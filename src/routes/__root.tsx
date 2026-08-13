@@ -11,7 +11,7 @@ export const Route = createRootRoute({
         content:
           "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover",
       },
-      { title: "SackReligious · Memphis Open World" },
+      { title: "SackReligious · Memphis 901" },
       {
         name: "description",
         content:

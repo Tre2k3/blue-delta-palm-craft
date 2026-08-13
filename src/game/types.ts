@@ -1,6 +1,17 @@
 export type Dir = "up" | "down" | "left" | "right";
 
-export type GameMode = "world" | "basketball" | "shop" | "dialogue" | "menu";
+export type GameMode =
+  | "world"
+  | "basketball"
+  | "shop"
+  | "dialogue"
+  | "menu"
+  | "interior";
+
+export type CameraView = "first" | "third";
+export type InputDevice = "keyboard" | "gamepad" | "touch";
+
+export type PauseTab = "resume" | "map" | "missions" | "wardrobe" | "trophies" | "settings";
 
 export type LocationId =
   | "apartment"
@@ -9,7 +20,10 @@ export type LocationId =
   | "neighborhood"
   | "downtown"
   | "culture"
-  | "dropvan";
+  | "dropvan"
+  | "pyramid"
+  | "beale"
+  | "river";
 
 export type ApparelId =
   | "starter_tee"
@@ -20,6 +34,18 @@ export type ApparelId =
   | "gold_chain"
   | "black_hoodie"
   | "green_sweats";
+
+export type TrophyId =
+  | "first_steps"
+  | "family"
+  | "baller"
+  | "drop_day"
+  | "fresh_fit"
+  | "deep_pockets"
+  | "court_king"
+  | "city_legend"
+  | "night_owl"
+  | "full_closet";
 
 export interface ApparelItem {
   id: ApparelId;
@@ -43,9 +69,28 @@ export interface MissionStep {
 export interface Mission {
   id: string;
   title: string;
+  chapter: string;
   steps: MissionStep[];
   activeStep: number;
   complete: boolean;
+}
+
+export interface SideMission {
+  id: string;
+  title: string;
+  description: string;
+  reward: number;
+  done: boolean;
+  kind: "score" | "own" | "talk" | "visit";
+  target?: LocationId;
+  need?: number;
+}
+
+export interface TrophyDef {
+  id: TrophyId;
+  name: string;
+  description: string;
+  rank: "bronze" | "silver" | "gold" | "platinum";
 }
 
 export interface NpcDef {
@@ -57,6 +102,7 @@ export interface NpcDef {
   dialogue: string[];
   missionTalk?: string;
   isKBlanco?: boolean;
+  wander?: boolean;
 }
 
 export interface WorldPoi {
@@ -68,10 +114,19 @@ export interface WorldPoi {
   h: number;
   color: string;
   label: string;
+  district: string;
+}
+
+export interface CinematicState {
+  kind: "briefing" | "complete" | "enter" | "trophy";
+  title: string;
+  subtitle: string;
+  t: number;
+  duration: number;
 }
 
 export interface SaveData {
-  version: 1;
+  version: 2;
   sackdollars: number;
   respect: number;
   owned: ApparelId[];
@@ -81,6 +136,29 @@ export interface SaveData {
   missionComplete: boolean;
   basketballHighScore: number;
   tutorialDone: boolean;
+  trophies: TrophyId[];
+  sideProgress: Record<string, boolean>;
+  worldHour: number;
+  settings: GameSettings;
+}
+
+export interface GameSettings {
+  master: number;
+  music: number;
+  sfx: number;
+  shake: boolean;
+  rumble: boolean;
+  cameraView: CameraView;
+}
+
+export interface Floater {
+  x: number;
+  y: number;
+  vy: number;
+  life: number;
+  text: string;
+  color: string;
+  scale: number;
 }
 
 export interface HudSnapshot {
@@ -90,8 +168,10 @@ export interface HudSnapshot {
   missionTitle: string;
   missionStep: string;
   missionProgress: string;
+  missionChapter: string;
   interactHint: string | null;
   locationName: string;
+  district: string;
   dialogue: { speaker: string; text: string; choices?: string[] } | null;
   shopOpen: boolean;
   toast: string | null;
@@ -102,8 +182,26 @@ export interface HudSnapshot {
     timeLeft: number;
     shots: number;
     active: boolean;
+    combo: number;
+    power: number;
+    charging: boolean;
+    best: number;
   } | null;
   paused: boolean;
   started: boolean;
   missionComplete: boolean;
+  cinematic: CinematicState | null;
+  letterbox: number;
+  worldHour: number;
+  inputDevice: InputDevice;
+  promptButton: string;
+  trophies: TrophyId[];
+  trophyPopup: { name: string; rank: string; t: number } | null;
+  pauseTab: PauseTab;
+  settings: GameSettings;
+  sideMissions: { id: string; title: string; description: string; done: boolean; reward: number }[];
+  highScore: number;
+  hasSave: boolean;
+  cameraView: CameraView;
+  steps: { id: string; label: string; done: boolean; description: string }[];
 }

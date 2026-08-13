@@ -1,7 +1,7 @@
 import { c as HeadContent, d as Outlet, f as lazyRouteComponent, h as require_jsx_runtime, m as createRootRoute, p as createFileRoute, s as Scripts, u as createRouter } from "../_libs/@tanstack/react-router+[...].mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/router-B21sdmXZ.js
+//#region node_modules/.nitro/vite/services/ssr/assets/router-Cw1Tc3ks.js
 var import_jsx_runtime = require_jsx_runtime();
-var styles_default = "/assets/styles-OWIrIfTv.css";
+var styles_default = "/assets/styles-DmaWJwLG.css";
 var Route$1 = createRootRoute({
 	head: () => ({
 		meta: [
@@ -10,7 +10,7 @@ var Route$1 = createRootRoute({
 				name: "viewport",
 				content: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
 			},
-			{ title: "SackReligious · Memphis Open World" },
+			{ title: "SackReligious · Memphis 901" },
 			{
 				name: "description",
 				content: "Play as Benji. Run missions across Memphis, ball up, earn $ackdollars, and rep the brand."
@@ -39,7 +39,7 @@ function RootDocument({ children }) {
 		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("head", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(HeadContent, {}) }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("body", { children: [children, /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Scripts, {})] })]
 	});
 }
-var $$splitComponentImporter = () => import("./routes-GtrOeKIr.mjs");
+var $$splitComponentImporter = () => import("./routes-a1NyoTTH.mjs");
 var rootRouteChildren = { IndexRoute: createFileRoute("/")({ component: lazyRouteComponent($$splitComponentImporter, "component") }).update({
 	id: "/",
 	path: "/",

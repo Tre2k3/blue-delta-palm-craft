@@ -1,14 +1,55 @@
-import type { ApparelItem, Mission, NpcDef, WorldPoi } from "./types";
+import type { ApparelItem, Mission, NpcDef, SideMission, TrophyDef, WorldPoi } from "./types";
 
-/** World size in tiles (each tile = 48px) */
+/** Warm Memphis dusk — brand green/gold are accents only. */
+export const PAL = {
+  asphalt: "#22201e",
+  asphaltAlt: "#262320",
+  lot: "#2a2623",
+  lane: "rgba(184,166,120,0.22)",
+  sidewalk: "#35302a",
+  sidewalkAlt: "#3b352e",
+  curb: "#4a4239",
+  wall: "#2b2724",
+  wallAlt: "#322c28",
+  wallCool: "#26282c",
+  roof: "#3d3630",
+  roofEdge: "#6b5c4a",
+  windowDark: "#1a1715",
+  windowLit: "#f2c66a",
+  grass: "#4a5c3a",
+  grassTip: "#6d8250",
+  shadow: "rgba(74,95,107,0.28)",
+  shade: "#4a5f6b",
+  label: "#c4b8a8",
+  ink: "#0d0b0a",
+  skyTop: "#3a2e24",
+  skyBot: "#1a1612",
+  river0: "#2a3840",
+  river1: "#1a242c",
+  accent: "#1db954",
+  gold: "#d4af37",
+} as const;
+
+/** Bump to force the live preview to remount the world bake. */
+export const ART_REV = 8;
+
 export const TILE = 48;
-export const WORLD_W = 60;
-export const WORLD_H = 45;
+export const WORLD_W = 64;
+export const WORLD_H = 48;
 export const WORLD_PX_W = WORLD_W * TILE;
 export const WORLD_PX_H = WORLD_H * TILE;
 
-export const PLAYER_SPEED = 165;
-export const PLAYER_RUN = 250;
+export const PLAYER_SPEED = 168;
+export const PLAYER_RUN = 268;
+
+export const DEFAULT_SETTINGS = {
+  master: 0.85,
+  music: 0.42,
+  sfx: 0.7,
+  shake: true,
+  rumble: true,
+  cameraView: "third" as const,
+};
 
 export const APPAREL: ApparelItem[] = [
   {
@@ -81,79 +122,129 @@ export const POIS: WorldPoi[] = [
   {
     id: "apartment",
     name: "Benji's Apartment",
-    x: 4 * TILE,
-    y: 6 * TILE,
+    x: 5 * TILE,
+    y: 7 * TILE,
     w: 4 * TILE,
     h: 4 * TILE,
     color: "#3f3f46",
     label: "HOME",
+    district: "West Side",
   },
   {
     id: "store",
     name: "SackReligious HQ",
-    x: 26 * TILE,
+    x: 28 * TILE,
     y: 8 * TILE,
     w: 6 * TILE,
     h: 5 * TILE,
-    color: "#14532d",
+    color: "#2b2724",
     label: "HQ",
+    district: "Midtown",
   },
   {
     id: "court",
     name: "901 Court",
-    x: 10 * TILE,
-    y: 28 * TILE,
+    x: 11 * TILE,
+    y: 29 * TILE,
     w: 8 * TILE,
     h: 7 * TILE,
     color: "#7c2d12",
     label: "BALL",
+    district: "South Memphis",
   },
   {
     id: "neighborhood",
     name: "The Neighborhood",
-    x: 42 * TILE,
+    x: 46 * TILE,
     y: 10 * TILE,
     w: 5 * TILE,
     h: 4 * TILE,
     color: "#1e3a5f",
     label: "HOOD",
+    district: "East Memphis",
   },
   {
     id: "downtown",
     name: "Downtown Memphis",
-    x: 44 * TILE,
-    y: 28 * TILE,
+    x: 48 * TILE,
+    y: 30 * TILE,
     w: 5 * TILE,
     h: 4 * TILE,
-    color: "#312e81",
+    color: "#1f2937",
     label: "DT",
+    district: "Downtown",
   },
   {
     id: "culture",
     name: "The Culture Spot",
-    x: 22 * TILE,
-    y: 34 * TILE,
+    x: 24 * TILE,
+    y: 36 * TILE,
     w: 5 * TILE,
     h: 4 * TILE,
-    color: "#4a044e",
+    color: "#322c28",
     label: "CULTURE",
+    district: "South Main",
   },
   {
     id: "dropvan",
     name: "Drop Van",
-    x: 36 * TILE,
-    y: 20 * TILE,
+    x: 38 * TILE,
+    y: 21 * TILE,
     w: 3 * TILE,
     h: 2.5 * TILE,
     color: "#292524",
     label: "VAN",
+    district: "Union Ave",
   },
+  {
+    id: "beale",
+    name: "Beale Street",
+    x: 18 * TILE,
+    y: 19 * TILE,
+    w: 8 * TILE,
+    h: 3 * TILE,
+    color: "#3d3630",
+    label: "BEALE",
+    district: "Beale",
+  },
+  {
+    id: "pyramid",
+    name: "The Pyramid",
+    x: 54 * TILE,
+    y: 4 * TILE,
+    w: 6 * TILE,
+    h: 6 * TILE,
+    color: "#1c1917",
+    label: "PYRAMID",
+    district: "Harbor",
+  },
+  {
+    id: "river",
+    name: "Mississippi River",
+    x: 1 * TILE,
+    y: 42 * TILE,
+    w: 14 * TILE,
+    h: 4 * TILE,
+    color: "#1e3a5f",
+    label: "RIVER",
+    district: "Riverfront",
+  },
+];
+
+export const STREETS: { name: string; axis: "x" | "y"; tile: number }[] = [
+  { name: "BEALE ST", axis: "y", tile: 20 },
+  { name: "UNION AVE", axis: "y", tile: 6 },
+  { name: "POPLAR AVE", axis: "y", tile: 34 },
+  { name: "3RD ST", axis: "x", tile: 16 },
+  { name: "FRONT ST", axis: "x", tile: 34 },
+  { name: "HIGHLAND", axis: "x", tile: 50 },
 ];
 
 export function createDropDayMission(): Mission {
   return {
     id: "drop_day",
     title: "The Drop Day",
+    chapter: "CHAPTER 01",
     activeStep: 0,
     complete: false,
     steps: [
@@ -233,11 +324,84 @@ export function createDropDayMission(): Mission {
   };
 }
 
+export function createSideMissions(): SideMission[] {
+  return [
+    {
+      id: "pickup_kings",
+      title: "Pickup Kings",
+      description: "Score 16 in a single run at 901 Court.",
+      reward: 80,
+      done: false,
+      kind: "score",
+      target: "court",
+      need: 16,
+    },
+    {
+      id: "full_fit",
+      title: "Full Fit",
+      description: "Own four pieces from the HQ wall.",
+      reward: 60,
+      done: false,
+      kind: "own",
+      need: 4,
+    },
+    {
+      id: "city_tour",
+      title: "City Tour",
+      description: "Talk to every local on the map.",
+      reward: 70,
+      done: false,
+      kind: "talk",
+      need: 6,
+    },
+    {
+      id: "sunset_river",
+      title: "Sunset at the River",
+      description: "Walk the Mississippi riverfront.",
+      reward: 35,
+      done: false,
+      kind: "visit",
+      target: "river",
+    },
+    {
+      id: "pyramid_pic",
+      title: "Pyramid Flex",
+      description: "Stand at the Pyramid and take it in.",
+      reward: 40,
+      done: false,
+      kind: "visit",
+      target: "pyramid",
+    },
+    {
+      id: "beale_night",
+      title: "Beale After Dark",
+      description: "Hit Beale Street once the lights come on.",
+      reward: 45,
+      done: false,
+      kind: "visit",
+      target: "beale",
+    },
+  ];
+}
+
+export const TROPHIES: TrophyDef[] = [
+  { id: "first_steps", name: "First Steps", description: "Leave the apartment on Drop Day.", rank: "bronze" },
+  { id: "family", name: "Welcome to the Family", description: "Link with K Blanco at HQ.", rank: "bronze" },
+  { id: "baller", name: "Baller", description: "Score 8 at the 901 Court.", rank: "silver" },
+  { id: "drop_day", name: "Drop Day", description: "Finish the main mission.", rank: "gold" },
+  { id: "fresh_fit", name: "Fresh Fit", description: "Buy your first apparel drop.", rank: "bronze" },
+  { id: "deep_pockets", name: "Deep Pockets", description: "Hold $400 $ackdollars.", rank: "silver" },
+  { id: "court_king", name: "Court King", description: "Score 20 in one basketball run.", rank: "gold" },
+  { id: "city_legend", name: "901 Legend", description: "Reach 40 Respect.", rank: "gold" },
+  { id: "night_owl", name: "Night Owl", description: "Be out after 20:00.", rank: "bronze" },
+  { id: "full_closet", name: "Closet Heavy", description: "Own every piece on the wall.", rank: "platinum" },
+];
+
 export const NPCS: NpcDef[] = [
   {
     id: "k_blanco",
     name: "K Blanco",
-    x: 28.5 * TILE,
+    x: 30.5 * TILE,
     y: 10.5 * TILE,
     color: "#f5d0a9",
     dialogue: [
@@ -251,7 +415,7 @@ export const NPCS: NpcDef[] = [
   {
     id: "supporter_1",
     name: "Local Supporter",
-    x: 44 * TILE,
+    x: 48 * TILE,
     y: 12 * TILE,
     color: "#a3a3a3",
     dialogue: [
@@ -262,24 +426,24 @@ export const NPCS: NpcDef[] = [
   {
     id: "downtown_fan",
     name: "901 Fan",
-    x: 46 * TILE,
-    y: 30 * TILE,
+    x: 50 * TILE,
+    y: 32 * TILE,
     color: "#e5e5e5",
     dialogue: ["Fresh fits only. Respect the movement.", "You got that energy, Benji."],
   },
   {
     id: "culture_host",
     name: "Culture Host",
-    x: 24 * TILE,
-    y: 36 * TILE,
-    color: "#c4b5fd",
+    x: 26 * TILE,
+    y: 38 * TILE,
+    color: "#c4b8a8",
     dialogue: ["Culture spot is lit tonight.", "Drop sold through. Brand growing."],
   },
   {
     id: "court_coach",
     name: "Court OG",
-    x: 12 * TILE,
-    y: 30 * TILE,
+    x: 13 * TILE,
+    y: 31 * TILE,
     color: "#fdba74",
     dialogue: [
       "Court's open. Put up points, earn $ackdollars.",
@@ -289,11 +453,32 @@ export const NPCS: NpcDef[] = [
   {
     id: "street_npc",
     name: "Memphis Local",
-    x: 18 * TILE,
+    x: 20 * TILE,
     y: 18 * TILE,
-    color: "#86efac",
+    color: "#c4b8a8",
     dialogue: ["Man, this city rockin' with the brand heavy.", "Pyramid looks different on Drop Day."],
+    wander: true,
+  },
+  {
+    id: "beale_dj",
+    name: "Beale DJ",
+    x: 22 * TILE,
+    y: 21 * TILE,
+    color: "#fbbf24",
+    dialogue: ["Beale don't sleep. Brand either.", "When the neon hits, the city talks."],
+    wander: true,
   },
 ];
 
-export const SAVE_KEY = "sackreligious-memphis-v1";
+export const TIPS = [
+  "Hold Shift or the right face button to sprint the block.",
+  "Release the shot in the green window for a swish.",
+  "Streaks at the court pay extra $ackdollars.",
+  "Press Start or Esc for the map, missions, and wardrobe.",
+  "A DualSense or Xbox pad works — left stick to move, South to talk.",
+  "Night on Beale hits different. Stay out after 20:00.",
+  "Shop the wall at HQ. Fit changes how the city sees you.",
+];
+
+export const SAVE_KEY = "sackreligious-memphis-v2";
+export const SAVE_KEY_LEGACY = "sackreligious-memphis-v1";
