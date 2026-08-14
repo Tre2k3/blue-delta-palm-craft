@@ -31,7 +31,7 @@ export const PAL = {
 } as const;
 
 /** Bump to force the live preview to remount the world bake. */
-export const ART_REV = 8;
+export const ART_REV = 9;
 
 export const TILE = 48;
 export const WORLD_W = 64;

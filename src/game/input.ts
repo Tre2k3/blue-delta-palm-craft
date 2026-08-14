@@ -4,6 +4,7 @@ export type Actions = {
   mx: number;
   my: number;
   lookX: number;
+  lookY: number;
   run: boolean;
   interact: boolean;
   interactPressed: boolean;
@@ -43,7 +44,9 @@ export class InputManager {
   private padLookX = 0;
   lastPad: Gamepad | null = null;
   private mouseDX = 0;
+  private mouseDY = 0;
   private pointerLocked = false;
+  private padLookY = 0;
 
   private queuedInteract = false;
   private queuedPause = false;
@@ -80,6 +83,7 @@ export class InputManager {
   private mm = (e: MouseEvent) => {
     if (this.pointerLocked || e.buttons === 2) {
       this.mouseDX += e.movementX;
+      this.mouseDY += e.movementY;
       this.device = "keyboard";
     }
   };
@@ -128,7 +132,9 @@ export class InputManager {
     lookX += this.padLookX;
     lookX += this.touch.lookX;
     lookX += this.mouseDX * 0.045;
+    const lookY = this.padLookY + this.mouseDY * 0.045;
     this.mouseDX = 0;
+    this.mouseDY = 0;
 
     const len = Math.hypot(mx, my);
     if (len > 1) {
@@ -165,6 +171,7 @@ export class InputManager {
       mx,
       my,
       lookX,
+      lookY,
       run,
       interact: interactHeld,
       interactPressed,
@@ -181,6 +188,7 @@ export class InputManager {
     this.padMx = 0;
     this.padMy = 0;
     this.padLookX = 0;
+    this.padLookY = 0;
     this.padInteract = false;
     this.padBack = false;
     this.padPause = false;
@@ -202,6 +210,7 @@ export class InputManager {
       this.padShoot = !!(p.buttons[2]?.pressed || p.buttons[7]?.pressed);
       const look = radial(p.axes[2] ?? 0, p.axes[3] ?? 0, 0.2);
       this.padLookX += look.x;
+      this.padLookY += look.y;
       if (p.buttons[11]?.pressed) this.queuedView = true;
       this.padPause = !!(p.buttons[9]?.pressed);
       if (
