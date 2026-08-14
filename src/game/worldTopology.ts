@@ -55,7 +55,9 @@ export function trafficLanes(): Lane[] {
   return lanes;
 }
 
-const NON_SOLID_POIS = new Set(["court", "river", "dropvan", "beale"]);
+// Apartment is excluded because Benji's legacy spawn sits on its edge. Court,
+// river, drop van, and Beale are world zones rather than solid buildings.
+const NON_SOLID_POIS = new Set(["apartment", "court", "river", "dropvan", "beale"]);
 
 export function poiColliders(): Rect[] {
   return POIS.filter((p) => !NON_SOLID_POIS.has(p.id)).map((p) => ({
