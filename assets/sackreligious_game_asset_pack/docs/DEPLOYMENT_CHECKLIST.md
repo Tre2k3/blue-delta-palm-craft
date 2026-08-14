@@ -1,0 +1,29 @@
+# Deployable Game Checklist
+
+- [ ] Opening screen uses the approved final opening image and correct `$ackReligious` / `KLOTHING` wordmark.
+- [ ] No gibberish generated text appears anywhere in UI, signs, missions, dialogue, or storefronts.
+- [ ] Benji left/right orientation passes keyboard and gamepad tests.
+- [ ] Movement uses delta-time/fixed-step logic and is frame-rate independent.
+- [ ] Third-person camera follows smoothly, avoids clipping, and does not determine walk-facing while moving.
+- [ ] World is actual 3D/2.5D geometry with textured materials, not a static scene screenshot.
+- [ ] Dynamic sun, window emissive lights, street lamps, fog, shadows, and exposure are enabled.
+- [ ] Pedestrians use real character art/sprites and pathing; no stick-figure placeholders.
+- [ ] Cars use actual vehicle silhouettes/models and traffic lanes; no primitive box traffic in shipping build.
+- [ ] Interact prompts are anchored to the target and only appear inside interaction range.
+- [ ] K Blanco has a clean NPC sprite/model, collision, interaction radius, dialogue, and mission role.
+- [ ] Basketball court has independent player, ball, rim, floor, shot meter, scoring, rebound, and reset logic.
+- [ ] No player/ball/UI is baked into the court background.
+- [ ] Mission state machine cannot skip, duplicate rewards, or soft-lock.
+- [ ] Save/resume persists cash, respect, mission step, clothing, settings, trophies, and basketball high score.
+- [ ] Keyboard, gamepad, and touch controls all work.
+- [ ] Pause, settings, volume, camera mode, and accessibility/reduced-motion settings work.
+- [ ] Assets are preloaded/lazy-loaded with a visible loading state and failure fallback.
+- [ ] Mobile DPR and texture sizes are capped for performance.
+- [ ] Resize/orientation changes do not break canvas or HUD layout.
+- [ ] No duplicate player sprites or duplicate score HUD layers.
+- [ ] npm run typecheck passes.
+- [ ] npm run lint passes or only documented non-blocking warnings remain.
+- [ ] npm run build passes.
+- [ ] Playwright smoke test covers boot -> start -> movement -> K Blanco -> van -> court -> save -> reload.
+- [ ] Vercel/production preview works at direct route and refresh.
+- [ ] PWA manifest/icons/service worker are configured if installable mobile support is enabled.

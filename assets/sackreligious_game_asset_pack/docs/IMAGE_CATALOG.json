@@ -1,0 +1,818 @@
+[
+  {
+    "path": "00_OPENING/01_opening_concept_first.png",
+    "width": 1448,
+    "height": 1086,
+    "mode": "RGB",
+    "bytes": 2167175,
+    "sha256": "3d03603b2eeec196d9f0cdfc8a7625ae5b488e8f5eb7a8a995cf0e5a45d1a3bb"
+  },
+  {
+    "path": "00_OPENING/02_opening_flagship_klothing.png",
+    "width": 1448,
+    "height": 1086,
+    "mode": "RGB",
+    "bytes": 2348790,
+    "sha256": "890d82e7471a97bee4dfdf4f18aa5b67d3632b30c6af0c3977dcc0d55ab7914b"
+  },
+  {
+    "path": "00_OPENING/03_USE_THIS_opening_final_dollar_S_arched_SackReligious_Klothing.png",
+    "width": 1448,
+    "height": 1086,
+    "mode": "RGB",
+    "bytes": 2322291,
+    "sha256": "f0608138f902e9e73cc6fdf05a3b47497acea6a95873db172549b108d5c61c62"
+  },
+  {
+    "path": "01_GAMEPLAY_REFERENCE/01_boutique_interior_K_Blanco.png",
+    "width": 1672,
+    "height": 941,
+    "mode": "RGB",
+    "bytes": 2337507,
+    "sha256": "f0136fef6f8d541c94b5ddd257079bfb90c98167dcb42c676587aaf6c8f6b464"
+  },
+  {
+    "path": "01_GAMEPLAY_REFERENCE/02_boutique_exterior_drop_van.png",
+    "width": 1672,
+    "height": 941,
+    "mode": "RGB",
+    "bytes": 2553159,
+    "sha256": "886aff20f75d9eb5962bcfe9e0b5f89c778a03a02e9b684df30cac54dc6b0271"
+  },
+  {
+    "path": "01_GAMEPLAY_REFERENCE/03_downtown_daytime_open_world.png",
+    "width": 1672,
+    "height": 941,
+    "mode": "RGB",
+    "bytes": 2784972,
+    "sha256": "b0f71a519264eb945cdc6cb757523408861eb1b71db05ff764580e13835da66f"
+  },
+  {
+    "path": "01_GAMEPLAY_REFERENCE/04_culture_district_night.png",
+    "width": 1672,
+    "height": 941,
+    "mode": "RGB",
+    "bytes": 2729538,
+    "sha256": "e2675a00f04f3ba778cf3427b6a454323a253260f72a495867bb81e6a601fad4"
+  },
+  {
+    "path": "01_GAMEPLAY_REFERENCE/05_901_court_sunset_gameplay.png",
+    "width": 1672,
+    "height": 941,
+    "mode": "RGB",
+    "bytes": 2580300,
+    "sha256": "bd5248251dcfb0f0d7a4a2c4d7e0b23e0e8930e5e0b112b257d372296dd2471a"
+  },
+  {
+    "path": "01_GAMEPLAY_REFERENCE/06_downtown_rain_night.png",
+    "width": 1672,
+    "height": 941,
+    "mode": "RGB",
+    "bytes": 2499832,
+    "sha256": "a1aa903111c31079a23baa5c2d1906c80fe60eb5027fef324481f8fb8ee8fc7b"
+  },
+  {
+    "path": "01_GAMEPLAY_REFERENCE/07_901_rooftop_court_night.png",
+    "width": 1672,
+    "height": 941,
+    "mode": "RGB",
+    "bytes": 2307308,
+    "sha256": "5f5c4c63a300ef642ef5e274ef25529da6cd0d98db3880a7ed3999a61c9c430f"
+  },
+  {
+    "path": "01_GAMEPLAY_REFERENCE/08_alley_merch_delivery.png",
+    "width": 1672,
+    "height": 941,
+    "mode": "RGB",
+    "bytes": 2505571,
+    "sha256": "8a85573fa05c384cf40054b638281b6d8e2bbdc37804d61e114d95f62930576d"
+  },
+  {
+    "path": "01_GAMEPLAY_REFERENCE/09_block_party_event.png",
+    "width": 1672,
+    "height": 941,
+    "mode": "RGB",
+    "bytes": 2753062,
+    "sha256": "b5a28be6caa75a731157121fee1c331b10e42250febf224b63e8faeb2479a717"
+  },
+  {
+    "path": "01_GAMEPLAY_REFERENCE/10_boutique_customization_UI.png",
+    "width": 1672,
+    "height": 941,
+    "mode": "RGB",
+    "bytes": 2188785,
+    "sha256": "54bd25b16319186126023e6b78db0d02ec609175a495fb0a0474799c4c92fca0"
+  },
+  {
+    "path": "02_MATERIAL_SKINS_SET1/01_asphalt_basecolor.png",
+    "width": 1254,
+    "height": 1254,
+    "mode": "RGB",
+    "bytes": 3180278,
+    "sha256": "ac96b69cdc71a70ff6514b8bfa245dd1dbe3bd15f6ff9cab6ddf2988e4765d34"
+  },
+  {
+    "path": "02_MATERIAL_SKINS_SET1/02_sidewalk_basecolor.png",
+    "width": 1254,
+    "height": 1254,
+    "mode": "RGB",
+    "bytes": 3065546,
+    "sha256": "8fe35e96c9b7a6a9715e7fd44ef09e808c115d34b4605697193ad2b3fb8b1e47"
+  },
+  {
+    "path": "02_MATERIAL_SKINS_SET1/03_old_memphis_brick_basecolor.png",
+    "width": 1254,
+    "height": 1254,
+    "mode": "RGB",
+    "bytes": 2324611,
+    "sha256": "a9da041e95b855df21506d7951ea5f6d9ddf24fe21ecfa1f68d27f4b018e411e"
+  },
+  {
+    "path": "02_MATERIAL_SKINS_SET1/04_window_facade_emissive_reference.png",
+    "width": 1254,
+    "height": 1254,
+    "mode": "RGB",
+    "bytes": 2194375,
+    "sha256": "bcf1363c3133ef227a04811f0866fbef01cb2975e6994d903680da224bbc52c0"
+  },
+  {
+    "path": "02_MATERIAL_SKINS_SET1/05_rooftop_tar_gravel_basecolor.png",
+    "width": 1254,
+    "height": 1254,
+    "mode": "RGB",
+    "bytes": 3445011,
+    "sha256": "0476d653c7f4279f7c243d9cdb138be9a08f1d28360b1d18f30be6949445b593"
+  },
+  {
+    "path": "02_MATERIAL_SKINS_SET1/06_court_wood_basecolor.png",
+    "width": 1254,
+    "height": 1254,
+    "mode": "RGB",
+    "bytes": 2705531,
+    "sha256": "f7e38d75edd1a032a006dedc39b10bf3abb0a71c98f38af8012d04f5fd0cf6d6"
+  },
+  {
+    "path": "02_MATERIAL_SKINS_SET1/07_court_lines_and_clay_reference.png",
+    "width": 1254,
+    "height": 1254,
+    "mode": "RGB",
+    "bytes": 2926771,
+    "sha256": "9484bd0e041ea89fbd6d9d46ab176d858d8e628de06ee27d18dd1793ef4676ec"
+  },
+  {
+    "path": "02_MATERIAL_SKINS_SET1/08_tree_canopy_topdown.png",
+    "width": 1254,
+    "height": 1254,
+    "mode": "RGB",
+    "bytes": 2534883,
+    "sha256": "f73f6cf7071111d4bdb6b3900009558e1212c2122a4d3c43199902afc353e395"
+  },
+  {
+    "path": "02_MATERIAL_SKINS_SET1/09_dark_car_body_metal_basecolor.png",
+    "width": 1254,
+    "height": 1254,
+    "mode": "RGB",
+    "bytes": 2931055,
+    "sha256": "d78ffd8289145e610b1568e6e81794cf181747197c1e233555b616d1ba3d570f"
+  },
+  {
+    "path": "02_MATERIAL_SKINS_SET1/10_hq_beale_dark_brick_accent.png",
+    "width": 1254,
+    "height": 1254,
+    "mode": "RGB",
+    "bytes": 1555640,
+    "sha256": "cfd4593e9579afa81edc61eba677346ffdf7c8192ebf83b7734ef2809ebf8e86"
+  },
+  {
+    "path": "03_MATERIAL_SKINS_SET2/11_chain_link_fence.png",
+    "width": 1254,
+    "height": 1254,
+    "mode": "RGB",
+    "bytes": 2378509,
+    "sha256": "118e8b7eb2be8c8a1adaf56dd80b0250b63bc6ecbe31942479a4c9f50a46a5cf"
+  },
+  {
+    "path": "03_MATERIAL_SKINS_SET2/12_asphalt_road_stripe.png",
+    "width": 1254,
+    "height": 1254,
+    "mode": "RGB",
+    "bytes": 3275117,
+    "sha256": "3489f99d8cabb39730ff59e94dbd1abc2274e03666d28ce825a0f313836eaf72"
+  },
+  {
+    "path": "03_MATERIAL_SKINS_SET2/13_polished_warm_concrete.png",
+    "width": 1254,
+    "height": 1254,
+    "mode": "RGB",
+    "bytes": 2487825,
+    "sha256": "e4d9ef8dc609cacb1edf7b7a1b8e319da15de7d22a13d279fdd7d31bd72bb1e7"
+  },
+  {
+    "path": "03_MATERIAL_SKINS_SET2/14_dark_wood_panel.png",
+    "width": 1254,
+    "height": 1254,
+    "mode": "RGB",
+    "bytes": 1872533,
+    "sha256": "dd7ce54c126aa7ba445f59df73cd8438e405c1cb05be9df5643413cc257449a9"
+  },
+  {
+    "path": "03_MATERIAL_SKINS_SET2/15_rollup_metal_shutter.png",
+    "width": 1254,
+    "height": 1254,
+    "mode": "RGB",
+    "bytes": 1950958,
+    "sha256": "c96ac50c6978252ab8c31fd5c81cd687f42c8413f186bce067e6170bb46b2f7f"
+  },
+  {
+    "path": "03_MATERIAL_SKINS_SET2/16_weathered_stucco.png",
+    "width": 1254,
+    "height": 1254,
+    "mode": "RGB",
+    "bytes": 3074491,
+    "sha256": "57062cf95ec83401d935c60aadfaebdb8c9bf89bc47f16d797e6806c318781f4"
+  },
+  {
+    "path": "03_MATERIAL_SKINS_SET2/17_green_cinder_block_wall.png",
+    "width": 1254,
+    "height": 1254,
+    "mode": "RGB",
+    "bytes": 3185109,
+    "sha256": "774043ddc321c9e189c9081194e57896cd69fb0a8832d5efa91992ac6c86346b"
+  },
+  {
+    "path": "03_MATERIAL_SKINS_SET2/18_storefront_window_grid.png",
+    "width": 1254,
+    "height": 1254,
+    "mode": "RGB",
+    "bytes": 1816693,
+    "sha256": "e79b7be0ba8d4673e0309a1950260395ff023e969f2197fb3191aa7d4346c210"
+  },
+  {
+    "path": "03_MATERIAL_SKINS_SET2/19_charcoal_metal_surface.png",
+    "width": 1254,
+    "height": 1254,
+    "mode": "RGB",
+    "bytes": 2411510,
+    "sha256": "665c32a3a2b171233485a0af0d4c0984088a40e9f0a5ceaaf880ec7c99f7b2fd"
+  },
+  {
+    "path": "03_MATERIAL_SKINS_SET2/20_green_gold_fabric_stripe.png",
+    "width": 1254,
+    "height": 1254,
+    "mode": "RGB",
+    "bytes": 3733940,
+    "sha256": "c0c14f82479da0d5b871708f25187d430ab6201f774081dbad6555d191b3bdae"
+  },
+  {
+    "path": "04_CHARACTER_MAPS/01_core_cast_character_map.png",
+    "width": 1448,
+    "height": 1086,
+    "mode": "RGB",
+    "bytes": 2748349,
+    "sha256": "57eb1de4a471b662f7328133b5d15e5df93d053f8092566e99ead1a4eeb1ce3e"
+  },
+  {
+    "path": "04_CHARACTER_MAPS/02_Benji_character_map.png",
+    "width": 1448,
+    "height": 1086,
+    "mode": "RGB",
+    "bytes": 2624434,
+    "sha256": "b7d71a4e8849755dfdeecc426fa3202b4ec28295fba4f41828305e61f69cf0d3"
+  },
+  {
+    "path": "04_CHARACTER_MAPS/03_K_Blanco_character_map.png",
+    "width": 1448,
+    "height": 1086,
+    "mode": "RGB",
+    "bytes": 2569794,
+    "sha256": "f2c27e1d62700e805fa0ab054a74accf0aa6574caa67320409ab943d38e3c98f"
+  },
+  {
+    "path": "04_CHARACTER_MAPS/04_neighborhood_kids_character_map.png",
+    "width": 1448,
+    "height": 1086,
+    "mode": "RGB",
+    "bytes": 2683540,
+    "sha256": "de64da9ed1e20efc00f1a76d85173b02c860a825c22b6ed8d7f6df15157098e4"
+  },
+  {
+    "path": "04_CHARACTER_MAPS/05_boutique_crew_character_map.png",
+    "width": 1448,
+    "height": 1086,
+    "mode": "RGB",
+    "bytes": 2655726,
+    "sha256": "02ca3b7b160b31a24b518687c12d007947c0ddf215bc3f6e97c56e53fba0f857"
+  },
+  {
+    "path": "04_CHARACTER_MAPS/06_901_court_character_map.png",
+    "width": 1448,
+    "height": 1086,
+    "mode": "RGB",
+    "bytes": 2582975,
+    "sha256": "e17c8ce0334630af5344def3bd255742bd41c9dd38dffefe76dab564ccd984f1"
+  },
+  {
+    "path": "04_CHARACTER_MAPS/07_memphis_street_NPC_character_map.png",
+    "width": 1448,
+    "height": 1086,
+    "mode": "RGB",
+    "bytes": 2624901,
+    "sha256": "1841574943b81d42d7f2cf9d53d8db2962c5da4deafaebba7adfe09d6ac5f069"
+  },
+  {
+    "path": "04_CHARACTER_MAPS/08_mission_cast_character_map.png",
+    "width": 1448,
+    "height": 1086,
+    "mode": "RGB",
+    "bytes": 2633223,
+    "sha256": "f7b9d36f2193c4c9d36bd4670c7b10cff6b43614ee31e5fa23834a005d726c1d"
+  },
+  {
+    "path": "04_CHARACTER_MAPS/09_crowd_ambient_character_map.png",
+    "width": 1448,
+    "height": 1086,
+    "mode": "RGB",
+    "bytes": 2736930,
+    "sha256": "a805794dbb25f0f352b5aa3fc4664e7cdbbfae6453fb32db19aa6c512b9f2e0a"
+  },
+  {
+    "path": "04_CHARACTER_MAPS/10_portraits_expressions_character_map.png",
+    "width": 1448,
+    "height": 1086,
+    "mode": "RGB",
+    "bytes": 2542204,
+    "sha256": "5a2a4ab7dd40fe683a6c4684dee09427097a59a856fe5fd0202381b9483525aa"
+  },
+  {
+    "path": "04_CHARACTER_MAPS/11_environment_and_character_reference_sheet.png",
+    "width": 1536,
+    "height": 1024,
+    "mode": "RGB",
+    "bytes": 2537651,
+    "sha256": "653b92693327db7f2b81279fdc31dfcd98d712b5f1491e9af343ebfd00130a99"
+  },
+  {
+    "path": "04_CHARACTER_MAPS/12_extended_character_sprite_reference_sheet.png",
+    "width": 1536,
+    "height": 1024,
+    "mode": "RGBA",
+    "bytes": 2918316,
+    "sha256": "1d0506b39fab487e2555d36613696d4698b675660331ffee647e5ee3ca0bc77a"
+  },
+  {
+    "path": "05_VEHICLE_MODELS_AND_SKINS/01_vehicle_character_map.png",
+    "width": 1448,
+    "height": 1086,
+    "mode": "RGB",
+    "bytes": 2364447,
+    "sha256": "04f494c6b8d8b0457a371f1caaaee245b3f4393ead17398ac13182b6146fecfd"
+  },
+  {
+    "path": "05_VEHICLE_MODELS_AND_SKINS/02_car_skins_and_liveries.png",
+    "width": 1448,
+    "height": 1086,
+    "mode": "RGB",
+    "bytes": 2316962,
+    "sha256": "fd1aaf89017bc5401116c089dfe7728b35cb03e36496902d951b08166759fd37"
+  },
+  {
+    "path": "05_VEHICLE_MODELS_AND_SKINS/03_drop_van_delivery_set.png",
+    "width": 1448,
+    "height": 1086,
+    "mode": "RGB",
+    "bytes": 2604610,
+    "sha256": "94bf2fbcf9ce41605e6aaaeb2509e985e4c4fb67048f33b91542ee89ef21ea90"
+  },
+  {
+    "path": "05_VEHICLE_MODELS_AND_SKINS/04_traffic_and_street_ride_map.png",
+    "width": 1448,
+    "height": 1086,
+    "mode": "RGB",
+    "bytes": 2582894,
+    "sha256": "4f69034a1b1bc4db5c3ba14166db9791c19cd18a9f0f084b25050fdc2345a96b"
+  },
+  {
+    "path": "05_VEHICLE_MODELS_AND_SKINS/05_vehicle_customization_garage.png",
+    "width": 1448,
+    "height": 1086,
+    "mode": "RGB",
+    "bytes": 2500833,
+    "sha256": "40942b9f90d039038ad2eb3984bc7fda2a6cdf1d25ff87d6d862877b12dc4406"
+  },
+  {
+    "path": "06_SCENE_REFERENCES/boutique_mission_the_drop_day.png",
+    "width": 1672,
+    "height": 941,
+    "mode": "RGB",
+    "bytes": 2330785,
+    "sha256": "737616ed879cf921494c31574cf9e051033ab0e7bbd9e3d08bac5edc4c1133e0"
+  },
+  {
+    "path": "06_SCENE_REFERENCES/cinematic_memphis_street_mission.png",
+    "width": 1672,
+    "height": 941,
+    "mode": "RGB",
+    "bytes": 2373389,
+    "sha256": "81820d73b53bb6f7f94fef3eb889c23145b9ca39ed37096ae26383cd9601e7be"
+  },
+  {
+    "path": "06_SCENE_REFERENCES/downtown_memphis_meet_up_mission.png",
+    "width": 1672,
+    "height": 941,
+    "mode": "RGB",
+    "bytes": 2784972,
+    "sha256": "b0f71a519264eb945cdc6cb757523408861eb1b71db05ff764580e13835da66f"
+  },
+  {
+    "path": "06_SCENE_REFERENCES/golden_hour_drop_off_on_beale_street.png",
+    "width": 1672,
+    "height": 941,
+    "mode": "RGB",
+    "bytes": 2553159,
+    "sha256": "886aff20f75d9eb5962bcfe9e0b5f89c778a03a02e9b684df30cac54dc6b0271"
+  },
+  {
+    "path": "06_SCENE_REFERENCES/memphis_street_missionqatigiit.png",
+    "width": 1672,
+    "height": 941,
+    "mode": "RGB",
+    "bytes": 2668188,
+    "sha256": "08bb287a147f6460e08d7ab280c983c0afb51c6d6cf33c88ccf8ea763c6f54e0"
+  },
+  {
+    "path": "06_SCENE_REFERENCES/neon_rain_in_downtown_memphis.png",
+    "width": 1672,
+    "height": 941,
+    "mode": "RGB",
+    "bytes": 2499832,
+    "sha256": "a1aa903111c31079a23baa5c2d1906c80fe60eb5027fef324481f8fb8ee8fc7b"
+  },
+  {
+    "path": "06_SCENE_REFERENCES/neon_sackreligious_boutique_customization_ui.png",
+    "width": 1672,
+    "height": 941,
+    "mode": "RGB",
+    "bytes": 2188785,
+    "sha256": "54bd25b16319186126023e6b78db0d02ec609175a495fb0a0474799c4c92fca0"
+  },
+  {
+    "path": "06_SCENE_REFERENCES/neon_sackreligious_boutique_showdown.png",
+    "width": 1672,
+    "height": 941,
+    "mode": "RGB",
+    "bytes": 2337507,
+    "sha256": "f0136fef6f8d541c94b5ddd257079bfb90c98167dcb42c676587aaf6c8f6b464"
+  },
+  {
+    "path": "06_SCENE_REFERENCES/sackreligious_boutique_showdown.png",
+    "width": 1672,
+    "height": 941,
+    "mode": "RGB",
+    "bytes": 2454018,
+    "sha256": "65fceb88c78e0b3323cdb1ffde03870c2701495adad89b27d9e61805e4bf69ce"
+  },
+  {
+    "path": "06_SCENE_REFERENCES/sackreligious_drop_van_mission.png",
+    "width": 1672,
+    "height": 941,
+    "mode": "RGB",
+    "bytes": 2544995,
+    "sha256": "391732f814238a92011d0a3a34f7e2e31366e05e625ea5a3558955d3eead813b"
+  },
+  {
+    "path": "06_SCENE_REFERENCES/sunset_streetball_at_901_court.png",
+    "width": 1672,
+    "height": 941,
+    "mode": "RGB",
+    "bytes": 2580300,
+    "sha256": "bd5248251dcfb0f0d7a4a2c4d7e0b23e0e8930e5e0b112b257d372296dd2471a"
+  },
+  {
+    "path": "06_SCENE_REFERENCES/urban_basketball_sunset_showdown.png",
+    "width": 1672,
+    "height": 941,
+    "mode": "RGB",
+    "bytes": 2549552,
+    "sha256": "ab1c5edd37e5251b3191f28e70272d4c2ecd714da8cda024afd435d512c7cea5"
+  },
+  {
+    "path": "06_SCENE_REFERENCES/urban_sunset_basketball_showcase.png",
+    "width": 1672,
+    "height": 941,
+    "mode": "RGB",
+    "bytes": 2232524,
+    "sha256": "31dc156070b00108c4a91c8fe5cc3361f82f9375e5aea873c65ec451fbc1059a"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/benji-back-norm.png",
+    "width": 160,
+    "height": 240,
+    "mode": "RGBA",
+    "bytes": 37840,
+    "sha256": "1c1abb70ef7c93f32651ae5c91bec7d91b7722c824274066b8af9e0810a2c1d8"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/benji-back.png",
+    "width": 512,
+    "height": 868,
+    "mode": "RGBA",
+    "bytes": 233705,
+    "sha256": "ca6277978aef2b1167ae1f9772df7ee992f8994f207a18be591333560b60035c"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/benji-front-cropped.png",
+    "width": 512,
+    "height": 868,
+    "mode": "RGBA",
+    "bytes": 482731,
+    "sha256": "fd927a9886eae8bb3a858611e7c04a47a90a39fd462822a954a1d20b68d30144"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/benji-front-norm.png",
+    "width": 160,
+    "height": 240,
+    "mode": "RGBA",
+    "bytes": 40290,
+    "sha256": "bc1592cdd429fb7967aa11e810894ab5f1664bf6026e513b159b6fb03600aece"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/benji-front.png",
+    "width": 512,
+    "height": 868,
+    "mode": "RGBA",
+    "bytes": 276374,
+    "sha256": "1e3ec382c6fe13bde9d255867ad929437e6fb39d906d00f01b44f673838677c9"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/benji-left-norm.png",
+    "width": 160,
+    "height": 240,
+    "mode": "RGBA",
+    "bytes": 41749,
+    "sha256": "f28a2f5531dac1dc861368aa12887fff1e0df3df56efa3e6daa8da847c52e134"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/benji-left.png",
+    "width": 512,
+    "height": 868,
+    "mode": "RGBA",
+    "bytes": 288698,
+    "sha256": "494dfd280804b12e2c380beab4fe6acd94d178f3dac0f40d407a84080cbae7e6"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/benji-right-norm.png",
+    "width": 160,
+    "height": 240,
+    "mode": "RGBA",
+    "bytes": 41696,
+    "sha256": "570ae264de9628133c16b2f8d0d484629d0c6613f13189106b46aa35c9ceef52"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/benji-right.png",
+    "width": 512,
+    "height": 868,
+    "mode": "RGBA",
+    "bytes": 288595,
+    "sha256": "02fb21a6d0b69a327ae403d6a8a41a236cee33a81d8dfdabe1e74072946d83df"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/benji-three-quarter.png",
+    "width": 512,
+    "height": 868,
+    "mode": "RGBA",
+    "bytes": 276048,
+    "sha256": "aa70556aff4979e5cf6d625141fd0e959f661cdfbdc3c831129f5b935a70d0d0"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/checkout.png",
+    "width": 2048,
+    "height": 1143,
+    "mode": "RGBA",
+    "bytes": 4508988,
+    "sha256": "51f5d3593751c4bd5d157962b4ff8d23ef1f60ded3141af92f9172cee2dc6268"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/court-fp.jpg",
+    "width": 1792,
+    "height": 1008,
+    "mode": "RGB",
+    "bytes": 428067,
+    "sha256": "c5dbfc45650afdad6658ba29a499d9bd735c25f58815123663ba23d0ea90cbc9"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/featured-products.png",
+    "width": 2048,
+    "height": 1143,
+    "mode": "RGBA",
+    "bytes": 4806551,
+    "sha256": "1945e73f2753044cc237a67ec4406ffe730cacedeb44e9a000011eb2ae79277b"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/k-blanco-counter.jpg",
+    "width": 4096,
+    "height": 2286,
+    "mode": "RGB",
+    "bytes": 915615,
+    "sha256": "fbbd34d8bbc17cc6cda97dbfacea4911f6815f1da1527b81e124826a30f525ca"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/k-blanco-jerseys.png",
+    "width": 2688,
+    "height": 1520,
+    "mode": "RGB",
+    "bytes": 7756593,
+    "sha256": "240774bf729c98d097f2e493334f6c5b29f852cd86b8f844b497aba8509401f6"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/k-blanco-portrait.png",
+    "width": 1834,
+    "height": 1024,
+    "mode": "RGB",
+    "bytes": 462930,
+    "sha256": "0275e37959a68ad691f28538d84712ec5517c4827c5ce5ff49d0d21ef76c2e3d"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/logo-wall.png",
+    "width": 2048,
+    "height": 1150,
+    "mode": "RGBA",
+    "bytes": 4786364,
+    "sha256": "8cb91dd090ed307578e1f8d8ee4843d4c195ccb2e3aa40db64db819a1a4a428b"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/memphis-dusk.jpg",
+    "width": 1792,
+    "height": 1008,
+    "mode": "RGB",
+    "bytes": 330057,
+    "sha256": "d7a980ade7a9489afaddb2b3d1e268690e22f45096d08ff5d91ea28bf0dc0f2b"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/sack-icon.png",
+    "width": 128,
+    "height": 128,
+    "mode": "RGBA",
+    "bytes": 1063,
+    "sha256": "a0914032a2a0d681491a947f3acdff615121f117468fb2c92d827b8d67abe28b"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/shopping-bags.jpg",
+    "width": 2048,
+    "height": 1143,
+    "mode": "RGB",
+    "bytes": 532345,
+    "sha256": "405b76de7a290526e7cc8f6247abde3554ac5fa89cd55eaca9330cf4a86dcfbd"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/store-checkout.jpg",
+    "width": 2048,
+    "height": 1143,
+    "mode": "RGBA",
+    "bytes": 3313752,
+    "sha256": "8a2d9ebda62b626b6eef70111afd17634b448c1f7b9b7348b9601f25206e813d"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/store-entry.jpg",
+    "width": 2048,
+    "height": 1143,
+    "mode": "RGBA",
+    "bytes": 3690092,
+    "sha256": "4ef318328d2c3473d51097fa46b567a73c848c798bb5a291e551c715f57f67dd"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/store-main.jpg",
+    "width": 2048,
+    "height": 1143,
+    "mode": "RGBA",
+    "bytes": 3878104,
+    "sha256": "421bed6a096e056521c7da9dbc4064d9ba68b6e63c2968bbace827ff0fd8988f"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/store-welcome.jpg",
+    "width": 2048,
+    "height": 1143,
+    "mode": "RGB",
+    "bytes": 560642,
+    "sha256": "3d55b48fbc0969a1942708f6de834cf6cea7df5639dbd9912b71a9514f5443b5"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/storyboard.png",
+    "width": 1448,
+    "height": 1086,
+    "mode": "RGB",
+    "bytes": 2541427,
+    "sha256": "5e80486bcbf57c19ddd2e9eac358f5eecc502be2420950d39398caf53795c119"
+  },
+  {
+    "path": "07_EXISTING_GROK_PUBLIC_GAME/title-key.jpg",
+    "width": 1792,
+    "height": 1008,
+    "mode": "RGB",
+    "bytes": 439315,
+    "sha256": "c82c23029f77a0b94af4a26526fd1f2e9ca284f62aa217a459e4d6e43a4c55ad"
+  },
+  {
+    "path": "08_ORIGINAL_UPLOADS/12809536-bc0f-4162-9e01-8509fc692aaa.png",
+    "width": 1490,
+    "height": 746,
+    "mode": "RGBA",
+    "bytes": 1654111,
+    "sha256": "9fd7656bc7b2e6c86531586bda13b15930b11cf60dc404da756649dc92d57620"
+  },
+  {
+    "path": "08_ORIGINAL_UPLOADS/7c077079-3455-4522-817d-a5eecb3bc3c9.png",
+    "width": 1532,
+    "height": 715,
+    "mode": "RGBA",
+    "bytes": 1931202,
+    "sha256": "f431a5cd2b8758502f3b01075e0e1347dfb8f5705d0eb274f9e3e13d50a5bd8f"
+  },
+  {
+    "path": "08_ORIGINAL_UPLOADS/94a14505-99eb-4f0d-bf4b-de63c6d21a17(1).png",
+    "width": 1834,
+    "height": 1024,
+    "mode": "RGB",
+    "bytes": 462930,
+    "sha256": "0275e37959a68ad691f28538d84712ec5517c4827c5ce5ff49d0d21ef76c2e3d"
+  },
+  {
+    "path": "08_ORIGINAL_UPLOADS/e1476cef-f461-4356-8d6c-0ed617370846.png",
+    "width": 1517,
+    "height": 767,
+    "mode": "RGBA",
+    "bytes": 1636848,
+    "sha256": "7b4c20127facabdc63b8d95218e55f9f2bb0f1609393307f0ea8413e6385c87e"
+  },
+  {
+    "path": "08_ORIGINAL_UPLOADS/hf_20260327_091751_08803d06-b0c1-41a2-981d-31612e7d9c4e(1).png",
+    "width": 2048,
+    "height": 1143,
+    "mode": "RGBA",
+    "bytes": 4843222,
+    "sha256": "9edde854161a71301e39e3b4b984506fcb291ea096dc084c490c5a6deb0630ac"
+  },
+  {
+    "path": "08_ORIGINAL_UPLOADS/hf_20260419_131640_9d1d4a64-9cb4-44cc-bb84-2850f0804976(1).png",
+    "width": 2048,
+    "height": 1143,
+    "mode": "RGBA",
+    "bytes": 4497536,
+    "sha256": "83ee9d8cf89c70a2fb203bbfdc9691f6717326390c2c623cf679d0fc0985aeff"
+  },
+  {
+    "path": "08_ORIGINAL_UPLOADS/hf_20260506_114412_7a7b1fa3-f1e4-478f-8ef6-cacb9f9f6d95(1).png",
+    "width": 2048,
+    "height": 1158,
+    "mode": "RGBA",
+    "bytes": 4518715,
+    "sha256": "51d234bdcee4ea6f068dd5e82a6b07bf9a2f98c314d1e0978b5a211fe1ff15bf"
+  },
+  {
+    "path": "08_ORIGINAL_UPLOADS/hf_20260707_160518_5f221987-9905-4bab-ad6e-5b5f80502eab_contact_10x10.png",
+    "width": 1160,
+    "height": 2048,
+    "mode": "RGBA",
+    "bytes": 539746,
+    "sha256": "380082f86576a352656b3ca403adc95358d14f7c1d62c2a8ba118f954fa06ee3"
+  },
+  {
+    "path": "08_ORIGINAL_UPLOADS/hf_20260707_180913_0355bac5-efab-4116-ac65-719f2ca28bc9_contact_10x10.png",
+    "width": 1160,
+    "height": 2048,
+    "mode": "RGBA",
+    "bytes": 543204,
+    "sha256": "fd982d217d8dc9126a97014807adc597e58200beadcf7c5c9a29c0fe912905e5"
+  },
+  {
+    "path": "08_ORIGINAL_UPLOADS/hf_20260707_183110_81504f62-f759-4340-ae96-80e033fedc79_contact_10x10.png",
+    "width": 1160,
+    "height": 2048,
+    "mode": "RGBA",
+    "bytes": 544433,
+    "sha256": "bfa07bc9c3d9832a5549a566bf9710f882805517f939a718976c4fa534b784e7"
+  },
+  {
+    "path": "08_ORIGINAL_UPLOADS/hf_20260708_003428_2615580d-672b-4cc7-9f99-a61adce6a003_contact_10x10.png",
+    "width": 1160,
+    "height": 2048,
+    "mode": "RGBA",
+    "bytes": 540358,
+    "sha256": "68b47772762c68c634cfc4ed0171c4bab0cdf67ef4b3384d8b232d156823444f"
+  },
+  {
+    "path": "09_CURRENT_SCREENSHOTS/97e3807a-6739-4cf9-b806-07b86296e70e.png",
+    "width": 1534,
+    "height": 700,
+    "mode": "RGBA",
+    "bytes": 1956864,
+    "sha256": "05446754683b64213170beb2ee5436a726dcab50f8f4d6621bffbf1a8e3a9819"
+  },
+  {
+    "path": "09_CURRENT_SCREENSHOTS/current_opening_before_replacement.png",
+    "width": 840,
+    "height": 657,
+    "mode": "RGBA",
+    "bytes": 509911,
+    "sha256": "4d056e9820ddf0bbab64b0656a2df59cdba51f440ee005776ea0b549cdcd964f"
+  }
+]

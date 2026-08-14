@@ -1,0 +1,16 @@
+SACKRELIGIOUS KLOTHING — BRAND LOCK
+
+CANONICAL DISPLAY NAME
+$ackReligious
+KLOTHING
+
+Rules:
+1. The first character of SackReligious is a dollar sign: $ackReligious.
+2. The $ackReligious wordmark should be slightly arched upward, matching the flagship storefront design.
+3. KLOTHING sits directly below the main wordmark in clean uppercase lettering.
+4. Never write SacKReligious, Sack Religion, Sack Religions, SackReligiouS, or any gibberish substitute.
+5. Do not invent slogans, fake street names, fake brand copy, or nonsense storefront wording.
+6. Use only approved copy from code/constants or this pack.
+7. Green / cream / warm gold / black are the primary brand colors.
+8. The final opening-background image is:
+   00_OPENING/03_USE_THIS_opening_final_dollar_S_arched_SackReligious_Klothing.png

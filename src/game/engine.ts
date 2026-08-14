@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck
 import {
   APPAREL,
@@ -10,12 +11,9 @@ import {
   SAVE_KEY,
   SAVE_KEY_LEGACY,
   STREETS,
-  TILE,
   TROPHIES,
-  WORLD_H,
   WORLD_PX_H,
   WORLD_PX_W,
-  WORLD_W,
   createDropDayMission,
   createSideMissions,
 } from "./data";
@@ -159,6 +157,7 @@ export class GameEngine {
 	raf = 0;
 	lastT = 0;
 	onHud: ((h: HudSnapshot) => void) | null = null;
+	onLoad: ((p: number) => void) | null = null;
 	hudAcc = 0;
 	clock = 0;
 	mapCanvas: HTMLCanvasElement | null = null;
@@ -183,10 +182,11 @@ export class GameEngine {
 		}).map(async ([k, src]) => {
 			try {
 				this.images[k] = await loadImage(src);
-			} catch {}
+			} catch { /* missing optional sprite */ }
 		}));
 		this.loadSave();
 		this.paintMap();
+		await this.world3d?.loadTextures((d, t) => this.onLoad?.(d / t));
 		this.world3d?.buildCity(this.walls, this.trees);
 		this.input.bind();
 		this.wireQa();
@@ -482,6 +482,7 @@ export class GameEngine {
 		window.__controlsTest = {
 			getYaw: () => this.yaw,
 			getSpeed: () => Math.hypot(this.vx, this.vy),
+			getFacing: () => this.facing,
 			setKeys: (codes) => {
 				this.input.keys.clear();
 				for (const c of codes) this.input.keys.add(c);
@@ -509,7 +510,12 @@ export class GameEngine {
 				step: this.mission.steps[this.mission.activeStep]?.id ?? "done",
 				mode: this.mode,
 				score: this.ball.score,
-				missionComplete: this.missionComplete
+				missionComplete: this.missionComplete,
+				facing: this.facing,
+				px: this.px,
+				py: this.py,
+				vx: this.vx,
+				vy: this.vy,
 			}),
 			setBallScore: (n) => {
 				this.ball.score = n;
@@ -551,7 +557,7 @@ export class GameEngine {
 		try {
 			localStorage.removeItem(SAVE_KEY);
 			localStorage.removeItem(SAVE_KEY_LEGACY);
-		} catch {}
+		} catch { /* storage */ }
 		this.mission = createDropDayMission();
 		this.side = createSideMissions();
 		this.missionComplete = false;
@@ -616,7 +622,7 @@ export class GameEngine {
 				...data.settings
 			};
 			if (data.sideProgress) for (const s of this.side) s.done = !!data.sideProgress[s.id];
-		} catch {}
+		} catch { /* storage */ }
 	}
 	save() {
 		const progress = {};
@@ -642,7 +648,7 @@ export class GameEngine {
 		try {
 			localStorage.setItem(SAVE_KEY, JSON.stringify(data));
 			this.hasSave = true;
-		} catch {}
+		} catch { /* storage */ }
 	}
 	applySettings(next) {
 		this.settings = {
@@ -826,16 +832,20 @@ export class GameEngine {
 			wy = mx * r.y + -my * f.y;
 			this.moving = true;
 			this.leftSpawn = true;
-			if (this.settings.cameraView === "third") this.facingFromAngle(Math.atan2(wx, -wy));
-			else this.applyYawToFacing();
 			audio.foot(this.clock);
 		} else {
 			this.moving = false;
-			this.applyYawToFacing();
 		}
 		const speed = runHeld ? PLAYER_RUN : PLAYER_SPEED;
 		this.vx = wx * speed;
 		this.vy = wy * speed;
+		if (Math.abs(this.vx) > Math.abs(this.vy) && Math.abs(this.vx) > 1) {
+			this.facing = this.vx < 0 ? "left" : "right";
+			this.dir = this.facing;
+		} else if (Math.abs(this.vy) > 1) {
+			this.facing = this.vy < 0 ? "up" : "down";
+			this.dir = this.facing;
+		}
 		const rad = 14;
 		let nx = this.px + this.vx * dt;
 		let ny = this.py + this.vy * dt;
@@ -883,7 +893,6 @@ export class GameEngine {
 				this.nearNpc = n.id;
 			}
 		}
-		this.input.prompt(this.input.device).interact;
 		if (this.nearNpc) {
 			const name = NPCS.find((x) => x.id === this.nearNpc).name;
 			this.interactHint = `Talk to ${name}`;

@@ -137,6 +137,36 @@ var Shirt = createLucideIcon("shirt", [["path", {
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var SwitchCamera = createLucideIcon("switch-camera", [
+	["path", {
+		d: "M11 19H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5",
+		key: "mtk2lu"
+	}],
+	["path", {
+		d: "M13 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5",
+		key: "120jsl"
+	}],
+	["circle", {
+		cx: "12",
+		cy: "12",
+		r: "3",
+		key: "1v7zrd"
+	}],
+	["path", {
+		d: "m18 22-3-3 3-3",
+		key: "kgdoj7"
+	}],
+	["path", {
+		d: "m6 2 3 3-3 3",
+		key: "1fnbkv"
+	}]
+]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var Target = createLucideIcon("target", [
 	["circle", {
 		cx: "12",
@@ -210,4 +240,4 @@ var Volume2 = createLucideIcon("volume-2", [
 	}]
 ]);
 //#endregion
-export { Settings as a, Shirt as i, Trophy as n, Play as o, Target as r, Map as s, Volume2 as t };
+export { Shirt as a, Map as c, SwitchCamera as i, Trophy as n, Settings as o, Target as r, Play as s, Volume2 as t };

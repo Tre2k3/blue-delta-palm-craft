@@ -31,7 +31,15 @@ export const PAL = {
 } as const;
 
 /** Bump to force the live preview to remount the world bake. */
-export const ART_REV = 9;
+export const ART_REV = 10;
+
+export const BRAND = {
+  name: "$ackReligious",
+  line: "KLOTHING",
+  city: "Memphis",
+  zip: "901",
+  currency: "$ackdollars",
+} as const;
 
 export const TILE = 48;
 export const WORLD_W = 64;

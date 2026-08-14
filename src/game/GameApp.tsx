@@ -10,7 +10,7 @@ import {
   SwitchCamera,
 } from "lucide-react";
 import { GameEngine } from "./engine";
-import { APPAREL, ART_REV, POIS, TROPHIES, TIPS } from "./data";
+import { APPAREL, ART_REV, BRAND, POIS, TROPHIES, TIPS } from "./data";
 import type { ApparelId, HudSnapshot, PauseTab } from "./types";
 
 const emptyHud: HudSnapshot = {
@@ -71,8 +71,10 @@ export function GameApp() {
   const engineRef = useRef<GameEngine | null>(null);
   const [hud, setHud] = useState<HudSnapshot>(emptyHud);
   const [ready, setReady] = useState(false);
+  const [loadPct, setLoadPct] = useState(0);
   const [bootError, setBootError] = useState<string | null>(null);
   const [titlePhase, setTitlePhase] = useState<"press" | "choose">("press");
+  const [titleSettings, setTitleSettings] = useState(false);
   const [tip, setTip] = useState(TIPS[0]!);
   const stickRef = useRef<{ id: number | null; ox: number; oy: number }>({
     id: null,
@@ -90,6 +92,7 @@ export function GameApp() {
         eng = new GameEngine(canvas);
         engineRef.current = eng;
         eng.onHud = (h) => setHud({ ...h });
+        eng.onLoad = (p) => setLoadPct(p);
         await eng.init();
         if (cancelled) {
           eng.destroy();
@@ -129,7 +132,7 @@ export function GameApp() {
     };
     window.addEventListener("keydown", go);
     return () => window.removeEventListener("keydown", go);
-  }, [hud.started, ready, titlePhase]);
+  }, [hud.started, ready, titlePhase, boot]);
 
   const onBuy = useCallback((id: ApparelId) => {
     engineRef.current?.buyItem(id);
@@ -212,30 +215,40 @@ export function GameApp() {
           }}
         >
           <img
-            src="/game/title-key.jpg"
+            src="/game/opening-title.jpg"
             alt=""
             className="absolute inset-0 h-full w-full object-cover"
+            style={{ objectPosition: "68% 46%" }}
             crossOrigin="anonymous"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-bg via-bg/75 to-bg/20" />
-          <div className="absolute inset-0 bg-gradient-to-t from-bg via-transparent to-bg/40" />
-          <div className="absolute top-0 inset-x-0 h-10 bg-black" />
-          <div className="absolute bottom-0 inset-x-0 h-10 bg-black" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/45 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/35" />
+          <div className="absolute top-0 inset-x-0 h-8 bg-black" />
+          <div className="absolute bottom-0 inset-x-0 h-8 bg-black" />
 
           <div className="relative z-10 flex h-full flex-col justify-between px-6 py-10 sm:px-12">
             <div>
-              <p className="font-display text-primary text-lg tracking-[0.35em]">SACKRELIGIOUS</p>
-              <p className="mt-2 text-[11px] uppercase tracking-[0.28em] text-muted">A Memphis Open World</p>
+              <p className="font-display text-primary text-xl tracking-[0.22em]">{BRAND.name}</p>
+              <p className="mt-1 text-[11px] uppercase tracking-[0.42em] text-gold">{BRAND.line}</p>
+              <p className="mt-3 text-[11px] uppercase tracking-[0.28em] text-muted">A Memphis Open World</p>
             </div>
 
             <div className="max-w-lg">
-              <h1 className="font-display text-6xl leading-[0.85] text-fg sm:text-8xl">MEMPHIS</h1>
-              <p className="mt-2 font-display text-3xl text-primary sm:text-4xl">901</p>
+              <h1 className="font-display text-6xl leading-[0.85] text-fg sm:text-8xl">{BRAND.city.toUpperCase()}</h1>
+              <p className="mt-2 font-display text-3xl text-primary sm:text-4xl">{BRAND.zip}</p>
               <p className="mt-4 max-w-sm text-sm leading-relaxed text-muted">
-                Play as Benji. Run Drop Day, ball the 901 Court, earn $ackdollars, and re-up the fit.
+                Play as Benji. Run Drop Day, ball the 901 Court, earn {BRAND.currency}, and re-up the fit.
               </p>
 
-              {!ready && <p className="mt-8 text-sm tracking-widest text-muted">LOADING</p>}
+              {!ready && (
+                <div className="mt-8 max-w-xs">
+                  <p className="text-sm tracking-widest text-muted">LOADING MEMPHIS</p>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15">
+                    <div className="h-full bg-primary transition-all" style={{ width: `${Math.round(loadPct * 100)}%` }} />
+                  </div>
+                  <p className="mt-1 text-[11px] text-subtle">{Math.round(loadPct * 100)}%</p>
+                </div>
+              )}
               {ready && (
                 <div className="mt-8 flex flex-col gap-2 max-w-xs">
                   <button
@@ -248,15 +261,39 @@ export function GameApp() {
                   {hud.hasSave && (
                     <button
                       type="button"
+                      onClick={() => boot(false)}
+                      className="min-h-11 rounded-lg border border-gold/50 bg-surface/70 px-6 font-display text-xl text-gold hover:bg-surface-2"
+                    >
+                      CONTINUE
+                    </button>
+                  )}
+                  {hud.hasSave && (
+                    <button
+                      type="button"
                       onClick={() => boot(true)}
                       className="min-h-12 rounded-lg border border-border bg-surface/80 px-6 font-display text-2xl text-fg hover:bg-surface-2"
                     >
                       NEW GAME
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => setTitleSettings((v) => !v)}
+                    className="min-h-10 rounded-lg border border-border/70 px-6 text-sm uppercase tracking-wider text-muted hover:text-fg"
+                  >
+                    Settings
+                  </button>
                 </div>
               )}
               {bootError && <p className="mt-3 text-sm text-danger">{bootError}</p>}
+              {titleSettings && ready && (
+                <div className="mt-4 max-w-xs rounded-xl border border-border bg-panel p-3">
+                  <PauseSettings
+                    settings={hud.settings}
+                    onChange={(s) => engineRef.current?.applySettings(s)}
+                  />
+                </div>
+              )}
             </div>
 
             <div className="flex flex-wrap items-end justify-between gap-4">

@@ -1,0 +1,27 @@
+BENJI LEFT / RIGHT ORIENTATION — REQUIRED FIX
+
+The current workspace sprite filenames are visually reversed:
+- current public/game/benji-left-norm.png visually faces SCREEN-RIGHT.
+- current public/game/benji-right-norm.png visually faces SCREEN-LEFT.
+
+Canonical solution (preferred):
+1. Swap the file contents or rename the two assets so the filenames match what the art actually faces.
+2. After that, map facing === "left" -> actual screen-left sprite and facing === "right" -> actual screen-right sprite.
+3. Determine facing from WORLD MOVEMENT VELOCITY, not from camera yaw while moving.
+
+Recommended movement-facing logic:
+
+if (Math.abs(vx) > Math.abs(vy)) {
+  facing = vx < 0 ? "left" : "right";
+} else if (Math.abs(vy) > 0.001) {
+  facing = vy < 0 ? "up" : "down";
+}
+
+While idle, preserve the last movement facing. Do not overwrite facing from camera yaw unless the game is explicitly in first-person aim mode.
+
+Acceptance test:
+- Hold A / left stick left: Benji travels left AND his face/body points screen-left.
+- Hold D / left stick right: Benji travels right AND his face/body points screen-right.
+- Hold W: back sprite.
+- Hold S: front sprite.
+- Stop moving: keep the last direction.
