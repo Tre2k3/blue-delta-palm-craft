@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import * as THREE from "three";
-import { NPCS, POIS, STREETS, TILE, WORLD_PX_H, WORLD_PX_W } from "./data";
+import { NPCS, STREETS, TILE, WORLD_PX_H, WORLD_PX_W } from "./data";
 import {
   aheadDistance,
   circleHitsRect,
@@ -143,9 +143,6 @@ function installWorldVisualFixes(World3D: any) {
   const proto = World3D.prototype;
   proto.__worldVisualFixInstalled = true;
 
-  // Replace the single giant asphalt sheet with explicit road corridors,
-  // sidewalks, curbs and lane markings derived from the same STREETS data used
-  // by traffic.
   proto.buildGround = function buildGround() {
     const lot = new THREE.Mesh(
       new THREE.PlaneGeometry(WORLD_PX_W / 16 + 20, WORLD_PX_H / 16 + 20),
@@ -203,9 +200,6 @@ function installWorldVisualFixes(World3D: any) {
     }
   };
 
-  // Replace capsule pedestrians with actual cropped characters from the
-  // supplied Memphis NPC character map.
-  const originalEnsurePeds = proto.ensurePeds;
   let atlas: THREE.Texture | null = null;
   let atlasLoading = false;
   const cropSpecs = [
@@ -265,21 +259,17 @@ function installWorldVisualFixes(World3D: any) {
       );
     }
     applyAtlasToPeds(this);
-    void originalEnsurePeds;
   };
 
   const originalSync = proto.sync;
   proto.sync = function syncWithCorrectedVehicleHeading(frame: any) {
     originalSync.call(this, frame);
-    // Existing car geometry is longest on local X. Align that axis to velocity.
     for (let i = 0; i < this.cars.length; i++) {
       const c = frame.cars[i];
       const g = this.cars[i];
       if (!c || !g) continue;
       if (Math.abs(c.vx) >= Math.abs(c.vy)) g.rotation.y = c.vx >= 0 ? 0 : Math.PI;
       else g.rotation.y = c.vy >= 0 ? -Math.PI / 2 : Math.PI / 2;
-      const first = g.children[0] as THREE.Sprite;
-      if (first instanceof THREE.Sprite) (first.material as THREE.SpriteMaterial).color.set(0xffffff);
     }
     for (const g of this.peds as THREE.Group[]) {
       const first = g.children[0];
