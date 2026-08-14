@@ -1,11 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { NPCS, WORLD_PX_H, WORLD_PX_W } from "./data";
+import * as THREE from "three";
+import { NPCS, POIS, STREETS, TILE, WORLD_PX_H, WORLD_PX_W } from "./data";
 import {
   aheadDistance,
   circleHitsRect,
   laneVelocity,
   nearestLane,
   poiColliders,
+  roadRects,
+  sidewalkRects,
   type Lane,
 } from "./worldTopology";
 
@@ -57,11 +60,18 @@ function installPrototypeFixes(GameEngine: any) {
       }
       for (const p of peds) nearest = Math.min(nearest, aheadDistance(c, p));
 
+      const speed = Math.max(1, Math.hypot(c.vx, c.vy));
+      const fx = c.vx / speed;
+      const fy = c.vy / speed;
+      const probeX = c.x + fx * 78;
+      const probeY = c.y + fy * 78;
+      const blockedByBuilding = poiColliders().some((box) => circleHitsRect(probeX, probeY, 14, box));
+
       const stopDistance = 44;
       const slowDistance = 150;
-      let desired = lane.speed;
+      let desired = blockedByBuilding ? 0 : lane.speed;
       if (nearest < stopDistance) desired = 0;
-      else if (nearest < slowDistance) desired = lane.speed * ((nearest - stopDistance) / (slowDistance - stopDistance));
+      else if (nearest < slowDistance) desired = Math.min(desired, lane.speed * ((nearest - stopDistance) / (slowDistance - stopDistance)));
 
       state.speed += (desired - state.speed) * Math.min(1, dt * (desired < state.speed ? 7 : 2.2));
       const vv = laneVelocity(lane, state.speed / Math.max(1, lane.speed));
@@ -118,10 +128,173 @@ function installPrototypeFixes(GameEngine: any) {
   };
 }
 
+function texturedMaterial(tex: THREE.Texture | undefined, roughness = 0.9, color = 0xffffff) {
+  const map = tex?.clone();
+  if (map) {
+    map.wrapS = THREE.RepeatWrapping;
+    map.wrapT = THREE.RepeatWrapping;
+    map.needsUpdate = true;
+  }
+  return new THREE.MeshStandardMaterial({ map, color, roughness, metalness: 0.02 });
+}
+
+function installWorldVisualFixes(World3D: any) {
+  if (!World3D || World3D.prototype.__worldVisualFixInstalled) return;
+  const proto = World3D.prototype;
+  proto.__worldVisualFixInstalled = true;
+
+  // Replace the single giant asphalt sheet with explicit road corridors,
+  // sidewalks, curbs and lane markings derived from the same STREETS data used
+  // by traffic.
+  proto.buildGround = function buildGround() {
+    const lot = new THREE.Mesh(
+      new THREE.PlaneGeometry(WORLD_PX_W / 16 + 20, WORLD_PX_H / 16 + 20),
+      texturedMaterial(this.mats?.concrete, 0.96, 0x4a4238),
+    );
+    lot.rotation.x = -Math.PI / 2;
+    lot.position.set(WORLD_PX_W / 32, -0.04, WORLD_PX_H / 32);
+    lot.receiveShadow = true;
+    this.scene.add(lot);
+
+    const roadMat = texturedMaterial(this.mats?.asphalt, 0.96, 0xffffff);
+    const walkMat = texturedMaterial(this.mats?.sidewalk, 0.92, 0xffffff);
+    const curbMat = texturedMaterial(this.mats?.concrete, 0.88, 0x756b5e);
+    const stripeMat = texturedMaterial(this.mats?.stripe, 0.86, 0xffffff);
+
+    for (const r of roadRects()) {
+      const road = new THREE.Mesh(new THREE.BoxGeometry(r.w / 16, 0.055, r.h / 16), roadMat);
+      road.position.set((r.x + r.w / 2) / 16, 0.02, (r.y + r.h / 2) / 16);
+      road.receiveShadow = true;
+      this.scene.add(road);
+    }
+
+    for (const r of sidewalkRects()) {
+      const walk = new THREE.Mesh(new THREE.BoxGeometry(r.w / 16, 0.12, r.h / 16), walkMat);
+      walk.position.set((r.x + r.w / 2) / 16, 0.08, (r.y + r.h / 2) / 16);
+      walk.receiveShadow = true;
+      this.scene.add(walk);
+    }
+
+    for (const st of STREETS) {
+      const center = st.tile * TILE;
+      if (st.axis === "y") {
+        for (const y of [center - TILE * 0.98, center + TILE * 0.98]) {
+          const curb = new THREE.Mesh(new THREE.BoxGeometry(WORLD_PX_W / 16, 0.15, 0.1), curbMat);
+          curb.position.set(WORLD_PX_W / 32, 0.11, y / 16);
+          this.scene.add(curb);
+        }
+        for (let x = TILE; x < WORLD_PX_W; x += TILE * 2.2) {
+          const dash = new THREE.Mesh(new THREE.BoxGeometry((TILE * 0.88) / 16, 0.016, 0.055), stripeMat);
+          dash.position.set(x / 16, 0.072, center / 16);
+          this.scene.add(dash);
+        }
+      } else {
+        for (const x of [center - TILE * 0.98, center + TILE * 0.98]) {
+          const curb = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, WORLD_PX_H / 16), curbMat);
+          curb.position.set(x / 16, 0.11, WORLD_PX_H / 32);
+          this.scene.add(curb);
+        }
+        for (let y = TILE; y < WORLD_PX_H; y += TILE * 2.2) {
+          const dash = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.016, (TILE * 0.88) / 16), stripeMat);
+          dash.position.set(center / 16, 0.072, y / 16);
+          this.scene.add(dash);
+        }
+      }
+    }
+  };
+
+  // Replace capsule pedestrians with actual cropped characters from the
+  // supplied Memphis NPC character map.
+  const originalEnsurePeds = proto.ensurePeds;
+  let atlas: THREE.Texture | null = null;
+  let atlasLoading = false;
+  const cropSpecs = [
+    [25, 350, 46, 105], [318, 350, 45, 105], [600, 350, 45, 105], [910, 350, 42, 105],
+    [30, 680, 44, 110], [318, 680, 45, 110], [905, 680, 43, 110],
+  ];
+
+  const applyAtlasToPeds = (world: any) => {
+    if (!atlas?.image) return;
+    const img = atlas.image as HTMLImageElement;
+    const iw = img.width || 1536;
+    const ih = img.height || 1024;
+    for (let i = 0; i < world.peds.length; i++) {
+      const group = world.peds[i] as THREE.Group;
+      const sprite = group.children[0] as THREE.Sprite;
+      if (!(sprite instanceof THREE.Sprite)) continue;
+      const [x, y, w, h] = cropSpecs[i % cropSpecs.length]!;
+      const map = atlas.clone();
+      map.repeat.set(w / iw, h / ih);
+      map.offset.set(x / iw, 1 - (y + h) / ih);
+      map.needsUpdate = true;
+      const mat = sprite.material as THREE.SpriteMaterial;
+      mat.map = map;
+      mat.color.set(0xffffff);
+      mat.needsUpdate = true;
+    }
+  };
+
+  proto.ensurePeds = function ensurePeds(n: number) {
+    while (this.peds.length < n) {
+      const g = new THREE.Group();
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0xffffff, transparent: true, depthWrite: false }));
+      sprite.scale.set(0.92, 1.62, 1);
+      sprite.position.y = 0.82;
+      g.add(sprite);
+      const sh = new THREE.Mesh(
+        new THREE.CircleGeometry(0.24, 14),
+        new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.24, depthWrite: false }),
+      );
+      sh.rotation.x = -Math.PI / 2;
+      sh.position.y = 0.01;
+      g.add(sh);
+      this.scene.add(g);
+      this.peds.push(g);
+    }
+    if (!atlas && !atlasLoading) {
+      atlasLoading = true;
+      new THREE.TextureLoader().load(
+        "/game/characters/07_memphis_street_NPC_character_map.png",
+        (t) => {
+          t.colorSpace = THREE.SRGBColorSpace;
+          atlas = t;
+          applyAtlasToPeds(this);
+        },
+        undefined,
+        () => { atlasLoading = false; },
+      );
+    }
+    applyAtlasToPeds(this);
+    void originalEnsurePeds;
+  };
+
+  const originalSync = proto.sync;
+  proto.sync = function syncWithCorrectedVehicleHeading(frame: any) {
+    originalSync.call(this, frame);
+    // Existing car geometry is longest on local X. Align that axis to velocity.
+    for (let i = 0; i < this.cars.length; i++) {
+      const c = frame.cars[i];
+      const g = this.cars[i];
+      if (!c || !g) continue;
+      if (Math.abs(c.vx) >= Math.abs(c.vy)) g.rotation.y = c.vx >= 0 ? 0 : Math.PI;
+      else g.rotation.y = c.vy >= 0 ? -Math.PI / 2 : Math.PI / 2;
+      const first = g.children[0] as THREE.Sprite;
+      if (first instanceof THREE.Sprite) (first.material as THREE.SpriteMaterial).color.set(0xffffff);
+    }
+    for (const g of this.peds as THREE.Group[]) {
+      const first = g.children[0];
+      if (first instanceof THREE.Sprite) (first.material as THREE.SpriteMaterial).color.set(0xffffff);
+    }
+  };
+}
+
 export function ensureWorldRuntimeFixes() {
   if (installPromise) return installPromise;
-  installPromise = import("./engine")
-    .then(({ GameEngine }) => installPrototypeFixes(GameEngine))
+  installPromise = Promise.all([import("./engine"), import("./world3d")])
+    .then(([{ GameEngine }, { World3D }]) => {
+      installPrototypeFixes(GameEngine);
+      installWorldVisualFixes(World3D);
+    })
     .catch((err) => console.error("Unable to install world runtime fixes", err));
   return installPromise;
 }
