@@ -1,52 +1,53 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+// @ts-nocheck
 import * as THREE from "three";
-import { NPCS, POIS, PLAYER_RUN, PLAYER_SPEED } from "./data";
+import { POIS, PLAYER_RUN, PLAYER_SPEED } from "./data";
 import { ensureWorldRuntimeFixes } from "./runtimeFixesV2";
 
 const S = 1 / 16;
-const wx = (x: number) => x * S;
-const wz = (y: number) => y * S;
+const wx = (x) => x * S;
+const wz = (y) => y * S;
 
-const APARTMENT = {
-  cx: -3200,
-  cy: -3200,
-  halfW: 112,
-  halfD: 86,
-  doorW: 34,
-};
+const APARTMENT = { cx: -3200, cy: -3200, halfW: 112, halfD: 86, doorW: 34 };
+const roomGroups = new WeakMap();
+const namedNpcRigs = new WeakMap();
+const courtDecorated = new WeakSet();
 
-const apartmentBlockers = [
-  { x: APARTMENT.cx - 86, y: APARTMENT.cy - 58, w: 62, h: 42 }, // bed
-  { x: APARTMENT.cx + 54, y: APARTMENT.cy - 66, w: 42, h: 26 }, // dresser
-  { x: APARTMENT.cx + 66, y: APARTMENT.cy + 12, w: 30, h: 48 }, // clothing rack
+const blockers = [
+  { x: APARTMENT.cx - 92, y: APARTMENT.cy - 60, w: 70, h: 46 },
+  { x: APARTMENT.cx + 52, y: APARTMENT.cy - 68, w: 46, h: 30 },
+  { x: APARTMENT.cx + 64, y: APARTMENT.cy + 4, w: 34, h: 52 },
 ];
 
-const roomGroups = new WeakMap<object, THREE.Group>();
-const namedNpcRigs = new WeakMap<object, Map<string, THREE.Group>>();
-const courtDecor = new WeakSet<object>();
-
-function circleRect(x: number, y: number, r: number, q: { x: number; y: number; w: number; h: number }) {
+function circleRect(x, y, r, q) {
   const nx = Math.max(q.x, Math.min(x, q.x + q.w));
   const ny = Math.max(q.y, Math.min(y, q.y + q.h));
   return (x - nx) ** 2 + (y - ny) ** 2 < r ** 2;
 }
 
-function mat(color: number, roughness = 0.76, metalness = 0.02) {
+function m(color, roughness = 0.78, metalness = 0.02) {
   return new THREE.MeshStandardMaterial({ color, roughness, metalness });
 }
 
-function limb(material: THREE.Material, radius: number, length: number) {
+function limb(material, radius, length) {
   const pivot = new THREE.Group();
-  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius * 0.94, length, 8), material);
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius * 0.92, length, 8), material);
   mesh.position.y = -length / 2;
   mesh.castShadow = true;
   pivot.add(mesh);
   return pivot;
 }
 
-function makeCharacterRig(id: string, index = 0) {
-  const roles: Record<string, { skin: number; shirt: number; pants: number; shoes: number; hat?: number; hair?: number; gold?: boolean }> = {
-    k_blanco: { skin: 0x9f6546, shirt: 0x161412, pants: 0x171717, shoes: 0xe7e2d8, hair: 0xf5efe3, gold: true },
+function makePerson(id, index = 0) {
+  const base = [
+    { skin: 0x6f402c, shirt: 0x1f6b3d, pants: 0x253649, shoes: 0xf2eee4 },
+    { skin: 0x925a3d, shirt: 0x222222, pants: 0x30343a, shoes: 0xe8e3da },
+    { skin: 0x593526, shirt: 0xe6e0d7, pants: 0x26384d, shoes: 0x171717 },
+    { skin: 0xa46a49, shirt: 0x703e2d, pants: 0x26282d, shoes: 0xeee9df },
+    { skin: 0x75452f, shirt: 0x263d5c, pants: 0x20262d, shoes: 0xf1ede6 },
+    { skin: 0x8d573c, shirt: 0x4e5f34, pants: 0x24282d, shoes: 0x151515 },
+  ];
+  const roles = {
+    k_blanco: { skin: 0x9f6546, shirt: 0x161412, pants: 0x171717, shoes: 0xe8e2d8, hair: 0xf7f0df, gold: true },
     court_coach: { skin: 0x75452f, shirt: 0x111111, pants: 0x202327, shoes: 0xf2eee4, hat: 0x181818, gold: true },
     supporter_1: { skin: 0x7e4b33, shirt: 0xf0ece4, pants: 0x26384d, shoes: 0xf2eee4, hat: 0x1a1a1a },
     downtown_fan: { skin: 0x5d3829, shirt: 0x1f6b3d, pants: 0x20262d, shoes: 0xf1eee7, gold: true },
@@ -54,207 +55,163 @@ function makeCharacterRig(id: string, index = 0) {
     street_npc: { skin: 0x70402e, shirt: 0x525960, pants: 0x253649, shoes: 0xede8df },
     beale_dj: { skin: 0x5e3526, shirt: 0x171717, pants: 0x202020, shoes: 0xe5dfd6, hat: 0x111111, gold: true },
   };
-  const palette = [
-    { skin: 0x6d3f2c, shirt: 0x1f6b3d, pants: 0x253649, shoes: 0xf2eee4 },
-    { skin: 0x945c3d, shirt: 0x252525, pants: 0x2f3439, shoes: 0xe8e4db },
-    { skin: 0x5d3727, shirt: 0xe6e1d8, pants: 0x26384d, shoes: 0x191919 },
-    { skin: 0xa66c49, shirt: 0x6c3d2e, pants: 0x26282d, shoes: 0xe8e4db },
-    { skin: 0x75452f, shirt: 0x263d5c, pants: 0x20262d, shoes: 0xf1ede6 },
-    { skin: 0x8d573c, shirt: 0x4e5f34, pants: 0x24282d, shoes: 0x151515 },
-  ];
-  const look = roles[id] ?? palette[index % palette.length]!;
-  const skin = mat(look.skin, 0.72);
-  const shirt = mat(look.shirt, 0.82);
-  const pants = mat(look.pants, 0.86);
-  const shoes = mat(look.shoes, 0.72);
-  const hair = mat(look.hair ?? 0x151311, 0.94);
-  const gold = mat(0xd4af37, 0.28, 0.7);
+  const look = { ...base[index % base.length], ...(roles[id] ?? {}) };
+  const skin = m(look.skin, 0.7);
+  const shirt = m(look.shirt, 0.84);
+  const pants = m(look.pants, 0.88);
+  const shoeMat = m(look.shoes, 0.74);
+  const hair = m(look.hair ?? 0x151311, 0.95);
+  const gold = m(0xd4af37, 0.28, 0.7);
 
-  const g = new THREE.Group() as THREE.Group & { userData: Record<string, any> };
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.62, 0.26), shirt);
-  torso.position.y = 0.96;
+  const g = new THREE.Group();
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.62, 0.28), shirt);
+  torso.position.y = 0.98;
   torso.castShadow = true;
   g.add(torso);
-
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.12, 8), skin);
-  neck.position.y = 1.33;
-  g.add(neck);
-
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.23, 14, 12), skin);
-  head.scale.set(0.92, 1.05, 0.9);
-  head.position.y = 1.55;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.235, 14, 12), skin);
+  head.scale.set(0.92, 1.06, 0.9);
+  head.position.y = 1.56;
   head.castShadow = true;
   g.add(head);
+  const capHair = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), hair);
+  capHair.position.y = 1.64;
+  capHair.castShadow = true;
+  g.add(capHair);
 
-  const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.235, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), hair);
-  hairCap.position.y = 1.62;
-  hairCap.castShadow = true;
-  g.add(hairCap);
-
-  const leftArm = limb(skin, 0.055, 0.54);
-  leftArm.position.set(-0.27, 1.23, 0);
-  leftArm.rotation.z = 0.08;
-  g.add(leftArm);
-  const rightArm = limb(skin, 0.055, 0.54);
-  rightArm.position.set(0.27, 1.23, 0);
-  rightArm.rotation.z = -0.08;
-  g.add(rightArm);
-
-  const leftLeg = limb(pants, 0.085, 0.58);
-  leftLeg.position.set(-0.11, 0.68, 0);
-  g.add(leftLeg);
-  const rightLeg = limb(pants, 0.085, 0.58);
-  rightLeg.position.set(0.11, 0.68, 0);
-  g.add(rightLeg);
+  const la = limb(skin, 0.058, 0.54);
+  la.position.set(-0.28, 1.22, 0);
+  la.rotation.z = 0.08;
+  g.add(la);
+  const ra = limb(skin, 0.058, 0.54);
+  ra.position.set(0.28, 1.22, 0);
+  ra.rotation.z = -0.08;
+  g.add(ra);
+  const ll = limb(pants, 0.087, 0.59);
+  ll.position.set(-0.11, 0.69, 0);
+  g.add(ll);
+  const rl = limb(pants, 0.087, 0.59);
+  rl.position.set(0.11, 0.69, 0);
+  g.add(rl);
 
   for (const x of [-0.11, 0.11]) {
-    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.09, 0.3), shoes);
-    shoe.position.set(x, 0.09, 0.055);
+    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.09, 0.31), shoeMat);
+    shoe.position.set(x, 0.09, 0.06);
     shoe.castShadow = true;
     g.add(shoe);
   }
 
   if (look.hat !== undefined) {
-    const capMat = mat(look.hat, 0.66);
-    const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.1, 12), capMat);
-    crown.position.y = 1.78;
+    const hm = m(look.hat, 0.65);
+    const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.1, 12), hm);
+    crown.position.y = 1.79;
     g.add(crown);
-    const brim = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.035, 0.14), capMat);
-    brim.position.set(0, 1.75, 0.17);
+    const brim = new THREE.Mesh(new THREE.BoxGeometry(0.27, 0.035, 0.14), hm);
+    brim.position.set(0, 1.755, 0.18);
     g.add(brim);
   }
-
   if (look.gold) {
     const chain = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.018, 7, 18), gold);
     chain.rotation.x = Math.PI / 2;
     chain.position.set(0, 1.25, 0.15);
     g.add(chain);
   }
-
   if (id === "k_blanco") {
-    // Distinct blonde curl clusters so K Blanco is recognizable even before final map-based skinning.
-    const curlGeo = new THREE.SphereGeometry(0.075, 8, 7);
-    for (const [x, y, z] of [
-      [-0.18, 1.7, 0.03], [-0.1, 1.78, 0.08], [0, 1.8, 0.08], [0.11, 1.76, 0.04], [0.18, 1.69, 0],
-    ]) {
+    const curlGeo = new THREE.SphereGeometry(0.076, 8, 7);
+    for (const [x, y, z] of [[-0.18, 1.71, 0.03], [-0.1, 1.79, 0.08], [0, 1.81, 0.08], [0.11, 1.77, 0.04], [0.18, 1.7, 0]]) {
       const curl = new THREE.Mesh(curlGeo, hair);
       curl.position.set(x, y, z);
       g.add(curl);
     }
   }
 
-  const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(0.3, 16),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28, depthWrite: false }),
-  );
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.3, 16), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.26, depthWrite: false }));
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = 0.012;
   g.add(shadow);
-
-  g.userData.leftArm = leftArm;
-  g.userData.rightArm = rightArm;
-  g.userData.leftLeg = leftLeg;
-  g.userData.rightLeg = rightLeg;
+  g.userData.leftArm = la;
+  g.userData.rightArm = ra;
+  g.userData.leftLeg = ll;
+  g.userData.rightLeg = rl;
   return g;
 }
 
-function buildApartmentInterior(world: any) {
-  if (roomGroups.has(world)) return roomGroups.get(world)!;
+function buildApartment(world) {
+  if (roomGroups.has(world)) return roomGroups.get(world);
   const g = new THREE.Group();
   const cx = wx(APARTMENT.cx);
   const cz = wz(APARTMENT.cy);
   const w = wx(APARTMENT.halfW * 2);
   const d = wz(APARTMENT.halfD * 2);
-
-  const floorMat = new THREE.MeshStandardMaterial({ color: 0x2b241f, roughness: 0.75 });
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0x201a17, roughness: 0.9 });
-  const trimMat = new THREE.MeshStandardMaterial({ color: 0x1f6b3d, roughness: 0.68 });
-  const warm = new THREE.MeshStandardMaterial({ color: 0xf2c66a, emissive: 0xc27a2a, emissiveIntensity: 0.45, roughness: 0.5 });
-
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(w, 0.12, d), floorMat);
+  const wall = m(0x201a17, 0.92);
+  const green = m(0x1f6b3d, 0.72);
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(w, 0.12, d), m(0x2d251f, 0.82));
   floor.position.set(cx, 0.02, cz);
   floor.receiveShadow = true;
   g.add(floor);
 
-  const wallH = 3.0;
-  const north = new THREE.Mesh(new THREE.BoxGeometry(w, wallH, 0.16), wallMat);
-  north.position.set(cx, wallH / 2, cz - d / 2);
+  const wh = 3.0;
+  const north = new THREE.Mesh(new THREE.BoxGeometry(w, wh, 0.16), wall);
+  north.position.set(cx, wh / 2, cz - d / 2);
   g.add(north);
-  const west = new THREE.Mesh(new THREE.BoxGeometry(0.16, wallH, d), wallMat);
-  west.position.set(cx - w / 2, wallH / 2, cz);
-  g.add(west);
-  const east = west.clone();
-  east.position.x = cx + w / 2;
-  g.add(east);
+  const side = new THREE.Mesh(new THREE.BoxGeometry(0.16, wh, d), wall);
+  side.position.set(cx - w / 2, wh / 2, cz);
+  g.add(side);
+  const side2 = side.clone();
+  side2.position.x = cx + w / 2;
+  g.add(side2);
+  const dw = wx(APARTMENT.doorW);
+  const sw = (w - dw) / 2;
+  const sl = new THREE.Mesh(new THREE.BoxGeometry(sw, wh, 0.16), wall);
+  sl.position.set(cx - dw / 2 - sw / 2, wh / 2, cz + d / 2);
+  g.add(sl);
+  const sr = sl.clone();
+  sr.position.x = cx + dw / 2 + sw / 2;
+  g.add(sr);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(dw, 0.52, 0.17), green);
+  head.position.set(cx, 2.74, cz + d / 2);
+  g.add(head);
 
-  // South wall has a real exit gap instead of trapping Benji inside a solid box.
-  const doorWidth = wx(APARTMENT.doorW);
-  const sideWidth = (w - doorWidth) / 2;
-  const southL = new THREE.Mesh(new THREE.BoxGeometry(sideWidth, wallH, 0.16), wallMat);
-  southL.position.set(cx - doorWidth / 2 - sideWidth / 2, wallH / 2, cz + d / 2);
-  g.add(southL);
-  const southR = southL.clone();
-  southR.position.x = cx + doorWidth / 2 + sideWidth / 2;
-  g.add(southR);
-  const header = new THREE.Mesh(new THREE.BoxGeometry(doorWidth, 0.55, 0.17), trimMat);
-  header.position.set(cx, 2.72, cz + d / 2);
-  g.add(header);
+  const bedBase = new THREE.Mesh(new THREE.BoxGeometry(4.1, 0.42, 2.5), m(0x171717, 0.86));
+  bedBase.position.set(cx - 4.35, 0.28, cz - 3.2);
+  g.add(bedBase);
+  const blanket = new THREE.Mesh(new THREE.BoxGeometry(3.85, 0.16, 2.3), green);
+  blanket.position.set(cx - 4.35, 0.58, cz - 3.2);
+  g.add(blanket);
+  const pillow = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.16, 0.64), m(0xece5db, 0.96));
+  pillow.position.set(cx - 5.45, 0.7, cz - 3.78);
+  g.add(pillow);
 
-  // Bed.
-  const bed = new THREE.Group();
-  const base = new THREE.Mesh(new THREE.BoxGeometry(3.9, 0.4, 2.4), mat(0x191919, 0.82));
-  base.position.y = 0.28;
-  bed.add(base);
-  const blanket = new THREE.Mesh(new THREE.BoxGeometry(3.7, 0.16, 2.25), mat(0x1f6b3d, 0.9));
-  blanket.position.y = 0.55;
-  bed.add(blanket);
-  const pillow = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.16, 0.62), mat(0xe9e3d8, 0.94));
-  pillow.position.set(-1.1, 0.69, -0.55);
-  bed.add(pillow);
-  bed.position.set(cx - 4.2, 0, cz - 3.2);
-  g.add(bed);
-
-  // Clothing wall and sneaker shelf — story-relevant apartment dressing.
-  const rack = new THREE.Group();
-  const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 2.5, 8), trimMat);
-  rail.rotation.z = Math.PI / 2;
-  rail.position.y = 1.8;
-  rack.add(rail);
-  for (let i = 0; i < 5; i++) {
-    const tee = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.62, 0.08), mat(i % 2 ? 0x171717 : 0x1f6b3d, 0.88));
-    tee.position.set(-0.95 + i * 0.48, 1.38, 0);
-    rack.add(tee);
-  }
-  rack.position.set(cx + 4.5, 0, cz + 0.4);
-  g.add(rack);
-
-  const dresser = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.85, 1.0), mat(0x3a2a20, 0.8));
-  dresser.position.set(cx + 4.2, 0.45, cz - 3.5);
+  const dresser = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.88, 1.05), m(0x3b2b20, 0.84));
+  dresser.position.set(cx + 4.35, 0.45, cz - 3.5);
   g.add(dresser);
-  const phone = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.035, 0.42), mat(0x111111, 0.25, 0.18));
-  phone.position.set(cx + 4.2, 0.9, cz - 3.5);
+  const phone = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.04, 0.43), m(0x111111, 0.3, 0.2));
+  phone.position.set(cx + 4.35, 0.91, cz - 3.5);
   g.add(phone);
 
-  // Faux window with Memphis-like warm light beyond it.
-  const window = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 1.55), new THREE.MeshStandardMaterial({ color: 0x6d3825, emissive: 0xb56235, emissiveIntensity: 0.38 }));
+  const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 2.7, 8), green);
+  rail.rotation.z = Math.PI / 2;
+  rail.position.set(cx + 4.25, 1.85, cz + 0.55);
+  g.add(rail);
+  for (let i = 0; i < 5; i++) {
+    const tee = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.62, 0.08), m(i % 2 ? 0x171717 : 0x1f6b3d, 0.88));
+    tee.position.set(cx + 3.25 + i * 0.48, 1.42, cz + 0.55);
+    g.add(tee);
+  }
+
+  const window = new THREE.Mesh(new THREE.PlaneGeometry(3.25, 1.55), new THREE.MeshStandardMaterial({ color: 0x6e3926, emissive: 0xb96134, emissiveIntensity: 0.4 }));
   window.position.set(cx, 1.8, cz - d / 2 + 0.09);
   g.add(window);
-  const sill = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.1, 0.22), trimMat);
+  const sill = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.1, 0.2), green);
   sill.position.set(cx, 1.0, cz - d / 2 + 0.14);
   g.add(sill);
 
-  const ceilingLight = new THREE.PointLight(0xffc878, 2.5, 12, 2);
-  ceilingLight.position.set(cx, 2.65, cz);
-  g.add(ceilingLight);
-  const lightMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.08, 16), warm);
-  lightMesh.position.set(cx, 2.85, cz);
-  g.add(lightMesh);
-
-  // Exit glow/pad.
-  const pad = new THREE.Mesh(new THREE.RingGeometry(0.36, 0.5, 28), new THREE.MeshBasicMaterial({ color: 0x1db954, transparent: true, opacity: 0.7, side: THREE.DoubleSide }));
-  pad.rotation.x = -Math.PI / 2;
-  pad.position.set(cx, 0.08, cz + d / 2 - 0.6);
-  g.add(pad);
+  const light = new THREE.PointLight(0xffc878, 2.6, 13, 2);
+  light.position.set(cx, 2.65, cz);
+  g.add(light);
+  const exit = new THREE.Mesh(new THREE.RingGeometry(0.36, 0.5, 28), new THREE.MeshBasicMaterial({ color: 0x1db954, transparent: true, opacity: 0.75, side: THREE.DoubleSide }));
+  exit.rotation.x = -Math.PI / 2;
+  exit.position.set(cx, 0.08, cz + d / 2 - 0.58);
+  g.add(exit);
 
   g.visible = false;
   world.scene.add(g);
@@ -262,105 +219,96 @@ function buildApartmentInterior(world: any) {
   return g;
 }
 
-function addCourtBranding(world: any) {
-  if (courtDecor.has(world)) return;
-  courtDecor.add(world);
+function textTexture(lines) {
+  const c = document.createElement("canvas");
+  c.width = 1024;
+  c.height = 512;
+  const q = c.getContext("2d");
+  q.fillStyle = "#11100f";
+  q.fillRect(0, 0, c.width, c.height);
+  q.strokeStyle = "#d4af37";
+  q.lineWidth = 18;
+  q.strokeRect(10, 10, c.width - 20, c.height - 20);
+  q.textAlign = "center";
+  q.textBaseline = "middle";
+  q.fillStyle = "#f5f1e8";
+  q.font = "900 132px Arial Black, sans-serif";
+  q.fillText(lines[0], c.width / 2, 185);
+  q.fillStyle = "#d4af37";
+  q.font = "900 118px Arial Black, sans-serif";
+  q.fillText(lines[1], c.width / 2, 340);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function decorateCourt(world) {
+  if (courtDecorated.has(world)) return;
+  courtDecorated.add(world);
   const court = POIS.find((p) => p.id === "court");
   if (!court) return;
   const cx = wx(court.x + court.w / 2);
   const cz = wz(court.y + court.h / 2);
   const cw = wx(court.w);
   const cd = wz(court.h);
-  const group = new THREE.Group();
+  const g = new THREE.Group();
+  const dark = m(0x171411, 0.75);
+  const gold = new THREE.MeshStandardMaterial({ color: 0xd4af37, emissive: 0x4c3208, emissiveIntensity: 0.18, roughness: 0.52 });
+  const cream = m(0xeee7dc, 0.78);
 
-  // Black/gold overlay so the court starts reading Sackrow Ballers now; the full indoor gym remains a later pass.
-  const surface = new THREE.Mesh(new THREE.PlaneGeometry(cw * 0.96, cd * 0.96), new THREE.MeshStandardMaterial({ color: 0x171411, roughness: 0.72 }));
+  const surface = new THREE.Mesh(new THREE.PlaneGeometry(cw * 0.965, cd * 0.965), dark);
   surface.rotation.x = -Math.PI / 2;
-  surface.position.set(cx, 0.125, cz);
+  surface.position.set(cx, 0.126, cz);
   surface.receiveShadow = true;
-  group.add(surface);
+  g.add(surface);
 
-  const goldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, emissive: 0x5a3b08, emissiveIntensity: 0.14, roughness: 0.5 });
-  const whiteMat = new THREE.MeshStandardMaterial({ color: 0xe9e2d6, roughness: 0.72 });
-  const line = (w: number, d: number, x: number, z: number, material = goldMat) => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.025, d), material);
-    m.position.set(x, 0.155, z);
-    group.add(m);
+  const line = (w, d, x, z, material = gold) => {
+    const a = new THREE.Mesh(new THREE.BoxGeometry(w, 0.025, d), material);
+    a.position.set(x, 0.154, z);
+    g.add(a);
   };
-  line(cw * 0.92, 0.055, cx, cz - cd * 0.44);
-  line(cw * 0.92, 0.055, cx, cz + cd * 0.44);
-  line(0.055, cd * 0.88, cx - cw * 0.46, cz);
-  line(0.055, cd * 0.88, cx + cw * 0.46, cz);
-  line(cw * 0.92, 0.04, cx, cz, whiteMat);
+  line(cw * 0.91, 0.055, cx, cz - cd * 0.44);
+  line(cw * 0.91, 0.055, cx, cz + cd * 0.44);
+  line(0.055, cd * 0.88, cx - cw * 0.455, cz);
+  line(0.055, cd * 0.88, cx + cw * 0.455, cz);
+  line(cw * 0.91, 0.04, cx, cz, cream);
+  const circle = new THREE.Mesh(new THREE.RingGeometry(1.16, 1.24, 48), gold);
+  circle.rotation.x = -Math.PI / 2;
+  circle.position.set(cx, 0.16, cz);
+  g.add(circle);
 
-  const center = new THREE.Mesh(new THREE.RingGeometry(1.15, 1.22, 48), goldMat);
-  center.rotation.x = -Math.PI / 2;
-  center.position.set(cx, 0.16, cz);
-  group.add(center);
-
-  // Brand decal from the user-supplied Sackrow Ballers artwork. If it ever fails to load, geometry still renders.
-  const tex = new THREE.TextureLoader().load("/game/branding/sackrow-ballers-logo.jpg", (t) => {
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.needsUpdate = true;
-  });
-  const logo = new THREE.Mesh(
-    new THREE.PlaneGeometry(4.5, 3.5),
-    new THREE.MeshBasicMaterial({ map: tex, transparent: false, toneMapped: false }),
-  );
+  const logo = new THREE.Mesh(new THREE.PlaneGeometry(5.1, 2.55), new THREE.MeshBasicMaterial({ map: textTexture(["SACKROW", "BALLERS"]), toneMapped: false }));
   logo.rotation.x = -Math.PI / 2;
-  logo.position.set(cx, 0.165, cz);
-  group.add(logo);
+  logo.position.set(cx, 0.166, cz);
+  g.add(logo);
 
-  // Baseline wordmark panels are intentionally readable and not generated gibberish.
-  const makeCanvasWord = (text: string) => {
-    const c = document.createElement("canvas");
-    c.width = 1024;
-    c.height = 256;
-    const ctx = c.getContext("2d")!;
-    ctx.clearRect(0, 0, c.width, c.height);
-    ctx.fillStyle = "#11100f";
-    ctx.fillRect(0, 0, c.width, c.height);
-    ctx.strokeStyle = "#d4af37";
-    ctx.lineWidth = 12;
-    ctx.strokeRect(8, 8, c.width - 16, c.height - 16);
-    ctx.fillStyle = "#f2eee4";
-    ctx.font = "900 132px Arial Black, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(text, c.width / 2, c.height / 2 + 4);
-    const t = new THREE.CanvasTexture(c);
-    t.colorSpace = THREE.SRGBColorSpace;
-    return t;
-  };
-  for (const [z, rot] of [[cz - cd * 0.34, 0], [cz + cd * 0.34, Math.PI]] as const) {
-    const word = new THREE.Mesh(new THREE.PlaneGeometry(5.5, 1.35), new THREE.MeshBasicMaterial({ map: makeCanvasWord("SACKROW BALLERS"), transparent: false, toneMapped: false }));
+  for (const [z, rot] of [[cz - cd * 0.34, 0], [cz + cd * 0.34, Math.PI]]) {
+    const word = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.15), new THREE.MeshBasicMaterial({ map: textTexture(["SACKROW", "BALLERS"]), toneMapped: false }));
     word.rotation.x = -Math.PI / 2;
     word.rotation.z = rot;
-    word.position.set(cx, 0.167, z);
-    group.add(word);
+    word.position.set(cx, 0.168, z);
+    g.add(word);
   }
-
-  world.scene.add(group);
+  world.scene.add(g);
 }
 
-function installEngineLogistics(GameEngine: any) {
-  const proto = GameEngine.prototype;
-  if (proto.__logisticsV3Installed) return;
-  proto.__logisticsV3Installed = true;
+function installEngine(GameEngine) {
+  const p = GameEngine.prototype;
+  if (p.__logisticsV3Installed) return;
+  p.__logisticsV3Installed = true;
+  const start = p.start;
+  const move = p.updatePlayer;
+  const proximity = p.updateProximity;
+  const interact = p.tryInteract;
+  const missionAuto = p.checkMissionAuto;
+  const getHud = p.getHud;
 
-  const originalStart = proto.start;
-  const originalUpdatePlayer = proto.updatePlayer;
-  const originalUpdateProximity = proto.updateProximity;
-  const originalTryInteract = proto.tryInteract;
-  const originalCheckMissionAuto = proto.checkMissionAuto;
-  const originalGetHud = proto.getHud;
-
-  proto.start = function startWithApartment(fresh = false) {
-    originalStart.call(this, fresh);
+  p.start = function startV3(fresh = false) {
+    start.call(this, fresh);
     const step = this.mission?.steps?.[this.mission.activeStep];
     if (step?.id === "wake" && !step.done) {
-      this.__interiorKind = "apartment";
       this.mode = "interior";
+      this.__interiorKind = "apartment";
       this.px = APARTMENT.cx;
       this.py = APARTMENT.cy - 4;
       this.vx = 0;
@@ -371,16 +319,15 @@ function installEngineLogistics(GameEngine: any) {
       this.leftSpawn = false;
       this.cinematic = null;
       this.letterbox = 0;
-      this.interactHint = "Walk to the door to leave the apartment";
-      this.showToast?.("NEW MISSION · THE DROP DAY", 2.6);
+      this.__interiorAtDoor = false;
+      this.interactHint = "Head to the front door";
+      this.showToast?.("NEW MISSION · THE DROP DAY", 2.5);
       this.emitHud?.();
     }
   };
 
-  proto.updatePlayer = function updatePlayerLogistics(dt: number, mx: number, my: number, runHeld: boolean) {
-    if (this.mode !== "interior" || this.__interiorKind !== "apartment") {
-      return originalUpdatePlayer.call(this, dt, mx, my, runHeld);
-    }
+  p.updatePlayer = function moveV3(dt, mx, my, runHeld) {
+    if (this.mode !== "interior" || this.__interiorKind !== "apartment") return move.call(this, dt, mx, my, runHeld);
     const f = this.fwd();
     const r = this.right();
     const len = Math.hypot(mx, my);
@@ -392,9 +339,7 @@ function installEngineLogistics(GameEngine: any) {
       dx = mx * r.x + -my * f.x;
       dy = mx * r.y + -my * f.y;
       this.moving = true;
-    } else {
-      this.moving = false;
-    }
+    } else this.moving = false;
     const speed = runHeld ? PLAYER_RUN * 0.82 : PLAYER_SPEED * 0.86;
     this.vx = dx * speed;
     this.vy = dy * speed;
@@ -409,43 +354,42 @@ function installEngineLogistics(GameEngine: any) {
     const maxY = APARTMENT.cy + APARTMENT.halfD - 8;
     let nx = Math.max(minX, Math.min(maxX, this.px + this.vx * dt));
     let ny = Math.max(minY, Math.min(maxY, this.py + this.vy * dt));
-    if (apartmentBlockers.some((q) => circleRect(nx, this.py, rad, q))) nx = this.px;
-    if (apartmentBlockers.some((q) => circleRect(this.px, ny, rad, q))) ny = this.py;
+    if (blockers.some((q) => circleRect(nx, this.py, rad, q))) nx = this.px;
+    if (blockers.some((q) => circleRect(this.px, ny, rad, q))) ny = this.py;
     this.px = nx;
     this.py = ny;
     this.animT += dt * (this.moving ? 9 : 2);
-    this.bob = this.moving ? Math.sin(this.animT * 2) * 3.0 : Math.sin(this.animT) * 0.5;
+    this.bob = this.moving ? Math.sin(this.animT * 2) * 3 : Math.sin(this.animT) * 0.5;
   };
 
-  proto.updateProximity = function updateProximityLogistics() {
+  p.updateProximity = function proximityV3() {
     if (this.mode === "interior" && this.__interiorKind === "apartment") {
-      const atDoor = Math.abs(this.px - APARTMENT.cx) < APARTMENT.doorW * 0.7 && this.py > APARTMENT.cy + APARTMENT.halfD - 38;
-      this.__interiorAtDoor = atDoor;
+      this.__interiorAtDoor = Math.abs(this.px - APARTMENT.cx) < APARTMENT.doorW * 0.72 && this.py > APARTMENT.cy + APARTMENT.halfD - 40;
       this.nearPoi = "apartment";
       this.nearNpc = null;
-      this.interactHint = atDoor ? "Leave Benji's Apartment" : "Head to the front door";
+      this.interactHint = this.__interiorAtDoor ? "Leave Benji's Apartment" : "Head to the front door";
       return;
     }
-    originalUpdateProximity.call(this);
+    proximity.call(this);
   };
 
-  proto.checkMissionAuto = function checkMissionAutoLogistics() {
+  p.checkMissionAuto = function missionAutoV3() {
     if (this.mode === "interior") return;
-    originalCheckMissionAuto.call(this);
+    missionAuto.call(this);
   };
 
-  proto.tryInteract = function tryInteractLogistics() {
+  p.tryInteract = function interactV3() {
     if (this.mode === "interior" && this.__interiorKind === "apartment") {
       if (!this.__interiorAtDoor) {
         this.showToast?.("Head to the front door to step into Memphis.", 1.5);
         return;
       }
-      const apt = POIS.find((p) => p.id === "apartment");
+      const apt = POIS.find((q) => q.id === "apartment");
       if (!apt) return;
       this.mode = "world";
       this.__interiorKind = null;
       this.px = apt.x + apt.w / 2;
-      this.py = apt.y + apt.h + 74;
+      this.py = apt.y + apt.h + 76;
       this.vx = 0;
       this.vy = 0;
       this.leftSpawn = true;
@@ -456,12 +400,13 @@ function installEngineLogistics(GameEngine: any) {
       this.emitHud?.();
       return;
     }
-    originalTryInteract.call(this);
+    interact.call(this);
   };
 
-  proto.getHud = function getHudLogistics() {
-    const hud = originalGetHud.call(this);
+  p.getHud = function hudV3() {
+    const hud = getHud.call(this);
     if (this.mode === "interior" && this.__interiorKind === "apartment") {
+      hud.mode = "world";
       hud.interactHint = this.interactHint;
       hud.locationName = "Benji's Apartment";
       hud.district = "West Side";
@@ -470,35 +415,33 @@ function installEngineLogistics(GameEngine: any) {
   };
 }
 
-function installWorldLogistics(World3D: any) {
-  const proto = World3D.prototype;
-  if (proto.__logisticsV3Installed) return;
-  proto.__logisticsV3Installed = true;
+function installWorld(World3D) {
+  const p = World3D.prototype;
+  if (p.__logisticsV3Installed) return;
+  p.__logisticsV3Installed = true;
 
-  // Replace the generic ambient capsules with better-proportioned street characters.
-  proto.ensurePeds = function ensurePedsV3(n: number) {
+  p.ensurePeds = function ensurePedsV3(n) {
     while (this.peds.length < n) {
-      const g = makeCharacterRig(`ambient_${this.peds.length}`, this.peds.length);
-      this.scene.add(g);
-      this.peds.push(g);
+      const rig = makePerson(`ambient_${this.peds.length}`, this.peds.length);
+      this.scene.add(rig);
+      this.peds.push(rig);
     }
   };
 
-  const originalBuildCity = proto.buildCity;
-  proto.buildCity = function buildCityV3(walls: any[], trees: any[]) {
-    originalBuildCity.call(this, walls, trees);
-    buildApartmentInterior(this);
-    addCourtBranding(this);
+  const build = p.buildCity;
+  p.buildCity = function buildV3(walls, trees) {
+    build.call(this, walls, trees);
+    buildApartment(this);
+    decorateCourt(this);
   };
 
-  const originalSync = proto.sync;
-  proto.sync = function syncV3(frame: any) {
-    originalSync.call(this, frame);
-    const room = buildApartmentInterior(this);
+  const sync = p.sync;
+  p.sync = function syncV3(frame) {
+    sync.call(this, frame);
+    const room = buildApartment(this);
     room.visible = frame.mode === "interior";
 
-    // The old non-K NPC sprites were the source of the large white rectangles.
-    // Keep them fully hidden and render role-specific 3D rigs instead.
+    // Remove the old blank SpriteMaterial NPC cards completely.
     for (const sprite of this.npcSprites?.values?.() ?? []) sprite.visible = false;
 
     let rigs = namedNpcRigs.get(this);
@@ -507,31 +450,28 @@ function installWorldLogistics(World3D: any) {
       namedNpcRigs.set(this, rigs);
     }
     for (let i = 0; i < frame.npcs.length; i++) {
-      const n = frame.npcs[i];
-      let rig = rigs.get(n.id);
+      const npc = frame.npcs[i];
+      let rig = rigs.get(npc.id);
       if (!rig) {
-        rig = makeCharacterRig(n.id, i);
+        rig = makePerson(npc.id, i);
         this.scene.add(rig);
-        rigs.set(n.id, rig);
+        rigs.set(npc.id, rig);
       }
       rig.visible = frame.mode !== "interior";
-      rig.position.set(wx(n.x), 0, wz(n.y));
-      const dx = frame.px - n.x;
-      const dy = frame.py - n.y;
+      rig.position.set(wx(npc.x), 0, wz(npc.y));
+      const dx = frame.px - npc.x;
+      const dy = frame.py - npc.y;
       if (Math.hypot(dx, dy) < 180) rig.rotation.y = Math.atan2(-dy, dx) - Math.PI / 2;
     }
-
-    // Keep the interior character scale slightly tighter so Benji doesn't look pasted onto a giant room.
-    if (frame.mode === "interior") this.player.scale.setScalar(0.93);
-    else this.player.scale.setScalar(1);
+    this.player.scale.setScalar(frame.mode === "interior" ? 0.94 : 1);
   };
 }
 
-async function installLogisticsV3() {
+async function install() {
   await ensureWorldRuntimeFixes();
   const [{ GameEngine }, { World3D }] = await Promise.all([import("./engine"), import("./world3d")]);
-  installEngineLogistics(GameEngine);
-  installWorldLogistics(World3D);
+  installEngine(GameEngine);
+  installWorld(World3D);
 }
 
-void installLogisticsV3().catch((err) => console.error("Unable to install logistics v3", err));
+void install().catch((err) => console.error("Unable to install logistics v3", err));
