@@ -2,15 +2,13 @@
 /**
  * Apartment Camera/Spawn V7
  *
- * Keeps the stable character renderer intact. This patch only fixes the two
- * apartment-specific camera problems exposed by QA:
- * 1) the third-person camera could sit outside the room and look through a wall;
- * 2) after exiting, Benji spawned too close to the exterior shell, so the
- *    follow camera could end up inside the apartment facade and occlude him.
+ * Keeps the stable character renderer intact. This patch only owns apartment
+ * camera/spawn behavior.
  */
 
 const APARTMENT = { cx: -3200, cy: -3200, halfW: 112, halfD: 86 };
 const S = 1 / 16;
+const worldStates = new WeakMap();
 
 function installEngine(GameEngine, POIS) {
   const p = GameEngine?.prototype;
@@ -23,20 +21,21 @@ function installEngine(GameEngine, POIS) {
     const wasAtDoor = !!this.__interiorAtDoor;
     const result = previousInteract.apply(this, args);
 
-    // Logistics V3 performs the actual mission transition. We only move the
-    // resulting world spawn farther from the building so the follow camera has
-    // a full character-length of clear space behind Benji.
     if (wasInterior && wasAtDoor && this.mode === "world") {
       const apt = POIS.find((q) => q.id === "apartment");
       if (apt) {
+        // Put Benji far enough south of the facade that the follow camera has
+        // clean street-side clearance.
         this.px = apt.x + apt.w / 2;
-        this.py = apt.y + apt.h + 152;
+        this.py = apt.y + apt.h + 184;
         this.vx = 0;
         this.vy = 0;
-        // Keep the initial view aimed out toward Memphis while the camera sits
-        // safely south of the apartment facade rather than inside it.
-        this.yaw = Math.PI;
-        this.pitch = -0.06;
+
+        // Yaw 0 makes the third-person camera sit SOUTH of Benji, away from the
+        // apartment behind him. The old PI yaw put the camera back toward the
+        // building and caused the foreground/roof occlusion seen in QA.
+        this.yaw = 0;
+        this.pitch = -0.08;
         this.facing = "down";
         this.dir = "down";
         this.updateProximity?.();
@@ -56,15 +55,37 @@ function installWorld(World3D) {
   p.sync = function apartmentCameraV7Sync(frame) {
     previousSync.call(this, frame);
 
-    // In the apartment, force the camera to remain INSIDE the room shell.
-    // The room's north wall is roughly z=-205.375 while Benji starts around
-    // z=-200, so this camera position gives a comfortable over-the-shoulder
-    // view without ever looking through the exterior wall.
+    let state = worldStates.get(this);
+    if (!state) {
+      state = { previousMode: null, exitUntil: 0 };
+      worldStates.set(this, state);
+    }
+
+    if (state.previousMode === "interior" && frame.mode === "world") {
+      state.exitUntil = (Number(frame.clock) || 0) + 1.25;
+    }
+    state.previousMode = frame.mode;
+
+    const x = (Number(frame.px) || APARTMENT.cx) * S;
+    const z = (Number(frame.py) || APARTMENT.cy) * S;
+
     if (frame.mode === "interior" && frame.cameraView === "third") {
-      const x = (Number(frame.px) || APARTMENT.cx) * S;
-      const z = (Number(frame.py) || APARTMENT.cy) * S;
-      this.camera.position.set(x, 2.25, z - 3.75);
-      this.camera.lookAt(x, 1.22, z + 0.35);
+      // Keep the camera inside the room shell and behind Benji on the south
+      // side while he walks toward the front door.
+      this.camera.position.set(x, 2.32, z - 3.45);
+      this.camera.lookAt(x, 1.18, z + 0.55);
+      this.camera.fov = 60;
+      this.camera.updateProjectionMatrix?.();
+    } else if (
+      frame.mode === "world" &&
+      frame.cameraView === "third" &&
+      (Number(frame.clock) || 0) < state.exitUntil
+    ) {
+      // One-second clean establishing shot immediately after pressing E. This
+      // bypasses any leftover facade/lot geometry while the normal follow
+      // camera settles onto the new spawn.
+      this.camera.position.set(x, 2.75, z + 5.1);
+      this.camera.lookAt(x, 1.15, z);
       this.camera.fov = 60;
       this.camera.updateProjectionMatrix?.();
     }
@@ -75,6 +96,7 @@ function installWorld(World3D) {
         mode: frame.mode,
         cameraView: frame.cameraView,
         player: { x: frame.px, y: frame.py },
+        exitCameraActive: frame.mode === "world" && (Number(frame.clock) || 0) < state.exitUntil,
         camera: this.camera ? {
           x: Number(this.camera.position.x.toFixed(3)),
           y: Number(this.camera.position.y.toFixed(3)),
