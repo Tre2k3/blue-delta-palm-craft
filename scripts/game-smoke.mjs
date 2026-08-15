@@ -49,40 +49,24 @@ try {
     e.updateProximity?.();
     e.emitHud?.();
   });
-  await page.waitForTimeout(900);
+  await page.waitForTimeout(1200);
+  await page.waitForFunction(() => !!window.__SACK_CHARACTERS_V8__, null, { timeout: 10_000 });
 
-  let state = await page.evaluate(() => {
-    const e = window.__SACK_V8_ENGINE__;
-    const w = e.world3d;
-    let ndc = null;
-    if (w?.sprite && w?.camera) {
-      const Vec3 = w.camera.position.constructor;
-      const v = new Vec3();
-      w.sprite.getWorldPosition(v);
-      v.project(w.camera);
-      ndc = { x: v.x, y: v.y, z: v.z };
-    }
-    const image = w?.sprite?.material?.map?.image;
-    return {
-      mode: e.mode,
-      interior: e.__v8Interior,
-      visible: w?.sprite?.visible,
-      ndc,
-      spriteTexture: image ? {
-        width: image.width || image.naturalWidth || 0,
-        height: image.height || image.naturalHeight || 0,
-      } : null,
-    };
-  });
+  let state = await page.evaluate(() => ({
+    mode: window.__SACK_V8_ENGINE__.mode,
+    interior: window.__SACK_V8_ENGINE__.__v8Interior,
+    characters: window.__SACK_CHARACTERS_V8__ || null,
+  }));
   assert(state.mode === "interior", "new game begins in an interior");
   assert(state.interior === "apartment", "new game begins inside Benji's apartment");
-  assert(state.visible === true, "Benji sprite is enabled in third person");
+  assert(state.characters?.playerVisible === true, "dedicated Benji 2.5D actor is visible");
+  assert(state.characters?.atlas?.walk === true, "Benji walking atlas loaded");
   assert(
-    !!state.spriteTexture && state.spriteTexture.width > 0 && state.spriteTexture.height > 0,
-    "Benji has a loaded visible sprite texture",
-  );
-  assert(
-    !!state.ndc && Math.abs(state.ndc.x) <= 1 && Math.abs(state.ndc.y) <= 1 && state.ndc.z >= -1 && state.ndc.z <= 1,
+    !!state.characters?.playerNdc &&
+      Math.abs(state.characters.playerNdc.x) <= 1 &&
+      Math.abs(state.characters.playerNdc.y) <= 1 &&
+      state.characters.playerNdc.z >= -1 &&
+      state.characters.playerNdc.z <= 1,
     "Benji projects inside the active camera viewport",
   );
   await page.screenshot({ path: "artifacts/v8-apartment.png", fullPage: true });
@@ -115,20 +99,21 @@ try {
     e.updateProximity?.();
     e.tryInteract();
   });
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(650);
   state = await page.evaluate(() => {
     const e = window.__SACK_V8_ENGINE__;
     return {
       mode: e.mode,
       step: e.mission.steps[e.mission.activeStep]?.id,
       wakeDone: e.mission.steps.find((s) => s.id === "wake")?.done,
-      visible: e.world3d?.sprite?.visible,
+      characters: window.__SACK_CHARACTERS_V8__ || null,
     };
   });
   assert(state.mode === "world", "apartment exit returns to Memphis world");
   assert(state.wakeDone === true, "leaving apartment completes wake objective");
   assert(state.step === "link_k", "next objective is Link up with K Blanco");
-  assert(state.visible === true, "Benji remains visible after apartment exit");
+  assert(state.characters?.playerVisible === true, "Benji remains visible after apartment exit");
+  assert((state.characters?.ambientVisible || 0) > 0, "2.5D Memphis pedestrians are visible outside");
 
   // HQ is a physical interior, not a menu teleport.
   await page.evaluate(() => {
@@ -138,7 +123,7 @@ try {
     e.updateProximity?.();
     e.tryInteract();
   });
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(650);
   state = await page.evaluate(() => ({
     mode: window.__SACK_V8_ENGINE__.mode,
     interior: window.__SACK_V8_ENGINE__.__v8Interior,
@@ -180,12 +165,14 @@ try {
     inFlight: window.__SACK_V8_ENGINE__.ball.inFlight,
     shots: window.__SACK_V8_ENGINE__.ball.shots,
     diag: window.__SACK_BBALL_V8__ || null,
+    characters: window.__SACK_CHARACTERS_V8__ || null,
   }));
   if (state.score < 2 || !state.held || state.inFlight) {
     console.error("Basketball diagnostic:", JSON.stringify(state.diag));
   }
   assert(state.score >= 2, "centered PERFECT shot scores");
   assert(state.held === true && state.inFlight === false, "ball resets to a playable next possession");
+  assert((state.characters?.gymVisible || 0) >= 6, "Sackrow gym has visible 2.5D players");
   await page.screenshot({ path: "artifacts/v8-sackrow-gym.png", fullPage: true });
 
   // No old blank named-NPC cards should be visible after V8 takes over.
