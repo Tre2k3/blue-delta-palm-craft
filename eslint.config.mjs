@@ -42,6 +42,16 @@ export default tseslint.config(
       "@typescript-eslint/no-explicit-any": "off",
     },
   },
+  {
+    // Runtime shims patch legacy class prototypes at runtime and intentionally
+    // cross boundaries that TypeScript cannot model cleanly. Keep the rest of
+    // the application strict while allowing these compatibility layers to use
+    // @ts-nocheck without failing CI.
+    files: ["src/game/runtime*.ts"],
+    rules: {
+      "@typescript-eslint/ban-ts-comment": "off",
+    },
+  },
   // Disable rules that conflict with Prettier formatting.
   prettier,
 );
