@@ -2,20 +2,38 @@
 /**
  * Input Facing V8
  *
- * Camera-relative world movement is useful for navigation, but the illustrated
- * Benji sprites must follow the player's literal directional input:
- * A=LEFT, D=RIGHT, W=BACK, S=FRONT. This layer records InputManager.poll()
- * and reapplies that visual-facing contract after the complete engine update,
- * so no older movement calculation can cross-wire left/right afterward.
+ * Illustrated character facing is intentionally input-relative, not camera-
+ * relative. The final visual contract is absolute:
+ *   A / left  -> LEFT
+ *   D / right -> RIGHT
+ *   W / up    -> BACK (away from viewer)
+ *   S / down  -> FRONT (toward viewer)
+ *
+ * Keyboard state is read directly after every completed engine update. Touch
+ * and gamepad fall back to the last normalized InputManager actions. This keeps
+ * camera yaw from ever cross-wiring the sprite direction.
  */
 
-function facingFrom(actions, fallback) {
-  const mx = Number(actions?.mx) || 0;
-  const my = Number(actions?.my) || 0;
+function facingFromVector(mx, my, fallback) {
+  mx = Number(mx) || 0;
+  my = Number(my) || 0;
   const ax = Math.abs(mx), ay = Math.abs(my);
   if (ax <= 0.05 && ay <= 0.05) return fallback;
   if (ax > ay) return mx < 0 ? "left" : "right";
   return my < 0 ? "up" : "down";
+}
+
+function facingFromPhysicalKeys(input, fallback) {
+  const keys = input?.keys;
+  if (!keys) return null;
+  const left = keys.has("KeyA") || keys.has("ArrowLeft");
+  const right = keys.has("KeyD") || keys.has("ArrowRight");
+  const up = keys.has("KeyW") || keys.has("ArrowUp");
+  const down = keys.has("KeyS") || keys.has("ArrowDown");
+  const x = (right ? 1 : 0) - (left ? 1 : 0);
+  const y = (down ? 1 : 0) - (up ? 1 : 0);
+  if (!x && !y) return null;
+  return facingFromVector(x, y, fallback);
 }
 
 async function install() {
@@ -43,18 +61,20 @@ async function install() {
       const result = oldUpdate.call(this, dt);
       if (this.started && !this.paused && !["shop", "dialogue", "menu"].includes(this.mode)) {
         const act = this.input?.__v8LastActions;
-        const next = facingFrom(act, this.facing || "down");
-        const mx = Number(act?.mx) || 0;
-        const my = Number(act?.my) || 0;
-        if (Math.abs(mx) > 0.05 || Math.abs(my) > 0.05) {
+        const keyFacing = facingFromPhysicalKeys(this.input, this.facing || "down");
+        const vectorFacing = facingFromVector(act?.mx, act?.my, this.facing || "down");
+        const hasVector = Math.abs(Number(act?.mx) || 0) > 0.05 || Math.abs(Number(act?.my) || 0) > 0.05;
+        const next = keyFacing ?? (hasVector ? vectorFacing : null);
+        if (next) {
           this.facing = next;
           this.dir = next;
         }
         if (typeof window !== "undefined") {
           window.__SACK_INPUT_V8__ = {
             installed: true,
-            mx,
-            my,
+            keyFacing,
+            mx: Number(act?.mx) || 0,
+            my: Number(act?.my) || 0,
             facing: this.facing,
             mode: this.mode,
           };
