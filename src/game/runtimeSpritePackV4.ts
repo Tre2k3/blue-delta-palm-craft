@@ -108,8 +108,6 @@ function chooseDirection(vx, vy, fallback = "down") {
 }
 
 function hideLegacyPeople(world) {
-  // Source/V2/V3 pedestrian and named-NPC visuals are intentionally hidden.
-  // Their simulation positions remain alive; V4 renders the same entities as 2.5D sprites.
   if (Array.isArray(world.peds)) {
     for (const item of world.peds) {
       const root = item?.root ?? item;
@@ -137,10 +135,6 @@ function syncPlayer(world, f, s) {
   }
   s.playerPrev = { x: f.px, y: f.py, t: now };
 
-  // WALK is the current visual source of truth because every direction has been manually
-  // verified: row 0 front, row 1 back, row 2 right, row 3 left.
-  // The run atlas is shipped in the pack but stays disabled until its side rows receive
-  // the same QA pass, so running can never reintroduce the old reversal bug.
   const tex = s.textures.benjiWalk;
   const cols = 5;
   const row = DIR_ROW[f.facing] ?? 0;
@@ -253,8 +247,6 @@ function installBasketball(GameEngine) {
   const originalRelease = proto.releaseShot;
   proto.releaseShot = function releaseShotV4(...args) {
     if (this.mode !== "basketball" || this.ball.inFlight || !this.ball.held) return;
-    // Keyboard/browser environments can occasionally lose key-up. A tap still launches
-    // a playable shot instead of leaving Benji permanently holding the ball.
     if (!this.ball.charging && (this.ball.power || 0) <= 0) {
       this.ball.charging = true;
       this.ball.power = 0.64;
@@ -273,7 +265,6 @@ function installBasketball(GameEngine) {
   const originalUpdate = proto.updateBasketball;
   proto.updateBasketball = function updateBasketballV4(dt, ...args) {
     const result = originalUpdate?.call(this, dt, ...args);
-    // Failsafe for a missing release event: max charge auto-releases.
     if (this.mode === "basketball" && this.ball.held && this.ball.charging && !this.ball.inFlight && this.ball.power >= 0.985) {
       this.releaseShot();
     }
@@ -291,10 +282,9 @@ function installBasketball(GameEngine) {
   };
 }
 
-// Install after Logistics V3 has had a chance to wrap the original engine/world methods.
 setTimeout(async () => {
   try {
-    const [{ World3D }, { GameEngine }] = await Promise.all([import("./world3d"), import("./engine")]);
+    const [{ World3D }, { GameEngine }] = await Promise.all([import("./world3d.ts"), import("./engine.ts")]);
     installWorld(World3D);
     installBasketball(GameEngine);
     window.__SACK_SPRITE_PACK_V4__ = {
