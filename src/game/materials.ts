@@ -2,6 +2,7 @@ import * as THREE from "three";
 import "./runtimeFixesV2";
 import "./runtimeWatchdog";
 import "./runtimeLogisticsV3";
+import "./runtimeApartmentCameraV7";
 import "./runtimeCharacterFacingV6";
 
 export const MAT_URLS = {
