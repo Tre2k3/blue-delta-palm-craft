@@ -3,6 +3,7 @@ import "./runtimeRaycastSafetyV8";
 import "./runtimeFixesV2";
 import "./runtimeWatchdog";
 import "./runtimeGameV8";
+import "./runtimeCharacterRendererV8";
 import "./runtimeBasketballStabilityV8";
 import "./runtimeV8Guard";
 
