@@ -284,7 +284,7 @@ function installBasketball(GameEngine) {
 
 setTimeout(async () => {
   try {
-    const [{ World3D }, { GameEngine }] = await Promise.all([import("./world3d.ts"), import("./engine.ts")]);
+    const [{ World3D }, { GameEngine }] = await Promise.all([import("./world3d"), import("./engine")]);
     installWorld(World3D);
     installBasketball(GameEngine);
     window.__SACK_SPRITE_PACK_V4__ = {
