@@ -2,46 +2,52 @@
 /**
  * Character Facing V6
  *
- * Runs only on the stable legacy/logistics character renderer. It does not
- * create or hide characters. Its job is to correct Benji's visible facing from
- * actual world movement while preserving the proven visible sprite path.
+ * Stable facing layer for the legacy/logistics Benji renderer.
+ *
+ * IMPORTANT: visual facing follows the PLAYER'S INPUT, not camera-relative
+ * world velocity. That keeps the contract intuitive even when the camera yaw
+ * changes:
+ *   A -> visibly LEFT
+ *   D -> visibly RIGHT
+ *   W -> BACK / moving away
+ *   S -> FRONT / moving toward camera
  */
-const states = new WeakMap();
 
-function chooseFacing(frame, state) {
-  const x = Number(frame.px) || 0;
-  const y = Number(frame.py) || 0;
-  let facing = state.facing || frame.facing || "down";
-  if (state.x != null && state.y != null) {
-    const dx = x - state.x;
-    const dy = y - state.y;
-    if (Math.abs(dx) > 0.02 || Math.abs(dy) > 0.02) {
-      facing = Math.abs(dx) > Math.abs(dy)
-        ? (dx < 0 ? "left" : "right")
-        : (dy < 0 ? "up" : "down");
+function installEngine(GameEngine) {
+  const p = GameEngine?.prototype;
+  if (!p || p.__characterInputFacingV6Installed) return;
+  p.__characterInputFacingV6Installed = true;
+
+  const previousUpdatePlayer = p.updatePlayer;
+  p.updatePlayer = function characterInputFacingV6(dt, mx, my, runHeld) {
+    const result = previousUpdatePlayer.call(this, dt, mx, my, runHeld);
+
+    // Raw input is the visual-facing authority. This intentionally does NOT use
+    // vx/vy because those vectors rotate with camera yaw.
+    const ax = Math.abs(Number(mx) || 0);
+    const ay = Math.abs(Number(my) || 0);
+    if (ax > 0.05 || ay > 0.05) {
+      if (ax > ay) this.facing = mx < 0 ? "left" : "right";
+      else this.facing = my < 0 ? "up" : "down";
+      this.dir = this.facing;
     }
-  }
-  state.x = x;
-  state.y = y;
-  state.facing = facing;
-  return facing;
+    return result;
+  };
 }
 
-function install(World3D) {
+function installWorld(World3D) {
   const p = World3D?.prototype;
   if (!p || p.__characterFacingV6Installed) return;
   p.__characterFacingV6Installed = true;
   const previousSync = p.sync;
+
   p.sync = function characterFacingV6Sync(frame) {
     previousSync.call(this, frame);
     if (!this.sprite || !frame?.images) return;
 
-    let state = states.get(this);
-    if (!state) {
-      state = { x: null, y: null, facing: "down" };
-      states.set(this, state);
-    }
-    const facing = chooseFacing(frame, state);
+    // Trust GameEngine.facing, which the input wrapper above sets directly from
+    // A/D/W/S. Do not infer facing from world-position deltas here.
+    const facing = frame.facing || "down";
 
     // The existing left/right filenames are visually reversed.
     let img = null;
@@ -65,24 +71,31 @@ function install(World3D) {
     this.sprite.scale?.set?.(1.15, 1.85, 1);
     this.sprite.position.y = 0.95 + (Number(frame.bob) || 0) * 0.02;
 
-    window.__SACK_CHARACTER_V6__ = {
-      installed: true,
-      visible: this.sprite.visible,
-      facing,
-      px: frame.px,
-      py: frame.py,
-      mode: frame.mode,
-      renderer: "stable legacy/logistics",
-    };
+    if (typeof window !== "undefined") {
+      window.__SACK_CHARACTER_V6__ = {
+        installed: true,
+        visible: this.sprite.visible,
+        facing,
+        px: frame.px,
+        py: frame.py,
+        mode: frame.mode,
+        renderer: "stable legacy/logistics",
+        facingSource: "raw player input",
+      };
+    }
   };
 }
 
 // Logistics V3 installs asynchronously. Delay this wrapper so it becomes the
-// outermost sync layer without competing with the old experimental V4/V5 code.
+// outermost stable facing layer without reactivating experimental V4/V5.
 setTimeout(async () => {
   try {
-    const { World3D } = await import("./world3d");
-    install(World3D);
+    const [{ World3D }, { GameEngine }] = await Promise.all([
+      import("./world3d"),
+      import("./engine"),
+    ]);
+    installEngine(GameEngine);
+    installWorld(World3D);
   } catch (err) {
     console.error("Unable to install Character Facing V6", err);
   }
