@@ -1,4 +1,5 @@
 // @ts-nocheck
+import "./runtimeWardrobeV8";
 /**
  * V8 guard/diagnostics.
  * Does not own gameplay. It only exposes the live engine for automated QA and
