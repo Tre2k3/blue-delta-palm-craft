@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import "./runtimeFixesV2";
 import "./runtimeWatchdog";
+import "./runtimeLogisticsV3";
 
 export const MAT_URLS = {
   asphalt: "/game/materials/01_asphalt_basecolor.png",
