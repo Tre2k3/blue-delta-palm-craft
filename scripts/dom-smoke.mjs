@@ -54,7 +54,6 @@ try {
   check(info && info.right > 0 && info.left < info.viewport.w && info.bottom > 0 && info.top < info.viewport.h, "Benji intersects the viewport", info);
   await page.screenshot({ path: "artifacts/v8-dom-apartment.png", fullPage: true });
 
-  // Real keyboard events, matching user behavior.
   for (const [key, expected] of [["a","left"],["d","right"],["w","up"],["s","down"]]) {
     await page.keyboard.down(key); await page.waitForTimeout(220);
     const facing = await page.evaluate(() => window.__SACK_V8_ENGINE__.facing);
@@ -79,7 +78,7 @@ try {
   });
   await page.waitForTimeout(700);
   const hq = await page.evaluate(() => ({ hq: window.__SACK_HQ_V8__ || null, dom: window.__SACK_CHARACTER_DOM_V8__ || null }));
-  check(window !== undefined, "HQ visual state captured");
+  check(hq?.hq?.inHQ === true, "HQ visual state is active", hq);
   const k = await characterInfo('[data-sack-character-v8="k-blanco-hq"]');
   check(k?.display === "block" && k?.backgroundImage?.includes("k_blanco"), "K Blanco is visibly present inside HQ", { k, hq });
   await page.screenshot({ path: "artifacts/v8-dom-hq.png", fullPage: true });
@@ -92,7 +91,6 @@ try {
   check((dom?.gymVisible || 0) >= 6, "Six illustrated Sackrow court actors are visible", dom);
   await page.screenshot({ path: "artifacts/v8-dom-gym.png", fullPage: true });
 
-  // Mobile: character must stay on-screen and UI/game loop must not crash.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(500);
   info = await characterInfo('[data-sack-character-v8="benji"]');
