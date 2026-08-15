@@ -2,16 +2,15 @@
 /**
  * Input Facing V8
  *
- * Illustrated character facing is intentionally input-relative, not camera-
- * relative. The final visual contract is absolute:
+ * Illustrated character facing is input-relative, never camera-relative:
  *   A / left  -> LEFT
  *   D / right -> RIGHT
  *   W / up    -> BACK (away from viewer)
  *   S / down  -> FRONT (toward viewer)
  *
- * Keyboard state is read directly after every completed engine update. Touch
- * and gamepad fall back to the last normalized InputManager actions. This keeps
- * camera yaw from ever cross-wiring the sprite direction.
+ * The authoritative correction now happens directly after updatePlayer(),
+ * where raw mx/my are guaranteed to be the exact movement input. A second
+ * end-of-update guard handles unusual modes and keyboard/gamepad/touch timing.
  */
 
 function facingFromVector(mx, my, fallback) {
@@ -54,7 +53,25 @@ async function install() {
   }
 
   const gp = GameEngine?.prototype;
-  if (gp && !gp.__v8FacingFinalInstalled) {
+  if (!gp) return;
+
+  if (!gp.__v8FacingPlayerInstalled) {
+    gp.__v8FacingPlayerInstalled = true;
+    const oldUpdatePlayer = gp.updatePlayer;
+    gp.updatePlayer = function updatePlayerFacingV8(dt, mx, my, runHeld) {
+      const result = oldUpdatePlayer.call(this, dt, mx, my, runHeld);
+      const ax = Math.abs(Number(mx) || 0);
+      const ay = Math.abs(Number(my) || 0);
+      if (ax > 0.05 || ay > 0.05) {
+        const next = facingFromVector(mx, my, this.facing || "down");
+        this.facing = next;
+        this.dir = next;
+      }
+      return result;
+    };
+  }
+
+  if (!gp.__v8FacingFinalInstalled) {
     gp.__v8FacingFinalInstalled = true;
     const oldUpdate = gp.update;
     gp.update = function updateWithFacingV8(dt) {
