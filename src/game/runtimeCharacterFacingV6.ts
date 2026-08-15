@@ -22,8 +22,6 @@ function installEngine(GameEngine) {
   p.updatePlayer = function characterInputFacingV6(dt, mx, my, runHeld) {
     const result = previousUpdatePlayer.call(this, dt, mx, my, runHeld);
 
-    // Raw input is the visual-facing authority. This intentionally does NOT use
-    // vx/vy because those vectors rotate with camera yaw.
     const ax = Math.abs(Number(mx) || 0);
     const ay = Math.abs(Number(my) || 0);
     if (ax > 0.05 || ay > 0.05) {
@@ -45,18 +43,17 @@ function installWorld(World3D) {
     previousSync.call(this, frame);
     if (!this.sprite || !frame?.images) return;
 
-    // Trust GameEngine.facing, which the input wrapper above sets directly from
-    // A/D/W/S. Do not infer facing from world-position deltas here.
     const facing = frame.facing || "down";
 
-    // The existing left/right filenames are visually reversed.
+    // QA confirmed the current runtime image map already has LEFT and RIGHT in
+    // the correct visual direction. Do NOT swap them here.
     let img = null;
     let key = "v6-front";
     if (facing === "left") {
-      img = frame.images.right ?? frame.images.left ?? frame.images.front;
+      img = frame.images.left ?? frame.images.right ?? frame.images.front;
       key = "v6-left";
     } else if (facing === "right") {
-      img = frame.images.left ?? frame.images.right ?? frame.images.front;
+      img = frame.images.right ?? frame.images.left ?? frame.images.front;
       key = "v6-right";
     } else if (facing === "up") {
       img = frame.images.back ?? frame.images.front;
@@ -81,13 +78,12 @@ function installWorld(World3D) {
         mode: frame.mode,
         renderer: "stable legacy/logistics",
         facingSource: "raw player input",
+        horizontalMapping: "direct left->left, right->right",
       };
     }
   };
 }
 
-// Logistics V3 installs asynchronously. Delay this wrapper so it becomes the
-// outermost stable facing layer without reactivating experimental V4/V5.
 setTimeout(async () => {
   try {
     const [{ World3D }, { GameEngine }] = await Promise.all([
