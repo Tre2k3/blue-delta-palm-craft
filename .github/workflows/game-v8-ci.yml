@@ -57,6 +57,10 @@ jobs:
       - name: Gameplay smoke test
         run: node scripts/game-smoke.mjs
 
+      - name: 2.5D visual and mobile smoke
+        if: always()
+        run: node scripts/dom-smoke.mjs
+
       - name: Server log on failure
         if: failure()
         run: cat /tmp/sack-game-v8.log || true
