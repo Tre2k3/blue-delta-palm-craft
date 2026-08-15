@@ -2,12 +2,53 @@
 /**
  * Basketball Stability V8
  *
- * RuntimeGameV8 owns the visible court and primary ball physics. This layer
- * adds two guarantees expected from an arcade basketball game:
- * - a PERFECT release is a make, not a random miss;
- * - every shot resolves back into a playable possession even if a collision
- *   edge case leaves the ball bouncing forever.
+ * Adds production guarantees around the primary V8 ball physics:
+ * - PERFECT releases score reliably;
+ * - no possession can remain stuck in-flight indefinitely;
+ * - recovery uses real elapsed time as a safety clock, so a throttled browser
+ *   or low-FPS mobile device still resolves a shot promptly even though the
+ *   simulation clamps frame delta.
  */
+
+function nowMs() {
+  return typeof performance !== "undefined" ? performance.now() : Date.now();
+}
+
+function forceScore(engine) {
+  if (!engine.ball?.inFlight || engine.ball.__scored || !engine.ball.__v8WillMake) return;
+  const hoop = engine.hoop();
+  engine.ball.ballX = hoop.x;
+  engine.ball.ballY = hoop.y;
+  engine.ball.ballZ = hoop.z - 2;
+  engine.ball.ballVz = -Math.max(120, Math.abs(Number(engine.ball.ballVz) || 0));
+  const pts = (Number(engine.ball.shotDist) || 0) > 165 ? 3 : 2;
+  const bonus = engine.ball.grade === "PERFECT" ? 1 : 0;
+  engine.ball.score += pts + bonus;
+  engine.ball.combo = (Number(engine.ball.combo) || 0) + 1;
+  engine.ball.best = Math.max(Number(engine.ball.best) || 0, engine.ball.combo);
+  engine.ball.flash = 0.5;
+  engine.ball.__scored = true;
+  engine.ball.__v8ForcedScore = true;
+  engine.tryCreditBasketball?.();
+  engine.float?.(`SWISH +${pts + bonus}`, "#d4af37", hoop.x, hoop.y);
+  engine.burst?.(hoop.x, hoop.y, "#d4af37");
+}
+
+function giveBack(engine) {
+  engine.ball.inFlight = false;
+  engine.ball.held = true;
+  engine.ball.charging = false;
+  engine.ball.power = 0;
+  engine.ball.ballX = engine.px;
+  engine.ball.ballY = engine.py;
+  engine.ball.ballZ = 18;
+  engine.ball.ballVx = 0;
+  engine.ball.ballVy = 0;
+  engine.ball.ballVz = 0;
+  engine.ball.__returnT = 0;
+  engine.ball.__v8FlightElapsed = 0;
+  engine.ball.__v8ReleaseReal = 0;
+}
 
 function install(GameEngine) {
   const p = GameEngine?.prototype;
@@ -19,33 +60,31 @@ function install(GameEngine) {
     const result = oldRelease.apply(this, args);
     if (this.mode === "basketball" && this.ball?.inFlight) {
       this.ball.__v8FlightElapsed = 0;
+      this.ball.__v8ReleaseReal = nowMs();
       this.ball.__v8PlannedFlight = Math.max(
         0.72,
         Math.min(1.18, 0.72 + (Number(this.ball.shotDist) || 0) / 650),
       );
-      // Perfect is always rewarded. GOOD keeps a little arcade variance.
       this.ball.__v8WillMake =
         this.ball.grade === "PERFECT" ||
         (this.ball.grade === "GOOD" && Math.random() < 0.78);
       this.ball.__v8ForcedScore = false;
+      this.ball.__scored = false;
     }
     return result;
   };
 
   const oldUpdate = p.updateBasketball;
   p.updateBasketball = function stableBasketballV8(dt, ...args) {
-    const wasInFlight = !!this.ball?.inFlight;
     const scoreBefore = Number(this.ball?.score) || 0;
     const result = oldUpdate.call(this, dt, ...args);
-
     if (this.mode !== "basketball" || !this.ball) return result;
 
-    if (wasInFlight || this.ball.inFlight) {
+    if (this.ball.inFlight) {
       this.ball.__v8FlightElapsed =
         (Number(this.ball.__v8FlightElapsed) || 0) + Math.max(0, Number(dt) || 0);
     }
 
-    // If the main physics already scored it, mark this possession resolved.
     if ((Number(this.ball.score) || 0) > scoreBefore) {
       this.ball.__v8ForcedScore = true;
       this.ball.__scored = true;
@@ -53,42 +92,40 @@ function install(GameEngine) {
 
     const planned = Number(this.ball.__v8PlannedFlight) || 1;
     const elapsed = Number(this.ball.__v8FlightElapsed) || 0;
+    const realElapsed = this.ball.__v8ReleaseReal
+      ? Math.max(0, (nowMs() - Number(this.ball.__v8ReleaseReal)) / 1000)
+      : 0;
 
-    // Center a guaranteed make through the hoop at the solved arrival time.
+    // The normal simulation gets first chance to make the basket. If a slow
+    // device has not advanced enough simulation time after ~1.35 seconds of
+    // actual play, resolve the guaranteed make anyway instead of appearing
+    // frozen to the player.
     if (
       this.ball.inFlight &&
       this.ball.__v8WillMake &&
       !this.ball.__scored &&
-      elapsed >= planned
+      (elapsed >= planned || realElapsed >= Math.max(1.35, planned + 0.18))
     ) {
-      const hoop = this.hoop();
-      this.ball.ballX = hoop.x;
-      this.ball.ballY = hoop.y;
-      this.ball.ballZ = hoop.z - 2;
-      this.ball.ballVz = -Math.max(120, Math.abs(Number(this.ball.ballVz) || 0));
-
-      const pts = (Number(this.ball.shotDist) || 0) > 165 ? 3 : 2;
-      const bonus = this.ball.grade === "PERFECT" ? 1 : 0;
-      this.ball.score += pts + bonus;
-      this.ball.combo = (Number(this.ball.combo) || 0) + 1;
-      this.ball.best = Math.max(Number(this.ball.best) || 0, this.ball.combo);
-      this.ball.flash = 0.5;
-      this.ball.__scored = true;
-      this.ball.__v8ForcedScore = true;
-      this.tryCreditBasketball?.();
-      this.float?.(`SWISH +${pts + bonus}`, "#d4af37", hoop.x, hoop.y);
-      this.burst?.(hoop.x, hoop.y, "#d4af37");
+      forceScore(this);
     }
 
-    // Hard ceiling on a possession: no stuck ball can soft-lock the session.
-    if (this.ball.inFlight && elapsed > planned + 1.35) {
+    // Let the swish remain visible briefly, then restore possession. On a miss,
+    // use a slightly longer ceiling so the bounce is still readable.
+    if (this.ball.inFlight && this.ball.__scored && realElapsed >= 1.85) {
+      this.ball.inFlight = false;
+      this.ball.__returnT = 0.22;
+    } else if (
+      this.ball.inFlight &&
+      !this.ball.__scored &&
+      (elapsed > planned + 1.35 || realElapsed >= 2.7)
+    ) {
       this.ball.inFlight = false;
       this.ball.ballZ = 8;
       this.ball.ballVx = 0;
       this.ball.ballVy = 0;
       this.ball.ballVz = 0;
-      this.ball.__returnT = 0.32;
-      if (!this.ball.__scored) this.ball.combo = 0;
+      this.ball.__returnT = 0.28;
+      this.ball.combo = 0;
     }
 
     if (!this.ball.held && !this.ball.inFlight) {
@@ -96,14 +133,12 @@ function install(GameEngine) {
         0,
         (Number(this.ball.__returnT) || 0) - Math.max(0, Number(dt) || 0),
       );
-      if (this.ball.__returnT <= 0 || elapsed > planned + 2.0) {
-        this.ball.held = true;
-        this.ball.charging = false;
-        this.ball.power = 0;
-        this.ball.ballX = this.px;
-        this.ball.ballY = this.py;
-        this.ball.ballZ = 18;
-        this.ball.__v8FlightElapsed = 0;
+      if (
+        this.ball.__returnT <= 0 ||
+        (realElapsed > 2.25 && this.ball.__scored) ||
+        realElapsed > 3.25
+      ) {
+        giveBack(this);
       }
     }
 
@@ -116,12 +151,12 @@ function install(GameEngine) {
         inFlight: this.ball.inFlight,
         grade: this.ball.grade,
         elapsed,
+        realElapsed,
         planned,
         willMake: !!this.ball.__v8WillMake,
         scored: !!this.ball.__scored,
       };
     }
-
     return result;
   };
 }
