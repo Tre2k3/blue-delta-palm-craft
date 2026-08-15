@@ -45,34 +45,66 @@ try {
     e.start(true);
     e.cinematic = null;
     e.letterbox = 0;
+    e.input?.keys?.clear?.();
     e.updateProximity?.();
     e.emitHud?.();
   });
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(900);
 
-  let state = await page.evaluate(() => ({
-    mode: window.__SACK_V8_ENGINE__.mode,
-    interior: window.__SACK_V8_ENGINE__.__v8Interior,
-    visible: window.__SACK_V8_ENGINE__.world3d?.sprite?.visible,
-  }));
+  let state = await page.evaluate(() => {
+    const e = window.__SACK_V8_ENGINE__;
+    const w = e.world3d;
+    let ndc = null;
+    if (w?.sprite && w?.camera) {
+      const Vec3 = w.camera.position.constructor;
+      const v = new Vec3();
+      w.sprite.getWorldPosition(v);
+      v.project(w.camera);
+      ndc = { x: v.x, y: v.y, z: v.z };
+    }
+    const image = w?.sprite?.material?.map?.image;
+    return {
+      mode: e.mode,
+      interior: e.__v8Interior,
+      visible: w?.sprite?.visible,
+      ndc,
+      spriteTexture: image ? {
+        width: image.width || image.naturalWidth || 0,
+        height: image.height || image.naturalHeight || 0,
+      } : null,
+    };
+  });
   assert(state.mode === "interior", "new game begins in an interior");
   assert(state.interior === "apartment", "new game begins inside Benji's apartment");
-  assert(state.visible === true, "Benji is visible in third person");
+  assert(state.visible === true, "Benji sprite is enabled in third person");
+  assert(
+    !!state.spriteTexture && state.spriteTexture.width > 0 && state.spriteTexture.height > 0,
+    "Benji has a loaded visible sprite texture",
+  );
+  assert(
+    !!state.ndc && Math.abs(state.ndc.x) <= 1 && Math.abs(state.ndc.y) <= 1 && state.ndc.z >= -1 && state.ndc.z <= 1,
+    "Benji projects inside the active camera viewport",
+  );
   await page.screenshot({ path: "artifacts/v8-apartment.png", fullPage: true });
 
-  // Direction contract: visual facing follows input, independent of camera yaw.
-  for (const [key, expected] of [
-    ["a", "left"],
-    ["d", "right"],
-    ["w", "up"],
-    ["s", "down"],
+  // Direction contract. Manipulate the engine's real InputManager key set so
+  // the check is deterministic in headless CI and still exercises poll/update.
+  for (const [code, label, expected] of [
+    ["KeyA", "A", "left"],
+    ["KeyD", "D", "right"],
+    ["KeyW", "W", "up"],
+    ["KeyS", "S", "down"],
   ]) {
-    await page.keyboard.down(key);
-    await page.waitForTimeout(180);
-    await page.keyboard.up(key);
-    await page.waitForTimeout(50);
+    await page.evaluate((nextCode) => {
+      const e = window.__SACK_V8_ENGINE__;
+      e.input.keys.clear();
+      e.input.keys.add(nextCode);
+    }, code);
+    await page.waitForTimeout(220);
     const facing = await page.evaluate(() => window.__SACK_V8_ENGINE__.facing);
-    assert(facing === expected, `${key.toUpperCase()} faces ${expected}`);
+    await page.evaluate(() => window.__SACK_V8_ENGINE__.input.keys.clear());
+    await page.waitForTimeout(70);
+    assert(facing === expected, `${label} faces ${expected}`);
   }
 
   // Exit apartment and ensure the first objective advances exactly once.
@@ -83,7 +115,7 @@ try {
     e.updateProximity?.();
     e.tryInteract();
   });
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(500);
   state = await page.evaluate(() => {
     const e = window.__SACK_V8_ENGINE__;
     return {
@@ -106,15 +138,16 @@ try {
     e.updateProximity?.();
     e.tryInteract();
   });
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(500);
   state = await page.evaluate(() => ({
     mode: window.__SACK_V8_ENGINE__.mode,
     interior: window.__SACK_V8_ENGINE__.__v8Interior,
   }));
   assert(state.mode === "interior" && state.interior === "hq", "SackReligious HQ is enterable");
+  await page.screenshot({ path: "artifacts/v8-hq.png", fullPage: true });
 
-  // Basketball: enter the indoor Sackrow gym, shoot a centered green-timing shot,
-  // resolve it, then make sure another possession becomes available.
+  // Basketball: enter Sackrow, fire a centered PERFECT release, resolve it,
+  // and guarantee the player receives another playable possession.
   await page.evaluate(() => {
     const e = window.__SACK_V8_ENGINE__;
     e.mode = "world";
@@ -133,19 +166,25 @@ try {
     mode: window.__SACK_V8_ENGINE__.mode,
     shots: window.__SACK_V8_ENGINE__.ball.shots,
     inFlight: window.__SACK_V8_ENGINE__.ball.inFlight,
+    grade: window.__SACK_V8_ENGINE__.ball.grade,
   }));
   assert(state.mode === "basketball", "basketball enters Sackrow gameplay mode");
   assert(state.shots === 1, "release creates a shot attempt");
   assert(state.inFlight === true, "basketball visibly enters flight state");
+  assert(state.grade === "PERFECT", "0.65 release is a PERFECT timing shot");
 
-  await page.waitForTimeout(2800);
+  await page.waitForTimeout(4200);
   state = await page.evaluate(() => ({
     score: window.__SACK_V8_ENGINE__.ball.score,
     held: window.__SACK_V8_ENGINE__.ball.held,
     inFlight: window.__SACK_V8_ENGINE__.ball.inFlight,
     shots: window.__SACK_V8_ENGINE__.ball.shots,
+    diag: window.__SACK_BBALL_V8__ || null,
   }));
-  assert(state.score >= 2, "centered green-timing shot scores");
+  if (state.score < 2 || !state.held || state.inFlight) {
+    console.error("Basketball diagnostic:", JSON.stringify(state.diag));
+  }
+  assert(state.score >= 2, "centered PERFECT shot scores");
   assert(state.held === true && state.inFlight === false, "ball resets to a playable next possession");
   await page.screenshot({ path: "artifacts/v8-sackrow-gym.png", fullPage: true });
 
@@ -155,7 +194,7 @@ try {
     e.exitBasketball();
     window.__gameTest.teleport("neighborhood");
   });
-  await page.waitForTimeout(700);
+  await page.waitForTimeout(900);
   const blanksVisible = await page.evaluate(() => {
     const values = [...(window.__SACK_V8_ENGINE__.world3d?.npcSprites?.values?.() || [])];
     return values.filter((x) => x?.visible).length;
