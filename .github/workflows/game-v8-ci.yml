@@ -58,11 +58,9 @@ jobs:
         run: node scripts/game-smoke.mjs
 
       - name: Full Drop Day save economy wardrobe smoke
-        if: always()
         run: node scripts/mission-smoke.mjs
 
       - name: 2.5D visual and mobile smoke
-        if: always()
         run: node scripts/dom-smoke.mjs
 
       - name: Server log on failure
