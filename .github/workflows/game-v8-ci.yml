@@ -1,0 +1,70 @@
+name: SackReligious Game V8 CI
+
+on:
+  push:
+    branches:
+      - feature/full-game-overhaul-v8
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify-game:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start preview
+        run: |
+          npm run dev > /tmp/sack-game-v8.log 2>&1 &
+          echo $! > /tmp/sack-game-v8.pid
+          for i in {1..45}; do
+            if curl -fsS http://127.0.0.1:8080/ >/dev/null; then
+              echo "Preview is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/sack-game-v8.log
+          exit 1
+
+      - name: Gameplay smoke test
+        run: node scripts/game-smoke.mjs
+
+      - name: Server log on failure
+        if: failure()
+        run: cat /tmp/sack-game-v8.log || true
+
+      - name: Upload QA screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sackreligious-v8-qa
+          path: artifacts/
+          if-no-files-found: ignore
