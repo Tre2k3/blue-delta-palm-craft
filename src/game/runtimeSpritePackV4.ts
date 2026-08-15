@@ -30,10 +30,13 @@ function loadTexture(url) {
         tex.colorSpace = THREE.SRGBColorSpace;
         tex.magFilter = THREE.LinearFilter;
         tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.wrapS = THREE.ClampToEdgeWrapping;
+        tex.wrapT = THREE.ClampToEdgeWrapping;
+        tex.needsUpdate = true;
         resolve(tex);
       },
       undefined,
-      reject,
+      (err) => reject(err || new Error(`Failed to load ${url}`)),
     );
   });
   texturePromises.set(url, p);
@@ -46,14 +49,18 @@ function frameMaterial(base, url, cols, rows, row, frame) {
   const key = `${url}|${cols}|${rows}|${safeRow}|${safeFrame}`;
   if (frameMats.has(key)) return frameMats.get(key);
   const tex = base.clone();
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
   tex.repeat.set(1 / cols, 1 / rows);
   tex.offset.set(safeFrame / cols, 1 - (safeRow + 1) / rows);
   tex.needsUpdate = true;
   const mat = new THREE.SpriteMaterial({
     map: tex,
+    color: 0xffffff,
     transparent: true,
-    alphaTest: 0.035,
+    alphaTest: 0.001,
     depthWrite: false,
+    depthTest: true,
   });
   frameMats.set(key, mat);
   return mat;
@@ -69,16 +76,33 @@ function makeShadow() {
   return mesh;
 }
 
-function makeSpriteActor(scene, scaleX = 1.05, scaleY = 1.82) {
+function makeSpriteActor(scene, scaleX = 1.05, scaleY = 1.82, withShadow = true) {
   const root = new THREE.Group();
   root.userData.spritePackV4 = true;
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, opacity: 0 }));
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0xffffff, transparent: true, opacity: 0 }));
+  sprite.userData.spritePackV4 = true;
   sprite.scale.set(scaleX, scaleY, 1);
   sprite.position.y = scaleY / 2;
   sprite.renderOrder = 4;
-  root.add(makeShadow(), sprite);
+  if (withShadow) root.add(makeShadow());
+  root.add(sprite);
   scene.add(root);
   return { root, sprite, facing: "down", prevX: null, prevY: null };
+}
+
+function publishSpriteDiagnostics(s, extra = {}) {
+  const walk = s.textures.benjiWalk;
+  const image = walk?.image;
+  window.__SACK_SPRITE_PACK_V4__ = {
+    ...(window.__SACK_SPRITE_PACK_V4__ || {}),
+    installed: true,
+    loaded: !!walk,
+    directionRows: { ...DIR_ROW },
+    assets: { ...ASSETS },
+    assetErrors: { ...s.assetErrors },
+    benjiTexture: image ? { width: image.width || 0, height: image.height || 0 } : null,
+    ...extra,
+  };
 }
 
 function getWorldState(world) {
@@ -87,17 +111,43 @@ function getWorldState(world) {
   s = {
     loaded: false,
     textures: {},
+    assetErrors: {},
     ambient: [],
     named: new Map(),
+    player: null,
     playerPrev: null,
   };
   worldStates.set(world, s);
-  Promise.all(Object.entries(ASSETS).map(async ([key, url]) => [key, await loadTexture(url)]))
-    .then((pairs) => {
-      s.textures = Object.fromEntries(pairs);
+
+  // Benji is the critical asset. Load it independently so a bad optional NPC
+  // or basketball atlas can never make the player disappear.
+  loadTexture(ASSETS.benjiWalk)
+    .then((tex) => {
+      s.textures.benjiWalk = tex;
       s.loaded = true;
+      publishSpriteDiagnostics(s, { playerAssetReady: true });
     })
-    .catch((err) => console.error("Sprite Pack V4 asset load failed", err));
+    .catch((err) => {
+      s.assetErrors.benjiWalk = String(err?.message || err || "unknown load error");
+      publishSpriteDiagnostics(s, { playerAssetReady: false });
+      console.error("Sprite Pack V4 Benji asset load failed", err);
+    });
+
+  // Optional sprite assets load independently. A single failure no longer
+  // rejects the entire pack.
+  for (const [key, url] of Object.entries(ASSETS)) {
+    if (key === "benjiWalk") continue;
+    loadTexture(url)
+      .then((tex) => {
+        s.textures[key] = tex;
+        publishSpriteDiagnostics(s);
+      })
+      .catch((err) => {
+        s.assetErrors[key] = String(err?.message || err || "unknown load error");
+        publishSpriteDiagnostics(s);
+        console.error(`Sprite Pack V4 optional asset load failed: ${key}`, err);
+      });
+  }
   return s;
 }
 
@@ -126,7 +176,37 @@ function hideLegacyPeople(world) {
 }
 
 function syncPlayer(world, f, s) {
-  if (!s.loaded || !world.sprite) return;
+  const visible = f.cameraView === "third" && f.mode !== "shop";
+
+  if (!s.loaded || !s.textures.benjiWalk) {
+    // Keep the pre-V4 player path available while the atlas is loading instead
+    // of hiding the only character representation on screen.
+    publishSpriteDiagnostics(s, {
+      playerVisibleRequested: visible,
+      playerActorCreated: false,
+      facing: f.facing,
+    });
+    return;
+  }
+
+  if (!s.player) {
+    // Use a dedicated V4 player sprite instead of mutating world.sprite. The
+    // legacy renderer rewrites world.sprite every frame, which could leave the
+    // new material invisible. The existing player contact shadow remains in
+    // world.player, so this actor intentionally does not add a second shadow.
+    s.player = makeSpriteActor(world.scene, 1.12, 1.92, false);
+  }
+
+  const actor = s.player;
+  actor.root.visible = visible;
+
+  // Once the dedicated V4 actor exists, suppress only the legacy sprite. Keep
+  // the legacy player group/contact shadow so the character stays grounded.
+  if (world.sprite) world.sprite.visible = false;
+
+  actor.root.position.set((f.px || 0) / 16, 0, (f.py || 0) / 16);
+  actor.facing = f.facing || actor.facing || "down";
+
   const now = f.clock || 0;
   let speed = 0;
   if (s.playerPrev) {
@@ -135,18 +215,27 @@ function syncPlayer(world, f, s) {
   }
   s.playerPrev = { x: f.px, y: f.py, t: now };
 
-  const tex = s.textures.benjiWalk;
   const cols = 5;
-  const row = DIR_ROW[f.facing] ?? 0;
+  const row = DIR_ROW[actor.facing] ?? 0;
   const frame = f.moving ? Math.floor(now * (speed > 185 ? 11 : 8)) % cols : 0;
-  world.sprite.material = frameMaterial(tex, ASSETS.benjiWalk, cols, 4, row, frame);
-  world.sprite.scale.set(1.12, 1.92, 1);
-  world.sprite.position.y = 0.96 + (f.bob || 0) * 0.008;
-  world.sprite.visible = f.cameraView === "third" && f.mode !== "shop";
+  actor.sprite.material = frameMaterial(s.textures.benjiWalk, ASSETS.benjiWalk, cols, 4, row, frame);
+  actor.sprite.scale.set(1.12, 1.92, 1);
+  actor.sprite.position.y = 0.96 + (f.bob || 0) * 0.008;
+  actor.sprite.visible = visible;
+
+  publishSpriteDiagnostics(s, {
+    playerVisibleRequested: visible,
+    playerActorCreated: true,
+    playerActorVisible: actor.root.visible && actor.sprite.visible,
+    playerWorldPosition: { x: actor.root.position.x, y: actor.root.position.y, z: actor.root.position.z },
+    facing: actor.facing,
+    row,
+    frame,
+  });
 }
 
 function syncAmbient(world, f, s) {
-  if (!s.loaded) return;
+  if (!s.textures.memphisNpc) return;
   while (s.ambient.length < f.peds.length) s.ambient.push(makeSpriteActor(world.scene, 1.02, 1.78));
   for (let i = 0; i < s.ambient.length; i++) {
     const actor = s.ambient[i];
@@ -170,12 +259,13 @@ function namedAsset(id) {
 }
 
 function syncNamed(world, f, s) {
-  if (!s.loaded) return;
   const seen = new Set();
   for (const npc of f.npcs) {
     seen.add(npc.id);
-    let actor = s.named.get(npc.id);
     const spec = namedAsset(npc.id);
+    const tex = s.textures[spec.key];
+    if (!tex) continue;
+    let actor = s.named.get(npc.id);
     if (!actor) {
       actor = makeSpriteActor(world.scene, spec.sx, spec.sy);
       s.named.set(npc.id, actor);
@@ -189,7 +279,7 @@ function syncNamed(world, f, s) {
     actor.prevX = npc.x;
     actor.prevY = npc.y;
     const frame = moving ? Math.floor((f.clock || 0) * 7.5) % spec.cols : 0;
-    actor.sprite.material = frameMaterial(s.textures[spec.key], spec.url, spec.cols, 4, DIR_ROW[actor.facing], frame);
+    actor.sprite.material = frameMaterial(tex, spec.url, spec.cols, 4, DIR_ROW[actor.facing], frame);
     actor.root.position.set(npc.x / 16, 0, npc.y / 16);
   }
   for (const [id, actor] of s.named) if (!seen.has(id)) actor.root.visible = false;
@@ -288,6 +378,7 @@ setTimeout(async () => {
     installWorld(World3D);
     installBasketball(GameEngine);
     window.__SACK_SPRITE_PACK_V4__ = {
+      ...(window.__SACK_SPRITE_PACK_V4__ || {}),
       installed: true,
       directionRows: { ...DIR_ROW },
       assets: { ...ASSETS },
