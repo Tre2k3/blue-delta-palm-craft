@@ -1,0 +1,1 @@
+Sackrow Ballers court branding is wired by runtimeLogisticsV3.ts. The runtime expects public/game/branding/sackrow-ballers-logo.jpg for the center-court decal. The source artwork was supplied by the project owner in chat. If the raster asset is not yet present, the black/gold court geometry and readable SACKROW BALLERS wordmarks still render without it.
