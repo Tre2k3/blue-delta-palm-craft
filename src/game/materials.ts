@@ -3,6 +3,7 @@ import "./runtimeRaycastSafetyV8";
 import "./runtimeFixesV2";
 import "./runtimeWatchdog";
 import "./runtimeGameV8";
+import "./runtimeBasketballStabilityV8";
 import "./runtimeV8Guard";
 
 export const MAT_URLS = {
