@@ -6,6 +6,7 @@ import "./runtimeGameV8";
 import "./runtimeCharacterRendererV8";
 import "./runtimeBasketballStabilityV8";
 import "./runtimeInputFacingV8";
+import "./runtimeHQFlowV8";
 import "./runtimeV8Guard";
 
 export const MAT_URLS = {
