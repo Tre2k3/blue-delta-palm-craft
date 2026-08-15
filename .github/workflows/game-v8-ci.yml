@@ -14,7 +14,7 @@ permissions:
 jobs:
   verify-game:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,6 +56,10 @@ jobs:
 
       - name: Gameplay smoke test
         run: node scripts/game-smoke.mjs
+
+      - name: Full Drop Day save economy wardrobe smoke
+        if: always()
+        run: node scripts/mission-smoke.mjs
 
       - name: 2.5D visual and mobile smoke
         if: always()
