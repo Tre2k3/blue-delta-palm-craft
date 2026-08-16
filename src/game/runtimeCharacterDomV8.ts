@@ -87,8 +87,20 @@ function setSheet(el, url, cols, rows, row, frame) {
 
 function project(world, x, z, worldHeight, el, aspect = .63) {
   const canvas = world.renderer.domElement;
-  const width = canvas.clientWidth || canvas.width || 1;
-  const height = canvas.clientHeight || canvas.height || 1;
+  const rect = canvas.getBoundingClientRect?.() || { width: canvas.clientWidth || canvas.width || 1, height: canvas.clientHeight || canvas.height || 1, left: 0, top: 0 };
+
+  // The game shell can retain its previous desktop CSS width for a frame (or
+  // longer in embedded/mobile preview shells) after the browser viewport is
+  // resized. Project DOM actors into the portion of the canvas that is
+  // actually visible instead of leaving them centered hundreds of pixels off
+  // screen. On normal layouts these values are identical to the canvas size.
+  const viewportW = Math.max(1, Number(window.innerWidth) || rect.width || 1);
+  const viewportH = Math.max(1, Number(window.innerHeight) || rect.height || 1);
+  const availableW = Math.max(1, viewportW - Math.max(0, Number(rect.left) || 0));
+  const availableH = Math.max(1, viewportH - Math.max(0, Number(rect.top) || 0));
+  const width = Math.max(1, Math.min(Number(rect.width) || canvas.clientWidth || canvas.width || 1, availableW));
+  const height = Math.max(1, Math.min(Number(rect.height) || canvas.clientHeight || canvas.height || 1, availableH));
+
   const foot = new THREE.Vector3(x, .03, z).project(world.camera);
   const head = new THREE.Vector3(x, worldHeight, z).project(world.camera);
   if (
