@@ -115,9 +115,6 @@ function project(world, x, z, worldHeight, el, aspect = .63, keepOnScreen = fals
   const vw = Math.max(1, window.innerWidth || document.documentElement.clientWidth || 1);
   const vh = Math.max(1, window.innerHeight || document.documentElement.clientHeight || 1);
 
-  // Use the actual visible canvas rectangle. In normal desktop play this is the
-  // full canvas. On responsive/embedded previews it also works when an ancestor
-  // temporarily retains a stale desktop width or offset.
   const left = clamp(Number(r.left) || 0, 0, vw);
   const top = clamp(Number(r.top) || 0, 0, vh);
   const right = clamp(Number(r.right) || ((Number(r.left) || 0) + (Number(r.width) || 1)), 0, vw);
@@ -137,7 +134,7 @@ function project(world, x, z, worldHeight, el, aspect = .63, keepOnScreen = fals
   }
 
   let fx = left + (foot.x * .5 + .5) * width;
-  let fy = top + (-foot.y * .5 + .5) * height;
+  const fy = top + (-foot.y * .5 + .5) * height;
   const hy = top + (-head.y * .5 + .5) * height;
   const h = Math.max(34, Math.min(height * .58, Math.abs(fy - hy)));
   const w = h * aspect;
@@ -223,8 +220,7 @@ function syncNamed(world, frame, s) {
 }
 
 function syncHQ(world, frame, engine, s) {
-  const inHQ =
-    engine?.__v8Interior === "hq" || engine?.__v8DialogueReturn === "hq" || engine?.__v8ShopReturn === "hq";
+  const inHQ = engine?.__v8Interior === "hq" || engine?.__v8DialogueReturn === "hq" || engine?.__v8ShopReturn === "hq";
   if (!inHQ || frame.mode === "shop") { s.hqK.style.display = "none"; return; }
   setSheet(s.hqK, URLS.k, 6, 4, KROW.down, 0);
   project(world, wx(HQ.cx + 42), wz(HQ.cy - 32), 1.95, s.hqK, .62);
