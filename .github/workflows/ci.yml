@@ -6,17 +6,7 @@ on:
       - main
   push:
     branches:
-      - main
-      - "chore/**"
-      - "fix/**"
-      - "feat/**"
-      - "feature/**"
-      - "ci/**"
-      - "docs/**"
-      - "cleanup/**"
-      - "refactor/**"
-      - "hotfix/**"
-      - "test/**"
+      - "**"
   workflow_dispatch:
 
 concurrency:
@@ -114,6 +104,9 @@ jobs:
           done
           echo "Screenshot count: $(find artifacts -maxdepth 1 -name '*.png' | wc -l)"
           exit "$missing"
+
+      - name: Black-frame and pixel variance
+        run: node scripts/qa-frames.mjs artifacts
 
       - name: Preview log on failure
         if: failure()
