@@ -4,28 +4,20 @@
  *
  * The 2.5D actors are projected DOM elements anchored to the 3D world. Some
  * embedded/mobile preview shells keep the game canvas at its previous desktop
- * width for a short period after a viewport change. This guard keeps the player
- * actor inside the actually visible browser viewport without altering the game
- * camera, physics or world position.
+ * width after a viewport change. Clamp Benji after the final character sync so
+ * the character can never be stranded outside the actually visible viewport.
  */
 
-let raf = 0;
-
 function clampPlayerToViewport() {
-  raf = 0;
   if (typeof window === "undefined" || typeof document === "undefined") return;
   const el = document.querySelector('[data-sack-character-v8="benji"]');
   if (!(el instanceof HTMLElement) || getComputedStyle(el).display === "none") return;
 
-  const parent = el.offsetParent instanceof HTMLElement ? el.offsetParent : el.parentElement;
-  const parentRect = parent?.getBoundingClientRect?.() ?? { left: 0, top: 0 };
   const rect = el.getBoundingClientRect();
   const vw = Math.max(1, window.innerWidth || document.documentElement.clientWidth || 1);
   const vh = Math.max(1, window.innerHeight || document.documentElement.clientHeight || 1);
-
-  // Only intervene when the actor would otherwise be outside the visible area.
-  // Preserve the normal projected 3D position whenever it already intersects.
   const pad = 8;
+
   let dx = 0;
   let dy = 0;
   if (rect.left < pad) dx = pad - rect.left;
@@ -42,58 +34,51 @@ function clampPlayerToViewport() {
     el.style.top = `${top + dy}px`;
   }
 
+  const finalRect = el.getBoundingClientRect();
   window.__SACK_RESPONSIVE_CHARACTERS_V8__ = {
     installed: true,
     viewport: { width: vw, height: vh },
     playerRect: {
-      left: rect.left,
-      top: rect.top,
-      right: rect.right,
-      bottom: rect.bottom,
+      left: finalRect.left,
+      top: finalRect.top,
+      right: finalRect.right,
+      bottom: finalRect.bottom,
     },
     corrected: Math.abs(dx) > 0.25 || Math.abs(dy) > 0.25,
-    parentOffset: { left: parentRect.left || 0, top: parentRect.top || 0 },
   };
 }
 
-function scheduleClamp() {
-  if (raf || typeof requestAnimationFrame === "undefined") return;
-  raf = requestAnimationFrame(clampPlayerToViewport);
+function install(World3D) {
+  const p = World3D?.prototype;
+  if (!p || p.__responsiveCharactersV8Installed) return;
+  p.__responsiveCharactersV8Installed = true;
+
+  // runtimeCharacterDomV8 and runtimeWardrobeV8 install before this module's
+  // delayed hook. Wrapping the final sync means our clamp runs synchronously
+  // after those systems write Benji's projected left/top values every frame.
+  const oldSync = p.sync;
+  p.sync = function responsiveCharactersV8Sync(frame) {
+    const result = oldSync.call(this, frame);
+    clampPlayerToViewport();
+    return result;
+  };
+
+  const refresh = () => clampPlayerToViewport();
+  window.addEventListener("resize", refresh, { passive: true });
+  window.addEventListener("orientationchange", refresh, { passive: true });
+  clampPlayerToViewport();
 }
 
 if (typeof window !== "undefined") {
-  window.addEventListener("resize", scheduleClamp, { passive: true });
-  window.addEventListener("orientationchange", scheduleClamp, { passive: true });
-
-  // The game continuously changes actor position through inline styles. Watch
-  // the player actor so a stale desktop projection is corrected immediately,
-  // including in automation shells where resize can happen between engine ticks.
-  const observer = new MutationObserver((records) => {
-    for (const record of records) {
-      const target = record.target;
-      if (target instanceof HTMLElement && target.dataset?.sackCharacterV8 === "benji") {
-        scheduleClamp();
-        break;
-      }
+  window.__SACK_RESPONSIVE_CHARACTERS_V8__ = { installed: true, waitingForWorld: true };
+  setTimeout(async () => {
+    try {
+      const { World3D } = await import("./world3d");
+      install(World3D);
+      window.__SACK_RESPONSIVE_CHARACTERS_V8__.waitingForWorld = false;
+    } catch (err) {
+      console.error("Responsive Character Guard V8 failed", err);
+      window.__SACK_RESPONSIVE_CHARACTERS_V8__ = { installed: false, error: String(err) };
     }
-  });
-
-  const attach = () => {
-    const el = document.querySelector('[data-sack-character-v8="benji"]');
-    if (el instanceof HTMLElement) {
-      observer.observe(el, { attributes: true, attributeFilter: ["style"] });
-      scheduleClamp();
-      return true;
-    }
-    return false;
-  };
-
-  if (!attach()) {
-    const bootObserver = new MutationObserver(() => {
-      if (attach()) bootObserver.disconnect();
-    });
-    bootObserver.observe(document.documentElement, { childList: true, subtree: true });
-  }
-
-  window.__SACK_RESPONSIVE_CHARACTERS_V8__ = { installed: true };
+  }, 1700);
 }
