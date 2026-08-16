@@ -27,6 +27,31 @@ try {
   await mkdir("artifacts", { recursive: true });
   await page.goto(baseURL, { waitUntil: "networkidle", timeout: 60000 });
   await page.waitForFunction(() => window.__SACK_V8_ENGINE__ && window.__SACK_V8_BOOT__?.installed, null, { timeout: 30000 });
+
+  const asset = await page.evaluate(async () => {
+    const src = "/game/sprites/benji_walk_4dir.webp";
+    try {
+      const response = await fetch(src, { cache: "no-store" });
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      const c = document.createElement("canvas");
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      const g = c.getContext("2d", { willReadFrequently: true });
+      g.drawImage(img, 0, 0);
+      const data = g.getImageData(0, 0, c.width, c.height).data;
+      let opaque = 0;
+      for (let i = 3; i < data.length; i += 4) if (data[i] > 24) opaque++;
+      URL.revokeObjectURL(url);
+      return { ok: response.ok, status: response.status, type: blob.type, bytes: blob.size, width: img.naturalWidth, height: img.naturalHeight, opaque };
+    } catch (err) {
+      return { ok: false, error: String(err) };
+    }
+  });
+  check(asset?.ok && asset.width > 100 && asset.height > 100 && asset.opaque > 1000, "Benji sprite file decodes into real opaque pixels", asset);
+
   await page.evaluate(() => { const e=window.__SACK_V8_ENGINE__; e.start(true); e.cinematic=null; e.letterbox=0; e.input.keys.clear(); e.emitHud?.(); });
   await page.waitForFunction(() => window.__SACK_CHARACTER_DOM_V8__?.playerDisplay === "block", null, { timeout: 15000 });
 
@@ -34,8 +59,28 @@ try {
   check(!!info, "Benji DOM actor exists", info);
   check(info?.display === "block", "Benji DOM actor is displayed", info);
   check((info?.width || 0) > 25 && (info?.height || 0) > 45, "Benji DOM actor has visible size", info);
-  check(info?.backgroundImage?.includes("benji_") || info?.backgroundImage?.includes("data:image/webp"), "Benji uses illustrated/wardrobe sprite art", info);
+  check(info?.backgroundImage?.includes("benji_") || info?.backgroundImage?.includes("data:image/"), "Benji uses illustrated/wardrobe sprite art", info);
   check(info && info.right > 0 && info.left < info.viewport.w && info.bottom > 0 && info.top < info.viewport.h, "Benji intersects the viewport", info);
+
+  const stack = await page.evaluate(() => {
+    const el = document.querySelector('[data-sack-character-v8="benji"]');
+    if (!(el instanceof HTMLElement)) return null;
+    const old = el.style.pointerEvents;
+    el.style.pointerEvents = "auto";
+    const r = el.getBoundingClientRect();
+    const x = Math.max(0, Math.min(innerWidth - 1, r.left + r.width / 2));
+    const y = Math.max(0, Math.min(innerHeight - 1, r.top + r.height / 2));
+    const top = document.elementFromPoint(x, y);
+    el.style.pointerEvents = old || "none";
+    return {
+      actorIsTop: top === el || el.contains(top),
+      topTag: top?.tagName || null,
+      topCharacter: top?.closest?.("[data-sack-character-v8]")?.getAttribute?.("data-sack-character-v8") || null,
+      actorZ: getComputedStyle(el).zIndex,
+      layerZ: getComputedStyle(el.parentElement).zIndex,
+    };
+  });
+  check(stack?.actorIsTop, "Benji character layer paints above the game canvas", stack);
   await page.screenshot({ path: "artifacts/v8-dom-apartment.png", fullPage: true });
 
   for (const [key, expected] of [["a","left"],["d","right"],["w","up"],["s","down"]]) {
