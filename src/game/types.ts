@@ -1,3 +1,5 @@
+import type { DropRunHud, RunGrade } from "./dropRun";
+
 export type Dir = "up" | "down" | "left" | "right";
 
 export type GameMode =
@@ -140,6 +142,22 @@ export interface SaveData {
   sideProgress: Record<string, boolean>;
   worldHour: number;
   settings: GameSettings;
+  dropRunIndex?: number;
+  dropRun?: Partial<{
+    active: boolean;
+    time: number;
+    deliveries: number;
+    combo: number;
+    bestCombo: number;
+    mistakes: number;
+    ballMakes: number;
+    ballPerfects: number;
+    ballScore: number;
+    points: number;
+    grade: RunGrade | null;
+  }>;
+  bestRunScore?: number;
+  bestGrade?: RunGrade | null;
 }
 
 export interface GameSettings {
@@ -186,6 +204,9 @@ export interface HudSnapshot {
     power: number;
     charging: boolean;
     best: number;
+    target: number;
+    perfects: number;
+    zone: string;
   } | null;
   paused: boolean;
   started: boolean;
@@ -204,6 +225,10 @@ export interface HudSnapshot {
   hasSave: boolean;
   cameraView: CameraView;
   steps: { id: string; label: string; done: boolean; description: string }[];
+  dropRun: DropRunHud;
+  uiPulse: number;
+  bestGrade: RunGrade | null;
+  bestRunScore: number;
 }
 
 export type GameTestState = {
@@ -241,4 +266,3 @@ declare global {
     __controlsTest?: ControlsTestApi;
   }
 }
-

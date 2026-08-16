@@ -60,6 +60,8 @@ export type WorldFrame = {
   animT: number;
   loco: LocomotionState;
   indoor: boolean;
+  punch: number;
+  hoopPulse: number;
 };
 
 type TexPack = Partial<Record<MatKey, THREE.Texture>>;
@@ -73,6 +75,7 @@ export class World3D {
   ball: THREE.Mesh;
   ballShadow: THREE.Mesh;
   hoopRim: THREE.Mesh;
+  hoopNet: THREE.Mesh | null = null;
   cars: THREE.Group[] = [];
   peds: THREE.Group[] = [];
   npcSprites = new Map<string, THREE.Sprite>();
@@ -484,6 +487,7 @@ export class World3D {
     );
     net.position.set(cx, 2.48, hoopZ);
     this.scene.add(net);
+    this.hoopNet = net;
     return this.hoopRim;
   }
 
@@ -649,6 +653,14 @@ export class World3D {
     const ease = 1 - Math.exp(-k * dt);
     const targetFov = f.cameraView === "first" ? (f.mode === "basketball" ? 74 : 70) : f.loco === "run" ? 66.5 : f.indoor ? 58 : 62;
     this.camFov += (targetFov - this.camFov) * (1 - Math.exp(-4.2 * dt));
+    this.camFov += (f.punch ?? 0) * 3.4;
+
+    const rimScale = 1 + (f.hoopPulse ?? 0) * 0.28;
+    this.hoopRim.scale.set(rimScale, rimScale, rimScale);
+    if (this.hoopNet) {
+      const netS = 1 + f.hoopPulse * 0.18;
+      this.hoopNet.scale.set(netS, 1 + f.hoopPulse * 0.35, netS);
+    }
 
     if (f.cameraView === "first") {
       this.camPos.set(x + sx, 1.68 + f.bob * 0.012 + step, z + sy);

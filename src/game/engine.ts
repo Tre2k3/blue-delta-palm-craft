@@ -17,6 +17,23 @@ import { audio } from "./audio";
 import { InputManager } from "./input";
 import { World3D } from "./world3d";
 import { CharacterController } from "./characterController";
+import { JUICE, emitBurst, stepParticles, type ScreenParticle } from "./juice";
+import {
+  createRun,
+  finalizeRun,
+  goodWindow,
+  gradeRank,
+  noteMistake,
+  perfectWindow,
+  scoreDelivery,
+  scoreMake,
+  scoreMiss,
+  shotZone,
+  tierFor,
+  toHud,
+  type DropRunState,
+  type RunGrade,
+} from "./dropRun";
 import type {
   ApparelId,
   CinematicState,
@@ -149,7 +166,7 @@ export class GameEngine {
 	nearPoi: LocationId | null = null;
 	nearNpc: string | null = null;
 	lastInteract = 0;
-	particles: { x: number; y: number; vx: number; vy: number; life: number; color: string; size: number }[] = [];
+	particles: ScreenParticle[] = [];
 	floaters: Floater[] = [];
 	running = false;
 	raf = 0;
@@ -164,6 +181,15 @@ export class GameEngine {
 	world3d: World3D | null = null;
 	mover = new CharacterController();
 	lastDt = 1 / 60;
+	runIndex = 1;
+	run: DropRunState = createRun(1);
+	bestRunScore = 0;
+	bestGrade: RunGrade | null = null;
+	uiPulse = 0;
+	punch = 0;
+	hoopPulse = 0;
+	plantSign = 0;
+	lastDeliveryAt = 0;
 	constructor(canvas: HTMLCanvasElement) {
 		this.canvas = canvas;
 		this.world3d = new World3D(canvas);
@@ -585,8 +611,17 @@ export class GameEngine {
 		this.dialogue = null;
 		this.ball.missionCredited = false;
 		this.ball.best = 0;
+		this.ball.targetScore = 8;
 		this.worldHour = 16.2;
 		this.hasSave = false;
+		this.runIndex = 1;
+		this.run = createRun(1);
+		this.bestRunScore = 0;
+		this.bestGrade = null;
+		this.uiPulse = 0;
+		this.punch = 0;
+		this.hoopPulse = 0;
+		this.lastDeliveryAt = 0;
 		if (emit) this.emitHud();
 	}
 	showToast(msg: string, t = 3.1) {
@@ -597,16 +632,22 @@ export class GameEngine {
 		this.floaters.push({
 			x,
 			y,
-			vy: -38,
-			life: 1.15,
+			vy: -42,
+			life: 1.2,
 			text,
 			color,
-			scale: 1.15
+			scale: 1.35
 		});
 	}
 	addTrauma(v: number) {
 		if (!this.settings.shake) return;
 		this.trauma = clamp(this.trauma + v, 0, 1);
+	}
+	addPunch(v: number) {
+		this.punch = Math.min(1, this.punch + v);
+	}
+	currentTier() {
+		return tierFor(this.runIndex);
 	}
 	loadSave() {
 		try {
@@ -632,6 +673,35 @@ export class GameEngine {
 				...data.settings
 			};
 			if (data.sideProgress) for (const s of this.side) s.done = !!data.sideProgress[s.id];
+			this.runIndex = Math.max(1, data.dropRunIndex ?? 1);
+			const tier = this.currentTier();
+			if (this.missionComplete) {
+				this.run = createRun(this.runIndex);
+			} else {
+				this.mission = createDropDayMission({ order: tier.deliveryOrder, courtTarget: tier.courtTarget });
+				for (const s of this.mission.steps) s.done = !!data.missionProgress?.[s.id];
+				const firstUndone = this.mission.steps.findIndex((s) => !s.done);
+				this.mission.activeStep = firstUndone === -1 ? this.mission.steps.length : firstUndone;
+				this.run = createRun(this.runIndex);
+				if (data.dropRun) {
+					this.run.active = !!data.dropRun.active;
+					this.run.time = data.dropRun.time ?? 0;
+					this.run.deliveries = data.dropRun.deliveries ?? 0;
+					this.run.combo = data.dropRun.combo ?? 0;
+					this.run.bestCombo = data.dropRun.bestCombo ?? 0;
+					this.run.mistakes = data.dropRun.mistakes ?? 0;
+					this.run.ballMakes = data.dropRun.ballMakes ?? 0;
+					this.run.ballPerfects = data.dropRun.ballPerfects ?? 0;
+					this.run.ballScore = data.dropRun.ballScore ?? 0;
+					this.run.points = data.dropRun.points ?? 0;
+					this.run.grade = data.dropRun.grade ?? null;
+				} else if (this.mission.steps.find((s) => s.id === "pickup")?.done) {
+					this.run.active = true;
+				}
+			}
+			this.ball.targetScore = tier.courtTarget;
+			this.bestRunScore = data.bestRunScore ?? 0;
+			this.bestGrade = data.bestGrade ?? null;
 		} catch { /* storage */ }
 	}
 	save() {
@@ -653,7 +723,23 @@ export class GameEngine {
 			trophies: this.trophies,
 			sideProgress,
 			worldHour: this.worldHour,
-			settings: this.settings
+			settings: this.settings,
+			dropRunIndex: this.runIndex,
+			dropRun: {
+				active: this.run.active,
+				time: this.run.time,
+				deliveries: this.run.deliveries,
+				combo: this.run.combo,
+				bestCombo: this.run.bestCombo,
+				mistakes: this.run.mistakes,
+				ballMakes: this.run.ballMakes,
+				ballPerfects: this.run.ballPerfects,
+				ballScore: this.run.ballScore,
+				points: this.run.points,
+				grade: this.run.grade,
+			},
+			bestRunScore: this.bestRunScore,
+			bestGrade: this.bestGrade,
 		};
 		try {
 			localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -715,6 +801,8 @@ export class GameEngine {
 		if (this.hitstop > 0) {
 			this.hitstop -= dt;
 			this.trauma = Math.max(0, this.trauma - dt * 1.6);
+			this.punch = Math.max(0, this.punch - dt * 2.4);
+			this.hoopPulse = Math.max(0, this.hoopPulse - dt * 4);
 			return;
 		}
 		if (this.toastT > 0) {
@@ -726,27 +814,28 @@ export class GameEngine {
 			if (this.trophyPopup.t <= 0) this.trophyPopup = null;
 		}
 		this.trauma = Math.max(0, this.trauma - dt * 1.7);
+		this.uiPulse = Math.max(0, this.uiPulse - dt * 2.6);
+		this.punch = Math.max(0, this.punch - dt * 3.1);
+		this.hoopPulse = Math.max(0, this.hoopPulse - dt * 3.4);
 		this.letterbox += ((this.cinematic ? 1 : 0) - this.letterbox) * (1 - Math.exp(-8 * dt));
-		for (let i = this.particles.length - 1; i >= 0; i--) {
-			const p = this.particles[i];
-			p.x += p.vx * dt;
-			p.y += p.vy * dt;
-			p.life -= dt;
-			if (p.life <= 0) this.particles.splice(i, 1);
-		}
+		stepParticles(this.particles, dt);
 		for (let i = this.floaters.length - 1; i >= 0; i--) {
 			const f = this.floaters[i];
+			if (!f) continue;
 			f.y += f.vy * dt;
 			f.life -= dt;
 			f.scale += (1 - f.scale) * (1 - Math.exp(-10 * dt));
 			if (f.life <= 0) this.floaters.splice(i, 1);
 		}
+		if (this.run.active) this.run.time += dt;
 		if (this.cinematic) {
 			this.cinematic.t += dt;
 			if (this.cinematic.t >= this.cinematic.duration) {
 				const kind = this.cinematic.kind;
 				this.cinematic = null;
-				if (kind === "briefing") this.showToast("Drop Day is live. Find K Blanco at HQ.");
+				if (kind === "briefing") {
+					this.showToast(this.runIndex > 1 ? `Run ${this.runIndex}. Link with K Blanco at HQ.` : "Drop Day is live. Find K Blanco at HQ.");
+				}
 				this.emitHud();
 			}
 		}
@@ -851,7 +940,11 @@ export class GameEngine {
 		this.dir = this.facing;
 		this.animT = this.mover.animT;
 		this.bob = this.moving ? Math.sin(this.animT * 2) * 3.2 : Math.sin(this.animT) * 0.6;
-		if (this.moving) audio.foot(this.clock);
+		const plant = Math.sin(this.mover.animT);
+		if (this.moving && plant > 0 && this.plantSign <= 0) {
+			audio.foot(this.clock, this.mover.state === "run");
+		}
+		this.plantSign = plant;
 		const rad = 14;
 		let nx = this.px + this.vx * dt;
 		let ny = this.py + this.vy * dt;
@@ -917,6 +1010,9 @@ export class GameEngine {
 		if (now - this.lastInteract < 140) return;
 		this.lastInteract = now;
 		this.mover.triggerInteract();
+		audio.interact();
+		this.uiPulse = 1;
+		this.addTrauma(JUICE.trauma.interact);
 		if (this.mode === "shop") return;
 		if (this.mode === "basketball") {
 			if (!this.ball.inFlight) this.beginCharge();
@@ -1007,13 +1103,17 @@ export class GameEngine {
 			return;
 		}
 		if (step.target && step.target !== loc) {
+			if ((step.kind === "deliver" || step.kind === "pickup") && this.run.active) {
+				const scored = loc === "store" || loc === "court" || loc === "dropvan" || loc === "neighborhood" || loc === "downtown" || loc === "culture";
+				if (scored) noteMistake(this.run);
+			}
 			this.showToast(`Objective: ${step.label}`);
 			return;
 		}
 		if (step.kind === "pickup" && loc === "dropvan") {
 			this.completeStep(step.id);
 			this.burst(this.px, this.py, "#1db954");
-			this.showToast("Drop secured. Hit the Neighborhood.");
+			this.showToast("Drop secured. Hit the next stop.");
 			return;
 		}
 		if (step.kind === "deliver" && step.target === loc) {
@@ -1069,9 +1169,29 @@ export class GameEngine {
 		this.respect += Math.ceil(step.reward / 10);
 		this.burst(this.px, this.py - 20, "#1db954");
 		this.float(`+$${step.reward}`, "#1db954");
-		this.addTrauma(.28);
+		this.addTrauma(step.kind === "deliver" ? JUICE.trauma.deliver : step.kind === "pickup" ? JUICE.trauma.pickup : JUICE.trauma.cash);
 		if (this.settings.rumble) this.input.rumble(90, .25, .4);
-		audio.cash();
+		this.uiPulse = 1;
+		if (id === "pickup") {
+			this.run.active = true;
+			this.run.time = 0;
+			this.lastDeliveryAt = this.clock;
+			audio.deliver();
+			this.hitstop = JUICE.hitstop.pickup;
+			this.addPunch(JUICE.punch.deliver);
+		} else if (step.kind === "deliver") {
+			const interval = this.lastDeliveryAt > 0 ? this.clock - this.lastDeliveryAt : 0;
+			const gained = scoreDelivery(this.run, interval, this.currentTier().parSeconds);
+			this.lastDeliveryAt = this.clock;
+			this.float(`COMBO x${this.run.combo}`, PAL.gold, this.px, this.py - 78);
+			if (gained > 420) this.float("FAST", PAL.gold);
+			audio.deliver();
+			audio.combo(this.run.combo);
+			this.hitstop = JUICE.hitstop.deliver;
+			this.addPunch(JUICE.punch.deliver);
+		} else {
+			audio.cash();
+		}
 		this.showToast(`+$${step.reward} $ackdollars · ${step.label}`);
 		if (id === "wake") this.unlockTrophy("first_steps");
 		if (id === "link_k") this.unlockTrophy("family");
@@ -1082,15 +1202,24 @@ export class GameEngine {
 			this.missionComplete = true;
 			this.mission.activeStep = this.mission.steps.length;
 			this.respect += 25;
+			const result = finalizeRun(this.run, this.currentTier().parSeconds, 180, 18);
+			this.sackdollars += result.bonusDollars;
+			this.respect += result.bonusRespect;
+			this.bestRunScore = Math.max(this.bestRunScore, this.run.points);
+			this.bestGrade = !this.bestGrade || gradeRank(result.grade) >= gradeRank(this.bestGrade) ? result.grade : this.bestGrade;
+			if (result.bonusDollars > 0) this.float(`GRADE ${result.grade} +$${result.bonusDollars}`, PAL.gold);
 			this.unlockTrophy("drop_day");
 			this.cinematic = {
 				kind: "complete",
 				title: "MISSION COMPLETE",
-				subtitle: "THE DROP DAY  ·  RESPECT UNLOCKED",
+				subtitle: `THE DROP DAY  ·  GRADE ${result.grade}`,
 				t: 0,
 				duration: 3.6
 			};
 			audio.mission();
+			audio.grade(result.grade);
+			this.addTrauma(JUICE.trauma.complete);
+			this.addPunch(JUICE.punch.complete);
 		} else this.mission.activeStep = next;
 		if (this.respect >= 40) this.unlockTrophy("city_legend");
 		if (this.sackdollars >= 400) this.unlockTrophy("deep_pockets");
@@ -1183,7 +1312,8 @@ export class GameEngine {
 		this.ball.missionCredited = false;
 		this.ball.grade = "";
 		this.ball.ballZ = 36;
-		this.showToast("Move · look · V camera · hold shoot");
+		this.ball.targetScore = this.currentTier().courtTarget;
+		this.showToast(`Move · look · V camera · hold shoot · need ${this.ball.targetScore}`);
 		this.emitHud();
 	}
 	tryCreditBasketball() {
@@ -1249,17 +1379,23 @@ export class GameEngine {
 			const planar = Math.hypot(dx, dy);
 			if (this.ball.ballVz < 0 && this.ball.ballZ <= hoop.z + 10 && this.ball.ballZ >= hoop.z - 14) {
 				if (planar < 11) {
-					const pts = this.ball.shotDist > 158 ? 3 : 2;
+					const zone = shotZone(this.ball.shotDist);
+					const pts = zone === "deep" ? 3 : 2;
 					const perfect = this.ball.grade === "PERFECT";
 					this.ball.score += perfect ? pts + 1 : pts;
 					this.ball.combo += 1;
 					this.ball.best = Math.max(this.ball.best, this.ball.combo);
-					this.ball.flash = 0.5;
+					this.ball.flash = perfect ? 0.62 : 0.5;
 					this.burst(hoop.x, hoop.y, PAL.gold);
-					this.float(perfect ? `SWISH +${pts + 1}` : `+${pts}`, PAL.gold, hoop.x, hoop.y);
-					this.addTrauma(perfect ? 0.45 : 0.28);
-					this.hitstop = perfect ? 0.07 : 0.04;
-					audio.swish();
+					this.float(perfect ? `PERFECT +${pts + 1}` : `+${pts}`, PAL.gold, hoop.x, hoop.y);
+					this.addTrauma(perfect ? JUICE.trauma.perfect : JUICE.trauma.make);
+					this.hitstop = perfect ? JUICE.hitstop.perfect : JUICE.hitstop.make;
+					this.addPunch(perfect ? JUICE.punch.perfect : JUICE.punch.make);
+					this.hoopPulse = perfect ? 1 : 0.65;
+					if (this.run.active) scoreMake(this.run, perfect, zone, this.ball.combo);
+					if (perfect) audio.perfect();
+					else audio.swish();
+					if (this.ball.combo > 1) audio.combo(this.ball.combo);
 					if (this.settings.rumble) this.input.rumble(perfect ? 140 : 80, 0.3, 0.55);
 					this.tryCreditBasketball();
 					this.ball.inFlight = false;
@@ -1268,10 +1404,12 @@ export class GameEngine {
 					this.ball.ballVy *= 0.2;
 				} else if (planar < 20) {
 					this.ball.combo = 0;
+					if (this.run.active) scoreMiss(this.run);
 					this.burst(hoop.x, hoop.y, "#e85d4c");
 					this.float("RIM", "#e85d4c", hoop.x, hoop.y);
 					audio.rim();
-					this.addTrauma(0.18);
+					this.addTrauma(JUICE.trauma.miss);
+					this.hoopPulse = 0.35;
 					const nx = dx / (planar || 1);
 					const ny = dy / (planar || 1);
 					this.ball.ballVx = nx * 90;
@@ -1326,17 +1464,20 @@ export class GameEngine {
 		audio.bounce();
 		const hoop = this.hoop();
 		const pwr = this.ball.power;
-		const perfect = pwr >= 0.54 && pwr <= 0.76;
-		const good = pwr >= 0.42 && pwr <= 0.88;
-		this.ball.grade = perfect ? "PERFECT" : good ? "GOOD" : "LATE";
+		const zone = shotZone(dist(this.px, this.py, hoop.x, hoop.y));
+		const win = perfectWindow(zone, this.currentTier().perfectHalfWidth);
+		const good = goodWindow(win);
+		const perfect = pwr >= win.lo && pwr <= win.hi;
+		const isGood = pwr >= good.lo && pwr <= good.hi;
+		this.ball.grade = perfect ? "PERFECT" : isGood ? "GOOD" : "LATE";
 		const d = dist(this.px, this.py, hoop.x, hoop.y);
 		const lookTo = Math.atan2(-(hoop.x - this.px), -(hoop.y - this.py));
 		let err = this.yaw - lookTo;
 		while (err > Math.PI) err -= Math.PI * 2;
 		while (err < -Math.PI) err += Math.PI * 2;
-		const assist = (perfect ? 0.72 : good ? 0.42 : 0.08) * clamp(1 - Math.abs(err) / 0.9, 0, 1);
+		const assist = (perfect ? 0.72 : isGood ? 0.42 : 0.08) * clamp(1 - Math.abs(err) / 0.9, 0, 1);
 		const shootYaw = this.yaw + (lookTo - this.yaw) * assist;
-		const speedErr = perfect ? 1 : good ? 0.94 + pwr * 0.08 : 0.62 + pwr * 0.55;
+		const speedErr = perfect ? 1 : isGood ? 0.94 + pwr * 0.08 : 0.62 + pwr * 0.55;
 		const horiz = (155 + d * 0.92) * speedErr;
 		const f = this.fwd();
 		this.ball.ballX = this.px + f.x * 10;
@@ -1349,7 +1490,7 @@ export class GameEngine {
 		this.ball.inFlight = true;
 		this.ball.held = false;
 		this.ball.power = 0;
-		this.ball.made = good;
+		this.ball.made = isGood;
 	}
 	beginCharge() {
 		if (this.mode === "basketball" && this.ball.held && !this.ball.inFlight) {
@@ -1358,20 +1499,43 @@ export class GameEngine {
 			this.mover.triggerShoot();
 		}
 	}
-	burst(x: number, y: number, color: string) {
-		for (let i = 0; i < 18; i++) {
-			const a = Math.random() * Math.PI * 2;
-			const s = 50 + Math.random() * 140;
-			this.particles.push({
-				x,
-				y,
-				vx: Math.cos(a) * s,
-				vy: Math.sin(a) * s,
-				life: .4 + Math.random() * .55,
-				color,
-				size: 2 + Math.random() * 4
-			});
+	burst(_x: number, _y: number, color: string) {
+		this.particles.push(...emitBurst(color, 22));
+	}
+	dismissRecap() {
+		this.run.recap = false;
+		this.emitHud();
+	}
+	replayDrop() {
+		if (this.mode === "basketball") this.exitBasketball();
+		if (this.mode === "shop") this.closeShop();
+		this.mode = "world";
+		this.dialogue = null;
+		this.cinematic = null;
+		this.runIndex += 1;
+		const tier = this.currentTier();
+		this.mission = createDropDayMission({ order: tier.deliveryOrder, courtTarget: tier.courtTarget });
+		this.missionComplete = false;
+		this.ball.missionCredited = false;
+		this.ball.targetScore = tier.courtTarget;
+		this.run = createRun(this.runIndex);
+		this.lastDeliveryAt = 0;
+		const store = POIS.find((p) => p.id === "store");
+		if (store) {
+			this.px = store.x + store.w / 2;
+			this.py = store.y + store.h + 28;
 		}
+		this.leftSpawn = true;
+		this.cinematic = {
+			kind: "briefing",
+			title: `DROP RUN ${this.runIndex}`,
+			subtitle: `${tier.courtTarget} ON THE COURT  ·  TIGHTER CLOCK`,
+			t: 0,
+			duration: 2.6,
+		};
+		this.showToast(`Run ${this.runIndex}. Link with K Blanco, then take a new route.`);
+		this.save();
+		this.emitHud();
 	}
 	getObjectiveTarget() {
 		const step = this.mission.steps[this.mission.activeStep];
@@ -1431,6 +1595,8 @@ export class GameEngine {
 				animT: this.mover.animT,
 				loco: this.mover.state,
 				indoor: this.mode === "interior" || this.mode === "shop",
+				punch: this.punch,
+				hoopPulse: this.hoopPulse,
 			});
 			this.world3d.render(w, h);
 		}
@@ -1440,6 +1606,13 @@ export class GameEngine {
 		}
 		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 		ctx.clearRect(0, 0, w, h);
+		for (const p of this.particles) {
+			const a = Math.max(0, p.life / p.maxLife);
+			ctx.globalAlpha = a;
+			ctx.fillStyle = p.color;
+			ctx.fillRect(w * 0.5 + p.ox - p.size / 2, h * 0.36 + p.oy - p.size / 2, p.size, p.size);
+		}
+		ctx.globalAlpha = 1;
 		if (this.settings.cameraView === "first") {
 			ctx.strokeStyle = "rgba(232,226,214,0.5)";
 			ctx.lineWidth = 1.4;
@@ -1481,6 +1654,10 @@ export class GameEngine {
 		const mh = 16;
 		const mx = w / 2 - mw / 2;
 		const my = h - 128;
+		const hoop = this.hoop();
+		const zone = shotZone(dist(this.px, this.py, hoop.x, hoop.y));
+		const win = perfectWindow(zone, this.currentTier().perfectHalfWidth);
+		const good = goodWindow(win);
 		ctx.fillStyle = "rgba(0,0,0,0.6)";
 		ctx.beginPath();
 		rr(ctx, mx - 5, my - 5, 198, 26, 8);
@@ -1488,14 +1665,14 @@ export class GameEngine {
 		ctx.fillStyle = "#1a1a1a";
 		ctx.fillRect(mx, my, mw, mh);
 		ctx.fillStyle = "rgba(29,185,84,0.28)";
-		ctx.fillRect(mx + mw * .48, my, mw * .4, mh);
+		ctx.fillRect(mx + mw * good.lo, my, mw * (good.hi - good.lo), mh);
 		ctx.fillStyle = "rgba(29,185,84,0.7)";
-		ctx.fillRect(mx + mw * .56, my, mw * .22, mh);
+		ctx.fillRect(mx + mw * win.lo, my, mw * (win.hi - win.lo), mh);
 		ctx.fillStyle = "#1db954";
 		ctx.fillRect(mx, my, mw * this.ball.power, mh);
 		ctx.fillStyle = "#f2f5f3";
 		ctx.font = "700 10px DM Sans, sans-serif";
-		ctx.fillText("RELEASE IN THE GREEN", mx, my - 10);
+		ctx.fillText(`RELEASE IN THE GREEN · ${zone.toUpperCase()}`, mx, my - 10);
 	}
 	drawCar(ctx: CanvasRenderingContext2D, car: { x: number; y: number; vx: number; vy: number; w: number; color: string }) {
 		ctx.save();
@@ -1743,7 +1920,10 @@ export class GameEngine {
 				combo: this.ball.combo,
 				power: this.ball.power,
 				charging: this.ball.charging,
-				best: this.ball.best
+				best: this.ball.best,
+				target: this.ball.targetScore,
+				perfects: this.run.ballPerfects,
+				zone: shotZone(dist(this.px, this.py, this.hoop().x, this.hoop().y)),
 			} : null,
 			paused: this.paused,
 			started: this.started,
@@ -1772,7 +1952,11 @@ export class GameEngine {
 				label: s.label,
 				done: s.done,
 				description: s.description
-			}))
+			})),
+			dropRun: toHud(this.run, this.currentTier().courtTarget, this.currentTier().parSeconds),
+			uiPulse: this.uiPulse,
+			bestGrade: this.bestGrade,
+			bestRunScore: this.bestRunScore,
 		};
 	}
 };

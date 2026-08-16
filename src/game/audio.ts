@@ -21,6 +21,7 @@ export class GameAudio {
   private bassGain: GainNode | null = null;
   private running = false;
   private lastFoot = 0;
+  private noiseBuf: AudioBuffer | null = null;
 
   unlock() {
     if (this.unlocked && this.ctx) {
@@ -62,7 +63,6 @@ export class GameAudio {
   private startBed() {
     if (!this.ctx || !this.music) return;
     this.running = true;
-    // Warm pad
     this.padOsc = this.ctx.createOscillator();
     this.padGain = this.ctx.createGain();
     const padFilter = this.ctx.createBiquadFilter();
@@ -76,7 +76,6 @@ export class GameAudio {
     this.padGain.connect(this.music);
     this.padOsc.start();
 
-    // Sub bass
     this.bassOsc = this.ctx.createOscillator();
     this.bassGain = this.ctx.createGain();
     this.bassOsc.type = "sine";
@@ -86,7 +85,6 @@ export class GameAudio {
     this.bassGain.connect(this.music);
     this.bassOsc.start();
 
-    // City hiss
     const buf = this.ctx.createBuffer(1, this.ctx.sampleRate * 2, this.ctx.sampleRate);
     const data = buf.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.18;
@@ -124,6 +122,43 @@ export class GameAudio {
       const notes = [55, 55, 65.4, 55, 73.4, 55, 49, 55];
       this.blipBass(notes[this.step]!);
     }
+  }
+
+  private noise() {
+    if (!this.ctx) return null;
+    if (!this.noiseBuf) {
+      this.noiseBuf = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * 0.22), this.ctx.sampleRate);
+      const d = this.noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    return this.noiseBuf;
+  }
+
+  private noiseBurst(dur: number, vol: number, hp: number, lp?: number) {
+    if (!this.ctx || !this.sfx) return;
+    const buf = this.noise();
+    if (!buf) return;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    const f = this.ctx.createBiquadFilter();
+    f.type = "highpass";
+    f.frequency.value = hp;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(vol, this.ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + dur);
+    src.connect(f);
+    if (lp) {
+      const lpf = this.ctx.createBiquadFilter();
+      lpf.type = "lowpass";
+      lpf.frequency.value = lp;
+      f.connect(lpf);
+      lpf.connect(g);
+    } else {
+      f.connect(g);
+    }
+    g.connect(this.sfx);
+    src.start();
+    src.stop(this.ctx.currentTime + dur + 0.02);
   }
 
   private kick() {
@@ -201,8 +236,23 @@ export class GameAudio {
     o.stop(this.ctx.currentTime + dur + 0.02);
   }
 
+  private duck(amount = 0.38, recover = 0.55) {
+    if (!this.ctx || !this.music) return;
+    const now = this.ctx.currentTime;
+    const curve = (x: number) => x * x;
+    const base = curve(this.volumes.music);
+    this.music.gain.setTargetAtTime(base * amount, now, 0.04);
+    this.music.gain.setTargetAtTime(base, now + recover, 0.18);
+  }
+
   ui() {
     this.tone(660, 0.06, "triangle", 0.07);
+  }
+
+  interact() {
+    this.tone(640, 0.05, "triangle", 0.065);
+    this.tone(980, 0.07, "sine", 0.03);
+    this.noiseBurst(0.04, 0.02, 2400);
   }
 
   confirm() {
@@ -213,20 +263,44 @@ export class GameAudio {
   cash() {
     this.tone(880, 0.08, "square", 0.05);
     this.tone(1320, 0.12, "triangle", 0.06);
+    this.tone(1760, 0.09, "sine", 0.03);
+  }
+
+  deliver() {
+    this.tone(392, 0.1, "triangle", 0.07);
+    this.tone(523, 0.14, "sine", 0.055);
+    this.tone(784, 0.18, "triangle", 0.05);
+    this.cash();
   }
 
   swish() {
     this.tone(740, 0.09, "sine", 0.08);
     this.tone(1180, 0.16, "triangle", 0.07);
+    this.noiseBurst(0.08, 0.03, 1800, 5200);
+  }
+
+  perfect() {
+    this.tone(880, 0.1, "sine", 0.09);
+    this.tone(1174, 0.14, "triangle", 0.07);
+    this.tone(1568, 0.2, "sine", 0.055);
+    this.noiseBurst(0.1, 0.04, 1400, 6400);
+  }
+
+  combo(n: number) {
+    const f = 520 + Math.min(n, 8) * 42;
+    this.tone(f, 0.07, "triangle", 0.05);
+    this.tone(f * 1.5, 0.05, "sine", 0.028);
   }
 
   rim() {
     this.tone(180, 0.08, "square", 0.05);
     this.tone(90, 0.12, "sine", 0.08);
+    this.noiseBurst(0.07, 0.035, 600, 2400);
   }
 
   bounce() {
     this.tone(140, 0.07, "sine", 0.06);
+    this.noiseBurst(0.04, 0.02, 300, 1600);
   }
 
   trophy() {
@@ -236,9 +310,19 @@ export class GameAudio {
   }
 
   mission() {
+    this.duck(0.32, 0.7);
     this.tone(392, 0.18, "triangle", 0.08);
     this.tone(523, 0.24, "triangle", 0.07);
     this.tone(659, 0.32, "sine", 0.09);
+  }
+
+  grade(letter: string) {
+    if (letter === "S" || letter === "A") {
+      this.mission();
+      this.tone(988, 0.22, "sine", 0.05);
+    } else {
+      this.confirm();
+    }
   }
 
   talk() {
@@ -246,14 +330,18 @@ export class GameAudio {
     this.tone(f, 0.05, "triangle", 0.04);
   }
 
-  foot(now: number) {
-    if (now - this.lastFoot < 0.28) return;
+  foot(now: number, running = false) {
+    const gap = running ? 0.2 : 0.3;
+    if (now - this.lastFoot < gap) return;
     this.lastFoot = now;
-    this.tone(90 + Math.random() * 30, 0.05, "sine", 0.035);
+    const vol = running ? 0.05 : 0.03;
+    this.tone((running ? 72 : 88) + Math.random() * 26, 0.045, "sine", vol);
+    this.noiseBurst(0.035, running ? 0.032 : 0.018, running ? 280 : 420, running ? 1400 : 1800);
   }
 
   whoosh() {
     this.tone(320, 0.1, "sawtooth", 0.03);
+    this.noiseBurst(0.09, 0.025, 400, 2200);
   }
 }
 
