@@ -4,27 +4,27 @@ import * as THREE from "three";
 /**
  * Character Renderer V8
  *
- * One renderer owns every 2.5D character. It deliberately uses the supplied
- * transparent sprite sheets as true fixed-grid atlases — not design-board
- * screenshots and not background crops. This renderer is installed after the
- * world/game runtime so no other layer can overwrite its player sprite.
+ * WebGL fallback for the 2.5D character system. The player uses the same
+ * verified standalone direction art as the final DOM renderer so a broken
+ * animation atlas can never make Benji disappear. NPC atlases remain animated.
  */
 
 const S = 1 / 16;
 const GYM = { cx: -4300, cy: -3200 };
 const URLS = {
-  benjiWalk: "/game/sprites/benji_walk_4dir.webp",
-  benjiRun: "/game/sprites/benji_run_4dir.webp",
+  player: {
+    down: "/game/benji-front-norm.png",
+    up: "/game/benji-back-norm.png",
+    left: "/game/benji-left-norm.png",
+    right: "/game/benji-right-norm.png",
+  },
   k: "/game/sprites/k_blanco_walk_4dir.webp",
   npc: "/game/sprites/memphis_npc_walk_4dir.webp",
   court: "/game/sprites/court_og_walk_4dir.webp",
 };
 
-const PLAYER_ROW = { down: 0, up: 1, right: 2, left: 3 };
 const NPC_ROW = { down: 0, up: 1, right: 2, left: 3 };
-// K Blanco's supplied sheet has left/right rows opposite the other sheets.
 const K_ROW = { down: 0, up: 1, left: 2, right: 3 };
-
 const states = new WeakMap();
 const texturePromises = new Map();
 const materialCache = new Map();
@@ -80,23 +80,21 @@ function frameMaterial(base, url, cols, rows, row, col) {
   return mat;
 }
 
-function staticMaterial(img, key, state) {
-  if (!img) return null;
-  if (state.staticMats.has(key)) return state.staticMats.get(key);
-  const tex = new THREE.Texture(img);
-  tex.needsUpdate = true;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.magFilter = THREE.LinearFilter;
-  tex.minFilter = THREE.LinearFilter;
-  const mat = new THREE.SpriteMaterial({
-    map: tex,
-    transparent: true,
-    alphaTest: 0.002,
-    depthWrite: false,
-    depthTest: true,
+function staticTextureMaterial(url) {
+  const key = `static:${url}`;
+  if (materialCache.has(key)) return Promise.resolve(materialCache.get(key));
+  return loadTexture(url).then((tex) => {
+    const mat = new THREE.SpriteMaterial({
+      map: tex,
+      color: 0xffffff,
+      transparent: true,
+      alphaTest: 0.002,
+      depthWrite: false,
+      depthTest: true,
+    });
+    materialCache.set(key, mat);
+    return mat;
   });
-  state.staticMats.set(key, mat);
-  return mat;
 }
 
 function makeActor(scene, width = 1.15, height = 1.95) {
@@ -107,7 +105,7 @@ function makeActor(scene, width = 1.15, height = 1.95) {
   sprite.renderOrder = 10;
   sprite.userData.v8Character = true;
   scene.add(sprite);
-  return { sprite, facing: "down", prevX: null, prevY: null };
+  return { sprite, facing: "down", prevX: null, prevY: null, staticDir: null };
 }
 
 function ensureState(world) {
@@ -120,12 +118,10 @@ function ensureState(world) {
     gym: [],
     textures: {},
     loaded: {},
-    staticMats: new Map(),
-    lastPlayer: null,
   };
   states.set(world, s);
 
-  for (const [key, url] of Object.entries(URLS)) {
+  for (const [key, url] of Object.entries({ k: URLS.k, npc: URLS.npc, court: URLS.court })) {
     loadTexture(url)
       .then((tex) => { s.textures[key] = tex; s.loaded[key] = true; })
       .catch((err) => { s.loaded[key] = false; console.warn(`Character V8 fallback: ${key}`, err); });
@@ -149,8 +145,6 @@ function hideLegacySprites(world, ownSprites) {
   world.scene.traverse((obj) => {
     if (!(obj instanceof THREE.Sprite)) return;
     if (ownSprites.has(obj)) return;
-    // Character cards/legacy Benji are superseded. Environment signage is
-    // implemented as plane meshes, so hiding non-V8 sprites is safe here.
     obj.visible = false;
   });
 }
@@ -160,33 +154,10 @@ function syncPlayer(world, frame, engine, s) {
   const visible = frame.cameraView === "third" && frame.mode !== "shop" && frame.mode !== "dialogue";
   a.sprite.visible = visible;
   a.sprite.position.set(wx(frame.px), 0.025, wz(frame.py));
-  a.facing = frame.facing || a.facing || "down";
-
-  const now = Number(frame.clock) || 0;
-  let speed = 0;
-  if (s.lastPlayer) {
-    const dt = Math.max(0.001, now - s.lastPlayer.t);
-    speed = Math.hypot(frame.px - s.lastPlayer.x, frame.py - s.lastPlayer.y) / dt;
-  }
-  s.lastPlayer = { x: frame.px, y: frame.py, t: now };
-
-  const sprinting = speed > 155;
-  const atlasKey = sprinting ? "benjiRun" : "benjiWalk";
-  const tex = s.textures[atlasKey] || s.textures.benjiWalk;
-  if (tex) {
-    const frameIndex = frame.moving ? Math.floor(now * (sprinting ? 11 : 8)) % 5 : 0;
-    a.sprite.material = frameMaterial(
-      tex,
-      sprinting ? URLS.benjiRun : URLS.benjiWalk,
-      5,
-      4,
-      PLAYER_ROW[a.facing] ?? 0,
-      frameIndex,
-    );
-  } else {
-    const key = a.facing === "up" ? "back" : a.facing === "down" ? "front" : a.facing;
-    const mat = staticMaterial(frame.images?.[key] ?? frame.images?.front, `player-${key}`, s);
-    if (mat) a.sprite.material = mat;
+  a.facing = URLS.player[frame.facing] ? frame.facing : (a.facing || "down");
+  if (a.staticDir !== a.facing) {
+    a.staticDir = a.facing;
+    staticTextureMaterial(URLS.player[a.facing]).then((mat) => { a.sprite.material = mat; });
   }
 }
 
@@ -245,9 +216,7 @@ function syncGym(world, frame, s) {
     return;
   }
   const t = Number(frame.clock) || 0;
-  const spots = [
-    [-55, -26], [52, -34], [-35, 38], [42, 30], [-82, 48], [78, 52],
-  ];
+  const spots = [[-55, -26], [52, -34], [-35, 38], [42, 30], [-82, 48], [78, 52]];
   for (let i = 0; i < s.gym.length; i++) {
     const a = s.gym[i], spec = a.spec;
     const [ox, oy] = spots[i];
@@ -273,9 +242,7 @@ function install(World3D) {
   p.sync = function characterRendererV8Sync(frame) {
     previousSync.call(this, frame);
     const s = ensureState(this);
-    const engine = this.__v8Engine;
-
-    syncPlayer(this, frame, engine, s);
+    syncPlayer(this, frame, this.__v8Engine, s);
     syncAmbient(this, frame, s);
     syncNamed(this, frame, s);
     syncGym(this, frame, s);
@@ -288,8 +255,6 @@ function install(World3D) {
     ]);
     hideLegacySprites(this, own);
 
-    // Project the dedicated actor for diagnostics. This catches a character
-    // that is technically visible but positioned outside the camera frustum.
     const projected = new THREE.Vector3();
     s.player.sprite.getWorldPosition(projected);
     projected.project(this.camera);
@@ -298,13 +263,8 @@ function install(World3D) {
         installed: true,
         playerVisible: s.player.sprite.visible,
         facing: s.player.facing,
-        atlas: {
-          walk: !!s.textures.benjiWalk,
-          run: !!s.textures.benjiRun,
-          npc: !!s.textures.npc,
-          k: !!s.textures.k,
-          court: !!s.textures.court,
-        },
+        playerStatic: true,
+        atlas: { npc: !!s.textures.npc, k: !!s.textures.k, court: !!s.textures.court },
         playerNdc: { x: projected.x, y: projected.y, z: projected.z },
         ambientVisible: s.peds.filter((a) => a.sprite.visible).length,
         namedVisible: [...s.named.values()].filter((a) => a.sprite.visible).length,
