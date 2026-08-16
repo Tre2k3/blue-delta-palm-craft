@@ -75,6 +75,9 @@ function ensureState(world) {
   let s = states.get(world);
   if (s) return s;
   const parent = ensureLayer();
+  // A single running game owns a single Benji DOM actor. Remove any orphaned
+  // actor left behind by hot reload or a previous World3D instance.
+  for (const orphan of document.querySelectorAll('[data-sack-character-v8="benji"]')) orphan.remove();
   s = {
     parent,
     player: makeEl(parent, "benji"),
@@ -175,7 +178,14 @@ function syncPlayer(world, frame, engine, s) {
   const url = run ? URLS.run : URLS.walk;
   const col = frame.moving ? Math.floor(now * (run ? 11 : 8)) % 5 : 0;
   setSheet(el, url, 5, 4, ROW[frame.facing] ?? 0, col);
-  project(world, wx(frame.px), wz(frame.py), 1.95, el, .62, true);
+  const projected = project(world, wx(frame.px), wz(frame.py), 1.95, el, .62, true);
+  if (projected) {
+    // In a third-person follow camera Benji is the focal actor. Use a viewport
+    // unit so a resize updates his horizontal position immediately even before
+    // the next engine frame. World movement and the camera still determine his
+    // vertical scale/grounding and every other actor remains fully projected.
+    el.style.left = "50vw";
+  }
 }
 
 function syncPeds(world, frame, s) {
