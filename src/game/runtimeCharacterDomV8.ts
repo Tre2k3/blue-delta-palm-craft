@@ -4,10 +4,10 @@ import * as THREE from "three";
 /**
  * Character DOM Renderer V8
  *
- * The supplied 2.5D sheets are visual art, not physical collision objects.
- * Rendering them as projected HTML sprite sheets avoids browser/WebGL texture
- * upload edge cases while still anchoring every actor to a true 3D world point.
- * Buildings, cars, physics, camera and collisions remain Three.js.
+ * Characters are illustrated 2.5D actors anchored to true 3D world points.
+ * They render in one fixed viewport layer instead of inside the canvas wrapper,
+ * which prevents responsive layouts, transforms, and preview shells from
+ * shifting otherwise-correct projected coordinates off screen.
  */
 
 const S = 1 / 16;
@@ -26,6 +26,26 @@ const states = new WeakMap();
 
 function wx(v) { return (Number(v) || 0) * S; }
 function wz(v) { return (Number(v) || 0) * S; }
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+function ensureLayer() {
+  let layer = document.querySelector("[data-sack-character-layer-v8]");
+  if (layer instanceof HTMLElement) return layer;
+  layer = document.createElement("div");
+  layer.dataset.sackCharacterLayerV8 = "true";
+  Object.assign(layer.style, {
+    position: "fixed",
+    inset: "0px",
+    width: "100vw",
+    height: "100vh",
+    overflow: "hidden",
+    pointerEvents: "none",
+    zIndex: "6",
+    contain: "layout style paint",
+  });
+  document.body.appendChild(layer);
+  return layer;
+}
 
 function makeEl(parent, kind) {
   const el = document.createElement("div");
@@ -40,6 +60,7 @@ function makeEl(parent, kind) {
     transform: "translateX(-50%)",
     transformOrigin: "50% 100%",
     backgroundRepeat: "no-repeat",
+    backgroundColor: "transparent",
     imageRendering: "auto",
     zIndex: "8",
     filter: "drop-shadow(0 8px 5px rgba(0,0,0,.34))",
@@ -53,9 +74,7 @@ function makeEl(parent, kind) {
 function ensureState(world) {
   let s = states.get(world);
   if (s) return s;
-  const parent = world.renderer?.domElement?.parentElement;
-  if (!parent) return null;
-  if (getComputedStyle(parent).position === "static") parent.style.position = "relative";
+  const parent = ensureLayer();
   s = {
     parent,
     player: makeEl(parent, "benji"),
@@ -63,8 +82,6 @@ function ensureState(world) {
     named: new Map(),
     gym: [],
     hqK: makeEl(parent, "k-blanco-hq"),
-    prevPeds: [],
-    prevNamed: new Map(),
   };
   states.set(world, s);
   return s;
@@ -85,21 +102,28 @@ function setSheet(el, url, cols, rows, row, frame) {
   el.style.backgroundPositionY = rows <= 1 ? "0%" : `${(row / (rows - 1)) * 100}%`;
 }
 
-function project(world, x, z, worldHeight, el, aspect = .63) {
+function project(world, x, z, worldHeight, el, aspect = .63, keepOnScreen = false) {
   const canvas = world.renderer.domElement;
-  const rect = canvas.getBoundingClientRect?.() || { width: canvas.clientWidth || canvas.width || 1, height: canvas.clientHeight || canvas.height || 1, left: 0, top: 0 };
+  const r = canvas.getBoundingClientRect?.() || {
+    width: canvas.clientWidth || canvas.width || 1,
+    height: canvas.clientHeight || canvas.height || 1,
+    left: 0,
+    top: 0,
+    right: canvas.clientWidth || canvas.width || 1,
+    bottom: canvas.clientHeight || canvas.height || 1,
+  };
+  const vw = Math.max(1, window.innerWidth || document.documentElement.clientWidth || 1);
+  const vh = Math.max(1, window.innerHeight || document.documentElement.clientHeight || 1);
 
-  // The game shell can retain its previous desktop CSS width for a frame (or
-  // longer in embedded/mobile preview shells) after the browser viewport is
-  // resized. Project DOM actors into the portion of the canvas that is
-  // actually visible instead of leaving them centered hundreds of pixels off
-  // screen. On normal layouts these values are identical to the canvas size.
-  const viewportW = Math.max(1, Number(window.innerWidth) || rect.width || 1);
-  const viewportH = Math.max(1, Number(window.innerHeight) || rect.height || 1);
-  const availableW = Math.max(1, viewportW - Math.max(0, Number(rect.left) || 0));
-  const availableH = Math.max(1, viewportH - Math.max(0, Number(rect.top) || 0));
-  const width = Math.max(1, Math.min(Number(rect.width) || canvas.clientWidth || canvas.width || 1, availableW));
-  const height = Math.max(1, Math.min(Number(rect.height) || canvas.clientHeight || canvas.height || 1, availableH));
+  // Use the actual visible canvas rectangle. In normal desktop play this is the
+  // full canvas. On responsive/embedded previews it also works when an ancestor
+  // temporarily retains a stale desktop width or offset.
+  const left = clamp(Number(r.left) || 0, 0, vw);
+  const top = clamp(Number(r.top) || 0, 0, vh);
+  const right = clamp(Number(r.right) || ((Number(r.left) || 0) + (Number(r.width) || 1)), 0, vw);
+  const bottom = clamp(Number(r.bottom) || ((Number(r.top) || 0) + (Number(r.height) || 1)), 0, vh);
+  const width = Math.max(1, right - left);
+  const height = Math.max(1, bottom - top);
 
   const foot = new THREE.Vector3(x, .03, z).project(world.camera);
   const head = new THREE.Vector3(x, worldHeight, z).project(world.camera);
@@ -111,17 +135,27 @@ function project(world, x, z, worldHeight, el, aspect = .63) {
     el.style.display = "none";
     return false;
   }
-  const fx = (foot.x * .5 + .5) * width;
-  const fy = (-foot.y * .5 + .5) * height;
-  const hy = (-head.y * .5 + .5) * height;
+
+  let fx = left + (foot.x * .5 + .5) * width;
+  let fy = top + (-foot.y * .5 + .5) * height;
+  const hy = top + (-head.y * .5 + .5) * height;
   const h = Math.max(34, Math.min(height * .58, Math.abs(fy - hy)));
   const w = h * aspect;
+  let actorTop = fy - h;
+
+  if (keepOnScreen) {
+    const pad = 8;
+    const minX = w / 2 + pad;
+    const maxX = Math.max(minX, vw - w / 2 - pad);
+    fx = clamp(fx, minX, maxX);
+    actorTop = clamp(actorTop, pad, Math.max(pad, vh - h - pad));
+  }
+
   el.style.display = "block";
   el.style.left = `${fx.toFixed(1)}px`;
-  el.style.top = `${(fy - h).toFixed(1)}px`;
+  el.style.top = `${actorTop.toFixed(1)}px`;
   el.style.width = `${w.toFixed(1)}px`;
   el.style.height = `${h.toFixed(1)}px`;
-  // Nearer actors paint over farther actors, while HUD retains a higher layer.
   el.style.zIndex = String(8 + Math.max(0, Math.min(90, Math.round((1 - foot.z) * 20))));
   return true;
 }
@@ -130,7 +164,6 @@ function hideWebglCharacterSprites(world) {
   world.scene.traverse((obj) => {
     if (obj instanceof THREE.Sprite && (obj.userData?.v8Character || obj.userData?.v8HQK)) obj.visible = false;
   });
-  // Legacy character cards/sprites are superseded as well.
   if (world.sprite) world.sprite.visible = false;
   if (world.npcSprites?.values) for (const sp of world.npcSprites.values()) sp.visible = false;
 }
@@ -145,7 +178,7 @@ function syncPlayer(world, frame, engine, s) {
   const url = run ? URLS.run : URLS.walk;
   const col = frame.moving ? Math.floor(now * (run ? 11 : 8)) % 5 : 0;
   setSheet(el, url, 5, 4, ROW[frame.facing] ?? 0, col);
-  project(world, wx(frame.px), wz(frame.py), 1.95, el, .62);
+  project(world, wx(frame.px), wz(frame.py), 1.95, el, .62, true);
 }
 
 function syncPeds(world, frame, s) {
@@ -230,11 +263,13 @@ function install(World3D) {
     syncHQ(this, frame, engine, s);
     syncGym(this, frame, s);
     if (typeof window !== "undefined") {
-      const display = getComputedStyle(s.player).display;
+      const playerRect = s.player.getBoundingClientRect();
       window.__SACK_CHARACTER_DOM_V8__ = {
         installed: true,
-        playerDisplay: display,
+        playerDisplay: getComputedStyle(s.player).display,
         playerFacing: frame.facing,
+        playerRect: { left: playerRect.left, top: playerRect.top, right: playerRect.right, bottom: playerRect.bottom },
+        viewport: { width: window.innerWidth, height: window.innerHeight },
         pedsVisible: s.peds.filter((a) => a.el.style.display !== "none").length,
         namedVisible: [...s.named.values()].filter((a) => a.el.style.display !== "none").length,
         gymVisible: s.gym.filter((el) => el.style.display !== "none").length,
