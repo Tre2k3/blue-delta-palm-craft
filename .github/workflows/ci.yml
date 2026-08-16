@@ -1,0 +1,121 @@
+name: SackReligious CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - "**"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CI: true
+  SMOKE_HEADED: "1"
+  GAME_URL: http://127.0.0.1:8080/
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start production preview
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          npm run preview > artifacts/preview.log 2>&1 &
+          echo $! > artifacts/preview.pid
+          for i in $(seq 1 60); do
+            if curl -fsS --max-time 2 http://127.0.0.1:8080/ >/dev/null; then
+              echo "Production preview is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Preview did not become ready on port 8080"
+          cat artifacts/preview.log || true
+          exit 1
+
+      - name: Game smoke
+        run: xvfb-run -a node scripts/game-smoke.mjs
+
+      - name: Mission smoke
+        run: xvfb-run -a node scripts/mission-smoke.mjs
+
+      - name: DOM visual smoke
+        run: xvfb-run -a node scripts/dom-smoke.mjs
+
+      - name: Confirm mission screenshots
+        run: |
+          set -euo pipefail
+          missing=0
+          for f in \
+            01-apartment-start.png \
+            02-apartment-exit.png \
+            03-k-blanco-hq.png \
+            04-drop-van.png \
+            05-neighborhood-delivery.png \
+            06-downtown-delivery.png \
+            07-culture-delivery.png \
+            08-sackrow-basketball.png \
+            09-return-to-hq.png \
+            10-drop-day-complete.png \
+            11-wardrobe-equipped.png \
+            12-after-reload.png
+          do
+            if [ ! -s "artifacts/$f" ]; then
+              echo "MISSING: artifacts/$f"
+              missing=1
+            else
+              echo "OK: artifacts/$f ($(wc -c < "artifacts/$f") bytes)"
+            fi
+          done
+          echo "Screenshot count: $(find artifacts -maxdepth 1 -name '*.png' | wc -l)"
+          exit "$missing"
+
+      - name: Black-frame and pixel variance
+        run: node scripts/qa-frames.mjs artifacts
+
+      - name: Preview log on failure
+        if: failure()
+        run: cat artifacts/preview.log || true
+
+      - name: Upload QA screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sackreligious-qa
+          path: artifacts/
+          if-no-files-found: error
