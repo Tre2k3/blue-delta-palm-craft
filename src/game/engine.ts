@@ -165,8 +165,8 @@ export class GameEngine {
 	highScore = 0;
 	walls: { x: number; y: number; w: number; h: number }[] = [];
 	trees: { x: number; y: number }[] = [];
-	cars: { x: number; y: number; vx: number; vy: number; w: number; color: string; laneId: string }[] = [];
-	peds: { x: number; y: number; vx: number; vy: number; color: string; t: number }[] = [];
+	cars: { x: number; y: number; vx: number; vy: number; w: number; color: string; laneId: string; skin: number }[] = [];
+	peds: { x: number; y: number; vx: number; vy: number; color: string; t: number; skin: number }[] = [];
 	npcLive: { id: string; x: number; y: number; ox: number; oy: number; t: number }[] = [];
 	poiBoxes: Rect[] = [];
 	laneMap = new Map<string, Lane>();
@@ -330,6 +330,7 @@ export class GameEngine {
 					w: 38 + ci % 3 * 8,
 					color: carColors[ci % carColors.length]!,
 					laneId: lane.id,
+					skin: ci % 4,
 				});
 				ci++;
 			}
@@ -357,6 +358,7 @@ export class GameEngine {
 				vy: alongStreet ? 0 : (i % 2 === 0 ? 1 : -1) * (18 + (i % 4) * 3),
 				color: pedColors[i % pedColors.length]!,
 				t: i,
+				skin: i % 4,
 			});
 		}
 		this.npcLive = NPCS.map((n) => ({
