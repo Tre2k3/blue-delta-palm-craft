@@ -65,7 +65,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          npm run preview -- --host 0.0.0.0 --port 8080 > artifacts/preview.log 2>&1 &
+          npm run preview > artifacts/preview.log 2>&1 &
           echo $! > artifacts/preview.pid
           for i in $(seq 1 60); do
             if curl -fsS --max-time 2 http://127.0.0.1:8080/ >/dev/null; then
