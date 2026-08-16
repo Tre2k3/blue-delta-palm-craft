@@ -1,12 +1,8 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-// @ts-nocheck
 import {
   APPAREL,
   DEFAULT_SETTINGS,
   NPCS,
   PAL,
-  PLAYER_RUN,
-  PLAYER_SPEED,
   POIS,
   SAVE_KEY,
   SAVE_KEY_LEGACY,
@@ -20,6 +16,7 @@ import {
 import { audio } from "./audio";
 import { InputManager } from "./input";
 import { World3D } from "./world3d";
+import { CharacterController } from "./characterController";
 import type {
   ApparelId,
   CinematicState,
@@ -30,6 +27,7 @@ import type {
   HudSnapshot,
   LocationId,
   Mission,
+  NpcDef,
   PauseTab,
   SideMission,
   TrophyId,
@@ -164,6 +162,8 @@ export class GameEngine {
 	leftSpawn = false;
 	hasSave = false;
 	world3d: World3D | null = null;
+	mover = new CharacterController();
+	lastDt = 1 / 60;
 	constructor(canvas: HTMLCanvasElement) {
 		this.canvas = canvas;
 		this.world3d = new World3D(canvas);
@@ -176,6 +176,11 @@ export class GameEngine {
 			back: "/game/benji-back-norm.png",
 			left: "/game/benji-left-norm.png",
 			right: "/game/benji-right-norm.png",
+			frontHi: "/game/benji-front.png",
+			backHi: "/game/benji-back.png",
+			leftHi: "/game/benji-left.png",
+			rightHi: "/game/benji-right.png",
+			threeQ: "/game/benji-three-quarter.png",
 			icon: "/game/sack-icon.png",
 			k: "/game/k-blanco-portrait.png",
 			featured: "/game/featured-products.png"
@@ -448,12 +453,14 @@ export class GameEngine {
 			}
 		}
 		const store = POIS.find((p) => p.id === "store");
-		g.globalAlpha = .16;
-		g.fillStyle = "#1db954";
-		g.beginPath();
-		g.arc(store.x + store.w / 2, store.y + store.h + 50, 40, 0, Math.PI * 2);
-		g.fill();
-		g.globalAlpha = 1;
+		if (store) {
+			g.globalAlpha = .16;
+			g.fillStyle = "#1db954";
+			g.beginPath();
+			g.arc(store.x + store.w / 2, store.y + store.h + 50, 40, 0, Math.PI * 2);
+			g.fill();
+			g.globalAlpha = 1;
+		}
 		for (const t of this.trees) {
 			g.fillStyle = "#1a2e1f";
 			g.beginPath();
@@ -481,15 +488,15 @@ export class GameEngine {
 		if (typeof window === "undefined") return;
 		window.__controlsTest = {
 			getYaw: () => this.yaw,
-			getSpeed: () => Math.hypot(this.vx, this.vy),
+			getSpeed: () => this.mover.speed,
 			getFacing: () => this.facing,
-			setKeys: (codes) => {
+			setKeys: (codes: string[]) => {
 				this.input.keys.clear();
 				for (const c of codes) this.input.keys.add(c);
 			}
 		};
 		window.__gameTest = {
-			teleport: (loc) => {
+			teleport: (loc: string) => {
 				if (this.mode === "basketball") this.exitBasketball();
 				if (this.mode === "shop") this.closeShop();
 				if (this.mode === "dialogue") {
@@ -517,7 +524,7 @@ export class GameEngine {
 				vx: this.vx,
 				vy: this.vy,
 			}),
-			setBallScore: (n) => {
+			setBallScore: (n: number) => {
 				this.ball.score = n;
 				this.tryCreditBasketball();
 				this.emitHud();
@@ -570,6 +577,9 @@ export class GameEngine {
 		this.px = 288;
 		this.py = 528;
 		this.leftSpawn = false;
+		this.mover.reset(0);
+		this.vx = 0;
+		this.vy = 0;
 		this.mode = "world";
 		this.shopOpen = false;
 		this.dialogue = null;
@@ -579,11 +589,11 @@ export class GameEngine {
 		this.hasSave = false;
 		if (emit) this.emitHud();
 	}
-	showToast(msg, t = 3.1) {
+	showToast(msg: string, t = 3.1) {
 		this.toast = msg;
 		this.toastT = t;
 	}
-	float(text, color, x = this.px, y = this.py - 50) {
+	float(text: string, color: string, x = this.px, y = this.py - 50) {
 		this.floaters.push({
 			x,
 			y,
@@ -594,7 +604,7 @@ export class GameEngine {
 			scale: 1.15
 		});
 	}
-	addTrauma(v) {
+	addTrauma(v: number) {
 		if (!this.settings.shake) return;
 		this.trauma = clamp(this.trauma + v, 0, 1);
 	}
@@ -625,9 +635,9 @@ export class GameEngine {
 		} catch { /* storage */ }
 	}
 	save() {
-		const progress = {};
+		const progress: Record<string, boolean> = {};
 		for (const s of this.mission.steps) progress[s.id] = s.done;
-		const sideProgress = {};
+		const sideProgress: Record<string, boolean> = {};
 		for (const s of this.side) sideProgress[s.id] = s.done;
 		const data = {
 			version: 2,
@@ -650,7 +660,7 @@ export class GameEngine {
 			this.hasSave = true;
 		} catch { /* storage */ }
 	}
-	applySettings(next) {
+	applySettings(next: Partial<GameSettings>) {
 		this.settings = {
 			...this.settings,
 			...next
@@ -659,7 +669,7 @@ export class GameEngine {
 		this.save();
 		this.emitHud();
 	}
-	setPauseTab(tab) {
+	setPauseTab(tab: PauseTab) {
 		this.pauseTab = tab;
 		audio.ui();
 		this.emitHud();
@@ -672,7 +682,7 @@ export class GameEngine {
 	startLoop() {
 		this.running = true;
 		this.lastT = performance.now();
-		const frame = (t) => {
+		const frame = (t: number) => {
 			if (!this.running) return;
 			let dt = (t - this.lastT) / 1e3;
 			this.lastT = t;
@@ -688,7 +698,8 @@ export class GameEngine {
 		};
 		this.raf = requestAnimationFrame(frame);
 	}
-	update(dt) {
+	update(dt: number) {
+		this.lastDt = dt;
 		this.clock += dt;
 		const act = this.input.poll();
 		audio.tick(dt, this.started && !this.paused, nightAmount(this.worldHour));
@@ -770,7 +781,7 @@ export class GameEngine {
 		this.checkSideVisits();
 		if (act.interactPressed) this.tryInteract();
 	}
-	updateTraffic(dt) {
+	updateTraffic(dt: number) {
 		for (const c of this.cars) {
 			c.x += c.vx * dt;
 			c.y += c.vy * dt;
@@ -780,7 +791,7 @@ export class GameEngine {
 			if (c.y < -40) c.y = WORLD_PX_H + 40;
 		}
 	}
-	updatePeds(dt) {
+	updatePeds(dt: number) {
 		for (const p of this.peds) {
 			p.t += dt;
 			p.x += p.vx * dt;
@@ -823,29 +834,24 @@ export class GameEngine {
 		const f = this.fwd();
 		const r = this.right();
 		const len = Math.hypot(mx, my);
-		let wx = 0;
-		let wy = 0;
+		let wishX = 0;
+		let wishY = 0;
 		if (len > 0.01) {
 			mx /= len;
 			my /= len;
-			wx = mx * r.x + -my * f.x;
-			wy = mx * r.y + -my * f.y;
-			this.moving = true;
+			wishX = mx * r.x + -my * f.x;
+			wishY = mx * r.y + -my * f.y;
 			this.leftSpawn = true;
-			audio.foot(this.clock);
-		} else {
-			this.moving = false;
 		}
-		const speed = runHeld ? PLAYER_RUN : PLAYER_SPEED;
-		this.vx = wx * speed;
-		this.vy = wy * speed;
-		if (Math.abs(this.vx) > Math.abs(this.vy) && Math.abs(this.vx) > 1) {
-			this.facing = this.vx < 0 ? "left" : "right";
-			this.dir = this.facing;
-		} else if (Math.abs(this.vy) > 1) {
-			this.facing = this.vy < 0 ? "up" : "down";
-			this.dir = this.facing;
-		}
+		this.mover.update(dt, wishX, wishY, runHeld);
+		this.vx = this.mover.vx;
+		this.vy = this.mover.vy;
+		this.moving = this.mover.speed > 12;
+		this.facing = this.mover.facing();
+		this.dir = this.facing;
+		this.animT = this.mover.animT;
+		this.bob = this.moving ? Math.sin(this.animT * 2) * 3.2 : Math.sin(this.animT) * 0.6;
+		if (this.moving) audio.foot(this.clock);
 		const rad = 14;
 		let nx = this.px + this.vx * dt;
 		let ny = this.py + this.vy * dt;
@@ -858,15 +864,15 @@ export class GameEngine {
 			ny = clamp(ny, 62, WORLD_PX_H - 48 - rad);
 		}
 		if (!this.collides(nx, this.py, rad)) this.px = nx;
+		else this.mover.vx = 0;
 		if (!this.collides(this.px, ny, rad)) this.py = ny;
-		this.animT += dt * (this.moving ? 9 : 2);
-		this.bob = this.moving ? Math.sin(this.animT * 2) * 3.2 : Math.sin(this.animT) * 0.6;
+		else this.mover.vy = 0;
 	}
 	collides(x: number, y: number, r: number) {
 		for (const w of this.walls) if (x + r > w.x && x - r < w.x + w.w && y + r > w.y && y - r < w.y + w.h) return true;
 		return false;
 	}
-	npcPos(id) {
+	npcPos(id: string) {
 		return this.npcLive.find((n) => n.id === id) ?? {
 			x: 0,
 			y: 0,
@@ -894,12 +900,12 @@ export class GameEngine {
 			}
 		}
 		if (this.nearNpc) {
-			const name = NPCS.find((x) => x.id === this.nearNpc).name;
+			const name = NPCS.find((x) => x.id === this.nearNpc)?.name ?? "local";
 			this.interactHint = `Talk to ${name}`;
 		} else if (this.nearPoi === "store") this.interactHint = "Enter HQ · Shop apparel";
 		else if (this.nearPoi === "court") this.interactHint = "Play basketball";
 		else if (this.nearPoi === "dropvan") this.interactHint = "Secure the drop";
-		else if (this.nearPoi) this.interactHint = `Explore ${POIS.find((x) => x.id === this.nearPoi).name}`;
+		else if (this.nearPoi) this.interactHint = `Explore ${POIS.find((x) => x.id === this.nearPoi)?.name ?? this.nearPoi}`;
 	}
 	tryInteract() {
 		if (!this.started || this.paused || this.cinematic) return;
@@ -910,6 +916,7 @@ export class GameEngine {
 		const now = performance.now();
 		if (now - this.lastInteract < 140) return;
 		this.lastInteract = now;
+		this.mover.triggerInteract();
 		if (this.mode === "shop") return;
 		if (this.mode === "basketball") {
 			if (!this.ball.inFlight) this.beginCharge();
@@ -945,7 +952,7 @@ export class GameEngine {
 		}
 		if (this.nearPoi) this.tryMissionAction(this.nearPoi);
 	}
-	openDialogue(npcId) {
+	openDialogue(npcId: string) {
 		const n = NPCS.find((x) => x.id === npcId);
 		if (!n) return;
 		audio.talk();
@@ -993,7 +1000,7 @@ export class GameEngine {
 		};
 		this.emitHud();
 	}
-	tryMissionAction(loc) {
+	tryMissionAction(loc: LocationId) {
 		const step = this.mission.steps[this.mission.activeStep];
 		if (!step || step.done) {
 			if (loc === "dropvan") this.showToast("Van's locked. Keep moving the brand.");
@@ -1022,7 +1029,7 @@ export class GameEngine {
 		if (!step || step.done) return;
 		if (step.id === "wake" && this.leftSpawn) {
 			const apt = POIS.find((p) => p.id === "apartment");
-			if (!insidePoi(this.px, this.py, apt, 50)) {
+			if (apt && !insidePoi(this.px, this.py, apt, 50)) {
 				this.completeStep("wake");
 				this.showToast("Memphis is open. Head to SackReligious HQ.");
 			}
@@ -1043,7 +1050,7 @@ export class GameEngine {
 		if (s && !s.done && this.owned.length >= (s.need ?? 4)) this.completeSide("full_fit");
 		if (this.owned.length >= APPAREL.length) this.unlockTrophy("full_closet");
 	}
-	completeSide(id) {
+	completeSide(id: string) {
 		const s = this.side.find((x) => x.id === id);
 		if (!s || s.done) return;
 		s.done = true;
@@ -1054,7 +1061,7 @@ export class GameEngine {
 		audio.mission();
 		this.save();
 	}
-	completeStep(id) {
+	completeStep(id: string) {
 		const step = this.mission.steps.find((s) => s.id === id);
 		if (!step || step.done) return;
 		step.done = true;
@@ -1090,7 +1097,7 @@ export class GameEngine {
 		this.save();
 		this.emitHud();
 	}
-	unlockTrophy(id) {
+	unlockTrophy(id: TrophyId) {
 		if (this.trophies.includes(id)) return;
 		const def = TROPHIES.find((t) => t.id === id);
 		if (!def) return;
@@ -1123,7 +1130,7 @@ export class GameEngine {
 		audio.ui();
 		this.emitHud();
 	}
-	buyItem(id) {
+	buyItem(id: ApparelId) {
 		const item = APPAREL.find((a) => a.id === id);
 		if (!item) return;
 		if (this.owned.includes(id)) {
@@ -1161,6 +1168,7 @@ export class GameEngine {
 		this.py = court.y + court.h - 58;
 		this.yaw = 0;
 		this.pitch = 0.12;
+		this.mover.reset(0);
 		this.applyYawToFacing();
 		this.ball.active = true;
 		this.ball.score = 0;
@@ -1347,9 +1355,10 @@ export class GameEngine {
 		if (this.mode === "basketball" && this.ball.held && !this.ball.inFlight) {
 			this.ball.charging = true;
 			this.ball.power = 0;
+			this.mover.triggerShoot();
 		}
 	}
-	burst(x, y, color) {
+	burst(x: number, y: number, color: string) {
 		for (let i = 0; i < 18; i++) {
 			const a = Math.random() * Math.PI * 2;
 			const s = 50 + Math.random() * 140;
@@ -1415,6 +1424,13 @@ export class GameEngine {
 					isK: !!NPCS.find((d) => d.id === n.id)?.isKBlanco,
 				})),
 				images: this.images,
+				dt: this.lastDt,
+				heading: this.mover.heading,
+				moveSpeed: this.mover.speed,
+				lean: this.mover.lean,
+				animT: this.mover.animT,
+				loco: this.mover.state,
+				indoor: this.mode === "interior" || this.mode === "shop",
 			});
 			this.world3d.render(w, h);
 		}
@@ -1460,7 +1476,7 @@ export class GameEngine {
 			this.drawMinimap(ctx, w, h);
 		}
 	}
-	drawShotMeter(ctx, w, h) {
+	drawShotMeter(ctx: CanvasRenderingContext2D, w: number, h: number) {
 		const mw = 188;
 		const mh = 16;
 		const mx = w / 2 - mw / 2;
@@ -1481,7 +1497,7 @@ export class GameEngine {
 		ctx.font = "700 10px DM Sans, sans-serif";
 		ctx.fillText("RELEASE IN THE GREEN", mx, my - 10);
 	}
-	drawCar(ctx, car) {
+	drawCar(ctx: CanvasRenderingContext2D, car: { x: number; y: number; vx: number; vy: number; w: number; color: string }) {
 		ctx.save();
 		ctx.translate(car.x, car.y);
 		if (Math.abs(car.vy) > Math.abs(car.vx)) ctx.rotate(car.vy > 0 ? Math.PI / 2 : -Math.PI / 2);
@@ -1497,7 +1513,7 @@ export class GameEngine {
 		ctx.fillRect(car.w - 3, 10, 3, 5);
 		ctx.restore();
 	}
-	drawPed(ctx, p) {
+	drawPed(ctx: CanvasRenderingContext2D, p: { x: number; y: number; color: string; t: number }) {
 		ctx.fillStyle = "rgba(0,0,0,0.25)";
 		ctx.beginPath();
 		ctx.ellipse(p.x, p.y + 3, 8, 4, 0, 0, Math.PI * 2);
@@ -1509,7 +1525,7 @@ export class GameEngine {
 		ctx.arc(p.x, p.y - 24, 6, 0, Math.PI * 2);
 		ctx.fill();
 	}
-	drawCompass(ctx, w, h) {
+	drawCompass(ctx: CanvasRenderingContext2D, w: number, h: number) {
 		const target = this.getObjectiveTarget();
 		if (!target) return;
 		const sx = target.x - this.camX;
@@ -1550,7 +1566,7 @@ export class GameEngine {
 		ctx.fillStyle = "#1db954";
 		ctx.fillText(label, lx, ly);
 	}
-	drawMinimap(ctx, w, h) {
+	drawMinimap(ctx: CanvasRenderingContext2D, w: number, h: number) {
 		const size = Math.min(136, Math.max(100, w * .15));
 		const pad = 12;
 		const mx = pad;
@@ -1610,7 +1626,7 @@ export class GameEngine {
 		ctx.font = "600 9px DM Sans, sans-serif";
 		ctx.fillText("MEMPHIS 901", 20, my + 14);
 	}
-	drawNpc(ctx, n) {
+	drawNpc(ctx: CanvasRenderingContext2D, n: NpcDef) {
 		const live = this.npcPos(n.id);
 		const x = live.x;
 		const y = live.y;
@@ -1645,7 +1661,7 @@ export class GameEngine {
 			ctx.stroke();
 		}
 	}
-	drawPlayer(ctx) {
+	drawPlayer(ctx: CanvasRenderingContext2D) {
 		const y = this.py + this.bob;
 		ctx.fillStyle = "rgba(0,0,0,0.35)";
 		ctx.beginPath();

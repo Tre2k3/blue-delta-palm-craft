@@ -205,3 +205,40 @@ export interface HudSnapshot {
   cameraView: CameraView;
   steps: { id: string; label: string; done: boolean; description: string }[];
 }
+
+export type GameTestState = {
+  sackdollars: number;
+  step: string;
+  mode: GameMode;
+  score: number;
+  missionComplete: boolean;
+  facing: Dir;
+  px: number;
+  py: number;
+  vx: number;
+  vy: number;
+};
+
+export type GameTestApi = {
+  teleport: (loc: string) => void;
+  getState: () => GameTestState;
+  setBallScore: (n: number) => void;
+  advanceDialogue: () => void;
+  interact: () => void;
+  resetSave: () => void;
+};
+
+export type ControlsTestApi = {
+  getYaw: () => number;
+  getSpeed: () => number;
+  getFacing: () => Dir;
+  setKeys: (codes: string[]) => void;
+};
+
+declare global {
+  interface Window {
+    __gameTest?: GameTestApi;
+    __controlsTest?: ControlsTestApi;
+  }
+}
+

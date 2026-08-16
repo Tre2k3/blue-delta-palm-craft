@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { POIS, TILE, WORLD_PX_H, WORLD_PX_W } from "./data";
 import { loadAllMaterials, setAnisotropy, std, type MatKey } from "./materials";
+import { PlayerCharacter } from "./playerCharacter";
+import type { LocomotionState } from "./characterController";
 
 export const S = 1 / 16;
 
@@ -51,6 +53,13 @@ export type WorldFrame = {
   peds: { x: number; y: number; color: string; t: number }[];
   npcs: { id: string; x: number; y: number; isK: boolean }[];
   images: Record<string, HTMLImageElement>;
+  dt: number;
+  heading: number;
+  moveSpeed: number;
+  lean: number;
+  animT: number;
+  loco: LocomotionState;
+  indoor: boolean;
 };
 
 type TexPack = Partial<Record<MatKey, THREE.Texture>>;
@@ -60,7 +69,7 @@ export class World3D {
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(68, 1, 0.12, 420);
   player: THREE.Group;
-  sprite: THREE.Sprite;
+  benji: PlayerCharacter;
   ball: THREE.Mesh;
   ballShadow: THREE.Mesh;
   hoopRim: THREE.Mesh;
@@ -74,6 +83,10 @@ export class World3D {
   private clock = 0;
   private tmp = new THREE.Vector3();
   private camPos = new THREE.Vector3();
+  private camLook = new THREE.Vector3();
+  private camFov = 62;
+  private lastDt = 1 / 60;
+  private benjiReady = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({
@@ -119,18 +132,10 @@ export class World3D {
     this.buildSky();
 
     this.player = new THREE.Group();
-    this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0xffffff, transparent: true }));
-    this.sprite.scale.set(1.15, 1.85, 1);
-    this.sprite.position.y = 0.95;
-    this.player.add(this.sprite);
-    const contact = new THREE.Mesh(
-      new THREE.CircleGeometry(0.32, 16),
-      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.32, depthWrite: false }),
-    );
-    contact.rotation.x = -Math.PI / 2;
-    contact.position.y = 0.02;
-    this.player.add(contact);
+    this.benji = new PlayerCharacter();
+    this.player.add(this.benji.root);
     this.scene.add(this.player);
+    this.camPos.set(10, 8, 18);
 
     this.ball = new THREE.Mesh(
       new THREE.SphereGeometry(0.12, 20, 16),
@@ -560,15 +565,16 @@ export class World3D {
 
   sync(f: WorldFrame) {
     this.clock = f.clock;
+    const dt = Math.min(f.dt || this.lastDt, 0.05);
+    this.lastDt = dt;
     const x = wx(f.px);
     const z = wz(f.py);
     this.player.position.set(x, 0, z);
-
-    const key = f.facing === "up" ? "back" : f.facing === "down" ? "front" : f.facing === "left" ? "left" : "right";
-    const img = f.images[key] ?? f.images.front;
-    if (img) this.sprite.material = this.matFor(img, key);
-    this.sprite.visible = f.cameraView === "third";
-    this.sprite.position.y = 0.95 + f.bob * 0.02;
+    if (!this.benjiReady && (f.images.frontHi || f.images.front)) {
+      this.benji.applyApprovedTextures(f.images);
+      this.benjiReady = true;
+    }
+    this.benji.update(dt, f.heading, f.moveSpeed, f.lean, f.loco, f.animT, f.cameraView === "third");
 
     const hoopY = 2.72;
     const by = Math.max(0.12, f.ball.z * (hoopY / 86));
@@ -635,19 +641,35 @@ export class World3D {
     const shake = f.trauma * f.trauma;
     const sx = Math.sin(f.clock * 47) * shake * 0.12;
     const sy = Math.cos(f.clock * 39) * shake * 0.08;
+    const step = Math.sin(f.animT) * (f.loco === "run" ? 0.028 : f.loco === "walk" ? 0.014 : 0);
+    const lookAhead = Math.min(f.moveSpeed / 268, 1);
+    const follow = f.loco === "run" ? 6.15 : 5.45;
+    const height = f.indoor ? 1.85 : 2.38;
+    const k = f.indoor ? 11 : f.loco === "run" ? 5.4 : 7.6;
+    const ease = 1 - Math.exp(-k * dt);
+    const targetFov = f.cameraView === "first" ? (f.mode === "basketball" ? 74 : 70) : f.loco === "run" ? 66.5 : f.indoor ? 58 : 62;
+    this.camFov += (targetFov - this.camFov) * (1 - Math.exp(-4.2 * dt));
 
     if (f.cameraView === "first") {
-      this.camera.position.set(x + sx, 1.68 + f.bob * 0.012, z + sy);
+      this.camPos.set(x + sx, 1.68 + f.bob * 0.012 + step, z + sy);
+      this.camera.position.copy(this.camPos);
       const ly = Math.sin(f.pitch);
       const lh = Math.cos(f.pitch);
       this.camera.lookAt(x + fwdX * lh * 8, 1.62 + ly * 8, z + fwdZ * lh * 8);
-      this.camera.fov = f.mode === "basketball" ? 74 : 70;
     } else {
-      this.camPos.set(x - fwdX * 5.6 + sx, 2.35, z - fwdZ * 5.6 + sy);
-      this.camera.position.lerp(this.camPos, 0.18);
-      this.camera.lookAt(x, 1.28, z);
-      this.camera.fov = 62;
+      const desired = this.tmp.set(
+        x - fwdX * follow + fwdX * lookAhead * 0.55 + sx,
+        height,
+        z - fwdZ * follow + fwdZ * lookAhead * 0.55 + sy,
+      );
+      this.camPos.x += (desired.x - this.camPos.x) * ease;
+      this.camPos.y += (desired.y - this.camPos.y) * ease;
+      this.camPos.z += (desired.z - this.camPos.z) * ease;
+      this.camera.position.copy(this.camPos);
+      this.camLook.set(x, 1.22 + step, z);
+      this.camera.lookAt(this.camLook);
     }
+    this.camera.fov = this.camFov;
     this.sun.target.position.set(x, 0, z);
   }
 
