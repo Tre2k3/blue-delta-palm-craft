@@ -10,7 +10,9 @@ export type JuiceKind =
   | "miss"
   | "combo"
   | "complete"
-  | "grade";
+  | "grade"
+  | "jump"
+  | "land";
 
 export const JUICE = {
   trauma: {
@@ -24,6 +26,8 @@ export const JUICE = {
     combo: 0.12,
     complete: 0.55,
     grade: 0.22,
+    jump: 0.12,
+    land: 0.16,
   },
   hitstop: {
     pickup: 0.035,

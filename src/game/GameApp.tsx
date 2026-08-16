@@ -685,19 +685,45 @@ export function GameApp() {
                   SHOOT
                 </button>
               ) : (
-                <button
-                  type="button"
-                  className="flex h-16 w-16 items-center justify-center rounded-full bg-primary font-display text-2xl text-primary-fg shadow-lg active:scale-95"
-                  onClick={() => engineRef.current?.tryInteract()}
-                >
-                  {hud.promptButton}
-                </button>
+                <div className="flex items-end gap-2">
+                  <button
+                    type="button"
+                    className="flex h-14 w-14 items-center justify-center rounded-full border border-border bg-panel font-display text-sm text-fg shadow-lg active:scale-95"
+                    onTouchStart={(e) => {
+                      e.preventDefault();
+                      const eng = engineRef.current;
+                      if (!eng) return;
+                      eng.input.queueJump();
+                    }}
+                    onTouchEnd={(e) => {
+                      e.preventDefault();
+                      const eng = engineRef.current;
+                      if (!eng) return;
+                      eng.input.touch.jump = false;
+                    }}
+                    onTouchCancel={(e) => {
+                      e.preventDefault();
+                      const eng = engineRef.current;
+                      if (!eng) return;
+                      eng.input.touch.jump = false;
+                    }}
+                  >
+                    JUMP
+                  </button>
+                  <button
+                    type="button"
+                    className="flex h-16 w-16 items-center justify-center rounded-full bg-primary font-display text-2xl text-primary-fg shadow-lg active:scale-95"
+                    onClick={() => engineRef.current?.tryInteract()}
+                  >
+                    {hud.promptButton}
+                  </button>
+                </div>
               )}
             </div>
           </div>
 
           <div className="pointer-events-none absolute bottom-3 right-3 z-10 hidden rounded-lg border border-border bg-panel/70 px-2 py-1 text-[10px] text-muted sm:block">
-            WASD · Q/R look · V camera · {hud.promptButton} · Space
+            WASD · Q/R look · V camera · {hud.promptButton} · Space jump
           </div>
 
           {/* Pause */}

@@ -242,6 +242,8 @@ export type GameTestState = {
   py: number;
   vx: number;
   vy: number;
+  air: number;
+  loco: string;
 };
 
 export type GameTestApi = {

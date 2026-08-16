@@ -343,6 +343,17 @@ export class GameAudio {
     this.tone(320, 0.1, "sawtooth", 0.03);
     this.noiseBurst(0.09, 0.025, 400, 2200);
   }
+
+  jump() {
+    this.tone(210, 0.07, "sine", 0.05);
+    this.tone(390, 0.08, "triangle", 0.028);
+    this.noiseBurst(0.06, 0.022, 380, 2100);
+  }
+
+  land() {
+    this.tone(92, 0.07, "sine", 0.055);
+    this.noiseBurst(0.05, 0.03, 220, 1400);
+  }
 }
 
 export const audio = new GameAudio();

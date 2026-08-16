@@ -223,7 +223,27 @@ export class GameEngine {
 			threeQ: "/game/benji-three-quarter.png",
 			icon: "/game/sack-icon.png",
 			k: "/game/k-blanco-portrait.png",
-			featured: "/game/featured-products.png"
+			featured: "/game/featured-products.png",
+			"walk-front-1": "/game/benji/walk-front-1.png",
+			"walk-front-2": "/game/benji/walk-front-2.png",
+			"walk-front-3": "/game/benji/walk-front-3.png",
+			"walk-front-4": "/game/benji/walk-front-4.png",
+			"walk-back-1": "/game/benji/walk-back-1.png",
+			"walk-back-2": "/game/benji/walk-back-2.png",
+			"walk-back-3": "/game/benji/walk-back-3.png",
+			"walk-back-4": "/game/benji/walk-back-4.png",
+			"walk-left-1": "/game/benji/walk-left-1.png",
+			"walk-left-2": "/game/benji/walk-left-2.png",
+			"walk-left-3": "/game/benji/walk-left-3.png",
+			"walk-left-4": "/game/benji/walk-left-4.png",
+			"walk-right-1": "/game/benji/walk-right-1.png",
+			"walk-right-2": "/game/benji/walk-right-2.png",
+			"walk-right-3": "/game/benji/walk-right-3.png",
+			"walk-right-4": "/game/benji/walk-right-4.png",
+			"jump-1": "/game/benji/jump-1.png",
+			"jump-2": "/game/benji/jump-2.png",
+			"jump-3": "/game/benji/jump-3.png",
+			"jump-4": "/game/benji/jump-4.png",
 		}).map(async ([k, src]) => {
 			try {
 				this.images[k] = await loadImage(src);
@@ -556,6 +576,8 @@ export class GameEngine {
 				py: this.py,
 				vx: this.vx,
 				vy: this.vy,
+				air: this.mover.air,
+				loco: this.mover.state,
 			}),
 			setBallScore: (n: number) => {
 				this.ball.score = n;
@@ -866,12 +888,12 @@ export class GameEngine {
 			if (act.shootPressed) this.beginCharge();
 			if (act.shootReleased) this.releaseShot();
 			if (act.backPressed) this.exitBasketball();
-			this.updatePlayer(dt, act.mx, act.my, act.run);
+			this.updatePlayer(dt, act.mx, act.my, act.run, false, false);
 			this.updateBasketball(dt);
 			return;
 		}
 		if (this.cinematic) return;
-		this.updatePlayer(dt, act.mx, act.my, act.run);
+		this.updatePlayer(dt, act.mx, act.my, act.run, act.jumpPressed, act.jump);
 		this.updateProximity();
 		this.checkMissionAuto();
 		this.checkSideVisits();
@@ -973,7 +995,7 @@ export class GameEngine {
 		else this.facing = "left";
 		this.dir = this.facing;
 	}
-	updatePlayer(dt: number, mx: number, my: number, runHeld: boolean) {
+	updatePlayer(dt: number, mx: number, my: number, runHeld: boolean, jumpPressed = false, jumpHeld = false) {
 		const f = this.fwd();
 		const r = this.right();
 		const len = Math.hypot(mx, my);
@@ -986,7 +1008,8 @@ export class GameEngine {
 			wishY = mx * r.y + -my * f.y;
 			this.leftSpawn = true;
 		}
-		this.mover.update(dt, wishX, wishY, runHeld);
+		const wasAir = this.mover.air > 0.08;
+		this.mover.update(dt, wishX, wishY, runHeld, jumpPressed, jumpHeld);
 		this.vx = this.mover.vx;
 		this.vy = this.mover.vy;
 		this.moving = this.mover.speed > 12;
@@ -994,8 +1017,17 @@ export class GameEngine {
 		this.dir = this.facing;
 		this.animT = this.mover.animT;
 		this.bob = this.moving ? Math.sin(this.animT * 2) * 3.2 : Math.sin(this.animT) * 0.6;
+		if (this.mover.jumped) {
+			audio.jump();
+			this.addTrauma(JUICE.trauma.jump);
+		}
+		if (this.mover.landed || (wasAir && this.mover.grounded)) {
+			audio.land();
+			this.addTrauma(JUICE.trauma.land);
+			this.punch = Math.max(this.punch, 0.2);
+		}
 		const plant = Math.sin(this.mover.animT);
-		if (this.moving && plant > 0 && this.plantSign <= 0) {
+		if (this.moving && this.mover.grounded && plant > 0 && this.plantSign <= 0) {
 			audio.foot(this.clock, this.mover.state === "run");
 		}
 		this.plantSign = plant;
@@ -1018,7 +1050,7 @@ export class GameEngine {
 	collides(x: number, y: number, r: number) {
 		for (const w of this.walls) if (x + r > w.x && x - r < w.x + w.w && y + r > w.y && y - r < w.y + w.h) return true;
 		for (const box of this.poiBoxes) if (circleHitsRect(x, y, r, box)) return true;
-		if (this.mode !== "basketball") {
+		if (this.mode !== "basketball" && this.mover.air < 0.55) {
 			for (const c of this.cars) {
 				if (circleHitsRect(x, y, r, { x: c.x - c.w * 0.5, y: c.y - 11, w: c.w, h: 22 })) return true;
 			}
@@ -1657,6 +1689,8 @@ export class GameEngine {
 				indoor: this.mode === "interior" || this.mode === "shop",
 				punch: this.punch,
 				hoopPulse: this.hoopPulse,
+				air: this.mover.air,
+				vz: this.mover.vz,
 			});
 			this.world3d.render(w, h);
 		}

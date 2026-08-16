@@ -62,6 +62,8 @@ export type WorldFrame = {
   indoor: boolean;
   punch: number;
   hoopPulse: number;
+  air: number;
+  vz: number;
 };
 
 type TexPack = Partial<Record<MatKey, THREE.Texture>>;
@@ -578,7 +580,7 @@ export class World3D {
       this.benji.applyApprovedTextures(f.images);
       this.benjiReady = true;
     }
-    this.benji.update(dt, f.heading, f.yaw, f.moveSpeed, f.lean, f.loco, f.animT, f.cameraView === "third");
+    this.benji.update(dt, f.heading, f.yaw, f.moveSpeed, f.lean, f.loco, f.animT, f.cameraView === "third", f.air, f.vz);
 
     const hoopY = 2.72;
     const by = Math.max(0.12, f.ball.z * (hoopY / 86));
@@ -645,10 +647,11 @@ export class World3D {
     const shake = f.trauma * f.trauma;
     const sx = Math.sin(f.clock * 47) * shake * 0.12;
     const sy = Math.cos(f.clock * 39) * shake * 0.08;
+    const air = f.air ?? 0;
     const step = Math.sin(f.animT) * (f.loco === "run" ? 0.028 : f.loco === "walk" ? 0.014 : 0);
     const lookAhead = Math.min(f.moveSpeed / 268, 1);
     const follow = f.loco === "run" ? 6.15 : 5.45;
-    const height = f.indoor ? 1.85 : 2.38;
+    const height = (f.indoor ? 1.85 : 2.38) + air * 0.35;
     const k = f.indoor ? 11 : f.loco === "run" ? 5.4 : 7.6;
     const ease = 1 - Math.exp(-k * dt);
     const targetFov = f.cameraView === "first" ? (f.mode === "basketball" ? 74 : 70) : f.loco === "run" ? 66.5 : f.indoor ? 58 : 62;
@@ -663,11 +666,11 @@ export class World3D {
     }
 
     if (f.cameraView === "first") {
-      this.camPos.set(x + sx, 1.68 + f.bob * 0.012 + step, z + sy);
+      this.camPos.set(x + sx, 1.68 + f.bob * 0.012 + step + air, z + sy);
       this.camera.position.copy(this.camPos);
       const ly = Math.sin(f.pitch);
       const lh = Math.cos(f.pitch);
-      this.camera.lookAt(x + fwdX * lh * 8, 1.62 + ly * 8, z + fwdZ * lh * 8);
+      this.camera.lookAt(x + fwdX * lh * 8, 1.62 + ly * 8 + air, z + fwdZ * lh * 8);
     } else {
       const desired = this.tmp.set(
         x - fwdX * follow + fwdX * lookAhead * 0.55 + sx,
@@ -678,7 +681,7 @@ export class World3D {
       this.camPos.y += (desired.y - this.camPos.y) * ease;
       this.camPos.z += (desired.z - this.camPos.z) * ease;
       this.camera.position.copy(this.camPos);
-      this.camLook.set(x, 1.22 + step, z);
+      this.camLook.set(x, 1.22 + step + air * 0.55, z);
       this.camera.lookAt(this.camLook);
     }
     this.camera.fov = this.camFov;
