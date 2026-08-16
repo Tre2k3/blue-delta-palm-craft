@@ -5,17 +5,21 @@ import * as THREE from "three";
  * Character DOM Renderer V8
  *
  * Characters are illustrated 2.5D actors anchored to true 3D world points.
- * They render in one fixed viewport layer instead of inside the canvas wrapper,
- * which prevents responsive layouts, transforms, and preview shells from
- * shifting otherwise-correct projected coordinates off screen.
+ * The player intentionally uses the verified standalone Benji direction art
+ * instead of the old empty walk atlas. This keeps the visible direction tied
+ * to the engine's logical facing and prevents transparent-atlas regressions.
  */
 
 const S = 1 / 16;
 const GYM = { cx: -4300, cy: -3200 };
 const HQ = { cx: -3700, cy: -3200 };
 const URLS = {
-  walk: "/game/sprites/benji_walk_4dir.webp",
-  run: "/game/sprites/benji_run_4dir.webp",
+  player: {
+    down: "/game/benji-front-norm.png",
+    up: "/game/benji-back-norm.png",
+    left: "/game/benji-left-norm.png",
+    right: "/game/benji-right-norm.png",
+  },
   k: "/game/sprites/k_blanco_walk_4dir.webp",
   npc: "/game/sprites/memphis_npc_walk_4dir.webp",
   court: "/game/sprites/court_og_walk_4dir.webp",
@@ -64,7 +68,7 @@ function makeEl(parent, kind) {
     imageRendering: "auto",
     zIndex: "8",
     filter: "drop-shadow(0 8px 5px rgba(0,0,0,.34))",
-    willChange: "left,top,width,height,background-position",
+    willChange: "left,top,width,height,background-position,transform",
     display: "none",
   });
   parent.appendChild(el);
@@ -75,8 +79,6 @@ function ensureState(world) {
   let s = states.get(world);
   if (s) return s;
   const parent = ensureLayer();
-  // A single running game owns a single Benji DOM actor. Remove any orphaned
-  // actor left behind by hot reload or a previous World3D instance.
   for (const orphan of document.querySelectorAll('[data-sack-character-v8="benji"]')) orphan.remove();
   s = {
     parent,
@@ -103,6 +105,15 @@ function setSheet(el, url, cols, rows, row, frame) {
   el.style.backgroundSize = `${cols * 100}% ${rows * 100}%`;
   el.style.backgroundPositionX = cols <= 1 ? "0%" : `${(frame / (cols - 1)) * 100}%`;
   el.style.backgroundPositionY = rows <= 1 ? "0%" : `${(row / (rows - 1)) * 100}%`;
+  el.style.transform = "translateX(-50%)";
+}
+
+function setStatic(el, url, bob = 0) {
+  el.style.backgroundImage = `url("${url}")`;
+  el.style.backgroundSize = "contain";
+  el.style.backgroundPosition = "center bottom";
+  el.style.backgroundRepeat = "no-repeat";
+  el.style.transform = `translateX(-50%) translateY(${bob.toFixed(1)}px)`;
 }
 
 function project(world, x, z, worldHeight, el, aspect = .63, keepOnScreen = false) {
@@ -173,19 +184,15 @@ function syncPlayer(world, frame, engine, s) {
   const visible = frame.cameraView === "third" && !["shop", "dialogue"].includes(frame.mode);
   if (!visible) { el.style.display = "none"; return; }
   const now = Number(frame.clock) || 0;
+  const dir = URLS.player[frame.facing] ? frame.facing : "down";
   const speed = Math.hypot(Number(engine?.vx) || 0, Number(engine?.vy) || 0);
-  const run = frame.moving && speed > 155;
-  const url = run ? URLS.run : URLS.walk;
-  const col = frame.moving ? Math.floor(now * (run ? 11 : 8)) % 5 : 0;
-  setSheet(el, url, 5, 4, ROW[frame.facing] ?? 0, col);
+  const moving = !!frame.moving && speed > 1;
+  const bob = moving ? -Math.abs(Math.sin(now * (speed > 155 ? 13 : 9))) * 2.4 : 0;
+  setStatic(el, URLS.player[dir], bob);
+  el.dataset.facing = dir;
+  el.dataset.moving = moving ? "true" : "false";
   const projected = project(world, wx(frame.px), wz(frame.py), 1.95, el, .62, true);
-  if (projected) {
-    // In a third-person follow camera Benji is the focal actor. Use a viewport
-    // unit so a resize updates his horizontal position immediately even before
-    // the next engine frame. World movement and the camera still determine his
-    // vertical scale/grounding and every other actor remains fully projected.
-    el.style.left = "50vw";
-  }
+  if (projected) el.style.left = "50vw";
 }
 
 function syncPeds(world, frame, s) {
@@ -274,6 +281,7 @@ function install(World3D) {
         installed: true,
         playerDisplay: getComputedStyle(s.player).display,
         playerFacing: frame.facing,
+        playerImage: s.player.style.backgroundImage,
         playerRect: { left: playerRect.left, top: playerRect.top, right: playerRect.right, bottom: playerRect.bottom },
         viewport: { width: window.innerWidth, height: window.innerHeight },
         pedsVisible: s.peds.filter((a) => a.el.style.display !== "none").length,
