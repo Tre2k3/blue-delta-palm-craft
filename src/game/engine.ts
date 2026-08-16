@@ -19,6 +19,17 @@ import { World3D } from "./world3d";
 import { CharacterController } from "./characterController";
 import { JUICE, emitBurst, stepParticles, type ScreenParticle } from "./juice";
 import {
+  aheadDistance,
+  circleHitsRect,
+  isRoadPoint,
+  laneVelocity,
+  poiColliders,
+  sidewalkRects,
+  trafficLanes,
+  type Lane,
+  type Rect,
+} from "./worldTopology";
+import {
   createRun,
   finalizeRun,
   goodWindow,
@@ -154,9 +165,12 @@ export class GameEngine {
 	highScore = 0;
 	walls: { x: number; y: number; w: number; h: number }[] = [];
 	trees: { x: number; y: number }[] = [];
-	cars: { x: number; y: number; vx: number; vy: number; w: number; color: string }[] = [];
+	cars: { x: number; y: number; vx: number; vy: number; w: number; color: string; laneId: string }[] = [];
 	peds: { x: number; y: number; vx: number; vy: number; color: string; t: number }[] = [];
 	npcLive: { id: string; x: number; y: number; ox: number; oy: number; t: number }[] = [];
+	poiBoxes: Rect[] = [];
+	laneMap = new Map<string, Lane>();
+	walks: Rect[] = [];
 	shopOpen = false;
 	cinematic: CinematicState | null = null;
 	letterbox = 0;
@@ -269,6 +283,8 @@ export class GameEngine {
 			x: (3 + i * 17 % 58) * 48,
 			y: (3 + i * 29 % 42) * 48
 		});
+		this.poiBoxes = poiColliders();
+		this.walks = sidewalkRects();
 		const carColors = [
 			"#1db954",
 			"#111111",
@@ -277,45 +293,27 @@ export class GameEngine {
 			"#b91c1c",
 			"#854d0e"
 		];
-		const lanes = [];
-		for (let i = 0; i < 10; i++) {
-			lanes.push({
-				x: (4 + i * 6) * 48,
-				y: 968,
-				vx: 90,
-				vy: 0
-			});
-			lanes.push({
-				x: (2 + i * 6) * 48,
-				y: 942,
-				vx: -80,
-				vy: 0
-			});
+		const lanes = trafficLanes();
+		this.laneMap = new Map(lanes.map((l) => [l.id, l]));
+		let ci = 0;
+		for (const lane of lanes) {
+			const count = lane.axis === "x" ? 3 : 2;
+			for (let i = 0; i < count; i++) {
+				const t = (i + 0.28) / count;
+				const along = lane.min + (lane.max - lane.min) * t;
+				const vel = laneVelocity(lane);
+				this.cars.push({
+					x: lane.axis === "x" ? along : lane.fixed,
+					y: lane.axis === "y" ? along : lane.fixed,
+					vx: vel.vx,
+					vy: vel.vy,
+					w: 38 + ci % 3 * 8,
+					color: carColors[ci % carColors.length]!,
+					laneId: lane.id,
+				});
+				ci++;
+			}
 		}
-		for (let i = 0; i < 6; i++) {
-			lanes.push({
-				x: 774,
-				y: (3 + i * 7) * 48,
-				vx: 0,
-				vy: 85
-			});
-			lanes.push({
-				x: 1622,
-				y: (4 + i * 7) * 48,
-				vx: 0,
-				vy: -78
-			});
-		}
-		lanes.forEach((l, i) => {
-			this.cars.push({
-				x: l.x,
-				y: l.y,
-				vx: l.vx,
-				vy: l.vy,
-				w: 38 + i % 3 * 8,
-				color: carColors[i % carColors.length]
-			});
-		});
 		const pedColors = [
 			"#d6d3d1",
 			"#a8a29e",
@@ -324,14 +322,23 @@ export class GameEngine {
 			"#44403c",
 			"#fafaf9"
 		];
-		for (let i = 0; i < 14; i++) this.peds.push({
-			x: (6 + i * 11 % 50) * 48,
-			y: (8 + i * 7 % 34) * 48,
-			vx: (i % 2 === 0 ? 1 : -1) * (22 + i % 5 * 4),
-			vy: (i % 3 === 0 ? 1 : -1) * (10 + i % 4 * 3),
-			color: pedColors[i % pedColors.length],
-			t: i
-		});
+		for (let i = 0; i < 14; i++) {
+			const walk = this.walks[i % Math.max(this.walks.length, 1)];
+			const along = walk
+				? walk.w > walk.h
+					? { x: walk.x + ((i * 211) % Math.max(walk.w - 8, 8)), y: walk.y + walk.h * 0.5 }
+					: { x: walk.x + walk.w * 0.5, y: walk.y + ((i * 173) % Math.max(walk.h - 8, 8)) }
+				: { x: (6 + (i * 11) % 50) * 48, y: (8 + (i * 7) % 34) * 48 };
+			const alongStreet = !!(walk && walk.w > walk.h);
+			this.peds.push({
+				x: along.x,
+				y: along.y,
+				vx: alongStreet ? (i % 2 === 0 ? 1 : -1) * (22 + (i % 5) * 4) : 0,
+				vy: alongStreet ? 0 : (i % 2 === 0 ? 1 : -1) * (18 + (i % 4) * 3),
+				color: pedColors[i % pedColors.length]!,
+				t: i,
+			});
+		}
 		this.npcLive = NPCS.map((n) => ({
 			id: n.id,
 			x: n.x,
@@ -872,21 +879,68 @@ export class GameEngine {
 	}
 	updateTraffic(dt: number) {
 		for (const c of this.cars) {
+			const lane = this.laneMap.get(c.laneId);
+			if (!lane) continue;
+			if (lane.axis === "x") c.y += (lane.fixed - c.y) * (1 - Math.exp(-8 * dt));
+			else c.x += (lane.fixed - c.x) * (1 - Math.exp(-8 * dt));
+			let scale = 1;
+			for (const o of this.cars) {
+				if (o === c || o.laneId !== c.laneId) continue;
+				const d = aheadDistance(c, o);
+				if (d < 78) scale = Math.min(scale, Math.max(0, (d - 30) / 48));
+			}
+			const pd = aheadDistance(c, { x: this.px, y: this.py });
+			if (pd < 86) scale = Math.min(scale, Math.max(0, (pd - 34) / 52));
+			const spd = Math.hypot(c.vx, c.vy);
+			if (spd > 1) {
+				const nx = c.x + (c.vx / spd) * 52;
+				const ny = c.y + (c.vy / spd) * 52;
+				for (const box of this.poiBoxes) {
+					if (circleHitsRect(nx, ny, 18, box)) {
+						scale = Math.min(scale, 0.12);
+						break;
+					}
+				}
+			}
+			const desired = laneVelocity(lane, scale);
+			c.vx += (desired.vx - c.vx) * (1 - Math.exp(-6 * dt));
+			c.vy += (desired.vy - c.vy) * (1 - Math.exp(-6 * dt));
 			c.x += c.vx * dt;
 			c.y += c.vy * dt;
-			if (c.x > 3112) c.x = -50;
-			if (c.x < -50) c.x = WORLD_PX_W + 40;
-			if (c.y > 2344) c.y = -40;
-			if (c.y < -40) c.y = WORLD_PX_H + 40;
+			if (lane.axis === "x") {
+				if (c.x > lane.max + 48) c.x = lane.min - 48;
+				if (c.x < lane.min - 48) c.x = lane.max + 48;
+			} else {
+				if (c.y > lane.max + 48) c.y = lane.min - 48;
+				if (c.y < lane.min - 48) c.y = lane.max + 48;
+			}
 		}
 	}
 	updatePeds(dt: number) {
 		for (const p of this.peds) {
 			p.t += dt;
-			p.x += p.vx * dt;
-			p.y += p.vy * dt;
-			if (p.x < 96 || p.x > 2976) p.vx *= -1;
-			if (p.y < 96 || p.y > 2112) p.vy *= -1;
+			let nx = p.x + p.vx * dt;
+			let ny = p.y + p.vy * dt;
+			if (nx < 96 || nx > 2976) p.vx *= -1;
+			if (ny < 96 || ny > 2112) p.vy *= -1;
+			const onWalk = this.walks.some((w) => nx >= w.x && nx <= w.x + w.w && ny >= w.y && ny <= w.y + w.h);
+			if (!onWalk || isRoadPoint(nx, ny)) {
+				p.vx *= -1;
+				p.vy *= -1;
+				nx = p.x + p.vx * dt;
+				ny = p.y + p.vy * dt;
+			}
+			for (const box of this.poiBoxes) {
+				if (circleHitsRect(nx, ny, 10, box)) {
+					p.vx *= -1;
+					p.vy *= -1;
+					nx = p.x;
+					ny = p.y;
+					break;
+				}
+			}
+			p.x = nx;
+			p.y = ny;
 		}
 		for (const n of this.npcLive) {
 			if (!NPCS.find((x) => x.id === n.id)?.wander) continue;
@@ -963,6 +1017,12 @@ export class GameEngine {
 	}
 	collides(x: number, y: number, r: number) {
 		for (const w of this.walls) if (x + r > w.x && x - r < w.x + w.w && y + r > w.y && y - r < w.y + w.h) return true;
+		for (const box of this.poiBoxes) if (circleHitsRect(x, y, r, box)) return true;
+		if (this.mode !== "basketball") {
+			for (const c of this.cars) {
+				if (circleHitsRect(x, y, r, { x: c.x - c.w * 0.5, y: c.y - 11, w: c.w, h: 22 })) return true;
+			}
+		}
 		return false;
 	}
 	npcPos(id: string) {
