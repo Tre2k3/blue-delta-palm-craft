@@ -578,7 +578,7 @@ export class World3D {
       this.benji.applyApprovedTextures(f.images);
       this.benjiReady = true;
     }
-    this.benji.update(dt, f.heading, f.moveSpeed, f.lean, f.loco, f.animT, f.cameraView === "third");
+    this.benji.update(dt, f.heading, f.yaw, f.moveSpeed, f.lean, f.loco, f.animT, f.cameraView === "third");
 
     const hoopY = 2.72;
     const by = Math.max(0.12, f.ball.z * (hoopY / 86));
