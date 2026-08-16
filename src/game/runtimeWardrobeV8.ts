@@ -67,8 +67,9 @@ async function install(World3D) {
   const oldSync = p.sync;
   p.sync = function wardrobeV8Sync(frame) {
     oldSync.call(this, frame);
-    const engine = this.__v8Engine; const parent = this.renderer?.domElement?.parentElement;
-    const el = parent?.querySelector?.('[data-sack-character-v8="benji"]'); if (!el || !engine) return;
+    const engine = this.__v8Engine;
+    const el = document.querySelector?.('[data-sack-character-v8="benji"]');
+    if (!el || !engine) return;
     const badge = ensureJerseyBadge(el);
     const run = Math.hypot(Number(engine.vx) || 0, Number(engine.vy) || 0) > 155;
     const base = run ? BASE_RUN : BASE_WALK;
