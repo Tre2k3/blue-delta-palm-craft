@@ -4,6 +4,7 @@ import { GameApp } from "../game/GameApp";
 import { installGameplayIntegrity } from "../game/gameplayIntegrity";
 import { installInteriorCollisionPass } from "../game/interiorCollisionPass";
 import { installMemphisEnvironmentPass } from "../game/memphisEnvironmentPass";
+import { installStreetSanitationPass } from "../game/streetSanitationPass";
 import { installVehicleVisualPass } from "../game/vehicleVisualPass";
 import { installWorldHazardPass } from "../game/worldHazardPass";
 
@@ -12,6 +13,7 @@ installInteriorCollisionPass();
 installWorldHazardPass();
 installCourtWorldIntegrity();
 installMemphisEnvironmentPass();
+installStreetSanitationPass();
 installVehicleVisualPass();
 
 export const Route = createFileRoute("/")({
