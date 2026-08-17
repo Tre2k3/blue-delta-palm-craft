@@ -23,7 +23,7 @@ try {
   await page.waitForSelector("button:has-text('ENTER MEMPHIS')", { timeout: 30000 });
   await page.getByRole("button", { name: /ENTER MEMPHIS/i }).click();
   await page.waitForFunction(
-    () => window.__gameTest && window.__controlsTest && window.__gameTest.furnitureCollisionProbe,
+    () => window.__gameTest && window.__controlsTest && window.__gameTest.furnitureCollisionProbe && window.__gameTest.environmentCollisionProbe && window.__SACK_ENVIRONMENT__,
     { timeout: 20000 },
   );
   await page.waitForTimeout(4200);
@@ -41,6 +41,16 @@ try {
   ok(furniture.hqCounter === true, "HQ checkout counter is physically solid", furniture);
   ok(furniture.apartmentDoorLane === false, "apartment doorway remains walkable", furniture);
   ok(furniture.hqDoorLane === false, "HQ doorway remains walkable", furniture);
+
+  const environment = await page.evaluate(() => ({
+    visuals: window.__SACK_ENVIRONMENT__,
+    collision: window.__gameTest.environmentCollisionProbe(),
+  }));
+  ok(environment.visuals?.river === true, "Mississippi River is rendered as a real world feature", environment);
+  ok(environment.visuals?.riverRailing === true, "riverfront has a boardwalk railing", environment);
+  ok(environment.visuals?.streetFurniture === true, "Memphis street furniture pass is active", environment);
+  ok(environment.collision?.riverWater === true, "Benji cannot walk out onto the river water", environment);
+  ok(environment.collision?.riverBoardwalk === false, "riverfront boardwalk remains walkable", environment);
   await captureShot(page, "artifacts/game-smoke-boot.png");
 
   // Test the real controller from Benji's playable home spawn. The old test
