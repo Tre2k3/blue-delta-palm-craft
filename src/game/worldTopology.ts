@@ -15,6 +15,7 @@ export type Lane = {
 const ROAD_HALF = TILE * 0.92;
 const LANE_OFFSET = TILE * 0.34;
 const SIDEWALK = TILE * 0.28;
+const INTERIOR_WALL = TILE * 0.24;
 
 export function roadRects(): Rect[] {
   return STREETS.map((s) =>
@@ -55,15 +56,39 @@ export function trafficLanes(): Lane[] {
   return lanes;
 }
 
+// These POIs are traversable zones instead of solid rectangles. Enterable
+// buildings get explicit wall strips below so their doors are physically real.
 const NON_SOLID_POIS = new Set(["apartment", "court", "river", "dropvan", "beale"]);
 
+function shellWithSouthDoor(p: { x: number; y: number; w: number; h: number }, doorCenterX: number, doorWidth: number): Rect[] {
+  const t = INTERIOR_WALL;
+  const doorL = Math.max(p.x + t, doorCenterX - doorWidth / 2);
+  const doorR = Math.min(p.x + p.w - t, doorCenterX + doorWidth / 2);
+  const out: Rect[] = [
+    { x: p.x, y: p.y, w: p.w, h: t },
+    { x: p.x, y: p.y, w: t, h: p.h },
+    { x: p.x + p.w - t, y: p.y, w: t, h: p.h },
+  ];
+  if (doorL > p.x) out.push({ x: p.x, y: p.y + p.h - t, w: doorL - p.x, h: t });
+  if (doorR < p.x + p.w) out.push({ x: doorR, y: p.y + p.h - t, w: p.x + p.w - doorR, h: t });
+  return out;
+}
+
 export function poiColliders(): Rect[] {
-  return POIS.filter((p) => !NON_SOLID_POIS.has(p.id)).map((p) => ({
+  const out = POIS.filter((p) => !NON_SOLID_POIS.has(p.id)).map((p) => ({
     x: p.x,
     y: p.y,
     w: p.w,
     h: p.h,
   }));
+
+  const apartment = POIS.find((p) => p.id === "apartment");
+  if (apartment) {
+    // New Game spawns at x=6*TILE on the apartment's south edge. Align the
+    // physical doorway with that spawn rather than forcing Benji through a wall.
+    out.push(...shellWithSouthDoor(apartment, 6 * TILE, TILE * 1.3));
+  }
+  return out;
 }
 
 export function circleHitsRect(x: number, y: number, r: number, q: Rect) {
