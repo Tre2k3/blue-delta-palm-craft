@@ -14,7 +14,6 @@ const COURT_BLOCKED_LANES = new Set([
 const SAFE_LANES = trafficLanes().filter((lane) => !COURT_BLOCKED_LANES.has(lane.id));
 
 type LiveCar = WorldFrame["cars"][number] & { laneId?: string };
-type LifeInternals = WorldLifePass & { scene: THREE.Scene };
 type PatchedLife = WorldLifePass & { __courtIntegrityPatched?: boolean };
 
 function insideCourt(x: number, y: number, pad = 0) {
@@ -107,7 +106,7 @@ export function installCourtWorldIntegrity() {
   const originalBuild = WorldLifePass.prototype.build;
   WorldLifePass.prototype.build = function courtSafeBuild(this: WorldLifePass) {
     originalBuild.call(this);
-    const scene = (this as LifeInternals).scene;
+    const scene = (this as unknown as { scene: THREE.Scene }).scene;
     hideCourtStreetFurniture(scene);
     buildCourtDeck(scene);
   };
