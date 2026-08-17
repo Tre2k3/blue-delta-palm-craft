@@ -27,12 +27,7 @@ try {
 
   const boot = await page.evaluate(() => {
     const s = window.__gameTest.getState();
-    return {
-      title: document.title,
-      hasCanvas: !!document.querySelector("canvas"),
-      mode: s.mode,
-      facing: s.facing,
-    };
+    return { title: document.title, hasCanvas: !!document.querySelector("canvas"), mode: s.mode, facing: s.facing };
   });
   ok(!!boot.title, "document title is present", boot);
   ok(boot.hasCanvas, "game canvas is mounted", boot);
@@ -49,10 +44,7 @@ try {
   const moving = await page.evaluate(() => window.__gameTest.getState());
   await page.keyboard.up("KeyD");
   ok(
-    Math.abs(moving.px - before.px) > 2 ||
-      Math.abs(moving.py - before.py) > 2 ||
-      Math.abs(moving.vx) > 1 ||
-      Math.abs(moving.vy) > 1,
+    Math.abs(moving.px - before.px) > 2 || Math.abs(moving.py - before.py) > 2 || Math.abs(moving.vx) > 1 || Math.abs(moving.vy) > 1,
     "movement keys change Benji position",
     { before, moving },
   );

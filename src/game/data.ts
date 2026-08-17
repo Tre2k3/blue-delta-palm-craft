@@ -1,4 +1,6 @@
-import type { ApparelItem, Mission, NpcDef, SideMission, TrophyDef, WorldPoi } from "./types";
+import type { DeliveryId } from "./dropRun";
+import { deliveryTarget } from "./dropRun";
+import type { ApparelItem, Mission, MissionStep, NpcDef, SideMission, TrophyDef, WorldPoi } from "./types";
 
 /** Warm Memphis dusk — brand green/gold are accents only. */
 export const PAL = {
@@ -31,7 +33,7 @@ export const PAL = {
 } as const;
 
 /** Bump to force the live preview to remount the world bake. */
-export const ART_REV = 10;
+export const ART_REV = 12;
 
 export const BRAND = {
   name: "$ackReligious",
@@ -248,7 +250,38 @@ export const STREETS: { name: string; axis: "x" | "y"; tile: number }[] = [
   { name: "HIGHLAND", axis: "x", tile: 50 },
 ];
 
-export function createDropDayMission(): Mission {
+export function createDropDayMission(opts?: { order?: DeliveryId[]; courtTarget?: number }): Mission {
+  const order = opts?.order ?? ["hood", "dt", "culture"];
+  const courtTarget = opts?.courtTarget ?? 8;
+  const delivers: Record<DeliveryId, MissionStep> = {
+    hood: {
+      id: "hood",
+      label: "Move product — Neighborhood",
+      description: "Connect with the real ones in the hood.",
+      target: deliveryTarget("hood"),
+      kind: "deliver",
+      reward: 50,
+      done: false,
+    },
+    dt: {
+      id: "dt",
+      label: "Move product — Downtown",
+      description: "Downtown vibes. More supporters.",
+      target: deliveryTarget("dt"),
+      kind: "deliver",
+      reward: 50,
+      done: false,
+    },
+    culture: {
+      id: "culture",
+      label: "Move product — Culture Spot",
+      description: "Last stop. The brand grows.",
+      target: deliveryTarget("culture"),
+      kind: "deliver",
+      reward: 60,
+      done: false,
+    },
+  };
   return {
     id: "drop_day",
     title: "The Drop Day",
@@ -283,37 +316,11 @@ export function createDropDayMission(): Mission {
         reward: 40,
         done: false,
       },
-      {
-        id: "hood",
-        label: "Move product — Neighborhood",
-        description: "Connect with the real ones in the hood.",
-        target: "neighborhood",
-        kind: "deliver",
-        reward: 50,
-        done: false,
-      },
-      {
-        id: "dt",
-        label: "Move product — Downtown",
-        description: "Downtown vibes. More supporters.",
-        target: "downtown",
-        kind: "deliver",
-        reward: 50,
-        done: false,
-      },
-      {
-        id: "culture",
-        label: "Move product — Culture Spot",
-        description: "Last stop. The brand grows.",
-        target: "culture",
-        kind: "deliver",
-        reward: 60,
-        done: false,
-      },
+      ...order.map((id) => ({ ...delivers[id] })),
       {
         id: "ball",
         label: "Ball up for respect",
-        description: "Hit the 901 Court. Score 8 points.",
+        description: `Hit the 901 Court. Score ${courtTarget} points.`,
         target: "court",
         kind: "basketball",
         reward: 45,

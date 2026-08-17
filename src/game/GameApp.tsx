@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { GameEngine } from "./engine";
 import { APPAREL, ART_REV, BRAND, POIS, TROPHIES, TIPS } from "./data";
+import { formatRunClock } from "./dropRun";
 import type { ApparelId, HudSnapshot, PauseTab } from "./types";
 
 const emptyHud: HudSnapshot = {
@@ -47,6 +48,27 @@ const emptyHud: HudSnapshot = {
   hasSave: false,
   cameraView: "third",
   steps: [],
+  dropRun: {
+    run: 1,
+    time: 0,
+    combo: 0,
+    bestCombo: 0,
+    points: 0,
+    courtTarget: 8,
+    grade: null,
+    recap: false,
+    deliveries: 0,
+    ballMakes: 0,
+    ballPerfects: 0,
+    ballScore: 0,
+    payout: 0,
+    respectEarned: 0,
+    par: 240,
+    active: false,
+  },
+  uiPulse: 0,
+  bestGrade: null,
+  bestRunScore: 0,
 };
 
 function formatHour(h: number) {
@@ -311,7 +333,10 @@ export function GameApp() {
           {/* Top HUD */}
           <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-3 p-3 sm:p-4">
             <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2 rounded-xl border border-border bg-panel px-3 py-2 backdrop-blur-sm">
+              <div
+                className="flex items-center gap-2 rounded-xl border border-border bg-panel px-3 py-2 backdrop-blur-sm"
+                style={{ transform: hud.uiPulse > 0.15 ? `scale(${1 + hud.uiPulse * 0.06})` : undefined }}
+              >
                 <img src="/game/sack-icon.png" alt="" className="h-7 w-7" />
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-muted">$ackdollars</p>
@@ -336,6 +361,12 @@ export function GameApp() {
               <p className="font-display text-lg leading-none text-gold">{hud.missionTitle}</p>
               <p className="mt-1 text-sm font-medium leading-snug text-fg">{hud.missionStep}</p>
               <p className="mt-1 text-xs text-muted tabular">{hud.missionProgress}</p>
+              {(hud.dropRun.active || hud.dropRun.points > 0) && !hud.missionComplete && (
+                <p className="mt-1 text-[11px] tabular text-primary">
+                  RUN {hud.dropRun.run} · {formatRunClock(hud.dropRun.time)} · {hud.dropRun.points}
+                  {hud.dropRun.combo > 1 ? ` · x${hud.dropRun.combo}` : ""}
+                </p>
+              )}
             </div>
           </div>
 
@@ -349,7 +380,10 @@ export function GameApp() {
 
           {hud.interactHint && hud.mode === "world" && !hud.cinematic && (
             <div className="pointer-events-none absolute left-1/2 top-[44%] z-20 -translate-x-1/2">
-              <div className="flex items-center gap-2 rounded-full border border-primary/35 bg-panel px-4 py-2 text-sm font-medium text-fg shadow-lg backdrop-blur-sm">
+              <div
+                className="flex items-center gap-2 rounded-full border border-primary/35 bg-panel px-4 py-2 text-sm font-medium text-fg shadow-lg backdrop-blur-sm"
+                style={{ transform: hud.uiPulse > 0.1 ? `scale(${1 + hud.uiPulse * 0.08})` : undefined }}
+              >
                 <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-primary px-1.5 font-display text-sm text-primary-fg">
                   {hud.promptButton}
                 </span>
@@ -385,7 +419,10 @@ export function GameApp() {
               <p className="font-display text-lg text-primary">901 COURT</p>
               <p className="tabular text-3xl font-semibold leading-none text-fg">{hud.basketball.score}</p>
               <p className="mt-1 text-xs text-muted">
-                {hud.basketball.timeLeft}s · {hud.basketball.shots} shots · need 8
+                {hud.basketball.timeLeft}s · {hud.basketball.shots} shots · need {hud.basketball.target}
+              </p>
+              <p className="mt-0.5 text-[10px] uppercase tracking-wider text-gold">
+                {hud.basketball.zone} · {hud.basketball.perfects} perfect
               </p>
               {hud.basketball.combo > 1 && (
                 <p className="mt-1 font-display text-xl text-primary">x{hud.basketball.combo} STREAK</p>
@@ -527,6 +564,62 @@ export function GameApp() {
             </div>
           )}
 
+          {hud.dropRun.recap && !hud.cinematic && !hud.shopOpen && (
+            <div className="absolute inset-0 z-40 flex items-end justify-center bg-bg/65 p-3 backdrop-blur-sm sm:items-center">
+              <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-5 shadow-2xl">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-primary">Drop Day · Run {hud.dropRun.run}</p>
+                <p className="font-display mt-1 text-6xl leading-none text-gold">{hud.dropRun.grade ?? "D"}</p>
+                <p className="mt-1 text-sm text-muted">Play better, earn more, look fresher.</p>
+                <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
+                  <div className="rounded-lg border border-border bg-surface-2 px-3 py-2">
+                    <dt className="text-[10px] uppercase tracking-wider text-muted">Time</dt>
+                    <dd className="tabular font-medium text-fg">{formatRunClock(hud.dropRun.time)}</dd>
+                  </div>
+                  <div className="rounded-lg border border-border bg-surface-2 px-3 py-2">
+                    <dt className="text-[10px] uppercase tracking-wider text-muted">Score</dt>
+                    <dd className="tabular font-medium text-fg">{hud.dropRun.points}</dd>
+                  </div>
+                  <div className="rounded-lg border border-border bg-surface-2 px-3 py-2">
+                    <dt className="text-[10px] uppercase tracking-wider text-muted">Deliveries</dt>
+                    <dd className="tabular font-medium text-fg">{hud.dropRun.deliveries}</dd>
+                  </div>
+                  <div className="rounded-lg border border-border bg-surface-2 px-3 py-2">
+                    <dt className="text-[10px] uppercase tracking-wider text-muted">Best combo</dt>
+                    <dd className="tabular font-medium text-fg">{hud.dropRun.bestCombo}</dd>
+                  </div>
+                  <div className="rounded-lg border border-border bg-surface-2 px-3 py-2">
+                    <dt className="text-[10px] uppercase tracking-wider text-muted">Court</dt>
+                    <dd className="tabular font-medium text-fg">
+                      {hud.dropRun.ballScore} · {hud.dropRun.ballPerfects} perfect
+                    </dd>
+                  </div>
+                  <div className="rounded-lg border border-border bg-surface-2 px-3 py-2">
+                    <dt className="text-[10px] uppercase tracking-wider text-muted">Payout</dt>
+                    <dd className="tabular font-medium text-gold">
+                      +${hud.dropRun.payout} · +{hud.dropRun.respectEarned} respect
+                    </dd>
+                  </div>
+                </dl>
+                <div className="mt-4 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => engineRef.current?.replayDrop()}
+                    className="min-h-11 rounded-xl bg-primary font-display text-2xl text-primary-fg"
+                  >
+                    RUN IT BACK
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => engineRef.current?.dismissRecap()}
+                    className="min-h-11 rounded-xl border border-border bg-surface-2 font-medium text-fg"
+                  >
+                    Keep roaming
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Mobile controls */}
           <div className="absolute inset-x-0 bottom-0 z-20 flex items-end justify-between p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:hidden">
             <div
@@ -592,19 +685,45 @@ export function GameApp() {
                   SHOOT
                 </button>
               ) : (
-                <button
-                  type="button"
-                  className="flex h-16 w-16 items-center justify-center rounded-full bg-primary font-display text-2xl text-primary-fg shadow-lg active:scale-95"
-                  onClick={() => engineRef.current?.tryInteract()}
-                >
-                  {hud.promptButton}
-                </button>
+                <div className="flex items-end gap-2">
+                  <button
+                    type="button"
+                    className="flex h-14 w-14 items-center justify-center rounded-full border border-border bg-panel font-display text-sm text-fg shadow-lg active:scale-95"
+                    onTouchStart={(e) => {
+                      e.preventDefault();
+                      const eng = engineRef.current;
+                      if (!eng) return;
+                      eng.input.queueJump();
+                    }}
+                    onTouchEnd={(e) => {
+                      e.preventDefault();
+                      const eng = engineRef.current;
+                      if (!eng) return;
+                      eng.input.touch.jump = false;
+                    }}
+                    onTouchCancel={(e) => {
+                      e.preventDefault();
+                      const eng = engineRef.current;
+                      if (!eng) return;
+                      eng.input.touch.jump = false;
+                    }}
+                  >
+                    JUMP
+                  </button>
+                  <button
+                    type="button"
+                    className="flex h-16 w-16 items-center justify-center rounded-full bg-primary font-display text-2xl text-primary-fg shadow-lg active:scale-95"
+                    onClick={() => engineRef.current?.tryInteract()}
+                  >
+                    {hud.promptButton}
+                  </button>
+                </div>
               )}
             </div>
           </div>
 
           <div className="pointer-events-none absolute bottom-3 right-3 z-10 hidden rounded-lg border border-border bg-panel/70 px-2 py-1 text-[10px] text-muted sm:block">
-            WASD · Q/R look · V camera · {hud.promptButton} · Space
+            WASD · Q/R look · V camera · {hud.promptButton} · Space jump
           </div>
 
           {/* Pause */}
@@ -648,6 +767,9 @@ export function GameApp() {
                       title={hud.missionTitle}
                       steps={hud.steps}
                       sides={hud.sideMissions}
+                      dropRun={hud.dropRun}
+                      bestGrade={hud.bestGrade}
+                      onReplay={() => engineRef.current?.replayDrop()}
                     />
                   )}
                   {hud.pauseTab === "wardrobe" && (
@@ -704,16 +826,25 @@ function PauseMissions({
   title,
   steps,
   sides,
+  dropRun,
+  bestGrade,
+  onReplay,
 }: {
   chapter: string;
   title: string;
   steps: HudSnapshot["steps"];
   sides: HudSnapshot["sideMissions"];
+  dropRun: HudSnapshot["dropRun"];
+  bestGrade: HudSnapshot["bestGrade"];
+  onReplay: () => void;
 }) {
   return (
     <div>
       <p className="text-[11px] uppercase tracking-wider text-primary">{chapter}</p>
       <p className="font-display text-3xl text-fg">{title}</p>
+      <p className="mt-1 text-xs text-muted">
+        Run {dropRun.run} · best grade {bestGrade ?? "—"} · {dropRun.points} pts
+      </p>
       <ul className="mt-4 space-y-2">
         {steps.map((s) => (
           <li
@@ -722,11 +853,20 @@ function PauseMissions({
               s.done ? "border-border bg-surface-2 text-muted" : "border-primary/30 bg-surface text-fg"
             }`}
           >
-            <p className="text-sm font-medium">{s.done ? s.label : s.label}</p>
+            <p className="text-sm font-medium">{s.label}</p>
             <p className="text-xs text-muted">{s.description}</p>
           </li>
         ))}
       </ul>
+      {steps.every((s) => s.done) && (
+        <button
+          type="button"
+          onClick={onReplay}
+          className="mt-4 min-h-11 w-full rounded-xl bg-primary font-display text-xl text-primary-fg"
+        >
+          RUN IT BACK
+        </button>
+      )}
       <p className="mt-6 text-[11px] uppercase tracking-wider text-muted">Side jobs</p>
       <ul className="mt-2 space-y-2">
         {sides.map((s) => (

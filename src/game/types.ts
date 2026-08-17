@@ -1,3 +1,5 @@
+import type { DropRunHud, RunGrade } from "./dropRun";
+
 export type Dir = "up" | "down" | "left" | "right";
 
 export type GameMode =
@@ -140,6 +142,22 @@ export interface SaveData {
   sideProgress: Record<string, boolean>;
   worldHour: number;
   settings: GameSettings;
+  dropRunIndex?: number;
+  dropRun?: Partial<{
+    active: boolean;
+    time: number;
+    deliveries: number;
+    combo: number;
+    bestCombo: number;
+    mistakes: number;
+    ballMakes: number;
+    ballPerfects: number;
+    ballScore: number;
+    points: number;
+    grade: RunGrade | null;
+  }>;
+  bestRunScore?: number;
+  bestGrade?: RunGrade | null;
 }
 
 export interface GameSettings {
@@ -186,6 +204,9 @@ export interface HudSnapshot {
     power: number;
     charging: boolean;
     best: number;
+    target: number;
+    perfects: number;
+    zone: string;
   } | null;
   paused: boolean;
   started: boolean;
@@ -204,4 +225,46 @@ export interface HudSnapshot {
   hasSave: boolean;
   cameraView: CameraView;
   steps: { id: string; label: string; done: boolean; description: string }[];
+  dropRun: DropRunHud;
+  uiPulse: number;
+  bestGrade: RunGrade | null;
+  bestRunScore: number;
+}
+
+export type GameTestState = {
+  sackdollars: number;
+  step: string;
+  mode: GameMode;
+  score: number;
+  missionComplete: boolean;
+  facing: Dir;
+  px: number;
+  py: number;
+  vx: number;
+  vy: number;
+  air: number;
+  loco: string;
+};
+
+export type GameTestApi = {
+  teleport: (loc: string) => void;
+  getState: () => GameTestState;
+  setBallScore: (n: number) => void;
+  advanceDialogue: () => void;
+  interact: () => void;
+  resetSave: () => void;
+};
+
+export type ControlsTestApi = {
+  getYaw: () => number;
+  getSpeed: () => number;
+  getFacing: () => Dir;
+  setKeys: (codes: string[]) => void;
+};
+
+declare global {
+  interface Window {
+    __gameTest?: GameTestApi;
+    __controlsTest?: ControlsTestApi;
+  }
 }
