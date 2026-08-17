@@ -1,4 +1,4 @@
-import { POIS } from "./data";
+import { POIS, TILE } from "./data";
 import { GameEngine } from "./engine";
 
 const APARTMENT = POIS.find((p) => p.id === "apartment")!;
@@ -14,6 +14,19 @@ function insideApartmentDoorZone(engine: GameEngine, pad = 8) {
     engine.px <= APARTMENT.x + APARTMENT.w + pad &&
     engine.py >= APARTMENT.y - pad &&
     engine.py <= APARTMENT.y + APARTMENT.h + pad;
+}
+
+function placeInsideApartment(engine: GameEngine) {
+  // The old spawn sat exactly on the apartment's south collider at y=528.
+  // Starting on a wall made the opening look like a facade and could trap the
+  // controller at frame zero. Put Benji visibly inside, centered on the real
+  // doorway approach, so the first playable action is actually walking out.
+  engine.px = 6 * TILE;
+  engine.py = APARTMENT.y + APARTMENT.h - 72;
+  engine.vx = 0;
+  engine.vy = 0;
+  engine.leftSpawn = false;
+  engine.updateProximity();
 }
 
 function placeInsideHQ(engine: GameEngine, xRatio: number, yRatio: number) {
@@ -38,10 +51,25 @@ export function installGameplayIntegrity() {
   if (proto.__physicalHqPatched) return;
   proto.__physicalHqPatched = true;
 
+  const originalResetProgress = GameEngine.prototype.resetProgress;
+  GameEngine.prototype.resetProgress = function physicalApartmentReset(this: GameEngine, emit = true) {
+    originalResetProgress.call(this, false);
+    placeInsideApartment(this);
+    if (emit) this.emitHud();
+  };
+
+  const originalStart = GameEngine.prototype.start;
+  GameEngine.prototype.start = function physicalApartmentStart(this: GameEngine, fresh = false) {
+    originalStart.call(this, fresh);
+    // Position is not persisted in the current save schema, so every session
+    // already respawns at home. Make that home spawn a legitimate interior.
+    placeInsideApartment(this);
+    this.emitHud();
+  };
+
   // The legacy objective waited until Benji was another 50px beyond the
   // apartment footprint. With a real doorway/interior that felt broken: the
   // player had visibly left home but the HUD still said "Leave the apartment".
-  // Complete the step as soon as he actually clears the physical doorway.
   const originalCheckMissionAuto = GameEngine.prototype.checkMissionAuto;
   GameEngine.prototype.checkMissionAuto = function physicalApartmentExit(this: GameEngine) {
     const step = this.mission.steps[this.mission.activeStep];
@@ -76,10 +104,22 @@ export function installGameplayIntegrity() {
       __gameTest?: Record<string, unknown> & {
         enterHQ?: () => void;
         enterHQShop?: () => void;
+        collisionProbe?: () => Record<string, unknown>;
       };
     };
     if (!w.__gameTest) return;
     w.__gameTest.enterHQ = () => placeInsideHQ(this, 0.50, 0.70);
     w.__gameTest.enterHQShop = () => placeInsideHQ(this, 0.84, 0.72);
+    w.__gameTest.collisionProbe = () => ({
+      px: this.px,
+      py: this.py,
+      south4: this.collides(this.px, this.py + 4, 14),
+      south16: this.collides(this.px, this.py + 16, 14),
+      east4: this.collides(this.px + 4, this.py, 14),
+      started: this.started,
+      paused: this.paused,
+      cinematic: this.cinematic?.kind ?? null,
+      nearPoi: this.nearPoi,
+    });
   };
 }
