@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import type { LocomotionState } from "./characterController";
+import { CAST_ROWS, cropCastFrame, loadCastAtlas } from "./castAtlas";
 
 type View = "front" | "back" | "left" | "right";
-type CycleKind = "idle" | "walk" | "jump";
+type CycleKind = "idle" | "walk" | "jump" | "shoot";
 
 const TAU = Math.PI * 2;
 const VIEWS: View[] = ["back", "left", "front", "right"];
@@ -11,8 +12,7 @@ function wrap(a: number) {
   return Math.atan2(Math.sin(a), Math.cos(a));
 }
 
-function texFromImage(img: HTMLImageElement) {
-  const tex = new THREE.Texture(img);
+function finishTexture(tex: THREE.Texture) {
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.needsUpdate = true;
   tex.minFilter = THREE.LinearFilter;
@@ -22,12 +22,15 @@ function texFromImage(img: HTMLImageElement) {
   return tex;
 }
 
-function cardMat(img?: HTMLImageElement) {
-  if (!img) {
+function cardMat(src?: HTMLImageElement | HTMLCanvasElement) {
+  if (!src) {
     return new THREE.MeshBasicMaterial({ color: 0x1a1c1e, transparent: true, opacity: 0 });
   }
+  const tex = src instanceof HTMLCanvasElement
+    ? finishTexture(new THREE.CanvasTexture(src))
+    : finishTexture(new THREE.Texture(src));
   return new THREE.MeshBasicMaterial({
-    map: texFromImage(img),
+    map: tex,
     transparent: true,
     alphaTest: 0.22,
     depthWrite: true,
@@ -66,10 +69,11 @@ function jumpFrame(air: number, vz: number) {
 }
 
 /**
- * One Benji card — never a 4-face box.
- * Heading still owns which side of him you see. The card yaws to the camera
- * so you always look at a single full figure, not four photos spinning.
- * Walk / jump frames swap the card map; idle stills stay the approved photos.
+ * Permanent Benji renderer.
+ *
+ * The clean Chapter 1 atlas is true RGBA and is never chroma-keyed, fixing
+ * the transparent "holes" that appeared in Benji's hair/hat. Existing
+ * individual assets remain a safe fallback if the atlas cannot be loaded.
  */
 export class PlayerCharacter {
   readonly root = new THREE.Group();
@@ -80,9 +84,13 @@ export class PlayerCharacter {
   private idle: Partial<Record<View, THREE.MeshBasicMaterial>> = {};
   private walk: Partial<Record<View, THREE.MeshBasicMaterial[]>> = {};
   private jump: THREE.MeshBasicMaterial[] = [];
+  private shoot: THREE.MeshBasicMaterial[] = [];
   private ready = false;
+  private atlasRequested = false;
   private lastKeyA = "";
   private lastKeyB = "";
+  private lastState: LocomotionState = "idle";
+  private actionT = 0;
 
   constructor() {
     this.root.add(this.body);
@@ -112,10 +120,12 @@ export class PlayerCharacter {
     const left = images.leftHi ?? images.left;
     const right = images.rightHi ?? images.right;
     if (!front && !back) return;
+
     this.idle.front = cardMat(front);
     this.idle.back = cardMat(back ?? front);
     this.idle.left = cardMat(left ?? front);
     this.idle.right = cardMat(right ?? front);
+
     for (const view of VIEWS) {
       const frames: THREE.MeshBasicMaterial[] = [];
       for (let i = 1; i <= 4; i++) {
@@ -124,11 +134,42 @@ export class PlayerCharacter {
       }
       this.walk[view] = frames;
     }
+
     this.jump = [];
     for (let i = 1; i <= 4; i++) {
       const img = images[`jump-${i}`];
       this.jump.push(img ? cardMat(img) : this.idle.front!);
     }
+
+    this.ready = true;
+    this.lastKeyA = "";
+    this.lastKeyB = "";
+
+    if (!this.atlasRequested) {
+      this.atlasRequested = true;
+      void loadCastAtlas()
+        .then((atlas) => this.installCastAtlas(atlas))
+        .catch(() => {
+          // Fallback assets above remain active.
+        });
+    }
+  }
+
+  private installCastAtlas(atlas: HTMLImageElement) {
+    const rows: Record<View, number> = {
+      front: CAST_ROWS.front,
+      back: CAST_ROWS.back,
+      left: CAST_ROWS.left,
+      right: CAST_ROWS.right,
+    };
+
+    for (const view of VIEWS) {
+      const frames = [0, 1, 2, 3].map((col) => cardMat(cropCastFrame(atlas, col, rows[view])));
+      this.walk[view] = frames;
+      this.idle[view] = frames[0]!;
+    }
+    this.jump = [0, 1, 2, 3].map((col) => cardMat(cropCastFrame(atlas, col, CAST_ROWS.jump)));
+    this.shoot = [0, 1, 2, 3].map((col) => cardMat(cropCastFrame(atlas, col, CAST_ROWS.shoot)));
     this.ready = true;
     this.lastKeyA = "";
     this.lastKeyB = "";
@@ -136,12 +177,13 @@ export class PlayerCharacter {
 
   private matFor(view: View, kind: CycleKind, frame: number) {
     if (kind === "jump") return this.jump[frame] ?? this.idle[view];
+    if (kind === "shoot") return this.shoot[frame] ?? this.idle[view];
     if (kind === "walk") return this.walk[view]?.[frame] ?? this.idle[view];
     return this.idle[view];
   }
 
   update(
-    _dt: number,
+    dt: number,
     heading: number,
     cameraYaw: number,
     speed: number,
@@ -155,17 +197,37 @@ export class PlayerCharacter {
     this.root.visible = thirdPerson;
     this.root.rotation.y = cameraYaw;
 
+    if (state !== this.lastState) {
+      this.lastState = state;
+      this.actionT = 0;
+    } else {
+      this.actionT += dt;
+    }
+
     const jumping = state === "jump" || air > 0.04;
-    const kind: CycleKind = jumping ? "jump" : state === "walk" || state === "run" ? "walk" : "idle";
-    const frame = kind === "walk" ? walkFrame(animT) : kind === "jump" ? jumpFrame(air, vz) : 0;
+    const kind: CycleKind = jumping
+      ? "jump"
+      : state === "shoot"
+        ? "shoot"
+        : state === "walk" || state === "run"
+          ? "walk"
+          : "idle";
+    const frame = kind === "walk"
+      ? walkFrame(animT)
+      : kind === "jump"
+        ? jumpFrame(air, vz)
+        : kind === "shoot"
+          ? Math.min(3, Math.floor(this.actionT / 0.105))
+          : 0;
 
     const rel = wrap(heading - cameraYaw);
     const blend = viewBlend(rel);
+
     if (this.ready) {
-      if (kind === "jump") {
-        const key = `jump:${frame}`;
+      if (kind === "jump" || kind === "shoot") {
+        const key = `${kind}:${frame}`;
         if (key !== this.lastKeyA) {
-          const mat = this.matFor("front", "jump", frame);
+          const mat = this.matFor("front", kind, frame);
           if (mat) this.cardA.material = mat;
           this.lastKeyA = key;
         }
