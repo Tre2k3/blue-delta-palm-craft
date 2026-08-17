@@ -64,12 +64,13 @@ try {
   await shot(page, "01-apartment-start.png");
   ok(s.step === "wake", "New game begins at the apartment objective", s);
 
-  // Use the same physical keyboard path a player uses. This validates both the
-  // real apartment doorway and the actual S-key movement contract.
-  await page.keyboard.down("KeyS");
+  // Playwright's printable `s` emits KeyboardEvent.code=KeyS, exactly what
+  // InputManager consumes. Using the literal string `KeyS` did not exercise the
+  // real browser keyboard path and produced a false zero-movement failure.
+  await page.keyboard.down("s");
   await page.waitForTimeout(900);
   const exitMovement = await state();
-  await page.keyboard.up("KeyS");
+  await page.keyboard.up("s");
   ok(
     Math.abs(exitMovement.py - s.py) > 8 || Math.abs(exitMovement.px - s.px) > 8,
     "Physical S input moves Benji through the apartment doorway",
