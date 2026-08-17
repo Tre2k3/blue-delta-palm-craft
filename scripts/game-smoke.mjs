@@ -22,7 +22,10 @@ try {
 
   await page.waitForSelector("button:has-text('ENTER MEMPHIS')", { timeout: 30000 });
   await page.getByRole("button", { name: /ENTER MEMPHIS/i }).click();
-  await page.waitForFunction(() => window.__gameTest && window.__controlsTest, { timeout: 20000 });
+  await page.waitForFunction(
+    () => window.__gameTest && window.__controlsTest && window.__gameTest.furnitureCollisionProbe,
+    { timeout: 20000 },
+  );
   await page.waitForTimeout(4200);
 
   const boot = await page.evaluate(() => {
@@ -32,6 +35,12 @@ try {
   ok(!!boot.title, "document title is present", boot);
   ok(boot.hasCanvas, "game canvas is mounted", boot);
   ok(!!boot.mode, "game test hook reports a mode", boot);
+
+  const furniture = await page.evaluate(() => window.__gameTest.furnitureCollisionProbe());
+  ok(furniture.bed === true, "apartment bed is physically solid", furniture);
+  ok(furniture.hqCounter === true, "HQ checkout counter is physically solid", furniture);
+  ok(furniture.apartmentDoorLane === false, "apartment doorway remains walkable", furniture);
+  ok(furniture.hqDoorLane === false, "HQ doorway remains walkable", furniture);
   await captureShot(page, "artifacts/game-smoke-boot.png");
 
   // Test the real controller from Benji's playable home spawn. The old test
