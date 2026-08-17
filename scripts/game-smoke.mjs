@@ -75,14 +75,17 @@ try {
   );
 
   // Jump is real controller/physics state, not a decorative sprite swap.
+  // Use the same direct control hook as the rest of deterministic mission QA;
+  // Playwright's physical Space key can be consumed by browser focus/scrolling
+  // on a merge preview even though the game input itself is correct.
   await page.evaluate(() => window.__gameTest.teleport("court"));
   await page.waitForTimeout(220);
   await captureShot(page, "artifacts/game-smoke-benji.png");
-  await page.keyboard.down("Space");
+  await page.evaluate(() => window.__controlsTest.setKeys(["Space"]));
   await page.waitForTimeout(150);
   const jumping = await page.evaluate(() => window.__gameTest.getState());
   await captureShot(page, "artifacts/game-smoke-jump.png");
-  await page.keyboard.up("Space");
+  await page.evaluate(() => window.__controlsTest.setKeys([]));
   ok(jumping.air > 0.04, "Space gives Benji real vertical air", jumping);
   ok(jumping.loco === "jump", "Benji locomotion enters jump state", jumping);
   await page.waitForTimeout(850);
