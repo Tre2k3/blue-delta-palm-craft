@@ -143,12 +143,44 @@ export class World3D extends World3DCore {
       }
     }
 
+    // The core renderer initially faces 2.5D cards toward the requested chase
+    // yaw. Camera obstruction can orbit the real camera after that update, so
+    // re-face only the flat actors to the camera that will actually render.
+    // Without this, Benji can turn edge-on and disappear exactly when the
+    // obstruction fix succeeds.
+    const actualCameraYaw = Math.atan2(
+      this.camera.position.x - this.cameraTarget.x,
+      this.camera.position.z - this.cameraTarget.z,
+    );
+    const yawDelta = Math.atan2(
+      Math.sin(actualCameraYaw - f.yaw),
+      Math.cos(actualCameraYaw - f.yaw),
+    );
+    if (Math.abs(yawDelta) > 0.001) {
+      this.benji.update(
+        0,
+        f.heading,
+        actualCameraYaw,
+        f.moveSpeed,
+        f.lean,
+        f.loco,
+        f.animT,
+        true,
+        f.air,
+        f.vz,
+      );
+      for (const ped of this.peds) {
+        if (ped.visible) ped.rotation.y = actualCameraYaw;
+      }
+    }
+
     (window as typeof window & {
-      __SACK_CAMERA__?: { blockers: number; occluded: boolean; distance: number };
+      __SACK_CAMERA__?: { blockers: number; occluded: boolean; distance: number; yawDelta: number };
     }).__SACK_CAMERA__ = {
       blockers: this.cameraBlockers.length,
       occluded: this.lastCameraOccluded,
       distance: this.camera.position.distanceTo(this.cameraTarget),
+      yawDelta,
     };
   }
 }
