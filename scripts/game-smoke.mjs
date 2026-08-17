@@ -63,10 +63,12 @@ try {
   await page.evaluate(() => window.__gameTest.resetSave());
   await page.waitForTimeout(180);
   const before = await page.evaluate(() => window.__gameTest.getState());
-  await page.keyboard.down("KeyD");
+  // Playwright expects the printable key name here. `d` generates a browser
+  // KeyboardEvent whose code is KeyD, which is what InputManager consumes.
+  await page.keyboard.down("d");
   await page.waitForTimeout(700);
   const moving = await page.evaluate(() => window.__gameTest.getState());
-  await page.keyboard.up("KeyD");
+  await page.keyboard.up("d");
   ok(
     Math.abs(moving.px - before.px) > 2 || Math.abs(moving.py - before.py) > 2 || Math.abs(moving.vx) > 1 || Math.abs(moving.vy) > 1,
     "movement keys change Benji position",
