@@ -16,14 +16,15 @@ const hqCx = STORE.x + STORE.w / 2;
 const hqCy = STORE.y + STORE.h / 2;
 
 // Visual furniture in world3d.ts is authored in Three.js world units where
-// one unit = 16 gameplay pixels. Mirror only the meaningful footprints here;
-// tiny decorative boxes stay non-solid so the rooms don't feel cramped.
+// one unit = 16 gameplay pixels. Mirror only meaningful footprints here. The
+// dresser was moved to the far east side of the room because its old west-side
+// placement physically overlapped Benji's doorway approach and trapped New Game.
 const APARTMENT_FURNITURE: Rect[] = [
   gameRect(apartmentCx - 2.55 * 16, apartmentCy - 2.55 * 16, 3.55 * 16, 2.25 * 16), // bed
   gameRect(apartmentCx - 4.25 * 16, apartmentCy - 2.70 * 16, 0.95 * 16, 0.85 * 16), // nightstand
   gameRect(apartmentCx + 2.05 * 16, apartmentCy - 0.15 * 16, 3.05 * 16, 1.18 * 16), // couch
   gameRect(apartmentCx + 1.30 * 16, apartmentCy + 1.35 * 16, 1.80 * 16, 1.02 * 16), // coffee table
-  gameRect(apartmentCx - 3.65 * 16, apartmentCy + 2.65 * 16, 1.95 * 16, 0.72 * 16), // dresser
+  gameRect(apartmentCx + 4.35 * 16, apartmentCy + 2.45 * 16, 1.95 * 16, 0.72 * 16), // dresser
 ];
 
 const HQ_FURNITURE: Rect[] = [
@@ -67,7 +68,9 @@ export function installInteriorCollisionPass() {
     w.__gameTest.furnitureCollisionProbe = () => ({
       bed: this.collides(bed.x + bed.w / 2, bed.y + bed.h / 2, 12),
       hqCounter: this.collides(counter.x + counter.w / 2, counter.y + counter.h / 2, 12),
+      apartmentSpawn: this.collides(6 * 48, APARTMENT.y + APARTMENT.h - 72, 14),
       apartmentDoorLane: this.collides(6 * 48, APARTMENT.y + APARTMENT.h - 48, 12),
+      apartmentThreshold: this.collides(6 * 48, APARTMENT.y + APARTMENT.h - 16, 12),
       hqDoorLane: this.collides(STORE.x + STORE.w / 2, STORE.y + STORE.h - 48, 12),
     });
   };
