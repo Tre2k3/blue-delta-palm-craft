@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { keyedTexture } from "./chroma";
+import { CAST_ROWS, cropCastFrame, loadCastAtlas } from "./castAtlas";
 
 export const PEOPLE_URLS = {
   "k-blanco": "/game/people/k-blanco.png",
@@ -10,6 +11,15 @@ export const PEOPLE_URLS = {
   "court-og": "/game/people/court-og.png",
   dj: "/game/people/dj.png",
 } as const;
+
+const PEOPLE_ATLAS_SLOTS: { key: keyof typeof PEOPLE_URLS; col: number; row: number }[] = [
+  { key: "k-blanco", col: 0, row: CAST_ROWS.peopleA },
+  { key: "supporter", col: 1, row: CAST_ROWS.peopleA },
+  { key: "fan", col: 2, row: CAST_ROWS.peopleA },
+  { key: "host", col: 0, row: CAST_ROWS.peopleB },
+  { key: "local", col: 1, row: CAST_ROWS.peopleB },
+  { key: "court-og", col: 2, row: CAST_ROWS.peopleB },
+];
 
 export const CAR_URLS = {
   sedan: "/game/cars/sedan.png",
@@ -45,9 +55,9 @@ export type CityArt = {
   facades: Partial<Record<keyof typeof FACADE_URLS, THREE.Texture>>;
 };
 
-function spriteTex(img: HTMLImageElement, keyed: boolean) {
-  const src = keyed ? keyedTexture(img) : img;
-  const tex = new THREE.Texture(src);
+function spriteTex(src: HTMLImageElement | HTMLCanvasElement, keyed: boolean) {
+  const prepared = keyed && src instanceof HTMLImageElement ? keyedTexture(src) : src;
+  const tex = new THREE.Texture(prepared);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.minFilter = THREE.LinearFilter;
   tex.magFilter = THREE.LinearFilter;
@@ -86,9 +96,30 @@ async function loadMap<T extends string>(
   return out;
 }
 
+async function loadPeople(): Promise<Partial<Record<keyof typeof PEOPLE_URLS, THREE.Texture>>> {
+  try {
+    const atlas = await loadCastAtlas();
+    const out: Partial<Record<keyof typeof PEOPLE_URLS, THREE.Texture>> = {};
+    for (const slot of PEOPLE_ATLAS_SLOTS) {
+      // These cells are true RGBA cutouts. Do not chroma-key them: the old
+      // magenta cleaner could erase legitimate edge pixels and create holes.
+      out[slot.key] = spriteTex(cropCastFrame(atlas, slot.col, slot.row), false);
+    }
+    try {
+      out.dj = spriteTex(await loadImage(PEOPLE_URLS.dj), true);
+    } catch {
+      /* optional */
+    }
+    return out;
+  } catch {
+    // Safe fallback while an older deployment is still serving individual art.
+    return loadMap(PEOPLE_URLS, true);
+  }
+}
+
 export async function loadCityArt(): Promise<CityArt> {
   const [people, cars, facades] = await Promise.all([
-    loadMap(PEOPLE_URLS, true),
+    loadPeople(),
     loadMap(CAR_URLS, true),
     loadMap(FACADE_URLS, false),
   ]);
