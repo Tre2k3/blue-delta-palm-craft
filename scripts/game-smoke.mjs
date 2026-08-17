@@ -34,11 +34,12 @@ try {
   ok(!!boot.mode, "game test hook reports a mode", boot);
   await captureShot(page, "artifacts/game-smoke-boot.png");
 
-  const before = await page.evaluate(() => {
-    window.__gameTest.teleport("store");
-    return window.__gameTest.getState();
-  });
-  await page.waitForTimeout(200);
+  // Test the real controller from Benji's playable home spawn. The old test
+  // teleported him to the curb outside HQ, where a live traffic car could
+  // legitimately block the movement probe and create a false failure.
+  await page.evaluate(() => window.__gameTest.resetSave());
+  await page.waitForTimeout(180);
+  const before = await page.evaluate(() => window.__gameTest.getState());
   await page.keyboard.down("KeyD");
   await page.waitForTimeout(700);
   const moving = await page.evaluate(() => window.__gameTest.getState());
