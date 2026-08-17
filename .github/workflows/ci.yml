@@ -71,6 +71,9 @@ jobs:
       - name: Game smoke
         run: xvfb-run -a node scripts/game-smoke.mjs
 
+      - name: Traffic and street-life smoke
+        run: xvfb-run -a node scripts/traffic-smoke.mjs
+
       - name: Mission smoke
         run: xvfb-run -a node scripts/mission-smoke.mjs
 
