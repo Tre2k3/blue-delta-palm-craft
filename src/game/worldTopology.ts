@@ -56,9 +56,9 @@ export function trafficLanes(): Lane[] {
   return lanes;
 }
 
-// These POIs are traversable zones instead of solid rectangles. Enterable
-// buildings get explicit wall strips below so their doors are physically real.
-const NON_SOLID_POIS = new Set(["apartment", "court", "river", "dropvan", "beale"]);
+// Enterable buildings are traversable volumes with explicit wall strips below;
+// world zones stay non-solid as before.
+const NON_SOLID_POIS = new Set(["apartment", "store", "court", "river", "dropvan", "beale"]);
 
 function shellWithSouthDoor(p: { x: number; y: number; w: number; h: number }, doorCenterX: number, doorWidth: number): Rect[] {
   const t = INTERIOR_WALL;
@@ -83,10 +83,12 @@ export function poiColliders(): Rect[] {
   }));
 
   const apartment = POIS.find((p) => p.id === "apartment");
-  if (apartment) {
-    // New Game spawns at x=6*TILE on the apartment's south edge. Align the
-    // physical doorway with that spawn rather than forcing Benji through a wall.
-    out.push(...shellWithSouthDoor(apartment, 6 * TILE, TILE * 1.3));
+  if (apartment) out.push(...shellWithSouthDoor(apartment, 6 * TILE, TILE * 1.3));
+
+  const store = POIS.find((p) => p.id === "store");
+  if (store) {
+    const center = store.x + store.w / 2;
+    out.push(...shellWithSouthDoor(store, center, TILE * 1.7));
   }
   return out;
 }
