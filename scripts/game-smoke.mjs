@@ -75,21 +75,20 @@ try {
   );
 
   // Jump is real controller/physics state, not a decorative sprite swap.
-  // Dispatch directly to the bound window listener so the test exercises the
-  // same queuedJump path as a real Space key without relying on page focus.
+  // Trigger the same React touch control used on mobile; that control calls
+  // InputManager.queueJump(), so CI exercises a shipped production input path
+  // without depending on synthetic keyboard focus/trust behavior.
   await page.evaluate(() => window.__gameTest.teleport("court"));
   await page.waitForTimeout(220);
   await captureShot(page, "artifacts/game-smoke-benji.png");
-  await page.evaluate(() => {
-    window.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", key: " ", bubbles: true }));
-  });
+  const jumpButton = page.getByRole("button", { name: /^JUMP$/i });
+  ok((await jumpButton.count()) === 1, "production JUMP control exists");
+  await jumpButton.dispatchEvent("touchstart", { touches: [{}], changedTouches: [{}] });
   await page.waitForTimeout(150);
   const jumping = await page.evaluate(() => window.__gameTest.getState());
   await captureShot(page, "artifacts/game-smoke-jump.png");
-  await page.evaluate(() => {
-    window.dispatchEvent(new KeyboardEvent("keyup", { code: "Space", key: " ", bubbles: true }));
-  });
-  ok(jumping.air > 0.04, "Space gives Benji real vertical air", jumping);
+  await jumpButton.dispatchEvent("touchend", { touches: [], changedTouches: [{}] });
+  ok(jumping.air > 0.04, "JUMP gives Benji real vertical air", jumping);
   ok(jumping.loco === "jump", "Benji locomotion enters jump state", jumping);
   await page.waitForTimeout(850);
 
