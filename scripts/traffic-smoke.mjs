@@ -36,6 +36,8 @@ try {
   ok(initial?.carsOnBlockedLane === 0, "court-crossing traffic lanes are rerouted", initial);
   ok((initial?.markers ?? 0) >= 8, "landmarks and Sackrow have readable world signage", initial);
   ok((initial?.parkedCars ?? 0) >= 10, "city includes parked vehicles in addition to moving traffic", initial);
+  ok(initial?.vehicle3D === true, "moving traffic uses 3D vehicle rigs instead of flat cross-cards", initial);
+  ok((initial?.vehicleRigCount ?? 0) >= 20, "the visible traffic population has 3D bodies and wheels", initial);
 
   await page.evaluate(() => window.__gameTest.teleport("downtown"));
   await page.waitForTimeout(700);
