@@ -58,6 +58,17 @@ function makeVehicleRig(index: number): VehicleRig {
   roof.position.set(-0.12, 1.055, 0);
   root.add(roof);
 
+  // Black rocker/door trim gives the procedural cars readable side detail
+  // instead of one uninterrupted colored box.
+  for (const z of [-0.505, 0.505]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(1.76, 0.09, 0.045), trim);
+    rail.position.set(-0.02, 0.38, z);
+    root.add(rail);
+    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.42, 0.035), trim);
+    pillar.position.set(-0.10, 0.80, z * 0.96);
+    root.add(pillar);
+  }
+
   const frontBumper = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.16, 0.84), chrome);
   frontBumper.position.set(1.17, 0.37, 0);
   root.add(frontBumper);
@@ -82,7 +93,6 @@ function makeVehicleRig(index: number): VehicleRig {
     root.add(wheel);
   }
 
-  // Slight model variation keeps a lane of cars from reading as clones.
   if (index % 3 === 1) root.scale.set(1.08, 0.93, 1.0);
   if (index % 3 === 2) root.scale.set(0.95, 1.07, 0.96);
   return { root, brakeLeft, brakeRight };
@@ -101,7 +111,6 @@ function installRig(group: THREE.Group, index: number): VehicleRig {
 }
 
 function yawForVelocity(vx: number, vy: number) {
-  // Vehicle body is modeled with local +X as its nose. Game Y maps to world Z.
   return Math.atan2(-vy, vx);
 }
 
