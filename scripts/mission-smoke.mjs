@@ -58,27 +58,28 @@ try {
   );
   await page.waitForTimeout(4200);
 
-  // ResetProgress already returns Benji to the real new-game apartment spawn.
-  // Do not use teleport("apartment") here: that helper intentionally places a
-  // player outside a POI and used to make the apartment screenshot misleading.
   await page.evaluate(() => window.__gameTest.resetSave());
   await page.waitForTimeout(300);
   let s = await state();
   await shot(page, "01-apartment-start.png");
   ok(s.step === "wake", "New game begins at the apartment objective", s);
 
-  // Walk out through the actual south doorway and prove the objective changes
-  // before any mission teleport/helper is used.
-  await page.evaluate(() => window.__controlsTest.setKeys(["KeyS"]));
-  await page.waitForTimeout(550);
-  await page.evaluate(() => window.__controlsTest.setKeys([]));
+  // Use the same physical keyboard path a player uses. This validates both the
+  // real apartment doorway and the actual S-key movement contract.
+  await page.keyboard.down("KeyS");
+  await page.waitForTimeout(900);
+  const exitMovement = await state();
+  await page.keyboard.up("KeyS");
+  ok(
+    Math.abs(exitMovement.py - s.py) > 8 || Math.abs(exitMovement.px - s.px) > 8,
+    "Physical S input moves Benji through the apartment doorway",
+    { before: s, moving: exitMovement },
+  );
   await page.waitForFunction(() => window.__gameTest.getState().step === "link_k", { timeout: 8000 });
   s = await state();
   await shot(page, "02-apartment-exit.png");
   ok(s.step === "link_k", "Walking through the apartment doorway advances Drop Day", s);
 
-  // Enter the physical HQ near K Blanco. This replaces the old test behavior
-  // that teleported to the sidewalk and talked through the exterior wall.
   await page.evaluate(() => window.__gameTest.enterHQ());
   await page.waitForTimeout(250);
   await page.evaluate(() => window.__gameTest.interact());
@@ -133,9 +134,6 @@ try {
   await page.waitForTimeout(500);
   await shot(page, "10-drop-day-complete.png");
 
-  // Completion runs a 3.6s cinematic. The dedicated shop QA position clears
-  // the cinematic and places Benji inside HQ at the merchandise wall, outside
-  // K Blanco's talk radius, so this validates the real interior shop path.
   await page.evaluate(() => window.__gameTest.enterHQShop());
   await page.waitForTimeout(220);
   await page.evaluate(() => window.__gameTest.interact());
