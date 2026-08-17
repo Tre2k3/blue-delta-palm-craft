@@ -25,8 +25,9 @@ function placeInsideHQ(engine: GameEngine, xRatio: number, yRatio: number) {
   engine.emitHud();
 }
 
-const proto = GameEngine.prototype as PatchedEngine;
-if (!proto.__physicalHqPatched) {
+export function installGameplayIntegrity() {
+  const proto = GameEngine.prototype as PatchedEngine;
+  if (proto.__physicalHqPatched) return;
   proto.__physicalHqPatched = true;
 
   const originalInteract = GameEngine.prototype.tryInteract;
