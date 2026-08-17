@@ -67,8 +67,6 @@ export class World3D extends World3DCore {
     const aptX = wx(APARTMENT.x + APARTMENT.w / 2);
     const aptZ = wz(APARTMENT.y + APARTMENT.h / 2);
 
-    // Find the explicit apartment landmark created by the core renderer. It is
-    // a top-level group centered exactly on the apartment POI.
     for (const child of this.scene.children) {
       if (!(child instanceof THREE.Group)) continue;
       if (Math.abs(child.position.x - aptX) > 0.02 || Math.abs(child.position.z - aptZ) > 0.02) continue;
@@ -78,8 +76,6 @@ export class World3D extends World3DCore {
       }
     }
 
-    // Building bodies are large BoxGeometry meshes. Thin sidewalks, awnings,
-    // fences, cars and court pieces deliberately do not qualify.
     this.scene.traverse((obj) => {
       if (!(obj instanceof THREE.Mesh)) return;
       if (!(obj.geometry instanceof THREE.BoxGeometry)) return;
@@ -121,15 +117,19 @@ export class World3D extends World3DCore {
     root.add(box(wallT, wallH, depth, wallMat, -halfW, wallH / 2, 0));
     root.add(box(wallT, wallH, depth, wallMat, halfW, wallH / 2, 0));
 
-    // South wall has a real open doorway so the first action is physically
-    // walking out of the apartment into Memphis rather than staring at a wall.
-    const doorW = 2.15;
-    const southPiece = (width - doorW) / 2;
-    root.add(box(southPiece, wallH, wallT, wallMat, -(doorW + southPiece) / 2, wallH / 2, halfD));
-    root.add(box(southPiece, wallH, wallT, wallMat, (doorW + southPiece) / 2, wallH / 2, halfD));
-    root.add(box(doorW, 0.18, wallT + 0.04, trimMat, 0, 2.55, halfD));
+    // The new-game spawn is one tile left of the apartment center. Place the
+    // visible doorway on that exact world coordinate so Benji starts in front
+    // of a real exit instead of embedded in a decorative wall.
+    const doorX = wx(6 * 48 - (APARTMENT.x + APARTMENT.w / 2));
+    const doorW = wx(48 * 1.3);
+    const doorL = doorX - doorW / 2;
+    const doorR = doorX + doorW / 2;
+    const leftW = Math.max(0, doorL + halfW);
+    const rightW = Math.max(0, halfW - doorR);
+    if (leftW > 0.01) root.add(box(leftW, wallH, wallT, wallMat, -halfW + leftW / 2, wallH / 2, halfD));
+    if (rightW > 0.01) root.add(box(rightW, wallH, wallT, wallMat, doorR + rightW / 2, wallH / 2, halfD));
+    root.add(box(doorW, 0.18, wallT + 0.04, trimMat, doorX, 2.55, halfD));
 
-    // Rug / living area.
     const rug = new THREE.Mesh(
       new THREE.PlaneGeometry(4.0, 2.8),
       new THREE.MeshStandardMaterial({ color: 0x0f5c35, roughness: 1 }),
@@ -138,26 +138,22 @@ export class World3D extends World3DCore {
     rug.position.set(1.25, 0.105, 0.3);
     root.add(rug);
 
-    // Bed and nightstand.
     root.add(box(3.45, 0.5, 2.15, darkMat, -2.55, 0.3, -2.55));
     root.add(box(3.25, 0.34, 1.95, fabricMat, -2.55, 0.63, -2.55));
     root.add(box(3.25, 0.5, 0.16, trimMat, -2.55, 1.02, -3.5));
     root.add(box(0.85, 0.74, 0.75, woodMat, -4.25, 0.39, -2.7));
 
-    // Couch, coffee table and TV wall.
     root.add(box(2.9, 0.65, 1.08, fabricMat, 2.05, 0.42, -0.15));
     root.add(box(2.9, 0.72, 0.28, trimMat, 2.05, 0.78, -0.62));
     root.add(box(1.65, 0.18, 0.9, woodMat, 1.3, 0.3, 1.35));
     root.add(box(2.05, 1.2, 0.12, darkMat, 2.55, 1.72, -halfD + 0.1));
     root.add(box(1.75, 0.92, 0.06, new THREE.MeshStandardMaterial({ color: 0x0b2217, emissive: 0x082615, emissiveIntensity: 0.45 }), 2.55, 1.72, -halfD + 0.02));
 
-    // SackReligious green/gold wall art.
     root.add(box(2.55, 1.15, 0.08, darkMat, -0.25, 1.85, -halfD + 0.04));
     root.add(box(2.1, 0.12, 0.06, goldMat, -0.25, 2.14, -halfD - 0.01));
     root.add(box(1.5, 0.11, 0.06, fabricMat, -0.25, 1.84, -halfD - 0.01));
     root.add(box(0.9, 0.11, 0.06, goldMat, -0.25, 1.54, -halfD - 0.01));
 
-    // Dresser / shoe boxes near the exit.
     root.add(box(1.8, 0.92, 0.58, woodMat, -3.65, 0.48, 2.65));
     root.add(box(0.72, 0.28, 0.52, darkMat, -3.1, 1.05, 2.65));
     root.add(box(0.72, 0.28, 0.52, trimMat, -3.85, 1.05, 2.65));
