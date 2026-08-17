@@ -23,7 +23,7 @@ try {
   await page.waitForSelector("button:has-text('ENTER MEMPHIS')", { timeout: 30000 });
   await page.getByRole("button", { name: /ENTER MEMPHIS/i }).click();
   await page.waitForFunction(
-    () => window.__gameTest && window.__controlsTest && window.__gameTest.furnitureCollisionProbe && window.__gameTest.environmentCollisionProbe && window.__SACK_ENVIRONMENT__,
+    () => window.__gameTest && window.__controlsTest && window.__gameTest.furnitureCollisionProbe && window.__gameTest.environmentCollisionProbe && window.__SACK_ENVIRONMENT__ && window.__SACK_APARTMENT_LAYOUT__,
     { timeout: 20000 },
   );
   await page.waitForTimeout(4200);
@@ -36,11 +36,17 @@ try {
   ok(boot.hasCanvas, "game canvas is mounted", boot);
   ok(!!boot.mode, "game test hook reports a mode", boot);
 
-  const furniture = await page.evaluate(() => window.__gameTest.furnitureCollisionProbe());
-  ok(furniture.bed === true, "apartment bed is physically solid", furniture);
-  ok(furniture.hqCounter === true, "HQ checkout counter is physically solid", furniture);
-  ok(furniture.apartmentDoorLane === false, "apartment doorway remains walkable", furniture);
-  ok(furniture.hqDoorLane === false, "HQ doorway remains walkable", furniture);
+  const furniture = await page.evaluate(() => ({
+    collision: window.__gameTest.furnitureCollisionProbe(),
+    layout: window.__SACK_APARTMENT_LAYOUT__,
+  }));
+  ok(furniture.layout?.dresserMoved === true, "apartment dresser is visually moved away from the exit", furniture);
+  ok(furniture.collision?.bed === true, "apartment bed is physically solid", furniture);
+  ok(furniture.collision?.hqCounter === true, "HQ checkout counter is physically solid", furniture);
+  ok(furniture.collision?.apartmentSpawn === false, "Benji's New Game spawn is collision-free", furniture);
+  ok(furniture.collision?.apartmentDoorLane === false, "apartment doorway approach remains walkable", furniture);
+  ok(furniture.collision?.apartmentThreshold === false, "apartment doorway threshold remains walkable", furniture);
+  ok(furniture.collision?.hqDoorLane === false, "HQ doorway remains walkable", furniture);
 
   const environment = await page.evaluate(() => ({
     visuals: window.__SACK_ENVIRONMENT__,
@@ -49,13 +55,11 @@ try {
   ok(environment.visuals?.river === true, "Mississippi River is rendered as a real world feature", environment);
   ok(environment.visuals?.riverRailing === true, "riverfront has a boardwalk railing", environment);
   ok(environment.visuals?.streetFurniture === true, "Memphis street furniture pass is active", environment);
+  ok(environment.visuals?.clearDrivingLanes === true, "legacy props are sanitized away from driving lanes", environment);
   ok(environment.collision?.riverWater === true, "Benji cannot walk out onto the river water", environment);
   ok(environment.collision?.riverBoardwalk === false, "riverfront boardwalk remains walkable", environment);
   await captureShot(page, "artifacts/game-smoke-boot.png");
 
-  // Test the real controller from Benji's playable home spawn. The old test
-  // teleported him to the curb outside HQ, where a live traffic car could
-  // legitimately block the movement probe and create a false failure.
   await page.evaluate(() => window.__gameTest.resetSave());
   await page.waitForTimeout(180);
   const before = await page.evaluate(() => window.__gameTest.getState());
