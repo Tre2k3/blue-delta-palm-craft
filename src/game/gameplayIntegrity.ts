@@ -43,10 +43,6 @@ function placePosition(engine: GameEngine, p: SavedPosition) {
 }
 
 function placeInsideApartment(engine: GameEngine) {
-  // The old spawn sat exactly on the apartment's south collider at y=528.
-  // Starting on a wall made the opening look like a facade and could trap the
-  // controller at frame zero. Put Benji visibly inside, centered on the real
-  // doorway approach, so the first playable action is actually walking out.
   engine.px = 6 * TILE;
   engine.py = APARTMENT.y + APARTMENT.h - 72;
   engine.vx = 0;
@@ -62,6 +58,7 @@ function placeInsideHQ(engine: GameEngine, xRatio: number, yRatio: number) {
   engine.dialogue = null;
   engine.dialogueNpcId = null;
   engine.cinematic = null;
+  engine.letterbox = 0;
   engine.shopOpen = false;
   engine.px = STORE.x + STORE.w * xRatio;
   engine.py = STORE.y + STORE.h * yRatio;
@@ -115,6 +112,10 @@ export function installGameplayIntegrity() {
     originalResetProgress.call(this, false);
     loadedPositions.delete(this);
     autoSaveState.delete(this);
+    // A reset is a gameplay action, not another intro. Clear any title-card
+    // lock immediately so Reset/New Game QA and real players can move at once.
+    this.cinematic = null;
+    this.letterbox = 0;
     placeInsideApartment(this);
     if (emit) this.emitHud();
   };
@@ -130,13 +131,13 @@ export function installGameplayIntegrity() {
     } else {
       placeInsideApartment(this);
     }
+    // Keep the cinematic identity card, but don't freeze the opening for more
+    // than a beat. The old 3.4-second hard lock made the game feel unresponsive.
+    if (this.cinematic?.kind === "briefing") this.cinematic.duration = 1.35;
     autoSaveState.set(this, { elapsed: 0, x: this.px, y: this.py });
     this.emitHud();
   };
 
-  // Lightweight autosave prevents a long walk/delivery route from being lost
-  // just because the player closed the tab between explicit mission rewards.
-  // It only writes in free-roam world mode and only after meaningful movement.
   const originalUpdate = GameEngine.prototype.update;
   GameEngine.prototype.update = function autoSavingUpdate(this: GameEngine, dt: number) {
     originalUpdate.call(this, dt);
@@ -155,9 +156,6 @@ export function installGameplayIntegrity() {
     this.save();
   };
 
-  // The legacy objective waited until Benji was another 50px beyond the
-  // apartment footprint. With a real doorway/interior that felt broken: the
-  // player had visibly left home but the HUD still said "Leave the apartment".
   const originalCheckMissionAuto = GameEngine.prototype.checkMissionAuto;
   GameEngine.prototype.checkMissionAuto = function physicalApartmentExit(this: GameEngine) {
     const step = this.mission.steps[this.mission.activeStep];
