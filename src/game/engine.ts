@@ -6,6 +6,8 @@ import {
   POIS,
   SAVE_KEY,
   SAVE_KEY_LEGACY,
+  SAVE_KEY_LEGACY_V1,
+  SAVE_VERSION,
   STREETS,
   TROPHIES,
   WORLD_PX_H,
@@ -61,6 +63,9 @@ import type {
   TrophyId,
   WorldPoi,
 } from "./types";
+import { analytics } from "./analytics";
+import { commerce } from "./commerce";
+import { GAME_BUILD_VERSION } from "./config";
 
 type ImgMap = Record<string, HTMLImageElement>;
 
@@ -199,6 +204,7 @@ export class GameEngine {
 	run: DropRunState = createRun(1);
 	bestRunScore = 0;
 	bestGrade: RunGrade | null = null;
+	dropLive = false;
 	uiPulse = 0;
 	punch = 0;
 	hoopPulse = 0;
@@ -255,6 +261,7 @@ export class GameEngine {
 		this.world3d?.buildCity(this.walls, this.trees);
 		this.input.bind();
 		this.wireQa();
+		this.applyQuality();
 		this.emitHud();
 	}
 	buildWorld() {
@@ -580,6 +587,11 @@ export class GameEngine {
 				vy: this.vy,
 				air: this.mover.air,
 				loco: this.mover.state,
+				equipped: this.equipped,
+				respect: this.respect,
+				owned: [...this.owned],
+				saveVersion: SAVE_VERSION,
+				dropLive: this.dropLive,
 			}),
 			setBallScore: (n: number) => {
 				this.ball.score = n;
@@ -591,7 +603,9 @@ export class GameEngine {
 				this.lastInteract = 0;
 				this.tryInteract();
 			},
-			resetSave: () => this.resetProgress()
+			resetSave: () => this.resetProgress(),
+			buyItem: (id: string) => this.buyItem(id as ApparelId),
+			openShop: () => this.openShop(),
 		};
 	}
 	destroy() {
@@ -615,12 +629,19 @@ export class GameEngine {
 			duration: 3.4
 		};
 		this.letterbox = 1;
+		analytics.track(fresh || !this.hasSave ? "new_game" : "game_started", {
+			chapter: this.mission.chapter,
+			mission: this.mission.id,
+		});
+		const first = this.mission.steps.find((s) => !s.done);
+		if (first) analytics.track("mission_started", { stepId: first.id, label: first.label });
 		this.emitHud();
 	}
 	resetProgress(emit = true) {
 		try {
 			localStorage.removeItem(SAVE_KEY);
 			localStorage.removeItem(SAVE_KEY_LEGACY);
+			localStorage.removeItem(SAVE_KEY_LEGACY_V1);
 		} catch { /* storage */ }
 		this.mission = createDropDayMission();
 		this.side = createSideMissions();
@@ -649,6 +670,7 @@ export class GameEngine {
 		this.run = createRun(1);
 		this.bestRunScore = 0;
 		this.bestGrade = null;
+		this.dropLive = false;
 		this.uiPulse = 0;
 		this.punch = 0;
 		this.hoopPulse = 0;
@@ -671,7 +693,7 @@ export class GameEngine {
 		});
 	}
 	addTrauma(v: number) {
-		if (!this.settings.shake) return;
+		if (!this.settings.shake || this.settings.reduceMotion) return;
 		this.trauma = clamp(this.trauma + v, 0, 1);
 	}
 	addPunch(v: number) {
@@ -684,6 +706,7 @@ export class GameEngine {
 		try {
 			let raw = localStorage.getItem(SAVE_KEY);
 			if (!raw) raw = localStorage.getItem(SAVE_KEY_LEGACY);
+			if (!raw) raw = localStorage.getItem(SAVE_KEY_LEGACY_V1);
 			this.hasSave = !!raw;
 			if (!raw) return;
 			const data = JSON.parse(raw);
@@ -693,6 +716,7 @@ export class GameEngine {
 			this.equipped = data.equipped;
 			this.mission.complete = data.missionComplete ?? false;
 			this.missionComplete = this.mission.complete;
+			this.dropLive = !!data.dropLive || this.missionComplete;
 			for (const s of this.mission.steps) s.done = !!data.missionProgress?.[s.id];
 			const firstUndone = this.mission.steps.findIndex((s) => !s.done);
 			this.mission.activeStep = firstUndone === -1 ? this.mission.steps.length : firstUndone;
@@ -733,6 +757,10 @@ export class GameEngine {
 			this.ball.targetScore = tier.courtTarget;
 			this.bestRunScore = data.bestRunScore ?? 0;
 			this.bestGrade = data.bestGrade ?? null;
+			if (!localStorage.getItem(SAVE_KEY)) {
+				data.version = SAVE_VERSION;
+				localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+			}
 		} catch { /* storage */ }
 	}
 	save() {
@@ -741,7 +769,7 @@ export class GameEngine {
 		const sideProgress: Record<string, boolean> = {};
 		for (const s of this.side) sideProgress[s.id] = s.done;
 		const data = {
-			version: 2,
+			version: SAVE_VERSION,
 			sackdollars: this.sackdollars,
 			respect: this.respect,
 			owned: this.owned,
@@ -755,6 +783,7 @@ export class GameEngine {
 			sideProgress,
 			worldHour: this.worldHour,
 			settings: this.settings,
+			dropLive: this.dropLive,
 			dropRunIndex: this.runIndex,
 			dropRun: {
 				active: this.run.active,
@@ -783,8 +812,30 @@ export class GameEngine {
 			...next
 		};
 		audio.setVolumes(this.settings);
+		this.applyQuality();
 		this.save();
 		this.emitHud();
+	}
+	applyQuality() {
+		const dpr = Math.min(window.devicePixelRatio || 1, this.settings.quality === "low" ? 1 : this.settings.quality === "medium" ? 1.35 : 1.75);
+		this.world3d?.renderer.setPixelRatio(dpr);
+		if (this.world3d) {
+			this.world3d.renderer.shadowMap.enabled = this.settings.quality !== "low";
+		}
+	}
+	returnToTitle() {
+		this.paused = false;
+		this.started = false;
+		this.mode = "world";
+		this.shopOpen = false;
+		this.dialogue = null;
+		this.cinematic = null;
+		audio.ui();
+		this.emitHud();
+	}
+	restartMission() {
+		this.resetProgress(false);
+		this.start(true);
 	}
 	setPauseTab(tab: PauseTab) {
 		this.pauseTab = tab;
@@ -872,10 +923,11 @@ export class GameEngine {
 		}
 		if (!this.started || this.paused) return;
 		if (act.viewPressed) this.toggleView();
-		if (Math.abs(act.lookX) <= 1.25) this.yaw -= act.lookX * 2.2 * dt;
-		else this.yaw -= act.lookX * 0.032;
-		if (Math.abs(act.lookY) <= 1.25) this.pitch -= act.lookY * 1.7 * dt;
-		else this.pitch -= act.lookY * 0.028;
+		const lookMul = this.settings.sensitivity || 1;
+		if (Math.abs(act.lookX) <= 1.25) this.yaw -= act.lookX * 2.2 * dt * lookMul;
+		else this.yaw -= act.lookX * 0.032 * lookMul;
+		if (Math.abs(act.lookY) <= 1.25) this.pitch -= act.lookY * 1.7 * dt * lookMul;
+		else this.pitch -= act.lookY * 0.028 * lookMul;
 		this.pitch = clamp(this.pitch, -1.15, 1.15);
 		this.worldHour = (this.worldHour + dt * .042) % 24;
 		if (this.worldHour >= 20 && this.worldHour < 20.1) this.unlockTrophy("night_owl");
@@ -1151,8 +1203,8 @@ export class GameEngine {
 		this.dialogueNpcId = npcId;
 		this.dialogueIndex = 0;
 		const step = this.mission.steps[this.mission.activeStep];
-		if (n.isKBlanco && step && step.kind === "talk" && !step.done) this.dialogueLines = [n.missionTalk ?? "Lock in for Drop Day.", "Grab the drop from the van, hit three spots, then bounce back."];
-		else if (n.isKBlanco && step && step.kind === "return" && !step.done) this.dialogueLines = ["You did it, Benji. Drop Day secured. Respect unlocked.", "Shop the wall anytime. In the sack, we trust."];
+		if (n.isKBlanco && step && step.kind === "talk" && !step.done) this.dialogueLines = [n.missionTalk ?? "Tonight is Drop Day.", "Grab the van, hit three spots, then come back to me."];
+		else if (n.isKBlanco && step && step.kind === "return" && !step.done) this.dialogueLines = ["You moved the city, Benji. That's Respect. The drop is live.", "Shop the wall anytime. Wear it like you earned it."];
 		else this.dialogueLines = [...n.dialogue];
 		this.dialogue = {
 			speaker: n.name,
@@ -1287,6 +1339,8 @@ export class GameEngine {
 			audio.cash();
 		}
 		this.showToast(`+$${step.reward} $ackdollars · ${step.label}`);
+		analytics.track("mission_completed", { stepId: id, label: step.label, reward: step.reward });
+		commerce.notifyMissionComplete(this.mission.id, id);
 		if (id === "wake") this.unlockTrophy("first_steps");
 		if (id === "link_k") this.unlockTrophy("family");
 		if (id === "ball") this.unlockTrophy("baller");
@@ -1303,6 +1357,10 @@ export class GameEngine {
 			this.bestGrade = !this.bestGrade || gradeRank(result.grade) >= gradeRank(this.bestGrade) ? result.grade : this.bestGrade;
 			if (result.bonusDollars > 0) this.float(`GRADE ${result.grade} +$${result.bonusDollars}`, PAL.gold);
 			this.unlockTrophy("drop_day");
+			this.dropLive = true;
+			if (this.worldHour < 18.6) this.worldHour = 18.8;
+			analytics.track("chapter_completed", { chapter: this.mission.chapter, grade: result.grade });
+			commerce.notifyChapterComplete(this.mission.chapter);
 			this.cinematic = {
 				kind: "complete",
 				title: "MISSION COMPLETE",
@@ -1314,7 +1372,11 @@ export class GameEngine {
 			audio.grade(result.grade);
 			this.addTrauma(JUICE.trauma.complete);
 			this.addPunch(JUICE.punch.complete);
-		} else this.mission.activeStep = next;
+		} else {
+			this.mission.activeStep = next;
+			const upcoming = this.mission.steps[next];
+			if (upcoming) analytics.track("mission_started", { stepId: upcoming.id, label: upcoming.label });
+		}
 		if (this.respect >= 40) this.unlockTrophy("city_legend");
 		if (this.sackdollars >= 400) this.unlockTrophy("deep_pockets");
 		this.save();
@@ -1336,6 +1398,7 @@ export class GameEngine {
 	}
 	openShop() {
 		audio.confirm();
+		analytics.track("hq_entered", { location: "store" });
 		this.cinematic = {
 			kind: "enter",
 			title: "SACKRELIGIOUS HQ",
@@ -1356,6 +1419,11 @@ export class GameEngine {
 	buyItem(id: ApparelId) {
 		const item = APPAREL.find((a) => a.id === id);
 		if (!item) return;
+		if (item.respectRequired && this.respect < item.respectRequired && !this.owned.includes(id)) {
+			this.showToast(`Need ${item.respectRequired} Respect to unlock ${item.name}`);
+			audio.ui();
+			return;
+		}
 		if (this.owned.includes(id)) {
 			this.equipped = id;
 			this.showToast(`Equipped ${item.name}`);
@@ -1385,6 +1453,7 @@ export class GameEngine {
 	}
 	enterBasketball() {
 		audio.whoosh();
+		analytics.track("basketball_started", { target: this.currentTier().courtTarget });
 		this.mode = "basketball";
 		const court = POIS.find((p) => p.id === "court")!;
 		this.px = court.x + court.w / 2;
@@ -1415,6 +1484,7 @@ export class GameEngine {
 		if (step?.kind === "basketball" && this.ball.score >= this.ball.targetScore && !step.done && !this.ball.missionCredited) {
 			this.ball.missionCredited = true;
 			this.completeStep(step.id);
+			analytics.track("basketball_completed", { score: this.ball.score, target: this.ball.targetScore });
 			this.showToast("Respect earned. Return to HQ when ready.");
 		}
 		const side = this.side.find((s) => s.id === "pickup_kings");
@@ -1693,6 +1763,11 @@ export class GameEngine {
 				hoopPulse: this.hoopPulse,
 				air: this.mover.air,
 				vz: this.mover.vz,
+				equipped: this.equipped,
+				outfitColor: this.equipped && this.equipped !== "starter_tee"
+					? APPAREL.find((a) => a.id === this.equipped)?.color ?? null
+					: null,
+				dropLive: this.dropLive,
 			});
 			this.world3d.render(w, h);
 		}
@@ -2053,6 +2128,8 @@ export class GameEngine {
 			uiPulse: this.uiPulse,
 			bestGrade: this.bestGrade,
 			bestRunScore: this.bestRunScore,
+			buildVersion: GAME_BUILD_VERSION,
+			dropLive: this.dropLive,
 		};
 	}
 };

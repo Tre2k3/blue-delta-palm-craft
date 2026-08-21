@@ -91,6 +91,8 @@ export class PlayerCharacter {
   private lastKeyB = "";
   private lastState: LocomotionState = "idle";
   private actionT = 0;
+  private ring: THREE.Mesh;
+  private badge: THREE.Mesh;
 
   constructor() {
     this.root.add(this.body);
@@ -112,6 +114,44 @@ export class PlayerCharacter {
     this.shadow.rotation.x = -Math.PI / 2;
     this.shadow.position.y = 0.015;
     this.root.add(this.shadow);
+
+    this.ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.34, 0.42, 24),
+      new THREE.MeshBasicMaterial({
+        color: 0x1db954,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+    );
+    this.ring.rotation.x = -Math.PI / 2;
+    this.ring.position.y = 0.03;
+    this.root.add(this.ring);
+
+    this.badge = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.28, 0.34),
+      new THREE.MeshBasicMaterial({
+        color: 0x1db954,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+      }),
+    );
+    this.badge.position.set(0.22, 1.18, 0.06);
+    this.body.add(this.badge);
+  }
+
+  setOutfitTint(hex: string | null) {
+    const color = hex ? Number.parseInt(hex.replace("#", ""), 16) : 0x1db954;
+    if (!Number.isFinite(color)) return;
+    const show = Boolean(hex);
+    const ringMat = this.ring.material as THREE.MeshBasicMaterial;
+    const badgeMat = this.badge.material as THREE.MeshBasicMaterial;
+    ringMat.color.setHex(color);
+    badgeMat.color.setHex(color);
+    ringMat.opacity = show ? 0.78 : 0;
+    badgeMat.opacity = show ? 0.92 : 0;
   }
 
   applyApprovedTextures(images: Record<string, HTMLImageElement>) {

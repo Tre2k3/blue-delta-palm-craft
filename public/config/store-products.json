@@ -1,0 +1,100 @@
+{
+  "products": [
+    {
+      "id": "sr-starter-tee",
+      "slug": "sr-starter-tee",
+      "name": "SackReligious Starter Green Tee",
+      "imageUrl": "/game/featured-products.png",
+      "price": 38,
+      "currency": "USD",
+      "sizes": ["S", "M", "L", "XL", "2XL"],
+      "available": true,
+      "storeUrl": "/product/sr-starter-tee",
+      "virtualOutfitId": "starter_tee"
+    },
+    {
+      "id": "sr-black-gold-tee",
+      "slug": "sr-black-gold-tee",
+      "name": "SackReligious Black & Gold Tee",
+      "imageUrl": "/game/featured-products.png",
+      "price": 48,
+      "currency": "USD",
+      "sizes": ["S", "M", "L", "XL", "2XL"],
+      "available": true,
+      "storeUrl": "/product/sr-black-gold-tee",
+      "virtualOutfitId": "classic_green"
+    },
+    {
+      "id": "sr-moneybag-hoodie",
+      "slug": "sr-moneybag-hoodie",
+      "name": "Moneybag Hoodie",
+      "imageUrl": "/game/logo-wall.png",
+      "price": 92,
+      "currency": "USD",
+      "sizes": ["S", "M", "L", "XL", "2XL"],
+      "available": true,
+      "storeUrl": "/product/sr-moneybag-hoodie",
+      "virtualOutfitId": "moneybag_hoodie"
+    },
+    {
+      "id": "sr-midnight-hoodie",
+      "slug": "sr-midnight-hoodie",
+      "name": "Midnight Hoodie",
+      "imageUrl": "/game/logo-wall.png",
+      "price": 88,
+      "currency": "USD",
+      "sizes": ["S", "M", "L", "XL", "2XL"],
+      "available": true,
+      "storeUrl": "/product/sr-midnight-hoodie",
+      "virtualOutfitId": "black_hoodie"
+    },
+    {
+      "id": "sr-fresh-jersey",
+      "slug": "sr-fresh-jersey",
+      "name": "FRESH 38127 Jersey",
+      "imageUrl": "/game/k-blanco-jerseys.png",
+      "price": 120,
+      "currency": "USD",
+      "sizes": ["S", "M", "L", "XL", "2XL"],
+      "available": true,
+      "storeUrl": "/product/sr-fresh-jersey",
+      "virtualOutfitId": "fresh_jersey"
+    },
+    {
+      "id": "sr-white-snapback",
+      "slug": "sr-white-snapback",
+      "name": "White Snapback",
+      "imageUrl": "/game/featured-products.png",
+      "price": 36,
+      "currency": "USD",
+      "sizes": ["OS"],
+      "available": true,
+      "storeUrl": "/product/sr-white-snapback",
+      "virtualOutfitId": "white_cap"
+    },
+    {
+      "id": "sr-moneybag-chain",
+      "slug": "sr-moneybag-chain",
+      "name": "Moneybag Chain",
+      "imageUrl": "/game/sack-icon.png",
+      "price": 160,
+      "currency": "USD",
+      "sizes": ["OS"],
+      "available": true,
+      "storeUrl": "/product/sr-moneybag-chain",
+      "virtualOutfitId": "gold_chain"
+    },
+    {
+      "id": "sr-green-sweats",
+      "slug": "sr-green-sweats",
+      "name": "Green Sweat Set",
+      "imageUrl": "/game/shopping-bags.jpg",
+      "price": 110,
+      "currency": "USD",
+      "sizes": ["S", "M", "L", "XL", "2XL"],
+      "available": true,
+      "storeUrl": "/product/sr-green-sweats",
+      "virtualOutfitId": "green_sweats"
+    }
+  ]
+}

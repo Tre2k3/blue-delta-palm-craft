@@ -13,6 +13,11 @@ import { GameEngine } from "./engine";
 import { APPAREL, ART_REV, BRAND, POIS, TROPHIES, TIPS } from "./data";
 import { formatRunClock } from "./dropRun";
 import type { ApparelId, HudSnapshot, PauseTab } from "./types";
+import { commerce, installCommerceTestHook } from "./commerce";
+import { installAnalyticsTestHook } from "./analytics";
+import { GAME_BUILD_VERSION, GAME_TITLE } from "./config";
+import { ErrorBoundary } from "./ui/ErrorBoundary";
+import { RotatePrompt } from "./ui/RotatePrompt";
 
 const emptyHud: HudSnapshot = {
   mode: "menu",
@@ -42,7 +47,7 @@ const emptyHud: HudSnapshot = {
   trophies: [],
   trophyPopup: null,
   pauseTab: "resume",
-  settings: { master: 0.85, music: 0.42, sfx: 0.7, shake: true, rumble: true, cameraView: "third" },
+  settings: { master: 0.85, music: 0.42, sfx: 0.7, shake: true, rumble: true, cameraView: "third", sensitivity: 1, quality: "high", reduceMotion: false },
   sideMissions: [],
   highScore: 0,
   hasSave: false,
@@ -69,6 +74,8 @@ const emptyHud: HudSnapshot = {
   uiPulse: 0,
   bestGrade: null,
   bestRunScore: 0,
+  buildVersion: GAME_BUILD_VERSION,
+  dropLive: false,
 };
 
 function formatHour(h: number) {
@@ -89,6 +96,22 @@ const TABS: { id: PauseTab; label: string; icon: typeof Play }[] = [
 ];
 
 export function GameApp() {
+  return (
+    <ErrorBoundary>
+      <RotatePrompt />
+      <GameShell />
+    </ErrorBoundary>
+  );
+}
+
+function loadCopy(pct: number) {
+  if (pct < 0.22) return "Loading Memphis...";
+  if (pct < 0.48) return "Loading Benji...";
+  if (pct < 0.78) return "Loading SackReligious HQ...";
+  return "Loading The Drop...";
+}
+
+function GameShell() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<GameEngine | null>(null);
   const [hud, setHud] = useState<HudSnapshot>(emptyHud);
@@ -103,6 +126,16 @@ export function GameApp() {
     ox: 0,
     oy: 0,
   });
+
+  useEffect(() => {
+    installAnalyticsTestHook();
+    installCommerceTestHook();
+    void commerce.init();
+    (window as Window & { __SACK_BUILD__?: unknown }).__SACK_BUILD__ = {
+      version: GAME_BUILD_VERSION,
+      title: GAME_TITLE,
+    };
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -264,7 +297,7 @@ export function GameApp() {
 
               {!ready && (
                 <div className="mt-8 max-w-xs">
-                  <p className="text-sm tracking-widest text-muted">LOADING MEMPHIS</p>
+                  <p className="text-sm tracking-widest text-muted">{loadCopy(loadPct)}</p>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15">
                     <div className="h-full bg-primary transition-all" style={{ width: `${Math.round(loadPct * 100)}%` }} />
                   </div>
@@ -307,7 +340,19 @@ export function GameApp() {
                   </button>
                 </div>
               )}
-              {bootError && <p className="mt-3 text-sm text-danger">{bootError}</p>}
+              {bootError && (
+                <div className="mt-3 max-w-xs">
+                  <p className="text-sm text-danger">We couldn't load Memphis.</p>
+                  <p className="mt-1 text-xs text-muted">{bootError}</p>
+                  <button
+                    type="button"
+                    className="mt-2 min-h-10 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-fg"
+                    onClick={() => window.location.reload()}
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
               {titleSettings && ready && (
                 <div className="mt-4 max-w-xs rounded-xl border border-border bg-panel p-3">
                   <PauseSettings
@@ -361,6 +406,9 @@ export function GameApp() {
               <p className="font-display text-lg leading-none text-gold">{hud.missionTitle}</p>
               <p className="mt-1 text-sm font-medium leading-snug text-fg">{hud.missionStep}</p>
               <p className="mt-1 text-xs text-muted tabular">{hud.missionProgress}</p>
+              {hud.dropLive && (
+                <p className="mt-1 text-[11px] uppercase tracking-[0.16em] text-gold">Drop live · free roam</p>
+              )}
               {(hud.dropRun.active || hud.dropRun.points > 0) && !hud.missionComplete && (
                 <p className="mt-1 text-[11px] tabular text-primary">
                   RUN {hud.dropRun.run} · {formatRunClock(hud.dropRun.time)} · {hud.dropRun.points}
@@ -505,7 +553,9 @@ export function GameApp() {
                   <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between">
                     <div>
                       <p className="font-display text-2xl text-primary">HQ SHOP</p>
-                      <p className="text-xs text-muted">In the $ack, we trust</p>
+                      <p className="text-xs text-muted">
+                        {hud.dropLive ? "Drop live · virtual fit + BUY IRL" : "Virtual equip · BUY IRL on the real site"}
+                      </p>
                     </div>
                     <p className="tabular font-display text-2xl text-gold">${hud.sackdollars}</p>
                   </div>
@@ -515,11 +565,14 @@ export function GameApp() {
                     {APPAREL.map((item) => {
                       const owned = hud.owned.includes(item.id);
                       const eq = hud.equipped === item.id;
+                      const locked = Boolean(item.respectRequired && hud.respect < item.respectRequired && !owned);
+                      const real = commerce.productForOutfit(item.id);
                       return (
                         <div
                           key={item.id}
-                          className="flex items-center gap-3 rounded-xl border border-border bg-surface-2 p-3"
+                          className="flex flex-col gap-2 rounded-xl border border-border bg-surface-2 p-3"
                         >
+                          <div className="flex items-center gap-3">
                           <div
                             className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg"
                             style={{ backgroundColor: item.color }}
@@ -530,22 +583,54 @@ export function GameApp() {
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="truncate font-medium text-fg">{item.name}</p>
-                            <p className="truncate text-xs text-muted">{item.description}</p>
+                            <p className="truncate text-xs text-muted">
+                              {locked ? `Respect ${item.respectRequired} to unlock` : item.description}
+                            </p>
+                            {real?.sizes && (
+                              <p className="mt-0.5 text-[10px] uppercase tracking-wider text-subtle">
+                                IRL {real.sizes.join(" · ")}
+                                {real.price != null ? ` · $${real.price}` : ""}
+                              </p>
+                            )}
                           </div>
                           <button
                             type="button"
                             data-testid={`buy-${item.id}`}
+                            disabled={locked}
                             onClick={() => onBuy(item.id)}
                             className={`min-h-10 shrink-0 rounded-lg px-3 py-2 text-sm font-semibold ${
                               eq
                                 ? "bg-primary/20 text-primary"
-                                : owned
-                                  ? "border border-border bg-surface text-fg"
-                                  : "bg-primary text-primary-fg"
+                                : locked
+                                  ? "border border-border bg-surface text-muted"
+                                  : owned
+                                    ? "border border-border bg-surface text-fg"
+                                    : "bg-primary text-primary-fg"
                             }`}
                           >
-                            {eq ? "On" : owned ? "Equip" : `$${item.price}`}
+                            {eq ? "On" : locked ? "Locked" : owned ? "Equip" : `$${item.price}`}
                           </button>
+                          </div>
+                          {real && (
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                data-testid={`view-${real.id}`}
+                                onClick={() => commerce.viewProduct(real)}
+                                className="min-h-9 flex-1 rounded-lg border border-border bg-surface text-xs font-semibold uppercase tracking-wider text-fg"
+                              >
+                                View product
+                              </button>
+                              <button
+                                type="button"
+                                data-testid={`buy-irl-${real.id}`}
+                                onClick={() => commerce.buyIrl(real)}
+                                className="min-h-9 flex-1 rounded-lg border border-gold/50 bg-gold/15 text-xs font-semibold uppercase tracking-wider text-gold"
+                              >
+                                Buy IRL
+                              </button>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -788,6 +873,29 @@ export function GameApp() {
                       <p className="mt-2 text-sm text-muted">
                         {hud.locationName} · {formatHour(hud.worldHour)} · High score {hud.highScore}
                       </p>
+                      <div className="mt-6 flex max-w-sm flex-col gap-2">
+                        <button
+                          type="button"
+                          className="min-h-11 rounded-xl bg-primary font-display text-2xl text-primary-fg"
+                          onClick={() => engineRef.current?.resume()}
+                        >
+                          Resume
+                        </button>
+                        <button
+                          type="button"
+                          className="min-h-11 rounded-xl border border-border bg-surface-2 text-sm font-semibold text-fg"
+                          onClick={() => engineRef.current?.restartMission()}
+                        >
+                          Restart mission
+                        </button>
+                        <button
+                          type="button"
+                          className="min-h-11 rounded-xl border border-border text-sm font-semibold text-muted"
+                          onClick={() => engineRef.current?.returnToTitle()}
+                        >
+                          Main menu
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1013,6 +1121,56 @@ function PauseSettings({
             </button>
           </div>
         </div>
+        <label className="block">
+          <span className="text-xs uppercase tracking-wider text-muted">Camera sensitivity</span>
+          <input
+            type="range"
+            min={0.4}
+            max={1.8}
+            step={0.05}
+            value={settings.sensitivity}
+            onChange={(e) => onChange({ sensitivity: Number(e.target.value) })}
+            className="mt-2 w-full accent-primary"
+          />
+        </label>
+        <div className="flex items-center justify-between rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm">
+          Graphics
+          <div className="flex gap-1">
+            {(["low", "medium", "high"] as const).map((q) => (
+              <button
+                key={q}
+                type="button"
+                className={`rounded-md px-2 py-1 text-xs capitalize ${settings.quality === q ? "bg-primary text-primary-fg" : "text-muted"}`}
+                onClick={() => onChange({ quality: q })}
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        </div>
+        <label className="flex items-center justify-between rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm">
+          Reduce motion
+          <input
+            type="checkbox"
+            checked={settings.reduceMotion}
+            onChange={(e) => onChange({ reduceMotion: e.target.checked })}
+            className="accent-primary"
+          />
+        </label>
+        <button
+          type="button"
+          className="min-h-10 w-full rounded-lg border border-border bg-surface-2 text-sm text-fg"
+          onClick={() => {
+            const el = document.documentElement;
+            if (!document.fullscreenElement) void el.requestFullscreen?.();
+            else void document.exitFullscreen?.();
+          }}
+        >
+          Toggle fullscreen
+        </button>
+        <p className="pt-2 text-[10px] uppercase tracking-[0.16em] text-subtle">
+          {GAME_TITLE} {GAME_BUILD_VERSION}
+        </p>
       </div>
     </div>
   );

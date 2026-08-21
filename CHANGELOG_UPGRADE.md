@@ -1,5 +1,17 @@
 # $ackReligious KLOTHING Memphis — Upgrade changelog
 
+## 0.9.0-rc — production vertical slice
+
+- Chapter 1 titles mapped onto existing mission IDs (wake → return)
+- Commerce layer: catalog JSON, BUY IRL, View product, iframe postMessage bridge
+- AnalyticsService events (start, missions, HQ, products, basketball, chapter)
+- Save schema v3 with v2/v1 migration; rewards stay idempotent
+- Respect gate on Moneybag Chain; equipped fit shows as color ring + badge
+- Error boundary, rotate-phone overlay, staged loading copy, version in settings
+- Settings: sensitivity, quality, reduce motion, fullscreen, restart, main menu
+- Docs: README + architecture, missions, world, basketball, vehicles, commerce, Lovable, deploy, QA
+- Tests: commerce-smoke, save-smoke (mission-test IDs/buttons preserved)
+
 ## Visual
 - Title uses approved opening `opening-title.png` (`$ackReligious` / `KLOTHING`, Benji + storefront)
 - Left-side UI, loading bar, ENTER MEMPHIS / CONTINUE / NEW GAME / Settings

@@ -64,3 +64,9 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+@media (orientation: portrait) and (max-width: 900px) {
+  .sack-rotate-prompt {
+    display: flex !important;
+  }
+}

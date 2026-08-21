@@ -14,7 +14,11 @@
     "preview": "node scripts/preview-prod.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "test:smoke": "node scripts/game-smoke.mjs",
+    "test:mission": "node scripts/mission-test.mjs",
+    "test:commerce": "node scripts/commerce-smoke.mjs",
+    "test:save": "node scripts/save-smoke.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.3",

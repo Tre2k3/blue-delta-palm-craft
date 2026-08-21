@@ -146,7 +146,7 @@ try {
   ok(buyLabel === "On", "Black hoodie is purchased/equipped in wardrobe UI", { buyLabel });
   await shot(page, "11-wardrobe-equipped.png");
 
-  const saveRaw = await page.evaluate(() => localStorage.getItem("sackreligious-memphis-v2"));
+  const saveRaw = await page.evaluate(() => localStorage.getItem("sackreligious-memphis-v3") || localStorage.getItem("sackreligious-memphis-v2"));
   let savedComplete = false;
   let savedEquipped = null;
   try {
@@ -166,6 +166,7 @@ try {
   persist.on("pageerror", (err) => pageErrors.push(String(err?.message || err)));
   if (saveRaw) {
     await persist.addInitScript((raw) => {
+      localStorage.setItem("sackreligious-memphis-v3", raw);
       localStorage.setItem("sackreligious-memphis-v2", raw);
     }, saveRaw);
   }

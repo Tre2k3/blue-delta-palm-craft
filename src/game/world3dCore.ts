@@ -66,6 +66,9 @@ export type WorldFrame = {
   hoopPulse: number;
   air: number;
   vz: number;
+  equipped?: string | null;
+  outfitColor?: string | null;
+  dropLive?: boolean;
 };
 
 type TexPack = Partial<Record<MatKey, THREE.Texture>>;
@@ -658,6 +661,7 @@ export class World3D {
       this.benjiReady = true;
     }
     this.benji.update(dt, f.heading, f.yaw, f.moveSpeed, f.lean, f.loco, f.animT, f.cameraView === "third", f.air, f.vz);
+    this.benji.setOutfitTint(f.outfitColor ?? null);
 
     const hoopY = 2.72;
     const by = Math.max(0.12, f.ball.z * (hoopY / 86));
@@ -719,11 +723,13 @@ export class World3D {
           mat.map = t;
         }
         s = new THREE.Sprite(mat);
-        s.scale.set(tex ? 1.12 : 1.05, tex ? 1.9 : 1.65, 1);
+        if (n.isK) s.scale.set(1.22, 2.52, 1);
+        else s.scale.set(tex ? 1.12 : 1.05, tex ? 1.9 : 1.65, 1);
+        s.position.y = n.isK ? 1.26 : 0.95;
         this.scene.add(s);
         this.npcSprites.set(n.id, s);
       }
-      s.position.set(wx(n.x), 0.95, wz(n.y));
+      s.position.set(wx(n.x), n.isK ? 1.26 : 0.95, wz(n.y));
     }
 
     const fwdX = -Math.sin(f.yaw);

@@ -56,6 +56,8 @@ export interface ApparelItem {
   category: "top" | "bottom" | "hat" | "chain" | "set";
   color: string;
   description: string;
+  productId?: string;
+  respectRequired?: number;
 }
 
 export interface MissionStep {
@@ -128,7 +130,7 @@ export interface CinematicState {
 }
 
 export interface SaveData {
-  version: 2;
+  version: 3;
   sackdollars: number;
   respect: number;
   owned: ApparelId[];
@@ -143,6 +145,7 @@ export interface SaveData {
   worldHour: number;
   settings: GameSettings;
   dropRunIndex?: number;
+  dropLive?: boolean;
   dropRun?: Partial<{
     active: boolean;
     time: number;
@@ -167,6 +170,9 @@ export interface GameSettings {
   shake: boolean;
   rumble: boolean;
   cameraView: CameraView;
+  sensitivity: number;
+  quality: "high" | "medium" | "low";
+  reduceMotion: boolean;
 }
 
 export interface Floater {
@@ -229,6 +235,8 @@ export interface HudSnapshot {
   uiPulse: number;
   bestGrade: RunGrade | null;
   bestRunScore: number;
+  buildVersion: string;
+  dropLive: boolean;
 }
 
 export type GameTestState = {
@@ -244,6 +252,11 @@ export type GameTestState = {
   vy: number;
   air: number;
   loco: string;
+  equipped?: ApparelId | null;
+  respect?: number;
+  owned?: ApparelId[];
+  saveVersion?: number;
+  dropLive?: boolean;
 };
 
 export type GameTestApi = {
@@ -253,6 +266,10 @@ export type GameTestApi = {
   advanceDialogue: () => void;
   interact: () => void;
   resetSave: () => void;
+  buyItem?: (id: string) => void;
+  openShop?: () => void;
+  enterHQ?: () => void;
+  enterHQShop?: () => void;
 };
 
 export type ControlsTestApi = {
@@ -266,5 +283,17 @@ declare global {
   interface Window {
     __gameTest?: GameTestApi;
     __controlsTest?: ControlsTestApi;
+    __SACK_COMMERCE__?: {
+      catalog: () => { id: string; slug: string; name: string }[];
+      loaded: () => boolean;
+      lastIntent: () => { kind: "view" | "buy"; productId: string; at: number } | null;
+      buyIrl: (id: string) => void;
+      viewProduct: (id: string) => void;
+    };
+    __SACK_ANALYTICS__?: {
+      events: () => { name: string; payload: Record<string, unknown>; at: number }[];
+      track: (name: string, payload?: Record<string, unknown>) => void;
+    };
+    __SACK_BUILD__?: { version: string; title: string };
   }
 }

@@ -59,6 +59,9 @@ export const DEFAULT_SETTINGS = {
   shake: true,
   rumble: true,
   cameraView: "third" as const,
+  sensitivity: 1,
+  quality: "high" as const,
+  reduceMotion: false,
 };
 
 export const APPAREL: ApparelItem[] = [
@@ -69,6 +72,7 @@ export const APPAREL: ApparelItem[] = [
     category: "top",
     color: "#1db954",
     description: "What Benji woke up in. In the sack we trust.",
+    productId: "sr-starter-tee",
   },
   {
     id: "classic_green",
@@ -77,6 +81,7 @@ export const APPAREL: ApparelItem[] = [
     category: "top",
     color: "#16a34a",
     description: "The drop that put the city on notice.",
+    productId: "sr-black-gold-tee",
   },
   {
     id: "moneybag_hoodie",
@@ -85,6 +90,7 @@ export const APPAREL: ApparelItem[] = [
     category: "top",
     color: "#15803d",
     description: "Heavyweight fleece. Moneybag logo front and center.",
+    productId: "sr-moneybag-hoodie",
   },
   {
     id: "black_hoodie",
@@ -93,6 +99,7 @@ export const APPAREL: ApparelItem[] = [
     category: "top",
     color: "#171717",
     description: "Black on black. Silent flex.",
+    productId: "sr-midnight-hoodie",
   },
   {
     id: "fresh_jersey",
@@ -101,6 +108,7 @@ export const APPAREL: ApparelItem[] = [
     category: "top",
     color: "#0f766e",
     description: "Memphis zip. K Blanco co-sign energy.",
+    productId: "sr-fresh-jersey",
   },
   {
     id: "white_cap",
@@ -109,6 +117,7 @@ export const APPAREL: ApparelItem[] = [
     category: "hat",
     color: "#f5f5f5",
     description: "SackReligious script. Keep it tilted.",
+    productId: "sr-white-snapback",
   },
   {
     id: "gold_chain",
@@ -117,6 +126,8 @@ export const APPAREL: ApparelItem[] = [
     category: "chain",
     color: "#d4af37",
     description: "Gold rope + pendant. Respect required.",
+    productId: "sr-moneybag-chain",
+    respectRequired: 20,
   },
   {
     id: "green_sweats",
@@ -125,6 +136,7 @@ export const APPAREL: ApparelItem[] = [
     category: "set",
     color: "#22c55e",
     description: "Full fit. Court to culture spot ready.",
+    productId: "sr-green-sweats",
   },
 ];
 
@@ -256,8 +268,8 @@ export function createDropDayMission(opts?: { order?: DeliveryId[]; courtTarget?
   const delivers: Record<DeliveryId, MissionStep> = {
     hood: {
       id: "hood",
-      label: "Move product — Neighborhood",
-      description: "Connect with the real ones in the hood.",
+      label: "Take the drop — Neighborhood",
+      description: "Deliver the pack. Meet a supporter who actually lives this city.",
       target: deliveryTarget("hood"),
       kind: "deliver",
       reward: 50,
@@ -265,8 +277,8 @@ export function createDropDayMission(opts?: { order?: DeliveryId[]; courtTarget?
     },
     dt: {
       id: "dt",
-      label: "Move product — Downtown",
-      description: "Downtown vibes. More supporters.",
+      label: "Get fresh — Downtown",
+      description: "Move product downtown, then represent. Fit is part of the work.",
       target: deliveryTarget("dt"),
       kind: "deliver",
       reward: 50,
@@ -274,8 +286,8 @@ export function createDropDayMission(opts?: { order?: DeliveryId[]; courtTarget?
     },
     culture: {
       id: "culture",
-      label: "Move product — Culture Spot",
-      description: "Last stop. The brand grows.",
+      label: "Build Respect — Culture Spot",
+      description: "Show up for the culture. Respect is reputation, not a second wallet.",
       target: deliveryTarget("culture"),
       kind: "deliver",
       reward: 60,
@@ -291,8 +303,8 @@ export function createDropDayMission(opts?: { order?: DeliveryId[]; courtTarget?
     steps: [
       {
         id: "wake",
-        label: "Leave the apartment",
-        description: "Drop Day is live. Step into Memphis.",
+        label: "Wake Up",
+        description: "Explore the apartment. The doorway is south. Step into Memphis.",
         target: "apartment",
         kind: "goto",
         reward: 10,
@@ -300,8 +312,8 @@ export function createDropDayMission(opts?: { order?: DeliveryId[]; courtTarget?
       },
       {
         id: "link_k",
-        label: "Link up with K Blanco",
-        description: "Hit SackReligious HQ and talk to K.",
+        label: "Link Up",
+        description: "Walk to SackReligious HQ and talk to K Blanco. Tonight is Drop Day.",
         target: "store",
         kind: "talk",
         reward: 25,
@@ -309,8 +321,8 @@ export function createDropDayMission(opts?: { order?: DeliveryId[]; courtTarget?
       },
       {
         id: "pickup",
-        label: "Pick up the drop",
-        description: "Secure the new drop at the van.",
+        label: "Get the Drop Ready",
+        description: "Inspect the wall, then secure the drop at the branded van.",
         target: "dropvan",
         kind: "pickup",
         reward: 40,
@@ -319,8 +331,8 @@ export function createDropDayMission(opts?: { order?: DeliveryId[]; courtTarget?
       ...order.map((id) => ({ ...delivers[id] })),
       {
         id: "ball",
-        label: "Ball up for respect",
-        description: `Hit the 901 Court. Score ${courtTarget} points.`,
+        label: "Own the 901 Court",
+        description: `Meet Court OG. Pick up, dribble, shoot. Score ${courtTarget}.`,
         target: "court",
         kind: "basketball",
         reward: 45,
@@ -328,8 +340,8 @@ export function createDropDayMission(opts?: { order?: DeliveryId[]; courtTarget?
       },
       {
         id: "return",
-        label: "Return to HQ",
-        description: "Mission complete. Report back to K Blanco.",
+        label: "The Drop",
+        description: "Return to HQ. The floor should feel different. Drop goes live.",
         target: "store",
         kind: "return",
         reward: 100,
@@ -420,11 +432,11 @@ export const NPCS: NpcDef[] = [
     y: 10.5 * TILE,
     color: "#f5d0a9",
     dialogue: [
-      "Welcome to the family. Glad you made it.",
-      "In the sack, we trust. You ready for Drop Day?",
-      "Shop the wall, move the product, grow the brand.",
+      "You made it. I needed somebody who moves like the city, not like a tourist.",
+      "Tonight is Drop Day. We do this clean — product out, Respect in.",
+      "Shop the wall if you want the fit. The real drop still has to hit the streets.",
     ],
-    missionTalk: "Benji. Lock in. Grab the drop from the van, hit three spots, then bounce back.",
+    missionTalk: "Benji. Tonight is Drop Day. Grab the van, hit three spots, then come back to me.",
     isKBlanco: true,
   },
   {
@@ -434,8 +446,8 @@ export const NPCS: NpcDef[] = [
     y: 12 * TILE,
     color: "#a3a3a3",
     dialogue: [
-      "You Benji? Heard SackReligious got that new drop.",
-      "This city rocking with the brand heavy.",
+      "You Benji? K said the new drop was coming through this block.",
+      "Don't just drop it and bounce. Talk to people. That's how Respect works.",
     ],
   },
   {
@@ -444,7 +456,7 @@ export const NPCS: NpcDef[] = [
     x: 50 * TILE,
     y: 32 * TILE,
     color: "#e5e5e5",
-    dialogue: ["Fresh fits only. Respect the movement.", "You got that energy, Benji."],
+    dialogue: ["Downtown don't care about talk. They care who showed up.", "You got that energy, Benji. Wear it."],
   },
   {
     id: "culture_host",
@@ -452,7 +464,7 @@ export const NPCS: NpcDef[] = [
     x: 26 * TILE,
     y: 38 * TILE,
     color: "#c4b8a8",
-    dialogue: ["Culture spot is lit tonight.", "Drop sold through. Brand growing."],
+    dialogue: ["Culture spot remembers who pulled up when it was quiet.", "You moved product. Now move with purpose."],
   },
   {
     id: "court_coach",
@@ -461,8 +473,8 @@ export const NPCS: NpcDef[] = [
     y: 31 * TILE,
     color: "#fdba74",
     dialogue: [
-      "Court's open. Put up points, earn $ackdollars.",
-      "Timing is everything. Let it fly at the peak.",
+      "Court's open. Pick the ball up, gather, then let it fly.",
+      "Don't rush the release. Green window. Miss, rebound, go again.",
     ],
   },
   {
@@ -495,5 +507,7 @@ export const TIPS = [
   "Shop the wall at HQ. Fit changes how the city sees you.",
 ];
 
-export const SAVE_KEY = "sackreligious-memphis-v2";
-export const SAVE_KEY_LEGACY = "sackreligious-memphis-v1";
+export const SAVE_KEY = "sackreligious-memphis-v3";
+export const SAVE_KEY_LEGACY = "sackreligious-memphis-v2";
+export const SAVE_KEY_LEGACY_V1 = "sackreligious-memphis-v1";
+export const SAVE_VERSION = 3 as const;
