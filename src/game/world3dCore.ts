@@ -5,6 +5,7 @@ import { PlayerCharacter } from "./playerCharacter";
 import type { LocomotionState } from "./characterController";
 import { CAR_SKINS, facadeFor, loadCityArt, NPC_SPRITE, PED_SKINS, type CityArt } from "./cityArt";
 import { decorateBuildings, getSignMaterial, type BuildingRef } from "./city/signage";
+import { createWebGLRenderer, disposeRenderer } from "./webgl";
 
 export const S = 1 / 16;
 
@@ -101,12 +102,7 @@ export class World3D {
   private benjiReady = false;
 
   constructor(canvas: HTMLCanvasElement) {
-    this.renderer = new THREE.WebGLRenderer({
-      canvas,
-      antialias: true,
-      powerPreference: "high-performance",
-      alpha: false,
-    });
+    this.renderer = createWebGLRenderer(canvas);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
     this.renderer.setClearColor(0x1a1612, 1);
     this.renderer.shadowMap.enabled = true;
@@ -794,7 +790,7 @@ export class World3D {
   }
 
   dispose() {
-    this.renderer.dispose();
+    disposeRenderer(this.renderer);
     this.overlay.remove();
   }
 }

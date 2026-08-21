@@ -96,10 +96,12 @@ const TABS: { id: PauseTab; label: string; icon: typeof Play }[] = [
 ];
 
 export function GameApp() {
+  const [bootId, setBootId] = useState(0);
+  const retry = useCallback(() => setBootId((n) => n + 1), []);
   return (
-    <ErrorBoundary>
+    <ErrorBoundary onRetry={retry}>
       <RotatePrompt />
-      <GameShell />
+      <GameShell key={bootId} onRetry={retry} />
     </ErrorBoundary>
   );
 }
@@ -111,7 +113,7 @@ function loadCopy(pct: number) {
   return "Loading The Drop...";
 }
 
-function GameShell() {
+function GameShell({ onRetry }: { onRetry: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<GameEngine | null>(null);
   const [hud, setHud] = useState<HudSnapshot>(emptyHud);
@@ -347,7 +349,7 @@ function GameShell() {
                   <button
                     type="button"
                     className="mt-2 min-h-10 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-fg"
-                    onClick={() => window.location.reload()}
+                    onClick={onRetry}
                   >
                     Retry
                   </button>

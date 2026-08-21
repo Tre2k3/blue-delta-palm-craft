@@ -1,6 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
-type Props = { children: ReactNode };
+type Props = { children: ReactNode; onRetry?: () => void };
 type State = { err: Error | null };
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -29,7 +29,7 @@ export class ErrorBoundary extends Component<Props, State> {
             className="mt-6 min-h-12 w-full rounded-xl bg-primary font-display text-2xl text-primary-fg"
             onClick={() => {
               this.setState({ err: null });
-              window.location.reload();
+              this.props.onRetry?.();
             }}
           >
             Retry

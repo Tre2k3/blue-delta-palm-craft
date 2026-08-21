@@ -19,6 +19,7 @@ import { audio } from "./audio";
 import { InputManager } from "./input";
 import { World3D } from "./world3d";
 import { CharacterController } from "./characterController";
+import { loseWebGL } from "./webgl";
 import { JUICE, emitBurst, stepParticles, type ScreenParticle } from "./juice";
 import {
   aheadDistance,
@@ -198,6 +199,7 @@ export class GameEngine {
 	leftSpawn = false;
 	hasSave = false;
 	world3d: World3D | null = null;
+	overlay: HTMLCanvasElement | null = null;
 	mover = new CharacterController();
 	lastDt = 1 / 60;
 	runIndex = 1;
@@ -212,11 +214,15 @@ export class GameEngine {
 	lastDeliveryAt = 0;
 	constructor(canvas: HTMLCanvasElement) {
 		this.canvas = canvas;
-		this.world3d = new World3D(canvas);
-		this.ctx = this.world3d.overlay.getContext("2d")!;
+		const overlay = document.createElement("canvas");
+		overlay.className = "pointer-events-none absolute inset-0 h-full w-full";
+		canvas.parentElement?.appendChild(overlay);
+		this.overlay = overlay;
+		this.ctx = overlay.getContext("2d")!;
 		this.buildWorld();
 	}
 	async init() {
+		await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
 		await Promise.all(Object.entries({
 			front: "/game/benji-front-norm.png",
 			back: "/game/benji-back-norm.png",
@@ -257,8 +263,18 @@ export class GameEngine {
 		}));
 		this.loadSave();
 		this.paintMap();
-		await this.world3d?.loadTextures((d, t) => this.onLoad?.(d / t));
-		this.world3d?.buildCity(this.walls, this.trees);
+		try {
+			this.world3d = new World3D(this.canvas);
+			this.world3d.overlay.remove();
+			this.world3d.overlay = this.overlay!;
+			this.ctx = this.world3d.overlay.getContext("2d")!;
+			await this.world3d.loadTextures((d, t) => this.onLoad?.(d / t));
+			this.world3d.buildCity(this.walls, this.trees);
+		} catch (err) {
+			this.world3d = null;
+			this.onLoad?.(1);
+			console.warn("[sack] WebGL unavailable, running 2D Memphis", err);
+		}
 		this.input.bind();
 		this.wireQa();
 		this.applyQuality();
@@ -614,6 +630,9 @@ export class GameEngine {
 		this.input.unbind();
 		this.world3d?.dispose();
 		this.world3d = null;
+		loseWebGL(this.canvas);
+		this.overlay?.remove();
+		this.overlay = null;
 	}
 	start(fresh = false) {
 		audio.unlock();
@@ -1777,6 +1796,7 @@ export class GameEngine {
 		}
 		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 		ctx.clearRect(0, 0, w, h);
+		if (!this.world3d) this.drawFallbackWorld(ctx, w, h);
 		for (const p of this.particles) {
 			const a = Math.max(0, p.life / p.maxLife);
 			ctx.globalAlpha = a;
@@ -1818,6 +1838,25 @@ export class GameEngine {
 		if (this.started && (this.mode === "world" || this.mode === "basketball")) {
 			this.drawCompass(ctx, w, h);
 			this.drawMinimap(ctx, w, h);
+		}
+	}
+	drawFallbackWorld(ctx: CanvasRenderingContext2D, w: number, h: number) {
+		this.camX = clamp(this.px - w / 2, 0, Math.max(0, WORLD_PX_W - w));
+		this.camY = clamp(this.py - h / 2, 0, Math.max(0, WORLD_PX_H - h));
+		const night = nightAmount(this.worldHour);
+		ctx.fillStyle = night > 0.3 ? "#1a1612" : "#3a2a22";
+		ctx.fillRect(0, 0, w, h);
+		ctx.save();
+		ctx.translate(-this.camX, -this.camY);
+		if (this.mapCanvas) ctx.drawImage(this.mapCanvas, 0, 0);
+		for (const car of this.cars) this.drawCar(ctx, car);
+		for (const p of this.peds) this.drawPed(ctx, p);
+		for (const n of NPCS) this.drawNpc(ctx, n);
+		this.drawPlayer(ctx);
+		ctx.restore();
+		if (night > 0.05) {
+			ctx.fillStyle = `rgba(6,8,14,${night * 0.45})`;
+			ctx.fillRect(0, 0, w, h);
 		}
 	}
 	drawShotMeter(ctx: CanvasRenderingContext2D, w: number, h: number) {
