@@ -15,10 +15,10 @@ function bool(name: string, fallback: boolean): boolean {
   return v === "1" || v.toLowerCase() === "true";
 }
 
-export const GAME_BUILD_VERSION = env("VITE_GAME_BUILD_VERSION") ?? "0.9.0-rc";
+export const GAME_BUILD_VERSION = env("VITE_GAME_BUILD_VERSION") ?? "0.9.7";
 export const GAME_TITLE = "$ackReligious: Memphis";
 
-export const STORE_BASE_URL = (env("VITE_STORE_BASE_URL") ?? "").replace(/\/$/, "");
+export const STORE_BASE_URL = (env("VITE_STORE_BASE_URL") ?? "https://10letters.store").replace(/\/$/, "");
 export const PRODUCT_CATALOG_URL = env("VITE_PRODUCT_CATALOG_URL") ?? "/config/store-products.json";
 export const ALLOWED_PARENT_ORIGIN = env("VITE_ALLOWED_PARENT_ORIGIN") ?? "";
 export const ANALYTICS_ENABLED = bool("VITE_ANALYTICS_ENABLED", true);

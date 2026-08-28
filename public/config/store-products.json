@@ -4,97 +4,131 @@
       "id": "sr-starter-tee",
       "slug": "sr-starter-tee",
       "name": "SackReligious Starter Green Tee",
-      "imageUrl": "/game/featured-products.png",
+      "imageUrl": "/game/products/sr-starter-tee.png",
       "price": 38,
       "currency": "USD",
       "sizes": ["S", "M", "L", "XL", "2XL"],
       "available": true,
       "storeUrl": "/product/sr-starter-tee",
-      "virtualOutfitId": "starter_tee"
+      "virtualOutfitId": "starter_tee",
+      "zone": "hq"
     },
     {
       "id": "sr-black-gold-tee",
       "slug": "sr-black-gold-tee",
       "name": "SackReligious Black & Gold Tee",
-      "imageUrl": "/game/featured-products.png",
+      "imageUrl": "/game/products/sr-black-gold-tee.png",
       "price": 48,
       "currency": "USD",
       "sizes": ["S", "M", "L", "XL", "2XL"],
       "available": true,
       "storeUrl": "/product/sr-black-gold-tee",
-      "virtualOutfitId": "classic_green"
+      "virtualOutfitId": "classic_green",
+      "zone": "hq"
     },
     {
       "id": "sr-moneybag-hoodie",
       "slug": "sr-moneybag-hoodie",
       "name": "Moneybag Hoodie",
-      "imageUrl": "/game/logo-wall.png",
+      "imageUrl": "/game/products/sr-moneybag-hoodie.png",
       "price": 92,
       "currency": "USD",
       "sizes": ["S", "M", "L", "XL", "2XL"],
       "available": true,
       "storeUrl": "/product/sr-moneybag-hoodie",
-      "virtualOutfitId": "moneybag_hoodie"
+      "virtualOutfitId": "moneybag_hoodie",
+      "zone": "hq"
     },
     {
       "id": "sr-midnight-hoodie",
       "slug": "sr-midnight-hoodie",
       "name": "Midnight Hoodie",
-      "imageUrl": "/game/logo-wall.png",
+      "imageUrl": "/game/products/sr-midnight-hoodie.png",
       "price": 88,
       "currency": "USD",
       "sizes": ["S", "M", "L", "XL", "2XL"],
       "available": true,
       "storeUrl": "/product/sr-midnight-hoodie",
-      "virtualOutfitId": "black_hoodie"
+      "virtualOutfitId": "black_hoodie",
+      "zone": "hq"
     },
     {
       "id": "sr-fresh-jersey",
       "slug": "sr-fresh-jersey",
       "name": "FRESH 38127 Jersey",
-      "imageUrl": "/game/k-blanco-jerseys.png",
+      "imageUrl": "/game/products/sr-fresh-jersey.png",
       "price": 120,
       "currency": "USD",
       "sizes": ["S", "M", "L", "XL", "2XL"],
       "available": true,
       "storeUrl": "/product/sr-fresh-jersey",
-      "virtualOutfitId": "fresh_jersey"
+      "virtualOutfitId": "fresh_jersey",
+      "zone": "court"
     },
     {
       "id": "sr-white-snapback",
       "slug": "sr-white-snapback",
       "name": "White Snapback",
-      "imageUrl": "/game/featured-products.png",
+      "imageUrl": "/game/products/sr-white-snapback.png",
       "price": 36,
       "currency": "USD",
       "sizes": ["OS"],
       "available": true,
       "storeUrl": "/product/sr-white-snapback",
-      "virtualOutfitId": "white_cap"
+      "virtualOutfitId": "white_cap",
+      "zone": "hq"
     },
     {
       "id": "sr-moneybag-chain",
       "slug": "sr-moneybag-chain",
       "name": "Moneybag Chain",
-      "imageUrl": "/game/sack-icon.png",
+      "imageUrl": "/game/products/sr-moneybag-chain.png",
       "price": 160,
       "currency": "USD",
       "sizes": ["OS"],
       "available": true,
       "storeUrl": "/product/sr-moneybag-chain",
-      "virtualOutfitId": "gold_chain"
+      "virtualOutfitId": "gold_chain",
+      "zone": "hq"
     },
     {
       "id": "sr-green-sweats",
       "slug": "sr-green-sweats",
       "name": "Green Sweat Set",
-      "imageUrl": "/game/shopping-bags.jpg",
+      "imageUrl": "/game/products/sr-green-sweats.png",
       "price": 110,
       "currency": "USD",
       "sizes": ["S", "M", "L", "XL", "2XL"],
       "available": true,
       "storeUrl": "/product/sr-green-sweats",
-      "virtualOutfitId": "green_sweats"
+      "virtualOutfitId": "green_sweats",
+      "zone": "hq"
+    },
+    {
+      "id": "sr-gold-drop",
+      "slug": "sr-gold-drop",
+      "name": "IRL Gold Drop",
+      "imageUrl": "/game/products/sr-gold-drop.png",
+      "price": 96,
+      "currency": "USD",
+      "sizes": ["S", "M", "L", "XL", "2XL"],
+      "available": true,
+      "storeUrl": "/product/sr-gold-drop",
+      "virtualOutfitId": "gold_drop",
+      "zone": "verified"
+    },
+    {
+      "id": "sr-night-run",
+      "slug": "sr-night-run",
+      "name": "Night Run Set",
+      "imageUrl": "/game/products/sr-night-run.png",
+      "price": 140,
+      "currency": "USD",
+      "sizes": ["S", "M", "L", "XL", "2XL"],
+      "available": true,
+      "storeUrl": "/product/sr-night-run",
+      "virtualOutfitId": "night_run",
+      "zone": "afterhours"
     }
   ]
 }

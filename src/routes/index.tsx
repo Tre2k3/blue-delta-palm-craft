@@ -1,7 +1,7 @@
+import { lazy, Suspense } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { installApartmentLayoutPass } from "../game/apartmentLayoutPass";
 import { installCourtWorldIntegrity } from "../game/courtWorldIntegrity";
-import { GameApp } from "../game/GameApp";
 import { installGameplayIntegrity } from "../game/gameplayIntegrity";
 import { installInteriorCollisionPass } from "../game/interiorCollisionPass";
 import { installMemphisEnvironmentPass } from "../game/memphisEnvironmentPass";
@@ -18,6 +18,12 @@ installMemphisEnvironmentPass();
 installStreetSanitationPass();
 installVehicleVisualPass();
 
+const GameApp = lazy(() => import("../game/GameApp").then((m) => ({ default: m.GameApp })));
+
 export const Route = createFileRoute("/")({
-  component: GameApp,
+  component: () => (
+    <Suspense fallback={<div className="flex h-full items-center justify-center bg-bg font-display text-3xl text-gold">MEMPHIS</div>}>
+      <GameApp />
+    </Suspense>
+  ),
 });

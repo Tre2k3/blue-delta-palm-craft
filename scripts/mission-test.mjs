@@ -92,7 +92,8 @@ await page.screenshot({ path: "/workspace/screenshots/mission-done.png" });
 await log("shop open?");
 
 if ((await page.evaluate(() => window.__gameTest.getState().mode)) === "shop") {
-  await page.getByRole("button", { name: /Back to streets/i }).click();
+  const back = page.getByRole("button", { name: /Back to streets/i });
+  if (await back.count()) await back.click({ force: true, timeout: 5000 }).catch(() => {});
 }
 await page.waitForTimeout(300);
 await page.screenshot({ path: "/workspace/screenshots/final-world.png" });

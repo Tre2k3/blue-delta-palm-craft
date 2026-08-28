@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { POIS, TILE } from "./data";
-import { laneVelocity, trafficLanes } from "./worldTopology";
+import { laneVelocity, nearestAsphalt, trafficLanes } from "./worldTopology";
 import { WorldLifePass } from "./worldLifePass";
 import { wx, wz, type WorldFrame } from "./world3dCore";
 
@@ -22,6 +22,8 @@ function insideCourt(x: number, y: number, pad = 0) {
 
 function buildCourtDeck(scene: THREE.Scene) {
   scene.getObjectByName("sackrow-court-safety-deck")?.removeFromParent();
+  const existing = scene.getObjectByName("sackrow-court-floor");
+  if (existing) return;
   const root = new THREE.Group();
   root.name = "sackrow-court-safety-deck";
   const cx = wx(COURT.x + COURT.w / 2);
@@ -29,10 +31,10 @@ function buildCourtDeck(scene: THREE.Scene) {
   const cw = wx(COURT.w);
   const cd = wz(COURT.h);
 
-  const floorMat = new THREE.MeshStandardMaterial({ color: 0x101211, roughness: 0.82, metalness: 0.02 });
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(cw - 0.25, cd - 0.25), floorMat);
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0x1a3d2a, roughness: 0.78, metalness: 0.02 });
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(cw + 0.6, cd + 0.6), floorMat);
   floor.rotation.x = -Math.PI / 2;
-  floor.position.set(cx, 0.155, cz);
+  floor.position.set(cx, 0.08, cz);
   floor.receiveShadow = true;
   root.add(floor);
 
@@ -42,7 +44,7 @@ function buildCourtDeck(scene: THREE.Scene) {
   const edge = 0.10;
   const box = (w: number, d: number, mat: THREE.Material, x: number, z: number) => {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, stripeH, d), mat);
-    mesh.position.set(x, 0.17, z);
+    mesh.position.set(x, 0.235, z);
     root.add(mesh);
   };
   box(cw - 0.55, edge, gold, cx, cz - cd / 2 + 0.28);
@@ -50,35 +52,23 @@ function buildCourtDeck(scene: THREE.Scene) {
   box(edge, cd - 0.55, green, cx - cw / 2 + 0.28, cz);
   box(edge, cd - 0.55, green, cx + cw / 2 - 0.28, cz);
   box(edge, cd - 1.2, gold, cx, cz);
-
-  const center = new THREE.Mesh(new THREE.TorusGeometry(1.72, 0.08, 8, 36), green);
-  center.rotation.x = Math.PI / 2;
-  center.position.set(cx, 0.18, cz);
-  root.add(center);
-  const inner = new THREE.Mesh(new THREE.TorusGeometry(1.22, 0.05, 8, 36), gold);
-  inner.rotation.x = Math.PI / 2;
-  inner.position.set(cx, 0.182, cz);
-  root.add(inner);
-
   scene.add(root);
 }
 
 function hideCourtStreetFurniture(scene: THREE.Scene) {
   const root = scene.getObjectByName("memphis-world-life");
   if (!root) return;
-  scene.updateMatrixWorld(true);
   const pos = new THREE.Vector3();
-  for (const child of [...root.children]) {
-    if (!(child instanceof THREE.Group)) continue;
-    let vehicleOrSignal = false;
-    child.traverse((node) => {
-      if (node instanceof THREE.Mesh && node.geometry instanceof THREE.CylinderGeometry) vehicleOrSignal = true;
-    });
-    if (!vehicleOrSignal) continue;
+  for (const child of root.children) {
     child.getWorldPosition(pos);
-    const px = pos.x / (1 / 16);
-    const py = pos.z / (1 / 16);
-    if (insideCourt(px, py, TILE * 0.65)) child.visible = false;
+    const px = pos.x * 16;
+    const py = pos.z * 16;
+    if (!insideCourt(px, py, TILE * 1.15)) continue;
+    let vehicle = false;
+    child.traverse((node) => {
+      if (node instanceof THREE.Mesh && node.geometry instanceof THREE.CylinderGeometry) vehicle = true;
+    });
+    if (vehicle) child.visible = false;
   }
 }
 
@@ -114,7 +104,18 @@ export function installCourtWorldIntegrity() {
   const originalPreSync = WorldLifePass.prototype.preSync;
   WorldLifePass.prototype.preSync = function courtSafeTraffic(this: WorldLifePass, frame: WorldFrame) {
     originalPreSync.call(this, frame);
-    for (let i = 0; i < frame.cars.length; i++) rerouteCourtCar(frame.cars[i] as LiveCar, i);
+    for (let i = 0; i < frame.cars.length; i++) {
+      const car = frame.cars[i] as LiveCar;
+      rerouteCourtCar(car, i);
+      if (insideCourt(car.x, car.y, TILE * 0.4) && car.laneId !== "RIVAL" && car.laneId !== "RACER") {
+        const safe = nearestAsphalt(car.x, car.y);
+        car.x = safe.x;
+        car.y = safe.y;
+        if (safe.laneId) car.laneId = safe.laneId;
+        car.vx *= 0.15;
+        car.vy *= 0.15;
+      }
+    }
   };
 
   const originalPostSync = WorldLifePass.prototype.postSync;
@@ -122,9 +123,17 @@ export function installCourtWorldIntegrity() {
     this: WorldLifePass,
     frame: WorldFrame,
     carGroups: THREE.Group[],
-    npcSprites: Map<string, THREE.Sprite>,
+    npcSprites: Map<string, THREE.Mesh>,
   ) {
     originalPostSync.call(this, frame, carGroups, npcSprites);
+    const scene = (this as unknown as { scene: THREE.Scene }).scene;
+    hideCourtStreetFurniture(scene);
+    for (let i = 0; i < carGroups.length; i++) {
+      const car = frame.cars[i] as LiveCar | undefined;
+      const g = carGroups[i];
+      if (!g) continue;
+      if (car && insideCourt(car.x, car.y, TILE * 0.5)) g.visible = false;
+    }
     let carsOnCourt = 0;
     let carsOnBlockedLane = 0;
     for (const raw of frame.cars) {

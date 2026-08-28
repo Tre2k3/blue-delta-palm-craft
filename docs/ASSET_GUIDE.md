@@ -4,7 +4,7 @@ North stars live under `assets/sackreligious_game_asset_pack/` and `public/game/
 
 | Subject | Use |
 | --- | --- |
-| Benji | `public/game/benji/walk-*-1..4.png`, jump-1..4, plus atlas fallback |
+| Benji | `public/game/benji/walk-*-1..4.png`, jump-1..4, plus atlas fallback. Outfits are composited at runtime from these plates (`outfitCompositor.ts`) so every fit keeps the same facing cycle. |
 | K Blanco | approved stylized portrait / store sprite — not later photoreal cutouts |
 | Court | Sackrow Ballers floor treatment |
 | Drop van | official $ackReligious Klothing wrap |

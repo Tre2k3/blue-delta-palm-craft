@@ -22,6 +22,7 @@ export class GameAudio {
   private running = false;
   private lastFoot = 0;
   private noiseBuf: AudioBuffer | null = null;
+  dropLive = false;
 
   unlock() {
     if (this.unlocked && this.ctx) {
@@ -111,15 +112,18 @@ export class GameAudio {
     }
     if (!playing) return;
     this.musicTimer += dt;
-    const bpm = 88;
+    const bpm = this.dropLive ? 104 : 88;
     const beat = 60 / bpm;
     if (this.musicTimer - this.lastKick >= beat) {
       this.lastKick = this.musicTimer;
       this.step = (this.step + 1) % 8;
       this.kick();
+      if (this.dropLive && this.step % 2 === 0) this.kick();
       if (this.step % 2 === 1) this.hat();
       if (this.step === 2 || this.step === 6) this.snare();
-      const notes = [55, 55, 65.4, 55, 73.4, 55, 49, 55];
+      const notes = this.dropLive
+        ? [55, 73.4, 82.4, 55, 98, 55, 73.4, 65.4]
+        : [55, 55, 65.4, 55, 73.4, 55, 49, 55];
       this.blipBass(notes[this.step]!);
     }
   }
@@ -298,9 +302,40 @@ export class GameAudio {
     this.noiseBurst(0.07, 0.035, 600, 2400);
   }
 
+  cheer() {
+    this.tone(523, 0.12, "triangle", 0.05);
+    this.tone(659, 0.16, "sine", 0.045);
+    this.tone(784, 0.22, "triangle", 0.04);
+    this.noiseBurst(0.16, 0.05, 800, 4200);
+  }
+
+  groan() {
+    this.tone(110, 0.18, "sine", 0.07);
+    this.tone(82, 0.22, "triangle", 0.05);
+  }
+
   bounce() {
     this.tone(140, 0.07, "sine", 0.06);
     this.noiseBurst(0.04, 0.02, 300, 1600);
+  }
+
+  splash() {
+    this.noiseBurst(0.12, 0.05, 200, 1800);
+    this.tone(180, 0.1, "sine", 0.05);
+    this.tone(90, 0.14, "triangle", 0.04);
+  }
+
+  nibble() {
+    this.tone(140, 0.05, "sine", 0.05);
+    this.tone(90, 0.08, "triangle", 0.04);
+    this.noiseBurst(0.05, 0.02, 180, 900);
+  }
+
+  catchFish() {
+    this.tone(523, 0.1, "triangle", 0.07);
+    this.tone(784, 0.16, "sine", 0.06);
+    this.tone(1046, 0.12, "triangle", 0.04);
+    this.noiseBurst(0.08, 0.03, 400, 2400);
   }
 
   trophy() {
@@ -314,6 +349,16 @@ export class GameAudio {
     this.tone(392, 0.18, "triangle", 0.08);
     this.tone(523, 0.24, "triangle", 0.07);
     this.tone(659, 0.32, "sine", 0.09);
+  }
+
+  dropAnthem() {
+    this.dropLive = true;
+    this.duck(0.4, 0.55);
+    this.tone(196, 0.28, "sine", 0.1);
+    this.tone(392, 0.4, "triangle", 0.08);
+    this.tone(587, 0.5, "sine", 0.07);
+    this.tone(784, 0.62, "triangle", 0.05);
+    this.cheer();
   }
 
   grade(letter: string) {

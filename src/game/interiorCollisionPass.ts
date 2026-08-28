@@ -4,7 +4,11 @@ import { circleHitsRect, type Rect } from "./worldTopology";
 
 const APARTMENT = POIS.find((p) => p.id === "apartment")!;
 const STORE = POIS.find((p) => p.id === "store")!;
-type PatchedEngine = GameEngine & { __interiorCollisionPatched?: boolean };
+type PatchedEngine = GameEngine & {
+  __interiorCollisionPatched?: boolean;
+  __interiorCollisionOriginal?: GameEngine["collides"];
+  __interiorWireOriginal?: GameEngine["wireQa"];
+};
 
 function gameRect(cx: number, cy: number, w: number, h: number): Rect {
   return { x: cx - w / 2, y: cy - h / 2, w, h };
@@ -28,13 +32,21 @@ const APARTMENT_FURNITURE: Rect[] = [
 ];
 
 const HQ_FURNITURE: Rect[] = [
-  gameRect(hqCx + 4.20 * 16, hqCy - 3.90 * 16, 4.35 * 16, 0.95 * 16), // checkout counter
-  gameRect(hqCx - 4.92 * 16, hqCy - 1.50 * 16, 0.98 * 16, 2.95 * 16), // rack 1
-  gameRect(hqCx - 2.02 * 16, hqCy - 1.50 * 16, 0.98 * 16, 2.95 * 16), // rack 2
-  gameRect(hqCx + 0.88 * 16, hqCy - 1.50 * 16, 0.98 * 16, 2.95 * 16), // rack 3
-  gameRect(hqCx - 2.50 * 16, hqCy + 2.40 * 16, 3.55 * 16, 1.60 * 16), // product table
-  gameRect(hqCx + 3.80 * 16, hqCy + 1.80 * 16, 2.55 * 16, 1.15 * 16), // lounge/drop table
+  loc(0, -5.25, 4.7, 1.15), // checkout counter at the back
+  loc(-8.15, 2.4, 0.75, 2.0), // west rack south
+  loc(-8.15, -1.6, 0.75, 2.0), // west rack north
+  loc(8.15, 2.4, 0.75, 2.0), // east rack south
+  loc(8.15, -1.6, 0.75, 2.0), // east rack north
+  loc(-3.55, 1.55, 1.75, 1.15), // left front table
+  loc(3.55, 1.55, 1.75, 1.15), // right front table
+  loc(-3.45, -1.85, 1.75, 1.15), // left rear table
+  loc(3.45, -1.85, 1.75, 1.15), // right rear table
+  loc(-7.5, 5.8, 1.25, 0.85), // entry vitrine
 ];
+
+function loc(lx: number, lz: number, w: number, d: number): Rect {
+  return gameRect(hqCx + lx * 16, hqCy + lz * 16, w * 16, d * 16);
+}
 
 function inside(p: { x: number; y: number; w: number; h: number }, x: number, y: number, pad = 12) {
   return x >= p.x - pad && x <= p.x + p.w + pad && y >= p.y - pad && y <= p.y + p.h + pad;
@@ -42,20 +54,18 @@ function inside(p: { x: number; y: number; w: number; h: number }, x: number, y:
 
 export function installInteriorCollisionPass() {
   const proto = GameEngine.prototype as PatchedEngine;
-  if (proto.__interiorCollisionPatched) return;
-  proto.__interiorCollisionPatched = true;
-
-  const originalCollides = GameEngine.prototype.collides;
+  const originalCollides = proto.__interiorCollisionOriginal ?? GameEngine.prototype.collides;
+  proto.__interiorCollisionOriginal = originalCollides;
   GameEngine.prototype.collides = function furnitureAwareCollision(this: GameEngine, x: number, y: number, r: number) {
     if (originalCollides.call(this, x, y, r)) return true;
-    // A high jump may clear low furniture, matching the existing car behavior.
     if (this.mover.air >= 0.62) return false;
     const furniture = inside(APARTMENT, x, y) ? APARTMENT_FURNITURE : inside(STORE, x, y) ? HQ_FURNITURE : null;
     if (!furniture) return false;
     return furniture.some((rect) => circleHitsRect(x, y, r, rect));
   };
 
-  const originalWireQa = GameEngine.prototype.wireQa;
+  const originalWireQa = proto.__interiorWireOriginal ?? GameEngine.prototype.wireQa;
+  proto.__interiorWireOriginal = originalWireQa;
   GameEngine.prototype.wireQa = function furnitureCollisionQa(this: GameEngine) {
     originalWireQa.call(this);
     if (typeof window === "undefined") return;

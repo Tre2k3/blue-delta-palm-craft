@@ -2,6 +2,9 @@ import * as THREE from "three";
 import { POIS } from "./data";
 import { WorldLifePass } from "./worldLifePass";
 import { S, World3D as World3DCore, wx, wz, type WorldFrame } from "./world3dCore";
+import { applyPolygonOffset } from "./polygonOffset";
+import { poiBuildingRect } from "./worldTopology";
+import { cutoutMeshMaterial } from "./cutout";
 
 export { S, wx, wz };
 export type { WorldFrame };
@@ -63,24 +66,40 @@ export class World3D extends World3DCore {
     });
 
     this.apartmentInterior?.removeFromParent();
-    this.apartmentInterior = this.buildApartmentInterior(wx(APARTMENT.x + APARTMENT.w / 2), wz(APARTMENT.y + APARTMENT.h / 2));
-    this.apartmentInterior.visible = false;
-    this.scene.add(this.apartmentInterior);
+    try {
+      this.apartmentInterior = this.buildApartmentInterior(wx(APARTMENT.x + APARTMENT.w / 2), wz(APARTMENT.y + APARTMENT.h / 2));
+      this.apartmentInterior.visible = false;
+      this.scene.add(this.apartmentInterior);
+    } catch (err) {
+      console.warn("[sack] apartment interior failed", err);
+      this.apartmentInterior = null;
+    }
 
     this.hqInterior?.removeFromParent();
-    this.hqInterior = this.buildHQInterior(wx(STORE.x + STORE.w / 2), wz(STORE.y + STORE.h / 2));
-    this.hqInterior.visible = false;
-    this.scene.add(this.hqInterior);
+    try {
+      this.hqInterior = this.buildHQInterior(wx(STORE.x + STORE.w / 2), wz(STORE.y + STORE.h / 2));
+      this.hqInterior.visible = false;
+      this.scene.add(this.hqInterior);
+    } catch (err) {
+      console.warn("[sack] HQ interior failed", err);
+      this.hqInterior = null;
+    }
 
-    this.worldLife.build();
+    try {
+      this.worldLife.build();
+    } catch (err) {
+      console.warn("[sack] world life failed", err);
+    }
   }
 
-  private findLandmark(poi: { x: number; y: number; w: number; h: number }) {
-    const cx = wx(poi.x + poi.w / 2);
-    const cz = wz(poi.y + poi.h / 2);
+  private findLandmark(poi: { id?: string; x: number; y: number; w: number; h: number }) {
+    const br = poi.id ? poiBuildingRect({ id: poi.id, x: poi.x, y: poi.y, w: poi.w, h: poi.h }) : poi;
+    const cx = wx(br.x + br.w / 2);
+    const cz = wz(br.y + br.h / 2);
     for (const child of this.scene.children) {
       if (!(child instanceof THREE.Group)) continue;
-      if (Math.abs(child.position.x - cx) > 0.02 || Math.abs(child.position.z - cz) > 0.02) continue;
+      if (poi.id && child.userData.poiId === poi.id) return child;
+      if (Math.abs(child.position.x - cx) > 0.08 || Math.abs(child.position.z - cz) > 0.08) continue;
       if (child.children.some((c) => c instanceof THREE.Mesh && c.geometry instanceof THREE.BoxGeometry)) return child;
     }
     return null;
@@ -119,10 +138,7 @@ export class World3D extends World3DCore {
     root.add(box(wallT, wallH, depth, wallMat, -halfW, wallH / 2, 0));
     root.add(box(wallT, wallH, depth, wallMat, halfW, wallH / 2, 0));
     this.addSouthDoor(root, width, halfD, wallH, wallT, wallMat, trimMat, wx(6 * 48 - (APARTMENT.x + APARTMENT.w / 2)), wx(48 * 1.3));
-    const rug = new THREE.Mesh(new THREE.PlaneGeometry(4.0, 2.8), new THREE.MeshStandardMaterial({ color: 0x0f5c35, roughness: 1 }));
-    rug.rotation.x = -Math.PI / 2;
-    rug.position.set(1.25, 0.105, 0.3);
-    root.add(rug);
+    root.add(box(4.0, 0.03, 2.8, new THREE.MeshStandardMaterial({ color: 0x0f5c35, roughness: 1 }), 1.25, 0.11, 0.3));
     root.add(box(3.45, 0.5, 2.15, darkMat, -2.55, 0.3, -2.55));
     root.add(box(3.25, 0.34, 1.95, fabricMat, -2.55, 0.63, -2.55));
     root.add(box(3.25, 0.5, 0.16, trimMat, -2.55, 1.02, -3.5));
@@ -148,54 +164,150 @@ export class World3D extends World3DCore {
     return root;
   }
 
+  private photoMat(tex: THREE.Texture | undefined, fallback: number) {
+    if (!tex) {
+      return applyPolygonOffset(
+        new THREE.MeshStandardMaterial({ color: fallback, roughness: 0.72 }),
+        "decal",
+      );
+    }
+    return applyPolygonOffset(
+      new THREE.MeshStandardMaterial({
+        map: tex,
+        color: 0xffffff,
+        roughness: 0.62,
+        metalness: 0.02,
+        emissive: new THREE.Color(0x404040),
+        emissiveMap: tex,
+        emissiveIntensity: 0.45,
+        depthWrite: true,
+      }),
+      "decal",
+    );
+  }
+
+  private photoWall(w: number, h: number, tex: THREE.Texture | undefined, fallback: number) {
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), this.photoMat(tex, fallback));
+    return mesh;
+  }
+
   private buildHQInterior(cx: number, cz: number) {
     const root = new THREE.Group();
     root.position.set(cx, 0, cz);
     root.name = "sackreligious-hq-interior";
-    const black = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.72 });
-    const charcoal = new THREE.MeshStandardMaterial({ color: 0x242424, roughness: 0.78 });
-    const green = new THREE.MeshStandardMaterial({ color: 0x086b3b, roughness: 0.68 });
-    const gold = new THREE.MeshStandardMaterial({ color: 0xd6aa2d, roughness: 0.4, metalness: 0.42 });
-    const wall = new THREE.MeshStandardMaterial({ color: 0xe5e1d8, roughness: 0.9 });
-    const wood = new THREE.MeshStandardMaterial({ color: 0x5a3924, roughness: 0.88 });
-    const width = wx(STORE.w) - 0.35;
-    const depth = wz(STORE.h) - 0.35;
+    const store = this.art.store;
+    const black = new THREE.MeshStandardMaterial({ color: 0x1a1612, roughness: 0.62, metalness: 0.12 });
+    const gold = new THREE.MeshStandardMaterial({ color: 0xd6aa2d, roughness: 0.38, metalness: 0.46 });
+    const green = new THREE.MeshStandardMaterial({ color: 0x0d7a42, roughness: 0.55, metalness: 0.08 });
+    const wallPaint = new THREE.MeshStandardMaterial({ color: 0x161412, roughness: 0.88 });
+    const wood = new THREE.MeshStandardMaterial({ color: 0x3a2a1c, roughness: 0.78 });
+    const glass = new THREE.MeshStandardMaterial({ color: 0x8aa4b8, roughness: 0.12, metalness: 0.55, transparent: true, opacity: 0.35 });
+    const width = wx(STORE.w) - 0.2;
+    const depth = wz(STORE.h) - 0.2;
     const halfW = width / 2;
     const halfD = depth / 2;
-    const wallH = 3.25;
-    const wallT = 0.14;
-    root.add(box(width, 0.1, depth, charcoal, 0, 0.04, 0));
-    root.add(box(width, wallH, wallT, wall, 0, wallH / 2, -halfD));
-    root.add(box(wallT, wallH, depth, wall, -halfW, wallH / 2, 0));
-    root.add(box(wallT, wallH, depth, wall, halfW, wallH / 2, 0));
-    this.addSouthDoor(root, width, halfD, wallH, wallT, wall, green, 0, wx(48 * 1.7));
-    root.add(box(4.2, 1.05, 0.82, black, 4.2, 0.55, -3.9));
-    root.add(box(4.2, 0.08, 0.88, gold, 4.2, 1.08, -3.9));
-    root.add(box(0.75, 0.55, 0.5, green, 3.1, 1.42, -3.9));
-    for (const x of [-5.4, -2.5, 0.4]) {
-      root.add(box(0.1, 1.8, 3.1, gold, x, 1.0, -1.5));
-      root.add(box(0.82, 0.72, 2.75, black, x + 0.48, 0.42, -1.5));
-      root.add(box(0.58, 0.12, 2.35, green, x + 0.48, 0.86, -1.5));
-    }
-    root.add(box(3.4, 0.75, 1.45, wood, -2.5, 0.4, 2.4));
-    root.add(box(1.0, 0.18, 1.1, green, -3.5, 0.88, 2.4));
-    root.add(box(1.0, 0.18, 1.1, gold, -2.35, 0.88, 2.4));
-    root.add(box(1.0, 0.18, 1.1, black, -1.2, 0.88, 2.4));
-    root.add(box(6.6, 1.65, 0.08, black, 0, 2.05, -halfD + 0.04));
-    root.add(box(5.5, 0.16, 0.06, green, 0, 2.48, -halfD - 0.01));
-    root.add(box(4.6, 0.18, 0.06, gold, 0, 2.08, -halfD - 0.01));
-    root.add(box(3.2, 0.12, 0.06, green, 0, 1.68, -halfD - 0.01));
-    root.add(box(2.4, 0.55, 1.0, green, 3.8, 0.33, 1.8));
-    root.add(box(1.3, 0.2, 0.8, gold, 3.8, 0.7, 1.8));
-    const key = new THREE.PointLight(0xffdf9a, 3.6, 21, 1.5);
-    key.position.set(0, 3.0, 0);
+    const wallH = 3.35;
+    const wallT = 0.12;
+
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x2a2118, roughness: 0.48, metalness: 0.16 });
+    root.add(box(width, 0.12, depth, floorMat, 0, 0.06, 0));
+    root.add(box(2.35, 0.04, depth * 0.78, gold, 0, 0.14, 0.35));
+    root.add(box(2.05, 0.03, depth * 0.76, new THREE.MeshStandardMaterial({ color: 0x1a1610, roughness: 0.55 }), 0, 0.165, 0.35));
+
+    root.add(box(width, 0.08, depth, black, 0, wallH + 0.04, 0));
+    root.add(box(width, wallH, wallT, wallPaint, 0, wallH / 2, -halfD));
+    root.add(box(wallT, wallH, depth, wallPaint, -halfW, wallH / 2, 0));
+    root.add(box(wallT, wallH, depth, wallPaint, halfW, wallH / 2, 0));
+    this.addSouthDoor(root, width, halfD, wallH, wallT, wallPaint, green, 0, wx(48 * 1.7));
+
+    const left = this.photoWall(depth - 0.5, wallH - 0.2, store.merch, 0x111111);
+    left.rotation.y = Math.PI / 2;
+    left.position.set(-halfW + 0.14, wallH / 2, 0);
+    root.add(left);
+    const right = this.photoWall(depth - 0.5, wallH - 0.2, store.featured, 0x111111);
+    right.rotation.y = -Math.PI / 2;
+    right.position.set(halfW - 0.14, wallH / 2, 0);
+    root.add(right);
+    const southL = this.photoWall(halfW - 1.15, wallH - 0.25, store.entry, 0x111111);
+    southL.rotation.y = Math.PI;
+    southL.position.set(-halfW / 2 - 0.45, wallH / 2, halfD - 0.14);
+    root.add(southL);
+    const southR = this.photoWall(halfW - 1.15, wallH - 0.25, store.welcome, 0x111111);
+    southR.rotation.y = Math.PI;
+    southR.position.set(halfW / 2 + 0.45, wallH / 2, halfD - 0.14);
+    root.add(southR);
+
+    root.add(box(4.4, 0.14, 0.1, gold, 0, 2.92, -halfD + 0.1));
+    root.add(box(3.2, 0.08, 0.08, green, 0, 2.72, -halfD + 0.1));
+
+    // Solid black checkout — no store photo on the face.
+    const counterZ = -halfD + 2.15;
+    const matte = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.82, metalness: 0.08 });
+    root.add(box(4.7, 1.12, 1.12, matte, 0, 0.56, counterZ));
+    root.add(box(4.82, 0.05, 1.2, gold, 0, 1.14, counterZ));
+    root.add(box(4.7, 0.9, 0.06, matte, 0, 0.58, counterZ + 0.56));
+    root.add(box(2.4, 0.06, 0.05, gold, 0, 0.78, counterZ + 0.59));
+    root.add(box(0.55, 0.42, 0.42, green, 1.6, 1.42, counterZ));
+
+    const addTable = (x: number, z: number, tex: THREE.Texture | undefined) => {
+      root.add(box(1.65, 0.72, 1.05, wood, x, 0.38, z));
+      root.add(box(1.55, 0.05, 0.95, gold, x, 0.78, z));
+      root.add(box(1.4, 0.03, 0.82, this.photoMat(tex, 0x0d7a42), x, 0.82, z));
+    };
+    addTable(-3.55, 1.55, store.featured);
+    addTable(3.55, 1.55, store.merch);
+    addTable(-3.45, -1.85, store.counter);
+    addTable(3.45, -1.85, store.featured);
+
+    const addRack = (x: number, z: number, rotY: number) => {
+      const g = new THREE.Group();
+      g.position.set(x, 0, z);
+      g.rotation.y = rotY;
+      g.add(box(0.08, 2.05, 0.08, black, -0.85, 1.05, 0));
+      g.add(box(0.08, 2.05, 0.08, black, 0.85, 1.05, 0));
+      g.add(box(1.85, 0.05, 0.05, gold, 0, 1.85, 0));
+      g.add(box(1.7, 1.35, 0.12, green, 0, 1.05, 0.02));
+      const art = this.photoWall(1.55, 1.2, store.merch, 0x0d7a42);
+      art.position.set(0, 1.08, 0.1);
+      g.add(art);
+      root.add(g);
+    };
+    addRack(-halfW + 0.7, 2.4, Math.PI / 2);
+    addRack(-halfW + 0.7, -1.6, Math.PI / 2);
+    addRack(halfW - 0.7, 2.4, -Math.PI / 2);
+    addRack(halfW - 0.7, -1.6, -Math.PI / 2);
+
+    root.add(box(1.15, 0.95, 0.7, black, -halfW + 1.4, 0.5, halfD - 1.6));
+    root.add(box(0.9, 0.08, 0.55, gold, -halfW + 1.4, 1.02, halfD - 1.6));
+    const vitrine = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.7, 0.62), glass);
+    vitrine.position.set(-halfW + 1.4, 1.42, halfD - 1.6);
+    root.add(vitrine);
+
+    const key = new THREE.PointLight(0xffe4b0, 7.4, 22, 1.15);
+    key.position.set(0, 2.95, 0.4);
     root.add(key);
-    const greenFill = new THREE.PointLight(0x28d17c, 1.25, 15, 1.8);
-    greenFill.position.set(-5.2, 2.3, -2.4);
+    const backLight = new THREE.PointLight(0xffd27a, 3.6, 12, 1.4);
+    backLight.position.set(0, 2.6, -halfD + 1.6);
+    root.add(backLight);
+    const greenFill = new THREE.PointLight(0x3ee08a, 2.2, 14, 1.5);
+    greenFill.position.set(-halfW + 1.6, 2.1, 0.2);
     root.add(greenFill);
-    const goldFill = new THREE.PointLight(0xffc84a, 1.0, 13, 1.8);
-    goldFill.position.set(5.1, 2.2, 2.0);
+    const goldFill = new THREE.PointLight(0xffc84a, 2.2, 14, 1.5);
+    goldFill.position.set(halfW - 1.6, 2.1, 0.2);
     root.add(goldFill);
+    const doorFill = new THREE.PointLight(0xf2efe4, 2.8, 10, 1.6);
+    doorFill.position.set(0, 2.3, halfD - 1.2);
+    root.add(doorFill);
+
+    const kTex = this.art.people["k-blanco"];
+    if (kTex) {
+      const kMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.22, 2.28), cutoutMeshMaterial(kTex));
+      kMesh.name = "k-blanco-desk";
+      kMesh.position.set(0.06, 1.22, counterZ - 0.28);
+      kMesh.scale.set(1.08, 1.08, 1);
+      kMesh.renderOrder = 2;
+      root.add(kMesh);
+    }
     return root;
   }
 
@@ -217,11 +329,18 @@ export class World3D extends World3DCore {
     this.worldLife.postSync(f, this.cars, this.npcSprites);
     const inApartment = inside(f, APARTMENT) && f.mode === "world";
     const inHQ = inside(f, STORE) && (f.mode === "world" || f.mode === "dialogue" || f.mode === "shop");
+    const kVisible = inHQ
+      && f.px > STORE.x + 28 && f.px < STORE.x + STORE.w - 28
+      && f.py > STORE.y + 36 && f.py < STORE.y + STORE.h - 70;
     if (this.apartmentExterior) this.apartmentExterior.visible = !inApartment;
     if (this.apartmentInterior) this.apartmentInterior.visible = inApartment;
     if (this.hqExterior) this.hqExterior.visible = !inHQ;
     if (this.hqInterior) this.hqInterior.visible = inHQ;
-    if (f.cameraView !== "third") {
+    const kSprite = this.npcSprites.get("k_blanco");
+    if (kSprite) kSprite.visible = false;
+    const kDesk = this.hqInterior?.getObjectByName("k-blanco-desk");
+    if (kDesk) kDesk.visible = kVisible;
+    if (f.cameraView !== "third" || f.driving) {
       this.lastCameraOccluded = false;
       return;
     }
@@ -272,9 +391,8 @@ export class World3D extends World3DCore {
     }
     const actualCameraYaw = Math.atan2(this.camera.position.x - this.cameraTarget.x, this.camera.position.z - this.cameraTarget.z);
     const yawDelta = Math.atan2(Math.sin(actualCameraYaw - f.yaw), Math.cos(actualCameraYaw - f.yaw));
-    if (Math.abs(yawDelta) > 0.001) {
-      this.benji.update(0, f.heading, actualCameraYaw, f.moveSpeed, f.lean, f.loco, f.animT, true, f.air, f.vz);
-      for (const ped of this.peds) if (ped.visible) ped.rotation.y = actualCameraYaw;
+    if (Math.abs(yawDelta) > 0.001 && !f.driving) {
+      this.benji.update(0, f.heading, actualCameraYaw, f.moveSpeed, f.lean, f.loco, f.animT, true, f.air, f.vz, !!f.jooking, !!f.dribbling, !!f.ballCharging, !!f.releasing, !!f.listening, 0, f.celebrate ?? 0, !!f.talking, !!f.interacting, !!f.rebounding);
     }
     (window as typeof window & { __SACK_CAMERA__?: { blockers: number; occluded: boolean; distance: number; yawDelta: number; apartment: boolean; hq: boolean } }).__SACK_CAMERA__ = {
       blockers: this.cameraBlockers.length,

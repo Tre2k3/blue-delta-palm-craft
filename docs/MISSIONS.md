@@ -4,7 +4,7 @@ Eight missions. IDs are stable for tests and saves. Labels are the player-facing
 
 | # | ID | Title | Kind | Target |
 | --- | --- | --- | --- | --- |
-| 1 | `wake` | Wake Up | goto | apartment |
+| 1 | `wake` | Leave Home | goto | apartment |
 | 2 | `link_k` | Link Up | talk | store (K Blanco) |
 | 3 | `pickup` | Get the Drop Ready | pickup | drop van |
 | 4 | `hood` | Take the drop — Neighborhood | deliver | neighborhood |
@@ -17,7 +17,7 @@ Delivery IDs stay `hood` / `dt` / `culture` so `dropRun` grading does not break.
 
 ## Flow
 
-1. Apartment spawn. South doorway. Leave the building to complete Wake Up.
+1. Apartment spawn. Already inside the room. South doorway. Walk out to complete Leave Home.
 2. Walk to HQ. Enter the real doors. Talk to K Blanco. Tonight is Drop Day.
 3. Secure the branded van.
 4. Three city drops. Combo timer grades the run.
@@ -28,4 +28,18 @@ Delivery IDs stay `hood` / `dt` / `culture` so `dropRun` grading does not break.
 
 `completeStep` no-ops if the step is already done. Reloading never double-pays.
 
-Side jobs: Pickup Kings, Full Fit, City Tour, Sunset at the River, Pyramid Flex, Beale After Dark.
+Side jobs: Pickup Kings, Full Fit, City Tour, Sunset at the River, Pyramid Flex, Beale After Dark, Cover Shot, Gold Alley, Night Route.
+
+# Chapter 2 — After Hours
+
+Starts the moment Drop Live fires. Does not rewrite Chapter 1 IDs.
+
+| # | ID | Title | Kind | Target |
+| --- | --- | --- | --- | --- |
+| 1 | `flash` | Cover Shot | talk | photographer outside HQ |
+| 2 | `alleywalk` | Gold Alley | goto | alley (25 Respect) |
+| 3 | `nightball` | Sackrow Night Court | basketball | court (score 10) |
+| 4 | `nightvan` | Night Route | pickup | drop van |
+| 5 | `afterparty` | Close with K | return | store |
+
+After Hours steps can be done in any order. Closing with K Blanco finishes the chapter and unlocks the After Hours trophy. Free roam and side jobs stay live.

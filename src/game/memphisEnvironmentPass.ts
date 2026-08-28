@@ -2,9 +2,11 @@ import * as THREE from "three";
 import { POIS, STREETS, TILE } from "./data";
 import { WorldLifePass } from "./worldLifePass";
 import { wx, wz } from "./world3dCore";
+import { applyPolygonOffset } from "./polygonOffset";
+import { PIERS, riverHole } from "./worldTopology";
 
 type PatchedLife = WorldLifePass & { __memphisEnvironmentPatched?: boolean };
-const RIVER = POIS.find((p) => p.id === "river")!;
+const RIVER = () => riverHole();
 
 function box(w: number, h: number, d: number, material: THREE.Material, x: number, y: number, z: number) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
@@ -75,56 +77,96 @@ function addDumpster(root: THREE.Group, x: number, z: number, rot = 0) {
   root.add(g);
 }
 
+function addBoat(root: THREE.Group, x: number, z: number, rot: number, color: number) {
+  const hull = new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.12 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x1a1c1e, roughness: 0.7 });
+  const g = new THREE.Group();
+  g.add(box(2.4, 0.28, 0.85, hull, 0, 0.18, 0));
+  g.add(box(1.1, 0.42, 0.62, dark, -0.2, 0.48, 0));
+  const cabin = box(0.55, 0.22, 0.4, hull, 0.7, 0.42, 0);
+  g.add(cabin);
+  g.position.set(x, 0.12, z);
+  g.rotation.y = rot;
+  root.add(g);
+}
+
+function addPier(root: THREE.Group, px: number, riverY: number, width: number) {
+  const wood = new THREE.MeshStandardMaterial({ color: 0x6a5138, roughness: 0.92 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x3a2c20, roughness: 0.88 });
+  const rail = new THREE.MeshStandardMaterial({ color: 0x25292b, roughness: 0.44, metalness: 0.64 });
+  const cx = wx(px + width / 2);
+  const walkZ = wz(riverY) - 0.35;
+  const length = wx(TILE * 2.55);
+  const pierW = wx(width);
+  root.add(box(pierW, 0.12, length, wood, cx, 0.18, walkZ + length / 2));
+  for (let i = 0; i < 5; i++) {
+    const z = walkZ + 0.35 + i * (length / 5);
+    root.add(box(0.09, 0.85, 0.09, dark, cx - pierW / 2 + 0.08, 0.08, z));
+    root.add(box(0.09, 0.85, 0.09, dark, cx + pierW / 2 - 0.08, 0.08, z));
+  }
+  root.add(box(0.06, 0.55, length * 0.92, rail, cx - pierW / 2, 0.62, walkZ + length / 2));
+  root.add(box(0.06, 0.55, length * 0.92, rail, cx + pierW / 2, 0.62, walkZ + length / 2));
+  addBench(root, cx, walkZ - 0.15, 0);
+}
+
 function buildEnvironment(scene: THREE.Scene) {
   scene.getObjectByName("memphis-environment-detail")?.removeFromParent();
   const root = new THREE.Group();
   root.name = "memphis-environment-detail";
 
-  // Mississippi River: the previous world was continuous asphalt all the way
-  // to the map edge. This creates an actual water body, boardwalk and railing.
-  const riverCx = wx(RIVER.x + RIVER.w / 2);
-  const riverCz = wz(RIVER.y + RIVER.h / 2);
-  const riverW = wx(RIVER.w);
-  const riverD = wz(RIVER.h);
+  const river = RIVER();
+  const riverCx = wx(river.x + river.w / 2);
+  const riverCz = wz(river.y + river.h / 2);
+  const riverW = wx(river.w);
+  const riverD = wz(river.h);
   const waterMat = new THREE.MeshStandardMaterial({
     color: 0x173d5c,
-    roughness: 0.23,
-    metalness: 0.26,
+    roughness: 0.22,
+    metalness: 0.28,
     emissive: 0x071c2d,
-    emissiveIntensity: 0.45,
-    transparent: true,
-    opacity: 0.96,
+    emissiveIntensity: 0.5,
   });
   const water = new THREE.Mesh(new THREE.PlaneGeometry(riverW, riverD), waterMat);
+  water.name = "mississippi-water";
   water.rotation.x = -Math.PI / 2;
   water.position.set(riverCx, 0.16, riverCz);
   water.receiveShadow = true;
   root.add(water);
 
-  const foamMat = new THREE.MeshBasicMaterial({ color: 0x8ec5df, transparent: true, opacity: 0.28 });
-  for (let i = 0; i < 8; i++) {
-    const strip = new THREE.Mesh(new THREE.PlaneGeometry(riverW * (0.22 + (i % 3) * 0.08), 0.035), foamMat.clone());
+  const foamMat = applyPolygonOffset(
+    new THREE.MeshBasicMaterial({ color: 0x8ec5df, transparent: true, opacity: 0.22, depthWrite: false }),
+    "overlay",
+  );
+  for (let i = 0; i < 18; i++) {
+    const strip = new THREE.Mesh(new THREE.PlaneGeometry(riverW * (0.08 + (i % 4) * 0.04), 0.04), foamMat.clone());
     strip.rotation.x = -Math.PI / 2;
-    strip.position.set(riverCx - riverW * 0.36 + i * riverW * 0.10, 0.175 + (i % 2) * 0.004, riverCz - riverD * 0.34 + (i % 4) * riverD * 0.18);
+    strip.position.set(
+      riverCx - riverW * 0.46 + (i * 0.051) * riverW,
+      0.175,
+      riverCz - riverD * 0.42 + (i % 5) * riverD * 0.16,
+    );
     root.add(strip);
   }
 
   const boardwalk = new THREE.MeshStandardMaterial({ color: 0x5d4936, roughness: 0.94 });
   const rail = new THREE.MeshStandardMaterial({ color: 0x25292b, roughness: 0.44, metalness: 0.64 });
-  const walkZ = wz(RIVER.y) - 0.48;
-  root.add(box(riverW + 0.8, 0.13, 1.25, boardwalk, riverCx, 0.14, walkZ));
-  root.add(box(riverW + 0.4, 0.08, 0.08, rail, riverCx, 1.02, walkZ + 0.52));
-  for (let x = riverCx - riverW / 2; x <= riverCx + riverW / 2; x += 1.45) {
-    root.add(box(0.07, 1.0, 0.07, rail, x, 0.55, walkZ + 0.52));
+  const walkZ = wz(river.y) - 0.55;
+  root.add(box(riverW + 1.2, 0.14, 1.55, boardwalk, riverCx, 0.14, walkZ));
+  root.add(box(riverW + 0.6, 0.08, 0.08, rail, riverCx, 1.02, walkZ + 0.62));
+  for (let x = riverCx - riverW / 2; x <= riverCx + riverW / 2; x += 1.55) {
+    root.add(box(0.07, 1.0, 0.07, rail, x, 0.55, walkZ + 0.62));
   }
-  addBench(root, riverCx - 8.2, walkZ - 0.15, 0);
-  addBench(root, riverCx + 2.8, walkZ - 0.15, 0);
-  addBench(root, riverCx + 9.4, walkZ - 0.15, 0);
-  addTrashCan(root, riverCx - 5.4, walkZ - 0.2);
-  addTrashCan(root, riverCx + 6.2, walkZ - 0.2);
+  for (let i = 0; i < 8; i++) {
+    addBench(root, riverCx - riverW * 0.42 + i * (riverW * 0.11), walkZ - 0.22, 0);
+    if (i % 2 === 0) addTrashCan(root, riverCx - riverW * 0.38 + i * (riverW * 0.11), walkZ - 0.28);
+  }
 
-  // Repeated small curb props make the city read as inhabited without adding
-  // expensive imported models or filling pedestrian paths with obstacles.
+  for (const pier of PIERS) addPier(root, pier.x, river.y, pier.w);
+
+  addBoat(root, riverCx - 18, riverCz + 2.4, 0.2, 0xcfc8bf);
+  addBoat(root, riverCx + 8, riverCz + 4.1, -0.4, 0x1e3a5f);
+  addBoat(root, riverCx + 22, riverCz + 1.6, 0.55, 0x7f1d1d);
+
   const xStreets = STREETS.filter((s) => s.axis === "x");
   const yStreets = STREETS.filter((s) => s.axis === "y");
   for (let i = 0; i < Math.min(xStreets.length, yStreets.length) * 2; i++) {
@@ -164,6 +206,7 @@ export function installMemphisEnvironmentPass() {
       riverRailing: true,
       curbProps: true,
       streetFurniture: true,
+      piers: true,
     };
   };
 }

@@ -13,7 +13,7 @@ export type GameMode =
 export type CameraView = "first" | "third";
 export type InputDevice = "keyboard" | "gamepad" | "touch";
 
-export type PauseTab = "resume" | "map" | "missions" | "wardrobe" | "trophies" | "settings";
+export type PauseTab = "resume" | "map" | "missions" | "wardrobe" | "trophies" | "kollab" | "settings";
 
 export type LocationId =
   | "apartment"
@@ -25,7 +25,15 @@ export type LocationId =
   | "dropvan"
   | "pyramid"
   | "beale"
-  | "river";
+  | "river"
+  | "foodtruck"
+  | "velis"
+  | "brothers"
+  | "alley"
+  | "strip"
+  | "welcome"
+  | "listenpost"
+  | "billboard";
 
 export type ApparelId =
   | "starter_tee"
@@ -35,7 +43,13 @@ export type ApparelId =
   | "white_cap"
   | "gold_chain"
   | "black_hoodie"
-  | "green_sweats";
+  | "green_sweats"
+  | "gold_drop"
+  | "night_run"
+  | "kollab_jersey"
+  | "tour_black"
+  | "tour_white"
+  | "tour_red";
 
 export type TrophyId =
   | "first_steps"
@@ -47,7 +61,14 @@ export type TrophyId =
   | "court_king"
   | "city_legend"
   | "night_owl"
-  | "full_closet";
+  | "full_closet"
+  | "irl_family"
+  | "sackrow_s"
+  | "drop_live"
+  | "after_hours"
+  | "strip_king"
+  | "river_rat"
+  | "block_eats";
 
 export interface ApparelItem {
   id: ApparelId;
@@ -58,6 +79,8 @@ export interface ApparelItem {
   description: string;
   productId?: string;
   respectRequired?: number;
+  irlOnly?: boolean;
+  dropLiveRequired?: boolean;
 }
 
 export interface MissionStep {
@@ -122,7 +145,7 @@ export interface WorldPoi {
 }
 
 export interface CinematicState {
-  kind: "briefing" | "complete" | "enter" | "trophy";
+  kind: "briefing" | "complete" | "enter" | "trophy" | "droplive" | "afterhours";
   title: string;
   subtitle: string;
   t: number;
@@ -161,6 +184,10 @@ export interface SaveData {
   }>;
   bestRunScore?: number;
   bestGrade?: RunGrade | null;
+  verifiedOrders?: string[];
+  unlocks?: string[];
+  vanSkin?: "chrome" | "gold" | null;
+  afterHoursProgress?: Record<string, boolean>;
 }
 
 export interface GameSettings {
@@ -185,6 +212,22 @@ export interface Floater {
   scale: number;
 }
 
+export type FishingPhase = "idle" | "cast" | "wait" | "nibble" | "strike" | "reel" | "catch" | "fail";
+
+export interface FishingHud {
+  active: boolean;
+  phase: FishingPhase;
+  power: number;
+  tension: number;
+  progress: number;
+  prompt: string;
+  fishName: string | null;
+  weight: string | null;
+  payout: number;
+  caught: number;
+  legendary: boolean;
+}
+
 export interface HudSnapshot {
   mode: GameMode;
   sackdollars: number;
@@ -194,6 +237,7 @@ export interface HudSnapshot {
   missionProgress: string;
   missionChapter: string;
   interactHint: string | null;
+  hintWalk?: boolean;
   locationName: string;
   district: string;
   dialogue: { speaker: string; text: string; choices?: string[] } | null;
@@ -213,7 +257,15 @@ export interface HudSnapshot {
     target: number;
     perfects: number;
     zone: string;
+    difficulty?: string;
+    challenge?: string;
+    ogLine?: string | null;
+    horse?: string | null;
+    call?: string | null;
+    board?: { score: number; label: string }[];
   } | null;
+  courtMenu?: { difficulty: string; unlocked: boolean } | null;
+  canShoot?: boolean;
   paused: boolean;
   started: boolean;
   missionComplete: boolean;
@@ -237,6 +289,18 @@ export interface HudSnapshot {
   bestRunScore: number;
   buildVersion: string;
   dropLive: boolean;
+  driving: boolean;
+  jooking?: boolean;
+  nextUnlock?: { label: string; at: number } | null;
+  vanSkin?: string | null;
+  race?: import("./race").RaceHud | null;
+  raceMenu?: boolean;
+  fishing?: FishingHud | null;
+  food?: import("./foodTrucks").FoodHud | null;
+  coolerCount?: number;
+  fed?: boolean;
+  sponsor?: import("./sponsors").SponsorHud | null;
+  sponsorOpen?: boolean;
 }
 
 export type GameTestState = {
@@ -257,6 +321,18 @@ export type GameTestState = {
   owned?: ApparelId[];
   saveVersion?: number;
   dropLive?: boolean;
+  driving?: boolean;
+  vehicleKind?: "van" | "car" | null;
+  raceActive?: boolean;
+  racePhase?: string;
+  raceLap?: number;
+  racePlace?: number;
+  raceTime?: number;
+  rivalX?: number;
+  rivalY?: number;
+  interactHint?: string | null;
+  nearPoi?: LocationId | null;
+  raceCue?: string | null;
 };
 
 export type GameTestApi = {
@@ -268,8 +344,13 @@ export type GameTestApi = {
   resetSave: () => void;
   buyItem?: (id: string) => void;
   openShop?: () => void;
+  wearProduct?: (id: string) => void;
   enterHQ?: () => void;
   enterHQShop?: () => void;
+  startRace?: (skipCountdown?: boolean) => void;
+  leaveRace?: () => void;
+  completeRace?: (win?: boolean) => void;
+  startFishing?: () => void;
 };
 
 export type ControlsTestApi = {
@@ -277,6 +358,7 @@ export type ControlsTestApi = {
   getSpeed: () => number;
   getFacing: () => Dir;
   setKeys: (codes: string[]) => void;
+  tapArrow: (dir: "left" | "right" | "up") => void;
 };
 
 declare global {
@@ -286,9 +368,16 @@ declare global {
     __SACK_COMMERCE__?: {
       catalog: () => { id: string; slug: string; name: string }[];
       loaded: () => boolean;
-      lastIntent: () => { kind: "view" | "buy"; productId: string; at: number } | null;
-      buyIrl: (id: string) => void;
+      lastIntent: () => { kind: "view" | "buy"; productId: string; size?: string; at: number } | null;
+      buyIrl: (id: string, size?: string) => void;
       viewProduct: (id: string) => void;
+      addToCart?: (id: string, size: string, qty?: number) => void;
+      snapshot?: () => unknown;
+      player?: () => unknown;
+      lastRunId?: () => string | null;
+      requestCatalog?: () => void;
+      gameId?: string;
+      build?: string;
     };
     __SACK_ANALYTICS__?: {
       events: () => { name: string; payload: Record<string, unknown>; at: number }[];

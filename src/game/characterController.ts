@@ -38,8 +38,8 @@ export class CharacterController {
   private coyote = 0;
   private jumpBuffer = 0;
 
-  readonly walkSpeed = PLAYER_SPEED;
-  readonly runSpeed = PLAYER_RUN;
+  walkSpeed = PLAYER_SPEED;
+  runSpeed = PLAYER_RUN;
   readonly accel = 940;
   readonly decel = 1520;
   readonly turnIdle = 11.5;
@@ -53,7 +53,7 @@ export class CharacterController {
   }
 
   triggerShoot() {
-    this.shootT = 0.42;
+    this.shootT = 0.22;
   }
 
   tryJump() {
@@ -101,12 +101,12 @@ export class CharacterController {
     this.speed = Math.hypot(this.vx, this.vy);
 
     if (this.speed > 10) {
-      const desired = Math.atan2(-this.vx, -this.vy);
+      const desired = Math.atan2(this.vx, -this.vy);
       const turnRate = this.speed > this.walkSpeed * 0.88 ? this.turnRun : this.turnWalk;
       this.heading = dampAngle(this.heading, desired, turnRate, dt);
       this.turnLean = wrapAngle(desired - this.heading);
     } else if (hasWish) {
-      const desired = Math.atan2(-wishX, -wishY);
+      const desired = Math.atan2(wishX, -wishY);
       this.heading = dampAngle(this.heading, desired, this.turnIdle, dt);
       this.turnLean *= Math.exp(-8 * dt);
     } else {

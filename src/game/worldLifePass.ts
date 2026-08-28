@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { POIS, STREETS, TILE, WORLD_PX_H, WORLD_PX_W } from "./data";
-import { laneVelocity, trafficLanes, type Lane } from "./worldTopology";
+import { inCourtPx, inRiverPx, punchRoads, trafficLanes, type Lane, type Rect, signalState, type SignalState } from "./worldTopology";
 import { wx, wz, type WorldFrame } from "./world3dCore";
+import { makeStreetCar, CAR_RIDE } from "./carRig";
 
 type LiveCar = WorldFrame["cars"][number] & { laneId?: string };
 type LivePed = WorldFrame["peds"][number] & { vx?: number; vy?: number };
@@ -13,7 +14,6 @@ type PedMemory = {
   resumeVy: number;
   pauseCount: number;
 };
-type SignalState = "red" | "yellow" | "green";
 type SignalVisual = {
   axis: "x" | "y";
   ix: number;
@@ -86,6 +86,7 @@ export class WorldLifePass {
   private courtCrowd: THREE.Group | null = null;
   private markerCount = 0;
   private parkedCars = 0;
+  private dropLiveSet: THREE.Group | null = null;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -105,6 +106,7 @@ export class WorldLifePass {
     this.buildParkedCars(this.root);
     this.buildCourtGameDay(this.root);
     this.buildBealeNeon(this.root);
+    this.buildDropLiveSet(this.root);
     this.scene.add(this.root);
   }
 
@@ -113,28 +115,49 @@ export class WorldLifePass {
     const curb = new THREE.MeshStandardMaterial({ color: 0x76736d, roughness: 0.94 });
     const laneWhite = new THREE.MeshStandardMaterial({ color: 0xe5e1d7, roughness: 0.9 });
     const laneGold = new THREE.MeshStandardMaterial({ color: 0xd6aa2d, roughness: 0.86 });
-    const roadWidth = wx(TILE * 1.72);
-    const walkWidth = wx(TILE * 0.30);
-    const worldW = wx(WORLD_PX_W);
-    const worldH = wz(WORLD_PX_H);
+    const roadPx = TILE * 1.72;
+    const walkPx = TILE * 0.30;
+
+    const strip = (r: Rect, h: number, y: number, mat: THREE.Material) => {
+      const w = wx(r.w);
+      const d = wz(r.h);
+      if (w < 0.08 || d < 0.08) return;
+      root.add(box(w, h, d, mat, wx(r.x + r.w / 2), y, wz(r.y + r.h / 2)));
+    };
 
     for (const street of STREETS) {
       if (street.axis === "y") {
-        const z = wz(street.tile * TILE);
-        root.add(box(worldW, 0.035, roadWidth, road, worldW / 2, 0.075, z));
-        root.add(box(worldW, 0.09, walkWidth, curb, worldW / 2, 0.10, z - roadWidth / 2 - walkWidth / 2));
-        root.add(box(worldW, 0.09, walkWidth, curb, worldW / 2, 0.10, z + roadWidth / 2 + walkWidth / 2));
-        root.add(box(worldW, 0.018, 0.08, laneWhite, worldW / 2, 0.105, z - roadWidth * 0.37));
-        root.add(box(worldW, 0.018, 0.08, laneWhite, worldW / 2, 0.105, z + roadWidth * 0.37));
-        for (let x = 2.0; x < worldW - 1; x += 5.7) root.add(box(2.4, 0.022, 0.09, laneGold, x, 0.11, z));
+        const cy = street.tile * TILE;
+        const roadRect: Rect = { x: 0, y: cy - roadPx / 2, w: WORLD_PX_W, h: roadPx };
+        const north: Rect = { x: 0, y: cy - roadPx / 2 - walkPx, w: WORLD_PX_W, h: walkPx };
+        const south: Rect = { x: 0, y: cy + roadPx / 2, w: WORLD_PX_W, h: walkPx };
+        const whiteN: Rect = { x: 0, y: cy - roadPx * 0.37 - 2, w: WORLD_PX_W, h: 4 };
+        const whiteS: Rect = { x: 0, y: cy + roadPx * 0.37 - 2, w: WORLD_PX_W, h: 4 };
+        for (const p of punchRoads(roadRect)) strip(p, 0.035, 0.075, road);
+        for (const p of punchRoads(north)) strip(p, 0.09, 0.10, curb);
+        for (const p of punchRoads(south)) strip(p, 0.09, 0.10, curb);
+        for (const p of punchRoads(whiteN)) strip(p, 0.018, 0.105, laneWhite);
+        for (const p of punchRoads(whiteS)) strip(p, 0.018, 0.105, laneWhite);
+        for (let x = 2.0; x < wx(WORLD_PX_W) - 1; x += 5.7) {
+          if (inCourtPx(x * 16, cy) || inRiverPx(x * 16, cy)) continue;
+          root.add(box(2.4, 0.022, 0.09, laneGold, x, 0.11, wz(cy)));
+        }
       } else {
-        const x = wx(street.tile * TILE);
-        root.add(box(roadWidth, 0.035, worldH, road, x, 0.075, worldH / 2));
-        root.add(box(walkWidth, 0.09, worldH, curb, x - roadWidth / 2 - walkWidth / 2, 0.10, worldH / 2));
-        root.add(box(walkWidth, 0.09, worldH, curb, x + roadWidth / 2 + walkWidth / 2, 0.10, worldH / 2));
-        root.add(box(0.08, 0.018, worldH, laneWhite, x - roadWidth * 0.37, 0.105, worldH / 2));
-        root.add(box(0.08, 0.018, worldH, laneWhite, x + roadWidth * 0.37, 0.105, worldH / 2));
-        for (let z = 2.0; z < worldH - 1; z += 5.7) root.add(box(0.09, 0.022, 2.4, laneGold, x, 0.11, z));
+        const cx = street.tile * TILE;
+        const roadRect: Rect = { x: cx - roadPx / 2, y: 0, w: roadPx, h: WORLD_PX_H };
+        const west: Rect = { x: cx - roadPx / 2 - walkPx, y: 0, w: walkPx, h: WORLD_PX_H };
+        const east: Rect = { x: cx + roadPx / 2, y: 0, w: walkPx, h: WORLD_PX_H };
+        const whiteW: Rect = { x: cx - roadPx * 0.37 - 2, y: 0, w: 4, h: WORLD_PX_H };
+        const whiteE: Rect = { x: cx + roadPx * 0.37 - 2, y: 0, w: 4, h: WORLD_PX_H };
+        for (const p of punchRoads(roadRect)) strip(p, 0.035, 0.075, road);
+        for (const p of punchRoads(west)) strip(p, 0.09, 0.10, curb);
+        for (const p of punchRoads(east)) strip(p, 0.09, 0.10, curb);
+        for (const p of punchRoads(whiteW)) strip(p, 0.018, 0.105, laneWhite);
+        for (const p of punchRoads(whiteE)) strip(p, 0.018, 0.105, laneWhite);
+        for (let z = 2.0; z < wz(WORLD_PX_H) - 1; z += 5.7) {
+          if (inCourtPx(cx, z * 16) || inRiverPx(cx, z * 16)) continue;
+          root.add(box(0.09, 0.022, 2.4, laneGold, wx(cx), 0.11, z));
+        }
       }
     }
   }
@@ -148,6 +171,7 @@ export class WorldLifePass {
 
     for (const vx0 of VERTICAL_STREET_CENTERS) {
       for (const hy0 of HORIZONTAL_STREET_CENTERS) {
+        if (inCourtPx(vx0, hy0) || inRiverPx(vx0, hy0)) continue;
         const cx = wx(vx0);
         const cz = wz(hy0);
         for (let i = -3; i <= 3; i++) {
@@ -228,7 +252,10 @@ export class WorldLifePass {
       { id: "dropvan", text: "DROP VAN", accent: "#d4af37", y: 3.5 },
       { id: "beale", text: "BEALE STREET", accent: "#e85d4c", y: 6.4 },
       { id: "pyramid", text: "THE PYRAMID", accent: "#d4af37", y: 15.0 },
-      { id: "river", text: "MISSISSIPPI RIVER", accent: "#4f9ddf", y: 4.8 },
+      { id: "river", text: "MISSISSIPPI RIVER", accent: "#4f9ddf", y: 3.2 },
+      { id: "foodtruck", text: "901 CATCH KITCHEN", accent: "#1db954", y: 3.6 },
+      { id: "velis", text: "VELI'S WINGS", accent: "#d4af37", y: 3.6 },
+      { id: "brothers", text: "WINGZ N THINGS", accent: "#e11d48", y: 3.6 },
     ];
     for (const def of defs) {
       const poi = POIS.find((p) => p.id === def.id);
@@ -240,34 +267,58 @@ export class WorldLifePass {
     }
   }
 
-  private makeParkedCar(color: number) {
-    const root = new THREE.Group();
-    const bodyMat = new THREE.MeshStandardMaterial({ color, roughness: 0.42, metalness: 0.32 });
-    const glass = new THREE.MeshStandardMaterial({ color: 0x17232a, roughness: 0.18, metalness: 0.25 });
-    const tire = new THREE.MeshStandardMaterial({ color: 0x0b0b0b, roughness: 0.96 });
-    root.add(box(2.25, 0.48, 1.0, bodyMat, 0, 0.42, 0));
-    root.add(box(1.15, 0.42, 0.86, glass, -0.1, 0.79, 0));
-    const wheelGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.16, 10);
-    for (const [x, z] of [[0.72, 0.5], [0.72, -0.5], [-0.72, 0.5], [-0.72, -0.5]] as const) {
-      const wheel = new THREE.Mesh(wheelGeo, tire);
-      wheel.rotation.x = Math.PI / 2;
-      wheel.position.set(x, 0.24, z);
-      root.add(wheel);
+  private makeParkedCar(index: number) {
+    return makeStreetCar(index, true).root;
+  }
+
+  private buildDropLiveSet(root: THREE.Group) {
+    const set = new THREE.Group();
+    set.name = "drop-live-set";
+    set.visible = false;
+    const store = POIS.find((p) => p.id === "store")!;
+    const cx = wx(store.x + store.w / 2);
+    const cz = wz(store.y + store.h + 70);
+    const gold = new THREE.MeshStandardMaterial({ color: 0xc9a84c, roughness: 0.4, metalness: 0.45, emissive: 0x6a4e12, emissiveIntensity: 0.55 });
+    const black = new THREE.MeshStandardMaterial({ color: 0x0d0d0d, roughness: 0.7 });
+    const neon = new THREE.MeshStandardMaterial({ color: 0x39ff14, emissive: 0x39ff14, emissiveIntensity: 1.4 });
+    for (let i = 0; i < 8; i++) {
+      const car = this.makeParkedCar(40 + i);
+      const side = i % 2 === 0 ? -1 : 1;
+      car.position.set(cx + side * (2.4 + (i % 4) * 1.6), CAR_RIDE, cz + Math.floor(i / 2) * 2.1);
+      car.rotation.y = side > 0 ? Math.PI : 0;
+      set.add(car);
+      this.parkedCars++;
     }
-    return root;
+    for (const x of [-4.2, 4.2]) {
+      set.add(box(0.12, 1.4, 0.12, gold, cx + x, 0.7, cz - 1.4));
+      set.add(box(0.08, 0.08, 2.6, neon, cx + x, 1.35, cz));
+    }
+    const flash = new THREE.PointLight(0xfff2c4, 2.4, 16, 1.6);
+    flash.position.set(cx, 3.2, cz);
+    set.add(flash);
+    const wash = new THREE.PointLight(0x39ff14, 1.1, 12, 2);
+    wash.position.set(cx, 2.4, cz + 2);
+    set.add(wash);
+    const stanchion = box(8.5, 0.08, 0.08, gold, cx, 0.9, cz - 2.2);
+    set.add(stanchion);
+    root.add(set);
+    this.dropLiveSet = set;
   }
 
   private buildParkedCars(root: THREE.Group) {
-    const colors = [0x111111, 0x30557a, 0x742d2d, 0x6c604b, 0x174d33, 0xe0ddd5];
     const placements: [number, number, number][] = [
       [15.0, 5.0, 0], [24.0, 6.8, Math.PI], [44.0, 20.9, 0], [53.0, 19.1, Math.PI],
       [33.4, 13.0, Math.PI / 2], [34.7, 25.0, -Math.PI / 2], [15.2, 35.2, 0], [51.0, 33.1, Math.PI],
       [27.0, 20.8, 0], [18.0, 19.2, Math.PI], [49.4, 7.0, Math.PI / 2], [16.6, 29.0, -Math.PI / 2],
+      [8.4, 19.4, Math.PI], [8.8, 21.2, 0], [58.4, 5.8, Math.PI / 2], [41.2, 34.6, 0],
+      [22.2, 34.2, Math.PI], [50.6, 20.6, 0], [16.2, 6.6, Math.PI], [35.6, 6.4, -Math.PI / 2],
+      [4.8, 34.4, 0], [59.2, 33.8, Math.PI], [28.8, 5.2, 0], [46.4, 6.8, Math.PI],
     ];
     for (let i = 0; i < placements.length; i++) {
       const [tx, ty, rot] = placements[i]!;
-      const car = this.makeParkedCar(colors[i % colors.length]!);
-      car.position.set(wx(tx * TILE), 0.02, wz(ty * TILE));
+      if (inCourtPx(tx * TILE, ty * TILE) || Math.abs(tx - 15) < 6 && ty > 27 && ty < 38) continue;
+      const car = this.makeParkedCar(i);
+      car.position.set(wx(tx * TILE), CAR_RIDE, wz(ty * TILE));
       car.rotation.y = rot;
       root.add(car);
       this.parkedCars++;
@@ -282,15 +333,6 @@ export class WorldLifePass {
     const black = new THREE.MeshStandardMaterial({ color: 0x101010, roughness: 0.78 });
     const green = new THREE.MeshStandardMaterial({ color: 0x08713f, roughness: 0.68, emissive: 0x062d1c, emissiveIntensity: 0.24 });
     const gold = new THREE.MeshStandardMaterial({ color: 0xd4af37, roughness: 0.52, metalness: 0.22 });
-
-    const outer = new THREE.Mesh(new THREE.TorusGeometry(1.65, 0.13, 8, 32), gold);
-    outer.rotation.x = Math.PI / 2;
-    outer.position.set(cx, 0.17, cz);
-    root.add(outer);
-    const inner = new THREE.Mesh(new THREE.TorusGeometry(1.18, 0.08, 8, 32), green);
-    inner.rotation.x = Math.PI / 2;
-    inner.position.set(cx, 0.18, cz);
-    root.add(inner);
 
     for (const side of [-1, 1]) {
       const bx = cx + side * (cw / 2 + 1.35);
@@ -326,23 +368,8 @@ export class WorldLifePass {
     }
   }
 
-  private signalOffset(ix: number, iy: number) {
-    const sx = nearest(ix, VERTICAL_STREET_CENTERS);
-    const sy = nearest(iy, HORIZONTAL_STREET_CENTERS);
-    return ((Math.floor(sx / TILE) * 0.37 + Math.floor(sy / TILE) * 0.19) % 1.7 + 1.7) % 1.7;
-  }
-
   private signalState(clock: number, axis: "x" | "y", ix: number, iy: number): SignalState {
-    const p = (clock + this.signalOffset(ix, iy)) % 12;
-    if (axis === "x") {
-      if (p < 4.6) return "green";
-      if (p < 5.3) return "yellow";
-      return "red";
-    }
-    if (p < 5.8) return "red";
-    if (p < 10.4) return "green";
-    if (p < 11.1) return "yellow";
-    return "red";
+    return signalState(clock, axis, ix, iy);
   }
 
   private updateSignals(clock: number) {
@@ -396,52 +423,14 @@ export class WorldLifePass {
       if (!car.laneId) continue;
       const lane = this.laneMap.get(car.laneId);
       if (!lane) continue;
-      let memory = this.trafficMemory.get(car);
-      if (!memory) {
-        memory = { turnCount: 0, cooldownUntil: f.clock + pseudo(i * 7.3) * 1.5 };
-        this.trafficMemory.set(car, memory);
-      }
-      const approach = this.approachFor(car, lane);
-      if (!approach) continue;
-      const signal = this.signalState(f.clock, lane.axis, approach.ix, approach.iy);
-      const yellowStop = signal === "yellow" && approach.delta > 28;
-      const shouldStop = signal === "red" || yellowStop;
-      if (shouldStop && approach.delta > 0 && approach.delta < 62) {
-        const stopGap = Math.max(28, car.w * 0.64);
-        const stopCoord = approach.center - lane.dir * stopGap;
-        const along = lane.axis === "x" ? car.x : car.y;
-        const toStop = (stopCoord - along) * lane.dir;
-        if (toStop <= 8 && toStop > -7) {
-          if (lane.axis === "x") car.x = stopCoord;
-          else car.y = stopCoord;
-          car.vx = 0;
-          car.vy = 0;
-          stoppedAtRed++;
-        } else if (toStop > 0) {
-          car.vx *= 0.22;
-          car.vy *= 0.22;
-        }
-      }
-
-      if (signal !== "green" || f.clock < memory.cooldownUntil || approach.delta < -10 || approach.delta > 15) continue;
-      const roll = pseudo(i * 97 + memory.turnCount * 41 + approach.center * 0.013);
-      const turn = roll < 0.18 ? "left" : roll < 0.36 ? "right" : null;
-      memory.turnCount++;
-      memory.cooldownUntil = f.clock + 1.7;
-      if (!turn) continue;
-      const destination = this.destinationLane(lane, approach.center, turn);
-      if (!destination) continue;
-      car.laneId = destination.id;
-      if (destination.axis === "x") car.y = destination.fixed;
-      else car.x = destination.fixed;
-      const velocity = laneVelocity(destination, 0.62);
-      car.vx = velocity.vx;
-      car.vy = velocity.vy;
-      this.totalTurns++;
+      if (car.braking || Math.hypot(car.vx, car.vy) < 6) stoppedAtRed++;
+      /* Engine owns stop-line + turn. This pass only counts and lights the heads. */
     }
 
     for (let i = 0; i < f.peds.length; i++) {
-      const ped = f.peds[i] as LivePed;
+      const ped = f.peds[i] as LivePed & { job?: string; inside?: boolean };
+      if (ped.inside) continue;
+      if (ped.job) continue;
       if (typeof ped.vx !== "number" || typeof ped.vy !== "number") continue;
       if (Math.hypot(ped.vx, ped.vy) > 0.5) movingPeds++;
       let memory = this.pedMemory.get(ped);
@@ -490,20 +479,11 @@ export class WorldLifePass {
   private lastMovingPeds = 0;
   private lastPausedPeds = 0;
 
-  postSync(f: WorldFrame, carGroups: THREE.Group[], npcSprites: Map<string, THREE.Sprite>) {
+  postSync(f: WorldFrame, carGroups: THREE.Group[], npcSprites: Map<string, THREE.Object3D>) {
     this.updateSignals(f.clock);
     this.smoothCarVisuals(f, carGroups);
-    this.ensureCourtCrowd(npcSprites);
-    if (this.courtCrowd) {
-      const cx = COURT.x + COURT.w / 2;
-      const cy = COURT.y + COURT.h / 2;
-      const near = Math.hypot(f.px - cx, f.py - cy) < 520;
-      this.courtCrowd.visible = f.mode === "basketball" || near;
-      for (let i = 0; i < this.courtCrowd.children.length; i++) {
-        const child = this.courtCrowd.children[i]!;
-        child.position.y = 0.95 + Math.sin(f.clock * 2.2 + i * 1.4) * 0.025;
-      }
-    }
+    if (this.courtCrowd) this.courtCrowd.visible = false;
+    if (this.dropLiveSet) this.dropLiveSet.visible = !!f.dropLive;
     this.publishDiagnostics(f);
   }
 
@@ -521,32 +501,48 @@ export class WorldLifePass {
       group.userData.smoothYaw = smooth;
       group.rotation.y = smooth;
       const speed = Math.min(1, Math.hypot(car.vx, car.vy) / 85);
-      group.position.y = Math.sin(f.clock * 7.5 + i * 0.83) * 0.012 * speed;
+      group.position.y = CAR_RIDE + Math.sin(f.clock * 7.5 + i * 0.83) * 0.012 * speed;
     }
   }
 
-  private ensureCourtCrowd(npcSprites: Map<string, THREE.Sprite>) {
+  private ensureCourtCrowd(npcSprites: Map<string, THREE.Object3D>, clock: number) {
     if (this.courtCrowd) return;
-    const ids = ["court_coach", "supporter_1", "downtown_fan", "culture_host", "street_npc", "k_blanco"];
-    if (ids.some((id) => !npcSprites.get(id))) return;
+    if (npcSprites.size < 2 && clock < 1.6) return;
     const group = new THREE.Group();
     group.name = "sackrow-court-crowd";
     const positions = [
-      [COURT.x + 22, COURT.y + 74],
-      [COURT.x + 24, COURT.y + 145],
-      [COURT.x + 26, COURT.y + 215],
-      [COURT.x + COURT.w - 22, COURT.y + 82],
-      [COURT.x + COURT.w - 24, COURT.y + 154],
-      [COURT.x + COURT.w - 26, COURT.y + 224],
+      [COURT.x + 18, COURT.y + 70],
+      [COURT.x + 20, COURT.y + 140],
+      [COURT.x + 22, COURT.y + 210],
+      [COURT.x + COURT.w - 18, COURT.y + 78],
+      [COURT.x + COURT.w - 20, COURT.y + 148],
+      [COURT.x + COURT.w - 22, COURT.y + 218],
+      [COURT.x + 90, COURT.y + COURT.h - 16],
+      [COURT.x + 220, COURT.y + COURT.h - 16],
     ] as const;
-    for (let i = 0; i < ids.length; i++) {
-      const source = npcSprites.get(ids[i]!);
-      if (!source) continue;
-      const material = source.material.clone();
-      const clone = new THREE.Sprite(material);
-      clone.scale.copy(source.scale).multiplyScalar(i === 0 ? 1.08 : 0.94 + (i % 3) * 0.05);
-      clone.position.set(wx(positions[i]![0]), 0.95, wz(positions[i]![1]));
-      group.add(clone);
+    const ids = ["court_coach", "supporter_1", "downtown_fan", "culture_host", "street_npc", "beale_dj", "supporter_1", "downtown_fan"];
+    const fallback = [0xc4a882, 0x1db954, 0xd6d3d1, 0xd4af37, 0x78716c, 0xe85d4c, 0xa8a29e, 0x3b82f6];
+    for (let i = 0; i < positions.length; i++) {
+      const source = npcSprites.get(ids[i]!) as THREE.Mesh | THREE.Sprite | undefined;
+      let card: THREE.Mesh;
+      if (source && "material" in source && source.material) {
+        card = new THREE.Mesh(
+          new THREE.PlaneGeometry(1, 1),
+          (source.material as THREE.Material).clone(),
+        );
+        card.scale.copy(source.scale).multiplyScalar(0.92 + (i % 3) * 0.05);
+      } else {
+        const mat = new THREE.MeshBasicMaterial({
+          color: fallback[i] ?? 0xc4a882,
+          transparent: false,
+          depthWrite: true,
+          toneMapped: false,
+        });
+        card = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+        card.scale.set(0.95, 1.7, 1);
+      }
+      card.position.set(wx(positions[i]![0]), 0.95, wz(positions[i]![1]));
+      group.add(card);
     }
     this.courtCrowd = group;
     this.scene.add(group);

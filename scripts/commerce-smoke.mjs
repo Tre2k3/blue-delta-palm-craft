@@ -41,11 +41,17 @@ const shop = await page.evaluate(() => {
 
 await page.click('[data-testid="buy-irl-sr-black-gold-tee"]');
 await page.waitForTimeout(200);
+const irlConfirm = page.getByRole("button", { name: /Buy IRL/i }).last();
+if (await irlConfirm.count()) await irlConfirm.click();
+await page.waitForTimeout(200);
 const intent = await page.evaluate(() => window.__SACK_COMMERCE__.lastIntent());
 const analytics = await page.evaluate(() =>
   (window.__SACK_ANALYTICS__?.events() ?? []).some((e) => e.name === "product_buy_clicked"),
 );
 
+const closeInspect = page.getByRole("button", { name: /^Close$/i });
+if (await closeInspect.count()) await closeInspect.click();
+await page.waitForTimeout(150);
 const back = page.getByRole("button", { name: /Back to streets/i });
 if (await back.count()) await back.click();
 

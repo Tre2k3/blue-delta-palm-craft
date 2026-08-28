@@ -1,5 +1,11 @@
 # $ackReligious KLOTHING Memphis — Upgrade changelog
 
+## 0.9.0-rc brand skins
+- Sackrow Ballers court floor (gold chain, diamond, moneybag ball) replaces the old wood/green deck
+- Traffic cars wear full $ackReligious / Sackrow wrap sheets on every body panel
+- Drop van uses the Sackrow Ballers van wrap
+- K Blanco in-game sprite + dialogue portrait from the approved character map (blonde, black jumpsuit)
+
 ## 0.9.0-rc — production vertical slice
 
 - Chapter 1 titles mapped onto existing mission IDs (wake → return)

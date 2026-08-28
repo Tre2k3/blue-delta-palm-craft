@@ -168,6 +168,10 @@ export function installGameplayIntegrity() {
 
   const originalInteract = GameEngine.prototype.tryInteract;
   GameEngine.prototype.tryInteract = function physicalHqInteract(this: GameEngine) {
+    if (this.vehicle) {
+      originalInteract.call(this);
+      return;
+    }
     if (this.nearPoi === "store" && !this.nearNpc) {
       if (!insideStore(this)) {
         this.showToast("Walk through the $ackReligious HQ doors.", 2.1);
@@ -194,7 +198,7 @@ export function installGameplayIntegrity() {
       };
     };
     if (!w.__gameTest) return;
-    w.__gameTest.enterHQ = () => placeInsideHQ(this, 0.50, 0.70);
+    w.__gameTest.enterHQ = () => placeInsideHQ(this, 0.50, 0.30);
     w.__gameTest.enterHQShop = () => placeInsideHQ(this, 0.84, 0.72);
     w.__gameTest.collisionProbe = () => ({
       px: this.px,

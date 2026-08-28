@@ -2,19 +2,19 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #141210;
-  --color-surface: #1c1916;
-  --color-surface-2: #25211d;
-  --color-fg: #efe8de;
+  --color-bg: #0d0d0d;
+  --color-surface: #161616;
+  --color-surface-2: #1f1c16;
+  --color-fg: #f5f0e1;
   --color-muted: #9a9084;
   --color-subtle: #6b635a;
   --color-border: #3a342e;
-  --color-primary: #1db954;
-  --color-primary-dim: #148a3e;
-  --color-primary-fg: #041208;
-  --color-gold: #d4af37;
+  --color-primary: #39ff14;
+  --color-primary-dim: #2bc410;
+  --color-primary-fg: #0d0d0d;
+  --color-gold: #c9a84c;
   --color-danger: #c46a32;
-  --color-panel: #12100eee;
+  --color-panel: #0d0d0dee;
   --font-display: "Bebas Neue", system-ui, sans-serif;
   --font-sans: "DM Sans", system-ui, sans-serif;
   --radius-sm: 0.5rem;
@@ -30,6 +30,8 @@
   html,
   body {
     height: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
     margin: 0;
     background: var(--color-bg);
     color: var(--color-fg);
@@ -39,6 +41,8 @@
   }
   body > * {
     height: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
   }
   button:not(:disabled),
   [role="button"]:not(:disabled) {
@@ -65,8 +69,31 @@
   }
 }
 
-@media (orientation: portrait) and (max-width: 900px) {
-  .sack-rotate-prompt {
-    display: flex !important;
+@media (max-height: 480px) {
+  .sack-title-kicker {
+    display: none;
+  }
+  .sack-title-blurb {
+    display: none;
+  }
+}
+
+@media (max-width: 390px) {
+  .sack-title-blurb {
+    display: none;
+  }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .sack-title-hero {
+    font-size: 2.75rem;
+    line-height: 0.85;
+  }
+  .sack-hud-chip {
+    transform: scale(0.88);
+    transform-origin: top left;
+  }
+  .sack-touch-bar {
+    padding-bottom: max(0.4rem, env(safe-area-inset-bottom));
   }
 }

@@ -16,6 +16,9 @@ export type Actions = {
   viewPressed: boolean;
   jump: boolean;
   jumpPressed: boolean;
+  jook: boolean;
+  jookPressed: boolean;
+  arrowTap: "left" | "right" | "up" | null;
 };
 
 const DEAD = 0.16;
@@ -29,7 +32,7 @@ function radial(x: number, y: number, dz = DEAD) {
 
 export class InputManager {
   keys = new Set<string>();
-  touch = { mx: 0, my: 0, shoot: false, lookX: 0, jump: false };
+  touch = { mx: 0, my: 0, shoot: false, lookX: 0, jump: false, jook: false, run: false };
   device: InputDevice = "keyboard";
   private prevShoot = false;
   private prevInteract = false;
@@ -37,6 +40,7 @@ export class InputManager {
   private prevPause = false;
   private prevView = false;
   private prevJump = false;
+  private prevJook = false;
   private padInteract = false;
   private padBack = false;
   private padPause = false;
@@ -59,15 +63,21 @@ export class InputManager {
   private queuedShootRelease = false;
   private queuedView = false;
   private queuedJump = false;
+  private queuedJook = false;
+  private queuedArrow: "left" | "right" | "up" | null = null;
 
   private kd = (e: KeyboardEvent) => {
-    this.keys.add(e.code);
     this.device = "keyboard";
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(e.code)) {
       e.preventDefault();
     }
+    if (e.repeat) return;
+    this.keys.add(e.code);
     if (e.code === "KeyE" || e.code === "Enter") this.queuedInteract = true;
-    if (e.code === "Space") this.queuedJump = true;
+    if (e.code === "Space") {
+      this.queuedJump = true;
+      this.queuedShootPress = true;
+    }
     if (e.code === "Escape") {
       this.queuedPause = true;
       this.queuedBack = true;
@@ -75,10 +85,14 @@ export class InputManager {
     if (e.code === "KeyP") this.queuedPause = true;
     if (e.code === "KeyF") this.queuedShootPress = true;
     if (e.code === "KeyV" || e.code === "KeyC") this.queuedView = true;
+    if (e.code === "KeyJ") this.queuedJook = true;
+    if (e.code === "ArrowLeft" || e.code === "KeyA") this.queuedArrow = "left";
+    if (e.code === "ArrowRight" || e.code === "KeyD") this.queuedArrow = "right";
+    if (e.code === "ArrowUp" || e.code === "KeyW") this.queuedArrow = "up";
   };
   private ku = (e: KeyboardEvent) => {
     this.keys.delete(e.code);
-    if (e.code === "KeyF") this.queuedShootRelease = true;
+    if (e.code === "KeyF" || e.code === "Space") this.queuedShootRelease = true;
   };
   private blur = () => this.keys.clear();
 
@@ -96,6 +110,15 @@ export class InputManager {
   queueJump() {
     this.queuedJump = true;
     this.touch.jump = true;
+  }
+
+  queueJook() {
+    this.queuedJook = true;
+    this.touch.jook = true;
+  }
+
+  queueArrow(dir: "left" | "right" | "up") {
+    this.queuedArrow = dir;
   }
 
   bind() {
@@ -128,6 +151,7 @@ export class InputManager {
     mx += this.touch.mx;
     my += this.touch.my;
     if (Math.abs(this.touch.mx) + Math.abs(this.touch.my) > 0.05) this.device = "touch";
+    if (this.touch.shoot || this.touch.jump || this.touch.jook || this.touch.run || this.touch.lookX) this.device = "touch";
 
     this.pollPad();
     mx += this.padMx;
@@ -153,9 +177,10 @@ export class InputManager {
       this.keys.has("KeyE") || this.keys.has("Enter") || this.padInteract;
     const backHeld = this.keys.has("Escape") || this.keys.has("Backspace") || this.padBack;
     const pauseHeld = this.keys.has("Escape") || this.keys.has("KeyP") || this.padPause;
-    const shootHeld = this.keys.has("KeyF") || this.padShoot || this.touch.shoot;
-    const run = this.keys.has("ShiftLeft") || this.keys.has("ShiftRight") || this.padRun;
+    const shootHeld = this.keys.has("KeyF") || this.keys.has("Space") || this.padShoot || this.touch.shoot;
+    const run = this.keys.has("ShiftLeft") || this.keys.has("ShiftRight") || this.padRun || this.touch.run;
     const jumpHeld = this.keys.has("Space") || this.padJump || this.touch.jump;
+    const jookHeld = this.keys.has("KeyJ") || this.touch.jook;
 
     const interactPressed = (interactHeld && !this.prevInteract) || this.queuedInteract;
     const backPressed = (backHeld && !this.prevBack) || this.queuedBack;
@@ -163,10 +188,16 @@ export class InputManager {
     const shootPressed = (shootHeld && !this.prevShoot) || this.queuedShootPress;
     const shootReleased = (!shootHeld && this.prevShoot) || this.queuedShootRelease;
     const jumpPressed = (jumpHeld && !this.prevJump) || this.queuedJump;
+    const jookPressed = (jookHeld && !this.prevJook) || this.queuedJook;
+    const arrowTap = this.queuedArrow;
     this.queuedInteract = false;
     this.queuedBack = false;
     this.queuedPause = false;
     this.queuedJump = false;
+    this.queuedJook = false;
+    this.queuedArrow = null;
+    this.queuedShootPress = false;
+    this.queuedShootRelease = false;
     const viewHeld = this.keys.has("KeyV") || this.keys.has("KeyC");
     const viewPressed = (viewHeld && !this.prevView) || this.queuedView;
     this.queuedView = false;
@@ -177,6 +208,7 @@ export class InputManager {
     this.prevPause = pauseHeld;
     this.prevShoot = shootHeld;
     this.prevJump = jumpHeld;
+    this.prevJook = jookHeld;
 
     return {
       mx,
@@ -194,6 +226,9 @@ export class InputManager {
       viewPressed,
       jump: jumpHeld,
       jumpPressed,
+      jook: jookHeld,
+      jookPressed,
+      arrowTap,
     };
   }
 
@@ -238,6 +273,15 @@ export class InputManager {
     }
   }
 
+  preferTouch() {
+    this.device = "touch";
+  }
+
+  queuePause() {
+    this.queuedPause = true;
+    this.device = "touch";
+  }
+
   rumble(ms: number, strong = 0.35, weak = 0.55) {
     const p = this.lastPad;
     const act = p?.vibrationActuator as
@@ -257,8 +301,8 @@ export class InputManager {
       return { interact: "A", pause: "Start", run: "Y", shoot: "X", jump: "RB" };
     }
     if (device === "touch") {
-      return { interact: "TAP", pause: "II", run: "HOLD", shoot: "SHOOT", jump: "JUMP" };
+      return { interact: "TAP", pause: "II", run: "RUN", shoot: "SHOOT", jump: "JUMP" };
     }
-    return { interact: "E", pause: "Esc", run: "Shift", shoot: "F", jump: "Space" };
+    return { interact: "E", pause: "Esc", run: "Shift", shoot: "Space", jump: "Space" };
   }
 }

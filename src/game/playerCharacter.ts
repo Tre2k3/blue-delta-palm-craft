@@ -1,47 +1,35 @@
 import * as THREE from "three";
 import type { LocomotionState } from "./characterController";
-import { CAST_ROWS, cropCastFrame, loadCastAtlas } from "./castAtlas";
+import { cleanSprite } from "./chroma";
+import { CUTOUT_ALPHA, cutoutMeshMaterial, hardenCutoutTexture } from "./cutout";
+import { dressBenji } from "./outfitCompositor";
+import { lookFor, stampFor, overlayKey, type View } from "./outfitLook";
+import type { ApparelId } from "./types";
 
-type View = "front" | "back" | "left" | "right";
-type CycleKind = "idle" | "walk" | "jump" | "shoot";
+type CycleKind = "idle" | "walk" | "jump" | "shoot" | "dribble" | "gather" | "release" | "rebound" | "celebrate" | "talk" | "interact" | "phone";
 
 const TAU = Math.PI * 2;
-const VIEWS: View[] = ["back", "left", "front", "right"];
+const VIEWS: View[] = ["back", "right", "front", "left"];
 
 function wrap(a: number) {
   return Math.atan2(Math.sin(a), Math.cos(a));
 }
 
 function finishTexture(tex: THREE.Texture) {
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.needsUpdate = true;
-  tex.minFilter = THREE.LinearFilter;
-  tex.magFilter = THREE.LinearFilter;
-  tex.anisotropy = 8;
-  tex.premultiplyAlpha = false;
-  return tex;
+  return hardenCutoutTexture(tex);
 }
 
 function cardMat(src?: HTMLImageElement | HTMLCanvasElement) {
   if (!src) {
-    return new THREE.MeshBasicMaterial({ color: 0x1a1c1e, transparent: true, opacity: 0 });
+    return new THREE.MeshBasicMaterial({ color: 0x1a1c1e, transparent: false, opacity: 0, visible: false });
   }
-  const tex = src instanceof HTMLCanvasElement
-    ? finishTexture(new THREE.CanvasTexture(src))
-    : finishTexture(new THREE.Texture(src));
-  return new THREE.MeshBasicMaterial({
-    map: tex,
-    transparent: true,
-    alphaTest: 0.22,
-    depthWrite: true,
-    side: THREE.DoubleSide,
-    toneMapped: false,
-  });
+  const tex = finishTexture(new THREE.CanvasTexture(src));
+  return cutoutMeshMaterial(tex);
 }
 
-/** Hold a view through most of its 90° sector; blend only near the seams. */
+/** Cardinals sit in the middle of each 90° sector so up/left/right/down pick the right plate. */
 function viewBlend(rel: number): { a: View; b: View; wa: number; wb: number } {
-  const ang = ((rel % TAU) + TAU) % TAU;
+  const ang = ((rel + Math.PI / 4) % TAU + TAU) % TAU;
   const sector = ang / (Math.PI / 2);
   const i0 = Math.floor(sector) % 4;
   const t = sector - Math.floor(sector);
@@ -69,11 +57,8 @@ function jumpFrame(air: number, vz: number) {
 }
 
 /**
- * Permanent Benji renderer.
- *
- * The clean Chapter 1 atlas is true RGBA and is never chroma-keyed, fixing
- * the transparent "holes" that appeared in Benji's hair/hat. Existing
- * individual assets remain a safe fallback if the atlas cannot be loaded.
+ * Benji renderer. Clothing is composited onto every idle / walk / jump plate
+ * so an equipped fit is the actual garment, not a color ring.
  */
 export class PlayerCharacter {
   readonly root = new THREE.Group();
@@ -85,14 +70,23 @@ export class PlayerCharacter {
   private walk: Partial<Record<View, THREE.MeshBasicMaterial[]>> = {};
   private jump: THREE.MeshBasicMaterial[] = [];
   private shoot: THREE.MeshBasicMaterial[] = [];
+  private dribble: THREE.MeshBasicMaterial[] = [];
+  private gather: THREE.MeshBasicMaterial[] = [];
+  private release: THREE.MeshBasicMaterial[] = [];
+  private rebound: THREE.MeshBasicMaterial[] = [];
+  private celebrate: THREE.MeshBasicMaterial[] = [];
+  private talk: THREE.MeshBasicMaterial[] = [];
+  private interact: THREE.MeshBasicMaterial[] = [];
+  private phone: THREE.MeshBasicMaterial[] = [];
   private ready = false;
-  private atlasRequested = false;
   private lastKeyA = "";
   private lastKeyB = "";
   private lastState: LocomotionState = "idle";
   private actionT = 0;
-  private ring: THREE.Mesh;
-  private badge: THREE.Mesh;
+  private grooveT = 0;
+  private images: Record<string, HTMLImageElement> = {};
+  private outfitId: ApparelId = "starter_tee";
+  private icon: HTMLImageElement | HTMLCanvasElement | null = null;
 
   constructor() {
     this.root.add(this.body);
@@ -114,102 +108,102 @@ export class PlayerCharacter {
     this.shadow.rotation.x = -Math.PI / 2;
     this.shadow.position.y = 0.015;
     this.root.add(this.shadow);
-
-    this.ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.34, 0.42, 24),
-      new THREE.MeshBasicMaterial({
-        color: 0x1db954,
-        transparent: true,
-        opacity: 0,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      }),
-    );
-    this.ring.rotation.x = -Math.PI / 2;
-    this.ring.position.y = 0.03;
-    this.root.add(this.ring);
-
-    this.badge = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.28, 0.34),
-      new THREE.MeshBasicMaterial({
-        color: 0x1db954,
-        transparent: true,
-        opacity: 0,
-        depthWrite: false,
-      }),
-    );
-    this.badge.position.set(0.22, 1.18, 0.06);
-    this.body.add(this.badge);
   }
 
-  setOutfitTint(hex: string | null) {
-    const color = hex ? Number.parseInt(hex.replace("#", ""), 16) : 0x1db954;
-    if (!Number.isFinite(color)) return;
-    const show = Boolean(hex);
-    const ringMat = this.ring.material as THREE.MeshBasicMaterial;
-    const badgeMat = this.badge.material as THREE.MeshBasicMaterial;
-    ringMat.color.setHex(color);
-    badgeMat.color.setHex(color);
-    ringMat.opacity = show ? 0.78 : 0;
-    badgeMat.opacity = show ? 0.92 : 0;
+  setOutfit(id: string | null | undefined) {
+    const next = (id as ApparelId) || "starter_tee";
+    if (next === this.outfitId && this.ready) return;
+    this.outfitId = next;
+    if (Object.keys(this.images).length) this.rebuildOutfit();
   }
+
+  /** @deprecated clothing is now on the sprite; kept so old calls compile. */
+  setOutfitTint(_hex: string | null) {}
 
   applyApprovedTextures(images: Record<string, HTMLImageElement>) {
-    const front = images.frontHi ?? images.front;
-    const back = images.backHi ?? images.back;
-    const left = images.leftHi ?? images.left;
-    const right = images.rightHi ?? images.right;
+    this.images = images;
+    this.icon = images.icon ?? null;
+    this.ready = false;
+    this.lastKeyA = "";
+  }
+
+  private dress(src: HTMLImageElement | undefined, view: View) {
+    if (!src) return undefined;
+    const cleaned = cleanSprite(src);
+    const look = lookFor(this.outfitId);
+    const key = stampFor(look, view);
+    const stamp = (key && this.images[key]) || this.icon;
+    const ovKey = overlayKey(look, view);
+    const overlay = (ovKey && this.images[ovKey]) || null;
+    return dressBenji(cleaned, look, view, stamp, overlay);
+  }
+
+  private disposePack() {
+    const drop = (m?: THREE.MeshBasicMaterial) => {
+      if (!m) return;
+      m.map?.dispose();
+      m.dispose();
+    };
+    for (const view of VIEWS) {
+      drop(this.idle[view]);
+      this.walk[view]?.forEach(drop);
+    }
+    this.jump.forEach(drop);
+    this.shoot.forEach(drop);
+    this.dribble.forEach(drop);
+    this.gather.forEach(drop);
+    this.release.forEach(drop);
+    this.rebound.forEach(drop);
+    this.celebrate.forEach(drop);
+    this.talk.forEach(drop);
+    this.interact.forEach(drop);
+    this.phone.forEach(drop);
+  }
+
+  private rebuildOutfit() {
+    this.disposePack();
+    const images = this.images;
+    const front = this.dress(images.frontHi ?? images.front, "front");
+    const back = this.dress(images.backHi ?? images.back, "back") ?? front;
+    // Engine already path-swaps left/right files so screen-left is visual left.
+    const left = this.dress(images.leftHi ?? images.left, "left") ?? front;
+    const right = this.dress(images.rightHi ?? images.right, "right") ?? front;
     if (!front && !back) return;
 
     this.idle.front = cardMat(front);
-    this.idle.back = cardMat(back ?? front);
-    this.idle.left = cardMat(left ?? front);
-    this.idle.right = cardMat(right ?? front);
+    this.idle.back = cardMat(back);
+    this.idle.left = cardMat(left);
+    this.idle.right = cardMat(right);
 
     for (const view of VIEWS) {
+      const idle = this.idle[view]!;
       const frames: THREE.MeshBasicMaterial[] = [];
       for (let i = 1; i <= 4; i++) {
         const img = images[`walk-${view}-${i}`];
-        frames.push(img ? cardMat(img) : this.idle[view]!);
+        frames.push(img ? cardMat(this.dress(img, view)) : idle);
       }
       this.walk[view] = frames;
     }
 
-    this.jump = [];
-    for (let i = 1; i <= 4; i++) {
+    this.jump = [1, 2, 3, 4].map((i) => {
       const img = images[`jump-${i}`];
-      this.jump.push(img ? cardMat(img) : this.idle.front!);
-    }
+      return img ? cardMat(this.dress(img, "front")) : this.idle.front!;
+    });
+    this.shoot = this.jump;
+    const pack = (prefix: string, count: number, fallback: THREE.MeshBasicMaterial[]) =>
+      Array.from({ length: count }, (_, i) => {
+        const img = images[`${prefix}-${i + 1}`];
+        return img ? cardMat(this.dress(img, "front")) : fallback[i % fallback.length]!;
+      });
+    this.dribble = pack("dribble", 4, this.jump);
+    this.gather = pack("gather", 2, this.jump);
+    this.release = pack("release", 2, this.jump);
+    this.rebound = pack("rebound", 2, this.jump);
+    this.celebrate = pack("celebrate", 2, this.jump);
+    this.talk = pack("talk", 1, [this.idle.front!]);
+    this.interact = pack("interact", 1, [this.idle.front!]);
+    this.phone = pack("phone", 1, [this.idle.front!]);
 
-    this.ready = true;
-    this.lastKeyA = "";
-    this.lastKeyB = "";
-
-    if (!this.atlasRequested) {
-      this.atlasRequested = true;
-      void loadCastAtlas()
-        .then((atlas) => this.installCastAtlas(atlas))
-        .catch(() => {
-          // Fallback assets above remain active.
-        });
-    }
-  }
-
-  private installCastAtlas(atlas: HTMLImageElement) {
-    const rows: Record<View, number> = {
-      front: CAST_ROWS.front,
-      back: CAST_ROWS.back,
-      left: CAST_ROWS.left,
-      right: CAST_ROWS.right,
-    };
-
-    for (const view of VIEWS) {
-      const frames = [0, 1, 2, 3].map((col) => cardMat(cropCastFrame(atlas, col, rows[view])));
-      this.walk[view] = frames;
-      this.idle[view] = frames[0]!;
-    }
-    this.jump = [0, 1, 2, 3].map((col) => cardMat(cropCastFrame(atlas, col, CAST_ROWS.jump)));
-    this.shoot = [0, 1, 2, 3].map((col) => cardMat(cropCastFrame(atlas, col, CAST_ROWS.shoot)));
     this.ready = true;
     this.lastKeyA = "";
     this.lastKeyB = "";
@@ -218,6 +212,14 @@ export class PlayerCharacter {
   private matFor(view: View, kind: CycleKind, frame: number) {
     if (kind === "jump") return this.jump[frame] ?? this.idle[view];
     if (kind === "shoot") return this.shoot[frame] ?? this.idle[view];
+    if (kind === "dribble") return this.dribble[frame] ?? this.idle[view];
+    if (kind === "gather") return this.gather[frame] ?? this.idle[view];
+    if (kind === "release") return this.release[frame] ?? this.idle[view];
+    if (kind === "rebound") return this.rebound[frame] ?? this.idle[view];
+    if (kind === "celebrate") return this.celebrate[frame] ?? this.idle[view];
+    if (kind === "talk") return this.talk[0] ?? this.idle[view];
+    if (kind === "interact") return this.interact[0] ?? this.idle[view];
+    if (kind === "phone") return this.phone[0] ?? this.idle[view];
     if (kind === "walk") return this.walk[view]?.[frame] ?? this.idle[view];
     return this.idle[view];
   }
@@ -233,6 +235,16 @@ export class PlayerCharacter {
     thirdPerson: boolean,
     air = 0,
     vz = 0,
+    jooking = false,
+    dribbling = false,
+    charging = false,
+    releasing = false,
+    listening = false,
+    musicT = 0,
+    celebrating = 0,
+    talking = false,
+    interacting = false,
+    rebounding = false,
   ) {
     this.root.visible = thirdPerson;
     this.root.rotation.y = cameraYaw;
@@ -247,67 +259,105 @@ export class PlayerCharacter {
     const jumping = state === "jump" || air > 0.04;
     const kind: CycleKind = jumping
       ? "jump"
-      : state === "shoot"
-        ? "shoot"
-        : state === "walk" || state === "run"
-          ? "walk"
-          : "idle";
+      : releasing
+        ? "release"
+        : charging
+          ? "gather"
+          : celebrating > 0.12
+            ? "celebrate"
+            : rebounding
+              ? "rebound"
+              : dribbling
+                ? "dribble"
+                : talking
+                  ? "talk"
+                  : interacting
+                    ? "interact"
+                    : state === "shoot"
+                      ? "shoot"
+                      : state === "walk" || state === "run"
+                        ? "walk"
+                        : this.actionT > 3.8 && state === "idle"
+                          ? "phone"
+                          : "idle";
     const frame = kind === "walk"
       ? walkFrame(animT)
       : kind === "jump"
         ? jumpFrame(air, vz)
-        : kind === "shoot"
-          ? Math.min(3, Math.floor(this.actionT / 0.105))
-          : 0;
+        : kind === "dribble"
+          ? walkFrame(animT * 1.35)
+          : kind === "gather"
+            ? Math.min(1, Math.floor(this.actionT / 0.16))
+            : kind === "release"
+              ? Math.min(1, Math.floor(this.actionT / 0.09))
+              : kind === "rebound" || kind === "celebrate"
+                ? Math.min(1, Math.floor(this.actionT / 0.18))
+                : kind === "shoot"
+                  ? Math.min(3, Math.floor(this.actionT / 0.105))
+                  : 0;
 
     const rel = wrap(heading - cameraYaw);
     const blend = viewBlend(rel);
 
     if (this.ready) {
-      if (kind === "jump" || kind === "shoot") {
-        const key = `${kind}:${frame}`;
-        if (key !== this.lastKeyA) {
-          const mat = this.matFor("front", kind, frame);
-          if (mat) this.cardA.material = mat;
-          this.lastKeyA = key;
-        }
-        this.lastKeyB = "";
-        const matA = this.cardA.material as THREE.MeshBasicMaterial;
-        matA.opacity = 1;
-        matA.alphaTest = 0.22;
-        this.cardB.visible = false;
-      } else {
-        const keyA = `${blend.a}:${kind}:${frame}`;
-        const keyB = `${blend.b}:${kind}:${frame}`;
-        if (keyA !== this.lastKeyA) {
-          const mat = this.matFor(blend.a, kind, frame);
-          if (mat) this.cardA.material = mat;
-          this.lastKeyA = keyA;
-        }
-        if (keyB !== this.lastKeyB) {
-          const mat = this.matFor(blend.b, kind, frame);
-          if (mat) this.cardB.material = mat;
-          this.lastKeyB = keyB;
-        }
-        const matA = this.cardA.material as THREE.MeshBasicMaterial;
-        const matB = this.cardB.material as THREE.MeshBasicMaterial;
-        matA.opacity = blend.wa;
-        matB.opacity = blend.wb;
-        matA.alphaTest = blend.wa > 0.92 ? 0.22 : 0.04;
-        matB.alphaTest = blend.wb > 0.92 ? 0.22 : 0.04;
-        this.cardB.visible = blend.wb > 0.02 && blend.a !== blend.b;
+      const view = blend.wa >= blend.wb ? blend.a : blend.b;
+      const key = `${view}:${kind}:${frame}:${this.outfitId}`;
+      if (key !== this.lastKeyA) {
+        const mat = this.matFor(
+          kind === "jump" || kind === "shoot" || kind === "dribble" || kind === "gather" || kind === "release" || kind === "rebound" || kind === "celebrate" || kind === "talk" || kind === "interact" || kind === "phone"
+            ? "front"
+            : view,
+          kind,
+          frame,
+        );
+        if (mat) this.cardA.material = mat;
+        this.lastKeyA = key;
       }
+      const matA = this.cardA.material as THREE.MeshBasicMaterial;
+      matA.opacity = 1;
+      matA.transparent = false;
+      matA.alphaTest = CUTOUT_ALPHA;
+      matA.depthWrite = true;
+      this.cardB.visible = false;
     }
 
-    this.body.rotation.z = lean * 0.55;
-    this.body.rotation.x = state === "run" ? -0.05 : state === "walk" ? -0.02 : jumping ? -0.04 : 0;
+    this.body.rotation.z = (jooking ? Math.sin(animT * 2.2) * 0.18 : dribbling ? Math.sin(animT * 2.4) * 0.1 : 0) + lean * 0.55;
+    this.body.rotation.x = jooking
+      ? Math.sin(animT * 3.1) * 0.12
+      : charging
+        ? -0.14
+        : releasing
+          ? 0.1
+          : state === "run"
+            ? -0.05
+            : state === "walk"
+              ? -0.02
+              : jumping
+                ? -0.04
+                : 0;
+    const dribbleBeat = dribbling ? Math.abs(Math.sin(animT * 2.35)) : 0;
     const bob =
       jumping
         ? 0
-        : state === "idle"
-          ? Math.sin(animT * 0.7) * 0.01
-          : Math.abs(Math.sin(animT)) * (state === "run" ? 0.042 : 0.024);
-    this.body.position.y = air + bob;
+        : jooking
+          ? Math.abs(Math.sin(animT * 2.4)) * 0.16
+          : dribbling
+            ? dribbleBeat * 0.06
+          : state === "idle"
+            ? Math.sin(animT * 0.7) * 0.01
+            : Math.abs(Math.sin(animT)) * (state === "run" ? 0.042 : 0.024);
+
+    if (listening) this.grooveT = Math.min(1, this.grooveT + dt * 4.5);
+    else this.grooveT = Math.max(0, this.grooveT - dt * 5.5);
+    const groove = this.grooveT * this.grooveT;
+    const beat = musicT > 0.05 ? musicT * 9.95 : animT * 8.6;
+    const hit = Math.pow(Math.max(0, Math.sin(beat)), 2.4);
+    const nod = groove * hit;
+    if (!jooking && !jumping && groove > 0.02) {
+      this.body.rotation.x += nod * 0.32;
+      this.body.rotation.z += Math.sin(beat * 0.5) * 0.05 * groove;
+    }
+    this.body.position.y = air + bob - nod * 0.07;
 
     const stretch = jumping
       ? vz > 0.8
@@ -315,10 +365,14 @@ export class PlayerCharacter {
         : vz < -1.2
           ? 0.94
           : 1.03
+      : charging
+        ? 0.92
+        : releasing
+          ? 1.12
       : 1 + Math.sin(animT * 2) * 0.016 * Math.min(speed / 268, 1);
-    const squat = jumping && vz > 0.8 ? 0.94 : jumping && vz < -1.2 ? 1.06 : 1;
-    this.cardA.scale.set(squat, stretch, 1);
-    this.cardB.scale.set(squat, stretch, 1);
+    const squat = jumping && vz > 0.8 ? 0.94 : jumping && vz < -1.2 ? 1.06 : charging ? 1.08 : releasing ? 0.9 : dribbling ? 1 + dribbleBeat * 0.03 : 1;
+    this.cardA.scale.set(squat * (1 + nod * 0.05), stretch * (1 - nod * 0.08), 1);
+    this.cardB.scale.set(squat * (1 + nod * 0.05), stretch * (1 - nod * 0.08), 1);
 
     const lift = Math.min(air / 1.4, 1);
     this.shadow.scale.setScalar(1 - lift * 0.45);

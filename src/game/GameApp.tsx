@@ -8,16 +8,20 @@ import {
   Play,
   Volume2,
   SwitchCamera,
+  Megaphone,
 } from "lucide-react";
 import { GameEngine } from "./engine";
 import { APPAREL, ART_REV, BRAND, POIS, TROPHIES, TIPS } from "./data";
+import { lookFor } from "./outfitLook";
 import { formatRunClock } from "./dropRun";
 import type { ApparelId, HudSnapshot, PauseTab } from "./types";
-import { commerce, installCommerceTestHook } from "./commerce";
+import { commerce, installCommerceTestHook, type CommerceSnapshot, type StoreProduct } from "./commerce";
 import { installAnalyticsTestHook } from "./analytics";
 import { GAME_BUILD_VERSION, GAME_TITLE } from "./config";
+import type { SponsorHud } from "./sponsors";
 import { ErrorBoundary } from "./ui/ErrorBoundary";
 import { RotatePrompt } from "./ui/RotatePrompt";
+import { arrowGlyph, formatGap, formatMph, formatRaceClock, RACE_CHECKPOINTS } from "./race";
 
 const emptyHud: HudSnapshot = {
   mode: "menu",
@@ -28,6 +32,7 @@ const emptyHud: HudSnapshot = {
   missionProgress: "0/0",
   missionChapter: "CHAPTER 01",
   interactHint: null,
+  hintWalk: false,
   locationName: "Memphis",
   district: "901",
   dialogue: null,
@@ -76,6 +81,16 @@ const emptyHud: HudSnapshot = {
   bestRunScore: 0,
   buildVersion: GAME_BUILD_VERSION,
   dropLive: false,
+  driving: false,
+  jooking: false,
+  race: null,
+  raceMenu: false,
+  fishing: null,
+  food: null,
+  coolerCount: 0,
+  fed: false,
+  sponsor: null,
+  sponsorOpen: false,
 };
 
 function formatHour(h: number) {
@@ -92,6 +107,7 @@ const TABS: { id: PauseTab; label: string; icon: typeof Play }[] = [
   { id: "missions", label: "Missions", icon: Target },
   { id: "wardrobe", label: "Wardrobe", icon: Shirt },
   { id: "trophies", label: "Trophies", icon: Trophy },
+  { id: "kollab", label: "Kollab", icon: Megaphone },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -128,14 +144,46 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
     ox: 0,
     oy: 0,
   });
+  const [store, setStore] = useState<CommerceSnapshot>(() => commerce.snapshot());
+  const [inspect, setInspect] = useState<{ product: StoreProduct; size: string } | null>(null);
+  const [touchUI, setTouchUI] = useState(false);
+  const [landscape, setLandscape] = useState(false);
+
+  useEffect(() => {
+    const read = () => {
+      const coarse = window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
+      setTouchUI(coarse);
+      setLandscape(window.matchMedia("(orientation: landscape)").matches && window.innerHeight <= 560);
+    };
+    read();
+    window.addEventListener("resize", read);
+    window.addEventListener("orientationchange", read);
+    return () => {
+      window.removeEventListener("resize", read);
+      window.removeEventListener("orientationchange", read);
+    };
+  }, []);
 
   useEffect(() => {
     installAnalyticsTestHook();
     installCommerceTestHook();
+    commerce.bind({
+      pause: (source) => engineRef.current?.setPauseReason(source, true),
+      resume: (source) => engineRef.current?.setPauseReason(source, false),
+      toast: (text) => engineRef.current?.showToast(text),
+      grant: (reward) => engineRef.current?.applyVerifiedReward(reward),
+    });
     void commerce.init();
     (window as Window & { __SACK_BUILD__?: unknown }).__SACK_BUILD__ = {
       version: GAME_BUILD_VERSION,
       title: GAME_TITLE,
+    };
+    const unsub = commerce.subscribe(setStore);
+    const onVis = () => engineRef.current?.setPauseReason("hidden", document.hidden);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      unsub();
+      document.removeEventListener("visibilitychange", onVis);
     };
   }, []);
 
@@ -267,7 +315,8 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
       {!hud.started && (
         <div
           className="absolute inset-0 z-40 flex flex-col"
-          onPointerDown={() => {
+          onPointerDown={(e) => {
+            if ((e.target as HTMLElement).closest("button")) return;
             if (titlePhase === "press" && ready) setTitlePhase("choose");
           }}
         >
@@ -283,7 +332,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
           <div className="absolute top-0 inset-x-0 h-8 bg-black" />
           <div className="absolute bottom-0 inset-x-0 h-8 bg-black" />
 
-          <div className="relative z-10 flex h-full flex-col justify-between px-6 py-10 sm:px-12">
+          <div className="relative z-10 flex h-full flex-col justify-between overflow-y-auto px-6 py-10 sm:px-12">
             <div>
               <p className="font-display text-primary text-xl tracking-[0.22em]">{BRAND.name}</p>
               <p className="mt-1 text-[11px] uppercase tracking-[0.42em] text-gold">{BRAND.line}</p>
@@ -291,10 +340,10 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
             </div>
 
             <div className="max-w-lg">
-              <h1 className="font-display text-6xl leading-[0.85] text-fg sm:text-8xl">{BRAND.city.toUpperCase()}</h1>
+              <h1 className="sack-title-hero font-display text-6xl leading-[0.85] text-fg sm:text-8xl">{BRAND.city.toUpperCase()}</h1>
               <p className="mt-2 font-display text-3xl text-primary sm:text-4xl">{BRAND.zip}</p>
               <p className="mt-4 max-w-sm text-sm leading-relaxed text-muted">
-                Play as Benji. Run Drop Day, ball the 901 Court, earn {BRAND.currency}, and re-up the fit.
+                Play as Benji. Run Drop Day, hoop at Sacks Giving Weekend, and rock the Worldwide Tour tees. 2 sponsor slots and 2 artist slots every 30 days.
               </p>
 
               {!ready && (
@@ -379,7 +428,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
         <>
           {/* Top HUD */}
           <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-3 p-3 sm:p-4">
-            <div className="flex flex-col gap-2">
+            <div className="sack-hud-chip flex flex-col gap-2">
               <div
                 className="flex items-center gap-2 rounded-xl border border-border bg-panel px-3 py-2 backdrop-blur-sm"
                 style={{ transform: hud.uiPulse > 0.15 ? `scale(${1 + hud.uiPulse * 0.06})` : undefined }}
@@ -390,6 +439,23 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                   <p className="tabular font-display text-2xl leading-none text-gold">${hud.sackdollars}</p>
                 </div>
               </div>
+              {store.connected && (
+                <div className="rounded-xl border border-gold/40 bg-panel px-3 py-2 backdrop-blur-sm">
+                  <p className="text-[10px] uppercase tracking-wider text-gold">{store.currency}</p>
+                  <p className="tabular font-display text-xl leading-none text-fg">{store.sackBucks ?? "—"}</p>
+                  {store.signInHint && <p className="text-[10px] text-muted">{store.signInHint}</p>}
+                </div>
+              )}
+              {hud.dropLive && (
+                <div className="rounded-xl border border-primary/50 bg-panel px-3 py-2 backdrop-blur-sm">
+                  <p className="font-display text-lg leading-none text-primary">DROP LIVE</p>
+                  {hud.nextUnlock && (
+                    <p className="mt-0.5 text-[10px] uppercase tracking-wider text-muted">
+                      Next · {hud.nextUnlock.label} at {hud.nextUnlock.at} Respect
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="flex items-center gap-3 rounded-xl border border-border bg-panel px-3 py-2 backdrop-blur-sm">
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-muted">Respect</p>
@@ -425,17 +491,21 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
               <span className="text-fg">{hud.locationName}</span>
               <span className="mx-1.5 text-subtle">/</span>
               {hud.district}
+              {!!hud.coolerCount && (
+                <span className="ml-2 text-primary">{hud.coolerCount} in cooler</span>
+              )}
+              {hud.fed && <span className="ml-2 text-gold">FED</span>}
             </div>
           </div>
 
-          {hud.interactHint && hud.mode === "world" && !hud.cinematic && (
-            <div className="pointer-events-none absolute left-1/2 top-[44%] z-20 -translate-x-1/2">
+          {hud.interactHint && hud.mode === "world" && !hud.cinematic && !hud.fishing?.active && (
+            <div className="pointer-events-none absolute left-3 top-[12.6rem] z-20 sm:top-[13.6rem]">
               <div
-                className="flex items-center gap-2 rounded-full border border-primary/35 bg-panel px-4 py-2 text-sm font-medium text-fg shadow-lg backdrop-blur-sm"
+                className="flex items-center gap-2 rounded-full border border-primary/35 bg-panel px-3 py-1.5 text-xs font-medium text-fg shadow-lg backdrop-blur-sm sm:text-sm"
                 style={{ transform: hud.uiPulse > 0.1 ? `scale(${1 + hud.uiPulse * 0.08})` : undefined }}
               >
                 <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-primary px-1.5 font-display text-sm text-primary-fg">
-                  {hud.promptButton}
+                  {hud.hintWalk ? "↓" : hud.promptButton}
                 </span>
                 {hud.interactHint}
               </div>
@@ -464,18 +534,11 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
             </div>
           )}
 
-          {hud.basketball && (
+          {hud.mode === "basketball" && hud.basketball && !hud.race?.active && (
             <div className="pointer-events-none absolute right-3 top-28 z-20 rounded-xl border border-border bg-panel px-4 py-3 backdrop-blur-sm">
-              <p className="font-display text-lg text-primary">901 COURT</p>
-              <p className="tabular text-3xl font-semibold leading-none text-fg">{hud.basketball.score}</p>
-              <p className="mt-1 text-xs text-muted">
-                {hud.basketball.timeLeft}s · {hud.basketball.shots} shots · need {hud.basketball.target}
-              </p>
-              <p className="mt-0.5 text-[10px] uppercase tracking-wider text-gold">
-                {hud.basketball.zone} · {hud.basketball.perfects} perfect
-              </p>
-              {hud.basketball.combo > 1 && (
-                <p className="mt-1 font-display text-xl text-primary">x{hud.basketball.combo} STREAK</p>
+              <p className="tabular text-4xl font-semibold leading-none text-fg">{hud.basketball.score}</p>
+              {hud.basketball.timeLeft > 0 && hud.basketball.timeLeft < 900 && (
+                <p className="mt-1 text-xs text-muted">{hud.basketball.timeLeft}s</p>
               )}
               <button
                 type="button"
@@ -487,10 +550,125 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
             </div>
           )}
 
+          {hud.fishing?.active && (
+            <div className="pointer-events-none absolute left-3 top-[12.6rem] z-20 w-[min(18rem,calc(100%-7.5rem))] rounded-xl border border-[#4f9ddf]/40 bg-panel px-3 py-2.5 backdrop-blur-sm sm:top-[13.6rem]">
+              <p className="font-display text-lg leading-none text-[#7ec8ef]">MISSISSIPPI</p>
+              <p className="mt-1 text-sm text-fg">{hud.fishing.prompt}</p>
+              {(hud.fishing.phase === "cast" || hud.fishing.phase === "reel") && (
+                <div className="mt-2 space-y-1.5">
+                  {hud.fishing.phase === "cast" ? (
+                    <div className="h-2 overflow-hidden rounded-full bg-black/50">
+                      <div className="h-full rounded-full bg-[#4f9ddf]" style={{ width: `${Math.round(hud.fishing.power * 100)}%` }} />
+                    </div>
+                  ) : (
+                    <>
+                      <div className="relative h-2.5 overflow-hidden rounded-full bg-black/50">
+                        <div className="absolute inset-y-0 left-[18%] w-[64%] bg-primary/55" />
+                        <div className="absolute inset-y-0 left-[82%] w-[18%] bg-red-500/40" />
+                        <div
+                          className="absolute top-[-3px] h-[calc(100%+6px)] w-1 rounded-sm bg-[#f4e27c]"
+                          style={{ left: `${Math.round(Math.min(1, hud.fishing.tension) * 100)}%` }}
+                        />
+                      </div>
+                      <div className="h-1 overflow-hidden rounded-full bg-black/40">
+                        <div className="h-full rounded-full bg-[#4f9ddf]" style={{ width: `${Math.round(hud.fishing.progress * 100)}%` }} />
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+              {hud.fishing.phase === "catch" && (
+                <p className="mt-1 font-display text-2xl text-gold">
+                  {hud.fishing.fishName}
+                  {hud.fishing.weight ? ` · ${hud.fishing.weight}` : ""}
+                  {hud.fishing.payout ? ` · +$${hud.fishing.payout}` : ""}
+                </p>
+              )}
+              {hud.fishing.phase === "fail" && <p className="mt-1 text-sm text-muted">{hud.fishing.fishName}</p>}
+              {hud.fishing.caught > 0 && hud.fishing.phase !== "catch" && (
+                <p className="mt-1 text-[10px] uppercase tracking-wider text-muted">{hud.fishing.caught} in the cooler</p>
+              )}
+            </div>
+          )}
+
+          {hud.race?.active && hud.race.phase !== "idle" && (
+            <div className="pointer-events-none absolute right-3 top-28 z-20 flex flex-col items-end gap-2">
+              <div className="rounded-xl border border-gold/40 bg-panel px-4 py-3 backdrop-blur-sm">
+                <p className="font-display text-lg text-gold">901 STRIP · VS CAM</p>
+                <p className="tabular font-display text-4xl leading-none text-fg">{hud.race.place === 1 ? "1ST" : "2ND"}</p>
+                <p className="mt-1 text-xs text-muted">
+                  LAP {hud.race.lap}/{hud.race.laps} · {formatRaceClock(hud.race.time)}
+                </p>
+                <p className="mt-0.5 text-[10px] uppercase tracking-wider text-primary">{hud.race.nextName}</p>
+                <p className={`mt-1 text-[11px] font-semibold ${hud.race.gap > 0.08 ? "text-gold" : "text-primary"}`}>
+                  {formatGap(hud.race.gap)}
+                </p>
+                <p className="mt-1 tabular text-sm text-fg">{formatMph(hud.race.speed)} mph</p>
+                {hud.race.boosting && <p className="font-display text-lg text-primary">NITRO</p>}
+                {hud.race.slowed && !hud.race.boosting && <p className="font-display text-lg text-red-400">SLOW</p>}
+                <p className="text-[10px] text-gold">
+                  {hud.race.rivalName} · lap {hud.race.rivalLap}
+                </p>
+                {hud.race.combo > 1 && (
+                  <p className="mt-1 font-display text-lg text-primary">COMBO x{hud.race.combo}</p>
+                )}
+                {hud.race.phase !== "finish" && (
+                  <button
+                    type="button"
+                    className="pointer-events-auto mt-2 w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-muted"
+                    onClick={() => engineRef.current?.leaveRace()}
+                  >
+                    Leave race
+                  </button>
+                )}
+              </div>
+              <RaceRadar race={hud.race} />
+            </div>
+          )}
+
+          {hud.race?.phase === "countdown" && (
+            <div className="pointer-events-none absolute inset-0 z-30 flex flex-col items-center justify-center gap-5">
+              <div className="flex gap-3">
+                {[0, 1, 2].map((i) => {
+                  const on = hud.race && hud.race.countdown <= 3.05 - i;
+                  const go = hud.race && hud.race.countdown <= 0.2;
+                  return (
+                    <div
+                      key={i}
+                      className={`h-6 w-6 rounded-full border ${
+                        go ? "border-primary bg-primary shadow-[0_0_18px_#39ff14]" : on ? "border-red-500 bg-red-500 shadow-[0_0_16px_#ef4444]" : "border-border bg-surface-2"
+                      }`}
+                    />
+                  );
+                })}
+              </div>
+              <p className="font-display text-8xl text-primary drop-shadow-lg">
+                {hud.race.countdown > 0.2 ? Math.ceil(hud.race.countdown) : "GO"}
+              </p>
+              <p className="font-display text-xl text-gold">HIT THE ARROWS · BEAT CAM</p>
+            </div>
+          )}
+
+          {hud.race?.phase === "green" && hud.race.cue && (
+            <div className="pointer-events-none absolute inset-x-0 top-[28%] z-30 flex flex-col items-center gap-1">
+              <div
+                className={`font-display text-[8rem] leading-none drop-shadow-[0_0_24px_rgba(0,0,0,0.65)] sm:text-[10rem] ${
+                  hud.race.cue.status === "hit" ? "text-primary" : hud.race.cue.status === "miss" ? "text-red-500" : "text-gold"
+                }`}
+                style={{ transform: `scale(${1 + hud.race.cue.flash * 0.35})` }}
+              >
+                {arrowGlyph(hud.race.cue.dir)}
+              </div>
+              <p className="font-display text-2xl text-fg">
+                {hud.race.cue.status === "live" ? "HIT IT · BOOST" : hud.race.cue.status === "hit" ? "NITRO" : "MISS · SLOW"}
+              </p>
+            </div>
+          )}
+
           {hud.started && !hud.paused && (
             <button
               type="button"
-              className="absolute left-3 bottom-24 z-20 flex items-center gap-2 rounded-xl border border-border bg-panel px-3 py-2 text-xs text-fg backdrop-blur-sm sm:bottom-3"
+              className={`absolute left-3 z-20 flex items-center gap-2 rounded-xl border border-border bg-panel px-3 py-2 text-xs text-fg backdrop-blur-sm ${touchUI ? "bottom-36" : "bottom-3"}`}
               onClick={() => engineRef.current?.toggleView()}
             >
               <SwitchCamera className="h-4 w-4 text-gold" />
@@ -567,14 +745,27 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                     {APPAREL.map((item) => {
                       const owned = hud.owned.includes(item.id);
                       const eq = hud.equipped === item.id;
-                      const locked = Boolean(item.respectRequired && hud.respect < item.respectRequired && !owned);
+                      const locked = Boolean(
+                        (item.respectRequired && hud.respect < item.respectRequired && !owned)
+                        || (item.irlOnly && !owned)
+                        || (item.dropLiveRequired && !hud.dropLive && !owned),
+                      );
                       const real = commerce.productForOutfit(item.id);
+                      const thumb = lookFor(item.id).thumb.src;
                       return (
                         <div
                           key={item.id}
                           className="flex flex-col gap-2 rounded-xl border border-border bg-surface-2 p-3"
                         >
                           <div className="flex items-center gap-3">
+                          {real?.imageUrl || thumb ? (
+                            <img
+                              src={real?.imageUrl ?? thumb}
+                              alt=""
+                              data-testid={`view-${real?.id ?? item.id}`}
+                              className="h-14 w-14 shrink-0 rounded-lg object-cover bg-black"
+                            />
+                          ) : (
                           <div
                             className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg"
                             style={{ backgroundColor: item.color }}
@@ -583,6 +774,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                               {item.category === "hat" ? "CAP" : item.category === "chain" ? "$" : "SR"}
                             </span>
                           </div>
+                          )}
                           <div className="min-w-0 flex-1">
                             <p className="truncate font-medium text-fg">{item.name}</p>
                             <p className="truncate text-xs text-muted">
@@ -610,23 +802,23 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                                     : "bg-primary text-primary-fg"
                             }`}
                           >
-                            {eq ? "On" : locked ? "Locked" : owned ? "Equip" : `$${item.price}`}
+                            {eq ? "On" : locked ? (item.irlOnly ? "IRL" : "Locked") : owned ? "Equip" : `$${item.price}`}
                           </button>
                           </div>
                           {real && (
                             <div className="flex gap-2">
                               <button
                                 type="button"
-                                data-testid={`view-${real.id}`}
-                                onClick={() => commerce.viewProduct(real)}
-                                className="min-h-9 flex-1 rounded-lg border border-border bg-surface text-xs font-semibold uppercase tracking-wider text-fg"
+                                data-testid={`tryon-${item.id}`}
+                                onClick={() => engineRef.current?.wearProduct(item.id)}
+                                className="min-h-9 flex-1 rounded-lg border border-primary/40 bg-primary/10 text-xs font-semibold uppercase tracking-wider text-primary"
                               >
-                                View product
+                                Try on
                               </button>
                               <button
                                 type="button"
                                 data-testid={`buy-irl-${real.id}`}
-                                onClick={() => commerce.buyIrl(real)}
+                                onClick={() => setInspect({ product: real, size: real.sizes?.[0] ?? "M" })}
                                 className="min-h-9 flex-1 rounded-lg border border-gold/50 bg-gold/15 text-xs font-semibold uppercase tracking-wider text-gold"
                               >
                                 Buy IRL
@@ -645,6 +837,176 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                     className="min-h-11 w-full rounded-xl border border-border bg-surface-2 font-medium text-fg"
                   >
                     Back to streets
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {inspect && (
+            <div className="absolute inset-0 z-50 flex items-end justify-center bg-bg/80 p-3 backdrop-blur-sm sm:items-center">
+              <div className="w-full max-w-md overflow-hidden rounded-2xl border border-gold/40 bg-surface shadow-2xl">
+                {inspect.product.imageUrl && (
+                  <img src={inspect.product.imageUrl} alt="" className="h-44 w-full object-cover" />
+                )}
+                <div className="p-4">
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-gold">{inspect.product.zone ?? "HQ DROP"}</p>
+                  <h3 className="font-display text-3xl text-fg">{inspect.product.name}</h3>
+                  <p className="font-display text-2xl text-gold">${inspect.product.price}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {(inspect.product.sizes ?? ["M"]).map((sz) => (
+                      <button
+                        key={sz}
+                        type="button"
+                        onClick={() => setInspect({ ...inspect, size: sz })}
+                        className={`min-h-10 min-w-10 rounded-lg border px-3 text-sm font-semibold ${inspect.size === sz ? "border-gold bg-gold text-bg" : "border-border bg-surface-2 text-fg"}`}
+                      >
+                        {sz}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-4 grid gap-2">
+                    {inspect.product.virtualOutfitId && (
+                      <button
+                        type="button"
+                        className="min-h-11 rounded-xl bg-primary font-display text-xl uppercase text-primary-fg"
+                        onClick={() => engineRef.current?.wearProduct(inspect.product.virtualOutfitId as ApparelId)}
+                      >
+                        Put on Benji
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="min-h-11 rounded-xl border border-gold/50 bg-gold/15 font-display text-xl uppercase text-gold"
+                      onClick={() => {
+                        commerce.addToCart(inspect.product, inspect.size);
+                        setInspect(null);
+                      }}
+                    >
+                      Buy IRL · {inspect.size}
+                    </button>
+                    <button type="button" className="min-h-10 text-xs uppercase tracking-wider text-muted" onClick={() => setInspect(null)}>
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {hud.food && (
+            <div className="absolute inset-x-0 bottom-0 z-40 flex justify-center p-3 sm:p-4">
+              <div className="flex max-h-[48vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-surface/95 shadow-2xl backdrop-blur-md">
+                <div className="relative h-20 shrink-0 overflow-hidden">
+                  <img src={hud.food.logo} alt="" className="h-full w-full object-cover object-center" crossOrigin="anonymous" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/50 to-transparent" />
+                  <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between gap-3">
+                    <div>
+                      <p className="font-display text-2xl" style={{ color: hud.food.accent }}>{hud.food.tag}</p>
+                      <p className="text-xs text-muted">{hud.food.blurb}</p>
+                    </div>
+                    <p className="tabular font-display text-2xl text-gold">${hud.sackdollars}</p>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-3">
+                  {hud.food.truckId === "foodtruck" && (
+                    <p className="mb-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-fg">
+                      {hud.food.catchName
+                        ? `Cooler · ${hud.food.catchName} ${hud.food.catchWeight} · ${hud.food.cooler} fish`
+                        : "Cooler empty · fish the Mississippi, then grill it here"}
+                    </p>
+                  )}
+                  {hud.food.social && (
+                    <p className="mb-2 text-[11px] uppercase tracking-wider text-gold">{hud.food.social}{hud.food.contact ? ` · ${hud.food.contact}` : ""}</p>
+                  )}
+                  <div className="grid gap-2">
+                    {hud.food.items.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        disabled={!!item.locked}
+                        className="flex min-h-16 items-center justify-between gap-3 rounded-xl border border-border bg-surface-2 px-3 py-3 text-left disabled:opacity-45"
+                        onClick={() => engineRef.current?.orderFood(item.id)}
+                      >
+                        <div className="min-w-0">
+                          <p className="font-medium text-fg">{item.name}</p>
+                          <p className="text-xs text-muted">{item.locked ?? item.blurb}</p>
+                        </div>
+                        <span className="shrink-0 font-display text-xl text-gold">${item.price}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="mt-3 min-h-11 w-full rounded-xl border border-border bg-panel text-sm text-muted"
+                    onClick={() => engineRef.current?.closeFood()}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {hud.sponsorOpen && hud.sponsor && (
+            <div className="absolute inset-0 z-40 flex items-end justify-center bg-bg/55 p-3 backdrop-blur-sm sm:items-center">
+              <div className="max-h-[86vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-gold/40 bg-surface/95 p-4 shadow-2xl">
+                <KollabSheet data={hud.sponsor} />
+                <button
+                  type="button"
+                  className="mt-3 min-h-11 w-full rounded-xl border border-border bg-panel text-sm text-muted"
+                  onClick={() => engineRef.current?.closeSponsor()}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
+
+          {hud.raceMenu && (
+            <div className="absolute inset-0 z-40 flex items-end justify-center bg-bg/50 p-4 backdrop-blur-sm sm:items-center">
+              <div className="w-full max-w-sm rounded-2xl border border-gold/40 bg-panel p-4">
+                <p className="font-display text-2xl text-gold">901 STRIP</p>
+                <p className="text-sm text-muted">The whip drives the 901 by itself. Hit ← → ↑ when they flash. Miss a turn and Cam walks it.</p>
+                <p className="mt-2 text-[11px] uppercase tracking-wider text-primary">Arrows / WASD · 3 laps · Beale · Highland · Poplar · 3rd · Union · Front</p>
+                <button
+                  type="button"
+                  className="mt-4 w-full rounded-xl bg-primary px-3 py-3 font-display text-2xl text-primary-fg"
+                  onClick={() => engineRef.current?.startRace()}
+                >
+                  RACE CAM
+                </button>
+                <button type="button" className="mt-3 w-full text-xs text-muted" onClick={() => engineRef.current?.closeRaceMenu()}>
+                  Not now
+                </button>
+              </div>
+            </div>
+          )}
+
+          {hud.race?.recap && !hud.cinematic && (
+            <div className="absolute inset-0 z-40 flex items-end justify-center bg-bg/65 p-3 backdrop-blur-sm sm:items-center">
+              <div className="w-full max-w-md rounded-2xl border border-gold/40 bg-surface p-5 shadow-2xl">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-gold">901 Strip · vs Cam</p>
+                <p className="font-display mt-1 text-6xl leading-none text-fg">{hud.race.winner === "player" ? "1ST" : "2ND"}</p>
+                <p className="mt-1 text-sm text-muted">{formatRaceClock(hud.race.time)} · {hud.race.winner === "player" ? "You took the loop." : "Cam got there first."}</p>
+                <p className="mt-3 font-display text-2xl text-gold">+${hud.race.payout} · +{hud.race.respect} respect</p>
+                {hud.race.bestTime > 0 && (
+                  <p className="mt-1 text-xs text-muted">Best {formatRaceClock(hud.race.bestTime)}</p>
+                )}
+                <div className="mt-4 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    className="min-h-11 rounded-xl bg-primary font-display text-2xl text-primary-fg"
+                    onClick={() => engineRef.current?.startRace()}
+                  >
+                    RUN IT BACK
+                  </button>
+                  <button
+                    type="button"
+                    className="min-h-11 rounded-xl border border-border bg-surface-2 font-medium text-fg"
+                    onClick={() => engineRef.current?.dismissRaceRecap()}
+                  >
+                    Keep roaming
                   </button>
                 </div>
               </div>
@@ -707,10 +1069,11 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
             </div>
           )}
 
-          {/* Mobile controls */}
-          <div className="absolute inset-x-0 bottom-0 z-20 flex items-end justify-between p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:hidden">
+          {touchUI && hud.started && !hud.paused && !hud.cinematic && !hud.shopOpen && !hud.food && !hud.dialogue && (
+          <div className={`sack-touch-bar absolute inset-x-0 bottom-0 z-20 flex items-end justify-between p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] ${landscape ? "origin-bottom scale-90 p-2" : ""}`}>
+            <div className="flex flex-col items-start gap-2">
             <div
-              className="relative h-28 w-28 touch-none rounded-full border border-border bg-panel/80 backdrop-blur-sm"
+              className={`relative touch-none rounded-full border border-border bg-panel/80 backdrop-blur-sm ${landscape ? "h-24 w-24" : "h-28 w-28"}`}
               onTouchStart={onStickStart}
               onTouchMove={onStickMove}
               onTouchEnd={onStickEnd}
@@ -719,7 +1082,41 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
               <div className="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/40 bg-primary/20" />
               <span className="absolute bottom-2 left-0 right-0 text-center text-[10px] text-muted">MOVE</span>
             </div>
+            <button
+              type="button"
+              className="flex h-11 min-w-16 items-center justify-center rounded-full border border-border bg-panel px-3 font-display text-sm text-fg"
+              onTouchStart={(e) => {
+                e.preventDefault();
+                if (engineRef.current) engineRef.current.input.touch.run = true;
+              }}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                if (engineRef.current) engineRef.current.input.touch.run = false;
+              }}
+            >
+              {hud.race?.active ? "BOOST" : "RUN"}
+            </button>
+            </div>
             <div className="flex flex-col items-end gap-2">
+              {hud.race?.phase === "green" ? (
+                <div className="flex gap-2">
+                  {(["left", "up", "right"] as const).map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      className={`flex items-center justify-center rounded-full border border-gold/50 bg-panel font-display text-fg shadow-lg active:scale-95 ${
+                        d === "up" ? "h-16 w-16 text-3xl text-gold" : "h-14 w-14 text-2xl"
+                      }`}
+                      onTouchStart={(e) => {
+                        e.preventDefault();
+                        engineRef.current?.input.queueArrow(d);
+                      }}
+                    >
+                      {arrowGlyph(d)}
+                    </button>
+                  ))}
+                </div>
+              ) : (
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -750,7 +1147,42 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                   →
                 </button>
               </div>
-              {hud.mode === "basketball" ? (
+              )}
+              {hud.fishing?.active ? (
+                <button
+                  type="button"
+                  className="flex h-16 w-16 items-center justify-center rounded-full bg-[#4f9ddf] font-display text-sm text-bg shadow-lg active:scale-95"
+                  onTouchStart={(e) => {
+                    e.preventDefault();
+                    const eng = engineRef.current;
+                    if (!eng) return;
+                    eng.input.touch.shoot = true;
+                  }}
+                  onTouchEnd={(e) => {
+                    e.preventDefault();
+                    const eng = engineRef.current;
+                    if (!eng) return;
+                    eng.input.touch.shoot = false;
+                  }}
+                >
+                  {hud.fishing.phase === "cast" ? "CAST" : hud.fishing.phase === "strike" || hud.fishing.phase === "nibble" ? "HOOK" : hud.fishing.phase === "reel" ? "REEL" : "OK"}
+                </button>
+              ) : hud.mode === "basketball" ? (
+                <div className="flex items-end gap-2">
+                <button
+                  type="button"
+                  className="flex h-14 w-14 items-center justify-center rounded-full border border-border bg-panel font-display text-sm text-fg shadow-lg active:scale-95"
+                  onTouchStart={(e) => {
+                    e.preventDefault();
+                    engineRef.current?.input.queueJump();
+                  }}
+                  onTouchEnd={(e) => {
+                    e.preventDefault();
+                    if (engineRef.current) engineRef.current.input.touch.jump = false;
+                  }}
+                >
+                  JUMP
+                </button>
                 <button
                   type="button"
                   className="flex h-16 w-16 items-center justify-center rounded-full bg-primary font-display text-lg text-primary-fg shadow-lg active:scale-95"
@@ -771,46 +1203,52 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                 >
                   SHOOT
                 </button>
+                </div>
               ) : (
                 <div className="flex items-end gap-2">
+                  <button
+                    type="button"
+                    className={`flex h-14 w-14 items-center justify-center rounded-full border font-display text-sm shadow-lg active:scale-95 ${hud.jooking ? "border-primary bg-primary text-primary-fg" : "border-border bg-panel text-fg"}`}
+                    onTouchStart={(e) => {
+                      e.preventDefault();
+                      engineRef.current?.input.queueJook();
+                    }}
+                    onTouchEnd={(e) => {
+                      e.preventDefault();
+                      if (engineRef.current) engineRef.current.input.touch.jook = false;
+                    }}
+                  >
+                    JOOK
+                  </button>
                   <button
                     type="button"
                     className="flex h-14 w-14 items-center justify-center rounded-full border border-border bg-panel font-display text-sm text-fg shadow-lg active:scale-95"
                     onTouchStart={(e) => {
                       e.preventDefault();
-                      const eng = engineRef.current;
-                      if (!eng) return;
-                      eng.input.queueJump();
+                      engineRef.current?.input.queueJump();
                     }}
                     onTouchEnd={(e) => {
                       e.preventDefault();
-                      const eng = engineRef.current;
-                      if (!eng) return;
-                      eng.input.touch.jump = false;
-                    }}
-                    onTouchCancel={(e) => {
-                      e.preventDefault();
-                      const eng = engineRef.current;
-                      if (!eng) return;
-                      eng.input.touch.jump = false;
+                      if (engineRef.current) engineRef.current.input.touch.jump = false;
                     }}
                   >
                     JUMP
                   </button>
                   <button
                     type="button"
-                    className="flex h-16 w-16 items-center justify-center rounded-full bg-primary font-display text-2xl text-primary-fg shadow-lg active:scale-95"
+                    className="flex h-16 w-16 items-center justify-center rounded-full bg-primary font-display text-xl text-primary-fg shadow-lg active:scale-95"
                     onClick={() => engineRef.current?.tryInteract()}
                   >
-                    {hud.promptButton}
+                    {hud.driving ? (hud.race?.active ? "RACE" : "PARK") : hud.hintWalk ? "↓" : hud.promptButton}
                   </button>
                 </div>
               )}
             </div>
           </div>
+          )}
 
-          <div className="pointer-events-none absolute bottom-3 right-3 z-10 hidden rounded-lg border border-border bg-panel/70 px-2 py-1 text-[10px] text-muted sm:block">
-            WASD · Q/R look · V camera · {hud.promptButton} · Space jump
+          <div className={`pointer-events-none absolute bottom-3 right-3 z-10 rounded-lg border border-border bg-panel/70 px-2 py-1 text-[10px] text-muted ${touchUI ? "hidden" : "hidden sm:block"}`}>
+            {hud.race?.active ? "Arrows on turns · Esc DNF" : `WASD drive · Shift boost · Q/R look · V camera · ${hud.promptButton} · Space jump`}
           </div>
 
           {/* Pause */}
@@ -863,6 +1301,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                     <PauseWardrobe owned={hud.owned} equipped={hud.equipped} onEquip={onBuy} />
                   )}
                   {hud.pauseTab === "trophies" && <PauseTrophies unlocked={hud.trophies} />}
+                  {hud.pauseTab === "kollab" && hud.sponsor && <KollabSheet data={hud.sponsor} />}
                   {hud.pauseTab === "settings" && (
                     <PauseSettings
                       settings={hud.settings}
@@ -882,6 +1321,16 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                           onClick={() => engineRef.current?.resume()}
                         >
                           Resume
+                        </button>
+                        <button
+                          type="button"
+                          className="min-h-11 rounded-xl border border-gold/40 bg-gold/10 font-display text-xl text-gold"
+                          onClick={() => {
+                            engineRef.current?.resume();
+                            engineRef.current?.startRace();
+                          }}
+                        >
+                          Race Cam
                         </button>
                         <button
                           type="button"
@@ -910,6 +1359,34 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
   );
 }
 
+function RaceRadar({ race }: { race: NonNullable<HudSnapshot["race"]> }) {
+  const minX = 14 * 48;
+  const maxX = 52 * 48;
+  const minY = 4 * 48;
+  const maxY = 36 * 48;
+  const nx = (x: number) => ((x - minX) / (maxX - minX)) * 100;
+  const ny = (y: number) => ((y - minY) / (maxY - minY)) * 100;
+  const loop = RACE_CHECKPOINTS.map((c) => `${nx(c.x)},${ny(c.y)}`).join(" ");
+  const first = RACE_CHECKPOINTS[0]!;
+  const loopClosed = `${loop} ${nx(first.x)},${ny(first.y)}`;
+  return (
+    <svg viewBox="0 0 100 100" className="h-28 w-28 rounded-xl border border-gold/30 bg-bg/70 p-1">
+      <polyline fill="none" stroke="#c9a84c" strokeWidth="1.6" points={loopClosed} opacity="0.7" />
+      {RACE_CHECKPOINTS.map((c) => (
+        <circle
+          key={c.name}
+          cx={nx(c.x)}
+          cy={ny(c.y)}
+          r={c.name === race.nextName ? 3.4 : 1.8}
+          fill={c.name === race.nextName ? "#39ff14" : "#c9a84c"}
+        />
+      ))}
+      <circle cx={nx(race.rivalX)} cy={ny(race.rivalY)} r="2.6" fill="#c9a84c" stroke="#0d0b0a" strokeWidth="0.6" />
+      <circle cx={nx(race.playerX)} cy={ny(race.playerY)} r="2.8" fill="#39ff14" stroke="#0d0b0a" strokeWidth="0.6" />
+    </svg>
+  );
+}
+
 function PauseMap({ district }: { district: string }) {
   return (
     <div>
@@ -922,7 +1399,7 @@ function PauseMap({ district }: { district: string }) {
             className="absolute -translate-x-1/2 -translate-y-1/2 text-center"
             style={{ left: `${(p.x / (64 * 48)) * 100}%`, top: `${(p.y / (48 * 48)) * 100}%` }}
           >
-            <div className="mx-auto h-2.5 w-2.5 rounded-full bg-primary" />
+            <div className="mx-auto h-2.5 w-2.5 rounded-full bg-primary" style={p.id === "strip" ? { background: "#c9a84c" } : undefined} />
             <p className="mt-0.5 text-[9px] uppercase tracking-wide text-fg">{p.label}</p>
           </div>
         ))}
@@ -1012,11 +1489,14 @@ function PauseWardrobe({
             key={a.id}
             type="button"
             onClick={() => onEquip(a.id)}
-            className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left ${
+            className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left ${
               equipped === a.id ? "border-primary bg-primary/10" : "border-border bg-surface-2"
             }`}
           >
-            <span className="text-sm font-medium text-fg">{a.name}</span>
+            <span className="flex min-w-0 items-center gap-3">
+              <img src={lookFor(a.id).thumb.src} alt="" className="h-10 w-10 shrink-0 rounded object-cover bg-black" />
+              <span className="truncate text-sm font-medium text-fg">{a.name}</span>
+            </span>
             <span className="text-xs text-muted">{equipped === a.id ? "Equipped" : "Equip"}</span>
           </button>
         ))}
@@ -1047,6 +1527,68 @@ function PauseTrophies({ unlocked }: { unlocked: string[] }) {
           );
         })}
       </ul>
+    </div>
+  );
+}
+
+function KollabSheet({ data }: { data: SponsorHud }) {
+  const copyPitch = async () => {
+    try {
+      await navigator.clipboard.writeText(data.pitch);
+    } catch {
+      /* private mode */
+    }
+  };
+  return (
+    <div>
+      <p className="text-[11px] uppercase tracking-[0.28em] text-gold">Welkome To $ackReligious World</p>
+      <p className="font-display text-4xl text-fg">KOLLAB PACKAGES</p>
+      <p className="mt-1 text-sm text-muted">
+        {data.cycle} · {data.days} days · {data.sponsorOpen}/{data.sponsorCap} sponsor open · {data.artistOpen}/{data.artistCap} artist open
+      </p>
+      <div className="mt-4 grid gap-2">
+        {data.packages.map((p) => (
+          <div key={`${p.kind}-${p.tier}`} className="rounded-xl border border-border bg-surface-2 px-3 py-3">
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="font-display text-2xl" style={{ color: p.kind === "sponsor" ? "#1db954" : "#d4af37" }}>
+                {p.name}
+              </p>
+              <p className="font-display text-xl text-gold">${p.price}</p>
+            </div>
+            <p className="text-[11px] uppercase tracking-wider text-muted">{p.tag}</p>
+            <ul className="mt-2 space-y-1">
+              {p.perks.map((perk) => (
+                <li key={perk} className="text-xs leading-relaxed text-fg">· {perk}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+      <p className="mt-4 text-[11px] uppercase tracking-wider text-gold">This cycle</p>
+      <div className="mt-2 grid gap-2">
+        {data.slots.map((s) => (
+          <div key={s.id} className="flex items-start justify-between gap-3 rounded-lg border border-border bg-panel px-3 py-2">
+            <div>
+              <p className="text-sm font-medium text-fg">{s.name}</p>
+              <p className="text-xs text-muted">{s.where}</p>
+              <p className="text-[11px] text-subtle">{s.note}</p>
+            </div>
+            <span className={`shrink-0 text-[10px] uppercase tracking-wider ${s.status === "held" ? "text-primary" : "text-gold"}`}>
+              {s.status === "held" ? "Live" : "Open"}
+            </span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-4 text-[11px] leading-relaxed text-muted">
+        Songs must be klean. You design the kharakters, we drop them in. Jersey profit stays 100% with the Deluxe sponsor. Prices move with the cut.
+      </p>
+      <button
+        type="button"
+        className="mt-3 min-h-11 w-full rounded-xl bg-primary font-display text-xl text-primary-fg"
+        onClick={() => void copyPitch()}
+      >
+        Copy message to Mikey
+      </button>
     </div>
   );
 }

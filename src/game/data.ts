@@ -33,7 +33,7 @@ export const PAL = {
 } as const;
 
 /** Bump to force the live preview to remount the world bake. */
-export const ART_REV = 12;
+export const ART_REV = 63;
 
 export const BRAND = {
   name: "$ackReligious",
@@ -138,6 +138,63 @@ export const APPAREL: ApparelItem[] = [
     description: "Full fit. Court to culture spot ready.",
     productId: "sr-green-sweats",
   },
+  {
+    id: "gold_drop",
+    name: "IRL Gold Drop",
+    price: 0,
+    category: "set",
+    color: "#c9a84c",
+    description: "Verified purchase colorway. Same piece as the real order.",
+    productId: "sr-gold-drop",
+    irlOnly: true,
+  },
+  {
+    id: "night_run",
+    name: "Night Run Set",
+    price: 140,
+    category: "set",
+    color: "#39ff14",
+    description: "After-hours fit. Respect 30 and Drop Live.",
+    productId: "sr-night-run",
+    respectRequired: 30,
+    dropLiveRequired: true,
+  },
+  {
+    id: "kollab_jersey",
+    name: "SR x Veli Kollab Jersey",
+    price: 125,
+    category: "top",
+    color: "#d4af37",
+    description: "This cycle's Deluxe perk. $ackReligious x Veli's Wings. IRL they keep 100% of jersey profit for 30 days.",
+    productId: "sr-veli-kollab-jersey",
+  },
+  {
+    id: "tour_black",
+    name: "Worldwide Tour Tee — Black",
+    price: 55,
+    category: "top",
+    color: "#111111",
+    description: "Diamond $ · EST. 2020. Memphis on the back. Sacks Giving drop.",
+    productId: "sr-tour-black",
+  },
+  {
+    id: "tour_white",
+    name: "Worldwide Tour Tee — White",
+    price: 55,
+    category: "top",
+    color: "#f5f5f5",
+    description: "White diamond $ tour tee. Rock it to the Sackrow games.",
+    productId: "sr-tour-white",
+  },
+  {
+    id: "tour_red",
+    name: "Worldwide Tour Tee — Red",
+    price: 55,
+    category: "top",
+    color: "#c41e3a",
+    description: "Red tour tee. Klothing Kompany worldwide.",
+    productId: "sr-tour-red",
+  },
 ];
 
 export const POIS: WorldPoi[] = [
@@ -210,10 +267,10 @@ export const POIS: WorldPoi[] = [
   {
     id: "dropvan",
     name: "Drop Van",
-    x: 38 * TILE,
-    y: 21 * TILE,
-    w: 3 * TILE,
-    h: 2.5 * TILE,
+    x: 30.4 * TILE,
+    y: 19.45 * TILE,
+    w: 3.2 * TILE,
+    h: 1.45 * TILE,
     color: "#292524",
     label: "VAN",
     district: "Union Ave",
@@ -243,13 +300,101 @@ export const POIS: WorldPoi[] = [
   {
     id: "river",
     name: "Mississippi River",
-    x: 1 * TILE,
-    y: 42 * TILE,
-    w: 14 * TILE,
-    h: 4 * TILE,
+    x: 0,
+    y: 41 * TILE,
+    w: WORLD_W * TILE,
+    h: (WORLD_H - 41) * TILE,
     color: "#1e3a5f",
     label: "RIVER",
     district: "Riverfront",
+  },
+  {
+    id: "foodtruck",
+    name: "901 Catch Kitchen",
+    x: 15.4 * TILE,
+    y: 22.4 * TILE,
+    w: 2.6 * TILE,
+    h: 1.7 * TILE,
+    color: "#166534",
+    label: "CATCH",
+    district: "Beale",
+  },
+  {
+    id: "velis",
+    name: "Veli's Wings",
+    x: 43.1 * TILE,
+    y: 22.5 * TILE,
+    w: 2.7 * TILE,
+    h: 1.7 * TILE,
+    color: "#b45309",
+    label: "VELI'S",
+    district: "Beale",
+  },
+  {
+    id: "brothers",
+    name: "Brothers Wingz N Things",
+    x: 7.6 * TILE,
+    y: 22.5 * TILE,
+    w: 2.7 * TILE,
+    h: 1.7 * TILE,
+    color: "#9f1239",
+    label: "WINGZ",
+    district: "Beale",
+  },
+  {
+    id: "alley",
+    name: "Gold Alley",
+    x: 35.2 * TILE,
+    y: 7.6 * TILE,
+    w: 2.2 * TILE,
+    h: 3.2 * TILE,
+    color: "#c9a84c",
+    label: "ALLEY",
+    district: "Midtown",
+  },
+  {
+    id: "strip",
+    name: "901 Strip",
+    x: 32.4 * TILE,
+    y: 18.8 * TILE,
+    w: 3.6 * TILE,
+    h: 2.4 * TILE,
+    color: "#c9a84c",
+    label: "RACE",
+    district: "Beale",
+  },
+  {
+    id: "welcome",
+    name: "Welkome Plaza",
+    x: 24.1 * TILE,
+    y: 13.5 * TILE,
+    w: 3.5 * TILE,
+    h: 2.5 * TILE,
+    color: "#1db954",
+    label: "WELKOME",
+    district: "Midtown",
+  },
+  {
+    id: "listenpost",
+    name: "Artist Listening Post",
+    x: 38.5 * TILE,
+    y: 22.55 * TILE,
+    w: 2.2 * TILE,
+    h: 1.55 * TILE,
+    color: "#d4af37",
+    label: "POST",
+    district: "Beale",
+  },
+  {
+    id: "billboard",
+    name: "901 Billboard",
+    x: 46.6 * TILE,
+    y: 16.2 * TILE,
+    w: 2.6 * TILE,
+    h: 1.5 * TILE,
+    color: "#c9a84c",
+    label: "BOARD",
+    district: "East Memphis",
   },
 ];
 
@@ -303,8 +448,8 @@ export function createDropDayMission(opts?: { order?: DeliveryId[]; courtTarget?
     steps: [
       {
         id: "wake",
-        label: "Wake Up",
-        description: "Explore the apartment. The doorway is south. Step into Memphis.",
+        label: "Leave Home",
+        description: "You're already inside. Walk south through the doorway onto the street.",
         target: "apartment",
         kind: "goto",
         reward: 10,
@@ -351,6 +496,63 @@ export function createDropDayMission(opts?: { order?: DeliveryId[]; courtTarget?
   };
 }
 
+export function createAfterHoursMission(): Mission {
+  return {
+    id: "after_hours",
+    title: "After Hours",
+    chapter: "CHAPTER 02",
+    activeStep: 0,
+    complete: false,
+    steps: [
+      {
+        id: "flash",
+        label: "Cover Shot",
+        description: "Talk to the photographer outside HQ. Drop Live needs a cover.",
+        target: "store",
+        kind: "talk",
+        reward: 50,
+        done: false,
+      },
+      {
+        id: "alleywalk",
+        label: "Gold Alley",
+        description: "The alley behind HQ is open. Walk it.",
+        target: "alley",
+        kind: "goto",
+        reward: 45,
+        done: false,
+      },
+      {
+        id: "nightball",
+        label: "Sackrow Night Court",
+        description: "Score 10 on the night court. Crowd is louder now.",
+        target: "court",
+        kind: "basketball",
+        reward: 70,
+        done: false,
+      },
+      {
+        id: "nightvan",
+        label: "Night Route",
+        description: "Take the drop van after dark. Headlights on.",
+        target: "dropvan",
+        kind: "pickup",
+        reward: 55,
+        done: false,
+      },
+      {
+        id: "afterparty",
+        label: "Close with K",
+        description: "Back to HQ. K Blanco shuts the night down.",
+        target: "store",
+        kind: "return",
+        reward: 90,
+        done: false,
+      },
+    ],
+  };
+}
+
 export function createSideMissions(): SideMission[] {
   return [
     {
@@ -362,6 +564,26 @@ export function createSideMissions(): SideMission[] {
       kind: "score",
       target: "court",
       need: 16,
+    },
+    {
+      id: "downtown_threes",
+      title: "From Downtown",
+      description: "Hit 6 threes in the 3-Point Challenge at 901 Court.",
+      reward: 90,
+      done: false,
+      kind: "score",
+      target: "court",
+      need: 6,
+    },
+    {
+      id: "horse_beat",
+      title: "HORSE",
+      description: "Clear Court OG's HORSE calls without spelling the word.",
+      reward: 100,
+      done: false,
+      kind: "score",
+      target: "court",
+      need: 5,
     },
     {
       id: "full_fit",
@@ -382,6 +604,36 @@ export function createSideMissions(): SideMission[] {
       need: 6,
     },
     {
+      id: "catch_grill",
+      title: "Catch Kitchen",
+      description: "Grill a Mississippi fish at the 901 truck.",
+      reward: 40,
+      done: false,
+      kind: "score",
+      target: "foodtruck",
+      need: 1,
+    },
+    {
+      id: "velis_plate",
+      title: "Veli's Gold",
+      description: "Order a plate from Veli's Wings.",
+      reward: 30,
+      done: false,
+      kind: "score",
+      target: "velis",
+      need: 1,
+    },
+    {
+      id: "brothers_crown",
+      title: "Wingz N Things",
+      description: "Eat with the Brothers on Beale.",
+      reward: 30,
+      done: false,
+      kind: "score",
+      target: "brothers",
+      need: 1,
+    },
+    {
       id: "sunset_river",
       title: "Sunset at the River",
       description: "Walk the Mississippi riverfront.",
@@ -389,6 +641,16 @@ export function createSideMissions(): SideMission[] {
       done: false,
       kind: "visit",
       target: "river",
+    },
+    {
+      id: "river_catch",
+      title: "901 Angler",
+      description: "Cast from a pier and land a fish.",
+      reward: 50,
+      done: false,
+      kind: "score",
+      target: "river",
+      need: 1,
     },
     {
       id: "pyramid_pic",
@@ -408,6 +670,52 @@ export function createSideMissions(): SideMission[] {
       kind: "visit",
       target: "beale",
     },
+    {
+      id: "photo_op",
+      title: "Cover Shot",
+      description: "After Drop Live, talk to the photographer outside HQ.",
+      reward: 70,
+      done: false,
+      kind: "talk",
+      need: 1,
+    },
+    {
+      id: "gold_alley",
+      title: "Gold Alley",
+      description: "Unlock the alley behind HQ at 25 Respect, then walk it.",
+      reward: 55,
+      done: false,
+      kind: "visit",
+      target: "alley",
+    },
+    {
+      id: "night_van",
+      title: "Night Route",
+      description: "Take the drop van out after 20:00.",
+      reward: 65,
+      done: false,
+      kind: "visit",
+      target: "dropvan",
+    },
+    {
+      id: "strip_kings",
+      title: "Strip Kings",
+      description: "Beat Cam in a 3-lap 901 street race.",
+      reward: 120,
+      done: false,
+      kind: "score",
+      target: "strip",
+      need: 1,
+    },
+    {
+      id: "welkome_board",
+      title: "Book the Block",
+      description: "Walk Welkome Plaza and read this cycle's sponsor + artist board.",
+      reward: 25,
+      done: false,
+      kind: "visit",
+      target: "welcome",
+    },
   ];
 }
 
@@ -422,14 +730,21 @@ export const TROPHIES: TrophyDef[] = [
   { id: "city_legend", name: "901 Legend", description: "Reach 40 Respect.", rank: "gold" },
   { id: "night_owl", name: "Night Owl", description: "Be out after 20:00.", rank: "bronze" },
   { id: "full_closet", name: "Closet Heavy", description: "Own every piece on the wall.", rank: "platinum" },
+  { id: "irl_family", name: "Paid in Full", description: "Verified IRL order unlocked a game reward.", rank: "gold" },
+  { id: "sackrow_s", name: "Sackrow S", description: "Finish a Drop Run at S grade.", rank: "platinum" },
+  { id: "drop_live", name: "Drop Live", description: "Turn the city on. Free roam begins.", rank: "gold" },
+  { id: "after_hours", name: "After Hours", description: "Finish Chapter 2. The night stays loud.", rank: "platinum" },
+  { id: "strip_king", name: "Strip King", description: "Beat Cam on the 901 loop.", rank: "gold" },
+  { id: "river_rat", name: "River Rat", description: "Land a fish on the Mississippi.", rank: "bronze" },
+  { id: "block_eats", name: "Block Eats", description: "Eat at every food truck on Beale.", rank: "silver" },
 ];
 
 export const NPCS: NpcDef[] = [
   {
     id: "k_blanco",
     name: "K Blanco",
-    x: 30.5 * TILE,
-    y: 10.5 * TILE,
+    x: 31 * TILE,
+    y: 8.56 * TILE,
     color: "#f5d0a9",
     dialogue: [
       "You made it. I needed somebody who moves like the city, not like a tourist.",
@@ -475,6 +790,7 @@ export const NPCS: NpcDef[] = [
     dialogue: [
       "Court's open. Pick the ball up, gather, then let it fly.",
       "Don't rush the release. Green window. Miss, rebound, go again.",
+      "After Drop Day we run HORSE and the 3-point. Don't come light.",
     ],
   },
   {
@@ -495,6 +811,41 @@ export const NPCS: NpcDef[] = [
     dialogue: ["Beale don't sleep. Brand either.", "When the neon hits, the city talks."],
     wander: true,
   },
+  {
+    id: "photog",
+    name: "Block Photog",
+    x: 31.2 * TILE,
+    y: 13.6 * TILE,
+    color: "#c9a84c",
+    dialogue: [
+      "Hold up. Chin down, chain out. That's the cover.",
+      "Drop Live looks different when the flash hits the gold.",
+      "Don't duck the camera. The brand needs the face that ran the drop.",
+    ],
+  },
+  {
+    id: "cam",
+    name: "Cam",
+    x: 33.6 * TILE,
+    y: 19.7 * TILE,
+    color: "#c9a84c",
+    dialogue: [
+      "Strip's open. Gold coupe versus the drop van.",
+      "Three laps. Beale, Highland, Poplar, 3rd, Union, Front. Don't brake for the lights — I won't.",
+    ],
+  },
+];
+
+export const DROP_LIVE_LINES = [
+  "That's the sound. Drop's live. The block felt that.",
+  "Cameras outside. People in the fit. That's because you showed up.",
+  "Free roam now. Side jobs print Respect. Don't waste the night.",
+];
+
+export const AFTER_HOURS_LINES = [
+  "That's the cover. Gold Alley, night court, van after dark.",
+  "You didn't just drop product. You dropped a night.",
+  "After Hours is closed. Side jobs still print Respect. Don't disappear.",
 ];
 
 export const TIPS = [
@@ -505,6 +856,10 @@ export const TIPS = [
   "A DualSense or Xbox pad works — left stick to move, South to talk.",
   "Night on Beale hits different. Stay out after 20:00.",
   "Shop the wall at HQ. Fit changes how the city sees you.",
+  "Race Cam at the 901 Strip. Three laps around the city.",
+  "Welkome Plaza books 2 sponsors and 2 artists every 30 days.",
+  "Worldwide Tour tees are in the locker. Black, white, or red.",
+  "Sacks Giving Weekend flyers are up on Beale, the court, and HQ.",
 ];
 
 export const SAVE_KEY = "sackreligious-memphis-v3";

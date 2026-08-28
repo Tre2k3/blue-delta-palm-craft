@@ -12,3 +12,7 @@ Traffic rules (world-life + court integrity):
 - No sideways sliding or sidewalk cutting as the intended path
 
 Do not skin the whole city in brand wraps.
+
+## 901 Strip race
+
+Benji hops a branded green street whip. Cam drives a gold coupe (`laneId: RIVAL`, skipped by traffic). 3 laps, countdown lights, rubber-band CPU, checkpoint gates on the 901 loop. Esc / Leave race is DNF. Win pays $140 + 10 Respect and unlocks Strip King.

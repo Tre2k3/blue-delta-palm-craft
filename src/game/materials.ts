@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { applyPolygonOffset, type OffsetLayer } from "./polygonOffset";
 
 export const MAT_URLS = {
   asphalt: "/game/materials/01_asphalt_basecolor.png",
@@ -88,6 +89,7 @@ export function std(
     repeat?: [number, number];
     transparent?: boolean;
     opacity?: number;
+    offset?: OffsetLayer;
   } = {},
 ) {
   const tex = map?.clone();
@@ -97,7 +99,7 @@ export function std(
     tex.repeat.set(opts.repeat[0], opts.repeat[1]);
     tex.needsUpdate = true;
   }
-  return new THREE.MeshStandardMaterial({
+  const mat = new THREE.MeshStandardMaterial({
     map: tex,
     color: opts.color ?? 0xffffff,
     roughness: opts.roughness ?? 0.86,
@@ -107,4 +109,6 @@ export function std(
     transparent: opts.transparent ?? false,
     opacity: opts.opacity ?? 1,
   });
+  if (opts.offset) applyPolygonOffset(mat, opts.offset);
+  return mat;
 }

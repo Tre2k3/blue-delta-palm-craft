@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { applyPolygonOffset } from "../polygonOffset";
 
 export type SignSlot = "storefront" | "billboard";
 
@@ -99,18 +100,6 @@ function paintAtlas(): HTMLCanvasElement {
 }
 
 async function loadAtlasFile(): Promise<THREE.Texture | null> {
-  const urls = ["/game3d/signs/atlas.svg"];
-  for (const url of urls) {
-    const tex = await new Promise<THREE.Texture | null>((resolve) => {
-      new THREE.TextureLoader().load(
-        url,
-        (t) => resolve(t),
-        undefined,
-        () => resolve(null),
-      );
-    });
-    if (tex) return tex;
-  }
   return null;
 }
 
@@ -140,16 +129,16 @@ export async function getSignAtlas(): Promise<THREE.Texture> {
 export async function getSignMaterial(): Promise<THREE.MeshStandardMaterial> {
   if (atlasMat) return atlasMat;
   const map = await getSignAtlas();
-  atlasMat = new THREE.MeshStandardMaterial({
-    map,
-    roughness: 0.48,
-    metalness: 0.08,
-    transparent: false,
-    polygonOffset: true,
-    polygonOffsetFactor: -1,
-    polygonOffsetUnits: -1,
-    depthWrite: true,
-  });
+  atlasMat = applyPolygonOffset(
+    new THREE.MeshStandardMaterial({
+      map,
+      roughness: 0.48,
+      metalness: 0.08,
+      transparent: false,
+      depthWrite: true,
+    }),
+    "overlay",
+  );
   return atlasMat;
 }
 
