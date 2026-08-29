@@ -3,11 +3,8 @@
  * Crop approved wrap sheets, Sackrow court, and K Blanco character map
  * into engine-ready textures. Run: node scripts/apply-brand-art.mjs
  */
-import { mkdirSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
 
-const require = createRequire(import.meta.url);
 // Use Python/PIL — already verified in this sandbox.
 const py = `
 from PIL import Image, ImageFilter, ImageOps

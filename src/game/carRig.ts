@@ -23,7 +23,18 @@ export type StreetCarRig = {
 };
 
 /** Sit on the raised WorldLife road (top ~0.09) instead of the y=0 ground plane. */
-export const CAR_RIDE = 0.16;
+/** Tyre radius. The rig origin is the contact patch, so wheels sit at this local Y. */
+export const WHEEL_RADIUS = 0.26;
+
+/**
+ * Ride height above the world origin.
+ *
+ * Wheels sit at local Y == WHEEL_RADIUS, so the rig origin is the tyre contact
+ * patch. WorldLife asphalt is a 0.035-tall box centered at y=0.075 (top ~0.093).
+ * CAR_RIDE is that surface so cars sit on the road instead of sinking through it.
+ * Animate the hull for suspension — do not raise the root.
+ */
+export const CAR_RIDE = 0.093;
 
 export const CIVILIAN_PAINTS: { color: number; kind: CarKind }[] = [
   { color: 0xcfc8bf, kind: "sedan" },
@@ -52,7 +63,7 @@ function makeWheel() {
   const rim = new THREE.MeshStandardMaterial({ color: 0xb8b8b8, roughness: 0.32, metalness: 0.72 });
   const disc = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.55, metalness: 0.4 });
   const root = new THREE.Group();
-  const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.16, 18), tire);
+  const wheel = new THREE.Mesh(new THREE.CylinderGeometry(WHEEL_RADIUS, WHEEL_RADIUS, 0.16, 18), tire);
   wheel.rotation.x = Math.PI / 2;
   root.add(wheel);
   const wall = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, 0.04, 18), tire);
@@ -147,7 +158,7 @@ export function makeStreetCar(index: number, parked = false): StreetCarRig {
     [-ax, -W * 0.5],
   ] as const) {
     const wheel = makeWheel();
-    wheel.position.set(x, 0.27, z);
+    wheel.position.set(x, WHEEL_RADIUS, z);
     if (z < 0) wheel.rotation.y = Math.PI;
     root.add(wheel);
     wheels.push(wheel);
@@ -216,7 +227,7 @@ export function makeDropVan(): THREE.Group {
     [-ax, -W * 0.5],
   ] as const) {
     const wheel = makeWheel();
-    wheel.position.set(x, 0.26, z);
+    wheel.position.set(x, WHEEL_RADIUS, z);
     if (z < 0) wheel.rotation.y = Math.PI;
     root.add(wheel);
   }

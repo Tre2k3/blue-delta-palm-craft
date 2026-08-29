@@ -77,7 +77,6 @@ import {
   type FishingState,
 } from "./fishing";
 import {
-  FOOD_TRUCKS,
   foodHud,
   foodTruckById,
   isFoodTruck,

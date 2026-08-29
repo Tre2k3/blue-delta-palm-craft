@@ -317,6 +317,10 @@ export class PlayerCharacter {
       matA.opacity = 1;
       matA.transparent = false;
       matA.alphaTest = CUTOUT_ALPHA;
+      // Match cutoutMeshMaterial: MSAA resolves the silhouette instead of a
+      // hard binary edge. Without this the runtime swap re-introduces the
+      // stair-stepped outline that hardenCutoutTexture was fixed to remove.
+      matA.alphaToCoverage = true;
       matA.depthWrite = true;
       this.cardB.visible = false;
     }

@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "vite dev --host 0.0.0.0 --port 8080",
-    "build": "vite build && npm run db:migrate",
+    "build": "node scripts/preflight.mjs && vite build && npm run db:migrate",
     "db:migrate": "node scripts/migrate.mjs",
     "build:dev": "vite build --mode development",
     "preview": "node scripts/preview-prod.mjs",
@@ -18,7 +18,8 @@
     "test:smoke": "node scripts/game-smoke.mjs",
     "test:mission": "node scripts/mission-test.mjs",
     "test:commerce": "node scripts/commerce-smoke.mjs",
-    "test:save": "node scripts/save-smoke.mjs"
+    "test:save": "node scripts/save-smoke.mjs",
+    "preflight": "node scripts/preflight.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.3",

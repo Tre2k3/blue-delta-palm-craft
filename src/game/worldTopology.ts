@@ -218,10 +218,6 @@ export function trafficLanes(): Lane[] {
 const MESH_SKIP = new Set(["court", "river", "dropvan", "strip", "alley", "foodtruck", "velis", "brothers", "welcome", "listenpost", "billboard"]);
 const ROAD_CLEAR = TILE * 1.7;
 
-function rectsOverlap(a: Rect, b: Rect) {
-  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-}
-
 function blockInteriorNear(cx: number, cy: number, w: number, h: number): Rect | null {
   const xCuts = [0, ...STREETS.filter((s) => s.axis === "x").map((s) => s.tile).sort((a, b) => a - b), WORLD_W];
   const yCuts = [0, ...STREETS.filter((s) => s.axis === "y").map((s) => s.tile).sort((a, b) => a - b), RIVER_TILE_Y];

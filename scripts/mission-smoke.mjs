@@ -135,7 +135,11 @@ try {
   await page.waitForTimeout(500);
   await shot(page, "10-drop-day-complete.png");
 
-  await page.evaluate(() => window.__gameTest.enterHQShop());
+  // Completion runs a deliberate 3.6s cinematic. The old test tried to open
+  // the shop while that guard was still active, so it captured a dark exterior
+  // frame and mislabeled it as wardrobe QA. Teleporting back to HQ through the
+  // existing QA hook clears the cinematic and creates a deterministic shop test.
+  await page.evaluate(() => window.__gameTest.teleport("store"));
   await page.waitForTimeout(220);
   await page.evaluate(() => window.__gameTest.interact());
   const buy = page.locator('[data-testid="buy-black_hoodie"]');

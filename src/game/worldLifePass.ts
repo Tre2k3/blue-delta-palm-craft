@@ -279,7 +279,6 @@ export class WorldLifePass {
     const cx = wx(store.x + store.w / 2);
     const cz = wz(store.y + store.h + 70);
     const gold = new THREE.MeshStandardMaterial({ color: 0xc9a84c, roughness: 0.4, metalness: 0.45, emissive: 0x6a4e12, emissiveIntensity: 0.55 });
-    const black = new THREE.MeshStandardMaterial({ color: 0x0d0d0d, roughness: 0.7 });
     const neon = new THREE.MeshStandardMaterial({ color: 0x39ff14, emissive: 0x39ff14, emissiveIntensity: 1.4 });
     for (let i = 0; i < 8; i++) {
       const car = this.makeParkedCar(40 + i);
@@ -479,7 +478,7 @@ export class WorldLifePass {
   private lastMovingPeds = 0;
   private lastPausedPeds = 0;
 
-  postSync(f: WorldFrame, carGroups: THREE.Group[], npcSprites: Map<string, THREE.Object3D>) {
+  postSync(f: WorldFrame, carGroups: THREE.Group[], _npcSprites: Map<string, THREE.Object3D>) {
     this.updateSignals(f.clock);
     this.smoothCarVisuals(f, carGroups);
     if (this.courtCrowd) this.courtCrowd.visible = false;

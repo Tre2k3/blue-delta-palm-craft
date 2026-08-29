@@ -661,7 +661,6 @@ export class World3D {
     const dark = new THREE.MeshStandardMaterial({ color: 0x161412, roughness: 0.64, metalness: 0.22 });
     const steel = new THREE.MeshStandardMaterial({ color: 0xb8b3aa, roughness: 0.32, metalness: 0.7 });
     const chrome = new THREE.MeshStandardMaterial({ color: 0xd9d4cc, roughness: 0.22, metalness: 0.82 });
-    const rubber = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
     const warm = new THREE.MeshStandardMaterial({ color: 0xffc07a, roughness: 0.45, emissive: 0xff9a3c, emissiveIntensity: 0.55 });
     const add = (mesh: THREE.Mesh, x: number, y: number, z: number) => {
       mesh.position.set(x, y, z);
