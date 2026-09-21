@@ -31,20 +31,34 @@ import { DAY_START_HOUR, HOURS_PER_SECOND, nightAmount } from "./dayCycle";
 import { spawnCityPeds, tickCityPed, PED_JOB_CHAT, boostDropLive, type PedActor } from "./cityLife";
 import { dueMilestones, nextMilestone, type VerifiedReward } from "./progression";
 import { sponsorHud } from "./sponsors";
+import { RCM, RCM_ARRIVE, rcmDrop, rcmFare, rcmHud, rcmParked, rcmVehicle, type RcmVehicleId } from "./rcmWorx";
 import {
   DIFFICULTY,
   HORSE_CALLS,
+  COURT_VENUES,
   cycleDifficulty,
   horseDisplay,
   loadBoard,
   ogLine,
   pushBoard,
+  venueFor,
   type BoardRow,
   type CourtChallenge,
   type CourtDifficulty,
+  type CourtVenueId,
 } from "./courtPlay";
 import { dressBenji } from "./outfitCompositor";
 import { lookFor, stampFor, overlayKey } from "./outfitLook";
+import { BASKETBALL_SPRITES, basketballImageKey } from "./basketballSprites";
+import { OUTFIT_PLATES, outfitImageKey } from "./outfitSprites";
+import {
+  applyRendererQuality,
+  isHandheld,
+  noteFrame,
+  preferQuality,
+  pixelRatio,
+  setQuality,
+} from "./graphics";
 import {
   aheadDistance,
   approachingCross,
@@ -77,6 +91,18 @@ import {
   type FishingState,
 } from "./fishing";
 import {
+  beginCharge as beginBowlChargeState,
+  bowlHud,
+  idleBowl,
+  laneApproachGame,
+  nearestLane,
+  payoutFor,
+  releaseRoll,
+  startBowl as startBowlState,
+  tickBowl,
+  type BowlingState,
+} from "./bowling";
+import {
   foodHud,
   foodTruckById,
   isFoodTruck,
@@ -86,6 +112,7 @@ import {
 } from "./foodTrucks";
 import {
   createRun,
+  expireRun,
   finalizeRun,
   goodWindow,
   gradeRank,
@@ -106,6 +133,7 @@ import {
   playerWrongWay,
   progressOf,
   settleRace,
+  snapToRacePath,
   tickAutoDrive,
   tickRaceCues,
   tickRival,
@@ -171,6 +199,7 @@ const PED_CHAT = [
 	"901 all day. Keep it moving.",
 	"Drop van's around the corner if you rolling product.",
 	"Beale got the cypher tonight. Pull up.",
+	"901 Lanes downtown if you want to roll a turkey.",
 ];
 const PED_NAMES = ["Uncle Tone", "Keisha", "Lil Sack", "Ms. Pat", "Dre", "Big Ralph", "Nia", "Cam"];
 function pedSpeaker(p: PedActor) {
@@ -245,7 +274,7 @@ export class GameEngine {
 		ballVy: 0,
 		ballVz: 0,
 		inFlight: false,
-		held: true,
+		held: false,
 		made: false,
 		flash: 0,
 		targetScore: 8,
@@ -260,6 +289,7 @@ export class GameEngine {
 		spotPts: 2,
 		hoopId: 0,
 		releaseT: 0,
+		followThroughT: 0,
 		pending: null as null | { vx: number; vy: number; vz: number },
 		scrambleT: 0,
 	};
@@ -268,6 +298,7 @@ export class GameEngine {
 	courtDifficulty: CourtDifficulty = "901";
 	courtChallenge: CourtChallenge = "timed";
 	courtMenu = false;
+	courtVenue: CourtVenueId = "901_day";
 	ogBark: string | null = null;
 	ogBarkT = 0;
 	crowdPulse = 0;
@@ -303,6 +334,12 @@ export class GameEngine {
 	foodApproach: FoodTruckId | null = null;
 	foodServe: { truckId: FoodTruckId; t: number; duration: number; item: string } | null = null;
 	sponsorOpen = false;
+	rcmMenu = false;
+	rcmPick: RcmVehicleId | null = null;
+	rcmDest: LocationId | null = null;
+	rcmJob = false;
+	rcmChauffeur = false;
+	rcmRuns = 0;
 	cooler: CoolerFish[] = [];
 	fedT = 0;
 	eaten = new Set<string>();
@@ -316,7 +353,7 @@ export class GameEngine {
 	nearNpc: string | null = null;
 	nearPed = -1;
 	nearCar = -1;
-	vehicle: { kind: "van" | "car"; carIndex: number } | null = null;
+	vehicle: { kind: "van" | "car" | "sprinter" | "escalade"; carIndex: number } | null = null;
 	race: RaceState = idleRace();
 	raceMenu = false;
 	rivalCarIndex = -1;
@@ -353,9 +390,14 @@ export class GameEngine {
 	hoopPulse = 0;
 	plantSign = 0;
 	fish: FishingState = idleFishing();
+	bowl: BowlingState = idleBowl();
+	bowlingHighScore = 0;
 	lastDeliveryAt = 0;
 	jooking = false;
 	jookT = 0;
+	playtestOpen = false;
+	playtestNoclip = false;
+	fpsEma = 60;
 	constructor(canvas: HTMLCanvasElement) {
 		this.canvas = canvas;
 		const overlay = document.createElement("canvas");
@@ -367,78 +409,82 @@ export class GameEngine {
 	}
 	async init() {
 		await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-		await Promise.all(Object.entries({
-			front: "/game/benji-front-norm.png",
-			back: "/game/benji-back-norm.png",
-			left: "/game/benji-left-norm.png",
-			right: "/game/benji-right-norm.png",
-			frontHi: "/game/benji-front.png",
-			backHi: "/game/benji-back.png",
-			leftHi: "/game/benji-left.png",
-			rightHi: "/game/benji-right.png",
-			threeQ: "/game/benji-three-quarter.png",
+		const bootImages: Record<string, string> = {
+			front: "/game/benji-front-norm.webp",
+			back: "/game/benji-back-norm.webp",
+			left: "/game/benji-left-norm.webp",
+			right: "/game/benji-right-norm.webp",
+			frontHi: "/game/benji-front.webp",
+			backHi: "/game/benji-back.webp",
+			leftHi: "/game/benji-left.webp",
+			rightHi: "/game/benji-right.webp",
+			threeQ: "/game/benji-three-quarter.webp",
 			icon: "/game/sack-icon.png",
-			k: "/game/k-blanco-portrait.png",
-			featured: "/game/featured-products.png",
-			"walk-front-1": "/game/benji/walk-front-1.png",
-			"walk-front-2": "/game/benji/walk-front-2.png",
-			"walk-front-3": "/game/benji/walk-front-3.png",
-			"walk-front-4": "/game/benji/walk-front-4.png",
-			"walk-back-1": "/game/benji/walk-back-1.png",
-			"walk-back-2": "/game/benji/walk-back-2.png",
-			"walk-back-3": "/game/benji/walk-back-3.png",
-			"walk-back-4": "/game/benji/walk-back-4.png",
-			"walk-left-1": "/game/benji/walk-left-1.png",
-			"walk-left-2": "/game/benji/walk-left-2.png",
-			"walk-left-3": "/game/benji/walk-left-3.png",
-			"walk-left-4": "/game/benji/walk-left-4.png",
-			"walk-right-1": "/game/benji/walk-right-1.png",
-			"walk-right-2": "/game/benji/walk-right-2.png",
-			"walk-right-3": "/game/benji/walk-right-3.png",
-			"walk-right-4": "/game/benji/walk-right-4.png",
-			"jump-1": "/game/benji/jump-1.png",
-			"jump-2": "/game/benji/jump-2.png",
-			"jump-3": "/game/benji/jump-3.png",
-			"jump-4": "/game/benji/jump-4.png",
-			"dribble-1": "/game/benji/dribble-1.png",
-			"dribble-2": "/game/benji/dribble-2.png",
-			"dribble-3": "/game/benji/dribble-3.png",
-			"dribble-4": "/game/benji/dribble-4.png",
-			"gather-1": "/game/benji/gather-1.png",
-			"gather-2": "/game/benji/gather-2.png",
-			"release-1": "/game/benji/release-1.png",
-			"release-2": "/game/benji/release-2.png",
-			"rebound-1": "/game/benji/rebound-1.png",
-			"rebound-2": "/game/benji/rebound-2.png",
-			"celebrate-1": "/game/benji/celebrate-1.png",
-			"celebrate-2": "/game/benji/celebrate-2.png",
-			"talk-1": "/game/benji/talk-1.png",
-			"interact-1": "/game/benji/interact-1.png",
-			"phone-1": "/game/benji/phone-1.png",
-			"overlay-tour-black-front": "/game/apparel/overlays/tour-black-front.png",
-			"overlay-tour-black-back": "/game/apparel/overlays/tour-black-back.png",
-			"overlay-tour-black-left": "/game/apparel/overlays/tour-black-left.png",
-			"overlay-tour-black-right": "/game/apparel/overlays/tour-black-right.png",
-			"overlay-tour-white-front": "/game/apparel/overlays/tour-white-front.png",
-			"overlay-tour-white-back": "/game/apparel/overlays/tour-white-back.png",
-			"overlay-tour-white-left": "/game/apparel/overlays/tour-white-left.png",
-			"overlay-tour-white-right": "/game/apparel/overlays/tour-white-right.png",
-			"overlay-tour-red-front": "/game/apparel/overlays/tour-red-front.png",
-			"overlay-tour-red-back": "/game/apparel/overlays/tour-red-back.png",
-			"overlay-tour-red-left": "/game/apparel/overlays/tour-red-left.png",
-			"overlay-tour-red-right": "/game/apparel/overlays/tour-red-right.png",
-			"tour-black-front": "/game/apparel/stamps/tour-black-print.png",
-			"tour-black-back": "/game/apparel/stamps/tour-black-tour.png",
+			k: "/game/k-blanco-portrait.webp",
+			featured: "/game/featured-products.webp",
+			"walk-front-1": "/game/benji/walk-front-1.webp",
+			"walk-front-2": "/game/benji/walk-front-2.webp",
+			"walk-front-3": "/game/benji/walk-front-3.webp",
+			"walk-front-4": "/game/benji/walk-front-4.webp",
+			"walk-back-1": "/game/benji/walk-back-1.webp",
+			"walk-back-2": "/game/benji/walk-back-2.webp",
+			"walk-back-3": "/game/benji/walk-back-3.webp",
+			"walk-back-4": "/game/benji/walk-back-4.webp",
+			"walk-left-1": "/game/benji/walk-left-1.webp",
+			"walk-left-2": "/game/benji/walk-left-2.webp",
+			"walk-left-3": "/game/benji/walk-left-3.webp",
+			"walk-left-4": "/game/benji/walk-left-4.webp",
+			"walk-right-1": "/game/benji/walk-right-1.webp",
+			"walk-right-2": "/game/benji/walk-right-2.webp",
+			"walk-right-3": "/game/benji/walk-right-3.webp",
+			"walk-right-4": "/game/benji/walk-right-4.webp",
+			"jump-1": "/game/benji/jump-1.webp",
+			"jump-2": "/game/benji/jump-2.webp",
+			"jump-3": "/game/benji/jump-3.webp",
+			"jump-4": "/game/benji/jump-4.webp",
+			"dribble-1": "/game/benji/dribble-1.webp",
+			"dribble-2": "/game/benji/dribble-2.webp",
+			"dribble-3": "/game/benji/dribble-3.webp",
+			"dribble-4": "/game/benji/dribble-4.webp",
+			"gather-1": "/game/benji/gather-1.webp",
+			"gather-2": "/game/benji/gather-2.webp",
+			"release-1": "/game/benji/release-1.webp",
+			"release-2": "/game/benji/release-2.webp",
+			"rebound-1": "/game/benji/rebound-1.webp",
+			"rebound-2": "/game/benji/rebound-2.webp",
+			"celebrate-1": "/game/benji/celebrate-1.webp",
+			"celebrate-2": "/game/benji/celebrate-2.webp",
+			"talk-1": "/game/benji/talk-1.webp",
+			"interact-1": "/game/benji/interact-1.webp",
+			"phone-1": "/game/benji/phone-1.webp",
+			"tour-black-front": "/game/apparel/stamps/tour-black-print.webp",
+			"tour-black-back": "/game/apparel/stamps/tour-black-tour.webp",
 			"tour-white-front": "/game/apparel/stamps/tour-white-print.png",
-			"tour-white-back": "/game/apparel/stamps/tour-white-tour.png",
-			"tour-red-front": "/game/apparel/stamps/tour-red-print.png",
-			"tour-red-back": "/game/apparel/stamps/tour-red-tour.png",
-		}).map(async ([k, src]) => {
+			"tour-white-back": "/game/apparel/stamps/tour-white-tour.webp",
+			"tour-red-front": "/game/apparel/stamps/tour-red-print.webp",
+			"tour-red-back": "/game/apparel/stamps/tour-red-tour.webp",
+		};
+		for (const [id, pack] of Object.entries(OUTFIT_PLATES)) {
+			for (const view of ["front", "back", "left", "right"] as const) {
+				bootImages[outfitImageKey(id as ApparelId, view)] = pack[view];
+			}
+		}
+		for (const [id, pack] of Object.entries(BASKETBALL_SPRITES)) {
+			bootImages[basketballImageKey(id as ApparelId, "ready")] = pack.ready;
+			bootImages[basketballImageKey(id as ApparelId, "drive")] = pack.drive;
+			bootImages[basketballImageKey(id as ApparelId, "shotFront")] = pack.shotFront;
+			bootImages[basketballImageKey(id as ApparelId, "shotBack")] = pack.shotBack;
+		}
+		await Promise.all(Object.entries(bootImages).map(async ([k, src]) => {
 			try {
 				this.images[k] = await loadImage(src);
 			} catch { /* missing optional sprite */ }
 		}));
 		this.loadSave();
+		if (isHandheld() && this.settings.quality === "high") {
+			this.settings.quality = "low";
+		}
+		setQuality(this.settings.quality);
 		this.paintMap();
 		await this.bootWorld3D();
 		this.input.bind();
@@ -664,6 +710,21 @@ export class GameEngine {
 			g.fillStyle = "#1db954";
 			g.font = "bold 12px sans-serif";
 			g.fillText("DROP VAN", p.x + 10, p.y + p.h / 2);
+		} else if (p.id === "rcmworx") {
+			g.fillStyle = "#0a0a0c";
+			g.fillRect(p.x, p.y, p.w, p.h);
+			g.strokeStyle = "#c9a84c";
+			g.lineWidth = 4;
+			g.strokeRect(p.x + 6, p.y + 6, p.w - 12, p.h - 12);
+			g.fillStyle = "#1a1a1c";
+			g.fillRect(p.x + 18, p.y + 28, 52, 28);
+			g.fillRect(p.x + p.w - 78, p.y + 32, 58, 22);
+			g.fillStyle = "#c9a84c";
+			g.font = "bold 14px sans-serif";
+			g.fillText("RCM WORX", p.x + 16, p.y + 22);
+			g.fillStyle = "#e8e0d0";
+			g.font = "11px sans-serif";
+			g.fillText("ON TIME", p.x + 16, p.y + p.h - 14);
 		} else if (p.id === "pyramid") {
 			g.fillStyle = "#1c1917";
 			g.beginPath();
@@ -767,23 +828,7 @@ export class GameEngine {
 			},
 		};
 		window.__gameTest = {
-			teleport: (loc: string) => {
-				if (this.mode === "basketball") this.exitBasketball();
-				if (this.mode === "shop") this.closeShop();
-				if (this.mode === "dialogue") {
-					this.mode = "world";
-					this.dialogue = null;
-				}
-				this.exitVehicle();
-				this.cinematic = null;
-				const p = POIS.find((x) => x.id === loc);
-				if (!p) return;
-				this.px = p.x + p.w / 2;
-				this.py = p.id === "river" ? p.y - 28 : p.y + p.h + 24;
-				this.leftSpawn = true;
-				this.updateProximity();
-				this.emitHud();
-			},
+			teleport: (loc: string) => this.warpTo(loc),
 			enterHQ: () => {
 				if (this.mode === "basketball") this.exitBasketball();
 				if (this.mode === "shop") this.closeShop();
@@ -848,10 +893,41 @@ export class GameEngine {
 			buyItem: (id: string) => this.buyItem(id as ApparelId),
 			openShop: () => this.openShop(),
 			wearProduct: (id: string) => this.wearProduct(id as ApparelId),
+			enterCourt: () => {
+				const court = POIS.find((p) => p.id === "court");
+				if (court) {
+					this.px = court.x + court.w / 2;
+					this.py = court.y + court.h * 0.72;
+				}
+				this.enterBasketball();
+			},
+			beginCharge: () => this.beginCharge(),
+			releaseShot: () => this.releaseShot(),
 			startRace: (skip = true) => this.startRace(skip),
 			leaveRace: () => this.leaveRace(),
 			completeRace: (win = true) => this.debugCompleteRace(win),
 			startFishing: () => this.startFishing(),
+			openCourtMenu: () => this.openCourtMenu(),
+			setCourtVenue: (id: string) => this.setCourtVenue(id),
+			enterLanes: () => {
+				const lanes = POIS.find((p) => p.id === "lanes");
+				if (lanes) {
+					this.px = lanes.x + lanes.w / 2;
+					this.py = lanes.y + lanes.h * 0.72;
+				}
+				this.startBowl();
+			},
+			startBowl: () => this.startBowl(),
+			leaveBowl: () => this.leaveBowl(),
+			enterRcm: () => {
+				const lot = POIS.find((p) => p.id === "rcmworx");
+				if (lot) {
+					this.px = lot.x + lot.w / 2;
+					this.py = lot.y + lot.h + 18;
+				}
+				this.openRcm();
+			},
+			bookRcm: (vehicle, dest, chauffeur = false) => this.bookRcm(vehicle as RcmVehicleId, dest as LocationId, chauffeur),
 		};
 	}
 	destroy() {
@@ -889,6 +965,7 @@ export class GameEngine {
 			duration: 3.4
 		};
 		this.letterbox = 1;
+		this.worldHour = DAY_START_HOUR;
 		analytics.track(fresh || !this.hasSave ? "new_game" : "game_started", {
 			chapter: this.mission.chapter,
 			mission: this.mission.id,
@@ -926,6 +1003,12 @@ export class GameEngine {
 		this.foodApproach = null;
 		this.foodServe = null;
 		this.sponsorOpen = false;
+		this.rcmMenu = false;
+		this.rcmPick = null;
+		this.rcmDest = null;
+		this.rcmJob = false;
+		this.rcmChauffeur = false;
+		this.rcmRuns = 0;
 		this.cooler = [];
 		this.fedT = 0;
 		this.eaten = new Set();
@@ -1014,8 +1097,10 @@ export class GameEngine {
 			this.trophies = data.trophies ?? [];
 			this.highScore = data.basketballHighScore ?? 0;
 			this.courtBoard = loadBoard();
-			const hour = data.worldHour ?? DAY_START_HOUR;
-			this.worldHour = hour >= 16 && hour < 17.5 ? DAY_START_HOUR : hour;
+			this.courtVenue = venueFor(data.courtVenue).id;
+			this.bowlingHighScore = data.bowlingHighScore ?? 0;
+			this.rcmRuns = data.rcmRuns ?? 0;
+			this.worldHour = DAY_START_HOUR;
 			if (data.settings) this.settings = {
 				...DEFAULT_SETTINGS,
 				...data.settings
@@ -1111,6 +1196,9 @@ export class GameEngine {
 			afterHoursProgress,
 			cooler: this.cooler.slice(0, 8),
 			eaten: [...this.eaten],
+			courtVenue: this.courtVenue,
+			bowlingHighScore: this.bowlingHighScore,
+			rcmRuns: this.rcmRuns,
 		};
 		try {
 			localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -1128,11 +1216,8 @@ export class GameEngine {
 		this.emitHud();
 	}
 	applyQuality() {
-		const dpr = Math.min(window.devicePixelRatio || 1, this.settings.quality === "low" ? 1 : this.settings.quality === "medium" ? 1.35 : 1.75);
-		this.world3d?.renderer.setPixelRatio(dpr);
-		if (this.world3d) {
-			this.world3d.renderer.shadowMap.enabled = this.settings.quality !== "low";
-		}
+		setQuality(this.settings.quality);
+		if (this.world3d) applyRendererQuality(this.world3d);
 	}
 	returnToTitle() {
 		this.userPaused = false;
@@ -1148,6 +1233,13 @@ export class GameEngine {
 	restartMission() {
 		this.resetProgress(false);
 		this.start(true);
+	}
+	openPause(tab: PauseTab = "resume") {
+		this.userPaused = true;
+		this.paused = true;
+		this.pauseTab = tab;
+		audio.ui();
+		this.emitHud();
 	}
 	setPauseTab(tab: PauseTab) {
 		this.pauseTab = tab;
@@ -1166,8 +1258,15 @@ export class GameEngine {
 			let dt = (t - this.lastT) / 1e3;
 			this.lastT = t;
 			dt = Math.min(dt, .1);
+			this.fpsEma = this.fpsEma * 0.86 + (dt > 1e-4 ? 1 / dt : 60) * 0.14;
 			this.update(dt);
 			this.draw();
+			const dropped = noteFrame(dt);
+			if (dropped) {
+				this.settings.quality = dropped;
+				this.applyQuality();
+				this.showToast("Phone mode · lowered graphics so it stays smooth");
+			}
 			this.hudAcc += dt;
 			if (this.hudAcc > .08) {
 				this.hudAcc = 0;
@@ -1183,12 +1282,15 @@ export class GameEngine {
 		const act = this.input.poll();
 		audio.tick(dt, this.started && !this.paused, nightAmount(this.worldHour));
 		if (this.started && act.pausePressed && !this.cinematic) {
-			if (this.mode === "shop") this.closeShop();
+			if (this.playtestOpen) this.setPlaytestOpen(false);
+			else if (this.mode === "shop") this.closeShop();
 			else if (this.foodMenu) this.closeFood();
 			else if (this.sponsorOpen) this.closeSponsor();
+			else if (this.rcmMenu) this.closeRcm();
 			else if (this.courtMenu) this.closeCourtMenu();
 			else if (this.mode === "dialogue") this.advanceDialogue();
 			else if (this.mode === "basketball" && act.backPressed) this.exitBasketball();
+			else if (this.bowl.active && act.backPressed) this.leaveBowl();
 			else {
 				this.setPauseReason("user", !this.userPaused);
 				audio.ui();
@@ -1228,7 +1330,18 @@ export class GameEngine {
 			f.scale += (1 - f.scale) * (1 - Math.exp(-10 * dt));
 			if (f.life <= 0) this.floaters.splice(i, 1);
 		}
-		if (this.run.active) this.run.time += dt;
+		if (this.run.active) {
+			this.run.time += dt;
+			const step = this.mission.steps[this.mission.activeStep];
+			const par = this.currentTier().parSeconds;
+			if (step && (step.kind === "deliver" || step.kind === "pickup") && this.run.time > par * 1.5) {
+				expireRun(this.run);
+				this.respect = Math.max(0, this.respect - 8);
+				this.showToast("Clock ran out. Respect took a hit.");
+				this.float("LATE", "#ef4444");
+				audio.groan();
+			}
+		}
 		if (this.cinematic) {
 			this.cinematic.t += dt;
 			if (this.cinematic.t >= this.cinematic.duration) {
@@ -1251,8 +1364,11 @@ export class GameEngine {
 		if (!this.started || this.paused) return;
 		if (act.viewPressed) this.toggleView();
 		const lookMul = this.settings.sensitivity || 1;
-		if (Math.abs(act.lookX) <= 1.25) this.yaw -= act.lookX * 2.2 * dt * lookMul;
-		else this.yaw -= act.lookX * 0.032 * lookMul;
+		const chauffeurLock = this.rcmJob && this.rcmChauffeur && !!this.vehicle;
+		if (!chauffeurLock) {
+			if (Math.abs(act.lookX) <= 1.25) this.yaw -= act.lookX * 2.2 * dt * lookMul;
+			else this.yaw -= act.lookX * 0.032 * lookMul;
+		}
 		if (Math.abs(act.lookY) <= 1.25) this.pitch -= act.lookY * 1.7 * dt * lookMul;
 		else this.pitch -= act.lookY * 0.028 * lookMul;
 		this.pitch = clamp(this.pitch, -1.15, 1.15);
@@ -1272,12 +1388,23 @@ export class GameEngine {
 			if (act.backPressed) this.closeSponsor();
 			return;
 		}
+		if (this.rcmMenu) {
+			if (act.backPressed) this.closeRcm();
+			return;
+		}
 		if (this.mode === "shop" || this.mode === "menu") return;
 		if (this.fish.active) {
 			this.updateFishing(dt, act.shoot, act.shootPressed, act.shootReleased);
 			this.updatePlayer(dt, 0, 0, false, false, false);
 			this.updateProximity();
 			if (act.backPressed || act.pausePressed) this.stopFishing();
+			return;
+		}
+		if (this.bowl.active) {
+			this.updateBowling(dt, act);
+			this.updateProximity();
+			if (act.backPressed) this.leaveBowl();
+			if (!this.inLanes() && this.bowl.phase !== "rolling" && this.bowl.phase !== "pins") this.leaveBowl();
 			return;
 		}
 		const hoopin = this.canShoot();
@@ -1341,8 +1468,10 @@ export class GameEngine {
 			this.ball.active = false;
 		}
 		if (act.interactPressed) this.tryInteract();
+		if (this.vehicle && this.rcmJob) this.tryFinishRcm();
 		if (this.vehicle && act.backPressed) {
 			if (this.race.active && this.race.phase !== "finish") this.leaveRace();
+			else if (this.rcmJob) this.cancelRcm();
 			else this.exitVehicle();
 		}
 	}
@@ -1364,11 +1493,11 @@ export class GameEngine {
 				c.vx = 0;
 				c.vy = 0;
 				c.braking = true;
-				if (carBlocked(c.x, c.y, 18)) {
-					const safe = nearestAsphalt(c.x, c.y);
-					c.x = safe.x;
-					c.y = safe.y;
-					if (safe.laneId) c.laneId = safe.laneId;
+				// Keep civilian traffic off the 901 loop so racers never pin on a parked car.
+				if (isRoadPoint(c.x, c.y) && (Math.abs(c.x - 34 * TILE) < 80 || Math.abs(c.x - 50 * TILE) < 80 || Math.abs(c.y - 6 * TILE) < 80 || Math.abs(c.y - 20 * TILE) < 80 || Math.abs(c.y - 34 * TILE) < 80)) {
+					c.x = 16 * TILE + ((i % 3) - 1) * 28;
+					c.y = 12 * TILE + Math.floor(i / 3) * 64;
+					c.laneId = "BEALE ST:east";
 				}
 				continue;
 			}
@@ -1536,13 +1665,13 @@ export class GameEngine {
 		for (const c of this.cars) {
 			if (c.laneId === "RIVAL" || c.laneId === "RACER") {
 				if (inCourtPx(c.x, c.y) || carBlocked(c.x, c.y, 14)) {
-					const safe = nearestAsphalt(c.x, c.y);
+					const safe = snapToRacePath(c.x, c.y);
 					c.x = safe.x;
 					c.y = safe.y;
 				}
 				continue;
 			}
-			if (inCourtPx(c.x, c.y) || carBlocked(c.x, c.y, 16)) {
+			if (inCourtPx(c.x, c.y) || carBlocked(c.x, c.y, 16) || !isRoadPoint(c.x, c.y)) {
 				const safe = nearestAsphalt(c.x, c.y);
 				c.x = safe.x;
 				c.y = safe.y;
@@ -1625,7 +1754,38 @@ export class GameEngine {
 		const f = this.fwd();
 		const r = this.right();
 		const driving = !!this.vehicle;
-		if (driving) {
+		if (driving && this.rcmJob && this.rcmChauffeur && this.rcmDest) {
+			const dest = POIS.find((p) => p.id === this.rcmDest);
+			if (dest) {
+				const tx = dest.x + dest.w / 2;
+				const ty = dest.id === "river" ? dest.y - 36 : dest.y + dest.h + 28;
+				const dx = tx - this.px;
+				const dy = ty - this.py;
+				const want = Math.atan2(-dx, -dy);
+				let diff = want - this.yaw;
+				while (diff > Math.PI) diff -= Math.PI * 2;
+				while (diff < -Math.PI) diff += Math.PI * 2;
+				this.yaw += Math.max(-1.8 * dt, Math.min(1.8 * dt, diff));
+				this.applyYawToFacing();
+				const face = this.fwd();
+				const distLeft = Math.hypot(dx, dy);
+				const throttle = distLeft < 90 ? 0.35 : 0.82;
+				const spd = 420 * throttle;
+				this.vx = face.x * spd;
+				this.vy = face.y * spd;
+				this.moving = true;
+				this.leftSpawn = true;
+				this.mover.vx = this.vx;
+				this.mover.vy = this.vy;
+				this.mover.speed = Math.hypot(this.vx, this.vy);
+				this.mover.heading = this.yaw;
+				this.mover.state = "run";
+				this.mover.air = 0;
+				this.mover.vz = 0;
+				this.animT += dt * 7;
+				this.bob = Math.sin(this.animT * 2) * 1.1;
+			}
+		} else if (driving) {
 			this.yaw -= mx * 2.35 * dt;
 			this.applyYawToFacing();
 			const face = this.fwd();
@@ -1703,12 +1863,20 @@ export class GameEngine {
 		}
 	}
 	collides(x: number, y: number, r: number) {
-		const indoor = POIS.some((p) => (p.id === "store" || p.id === "apartment") && x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h);
+		if (this.playtestNoclip) return false;
+		const indoor = POIS.some((p) => (p.id === "store" || p.id === "apartment" || p.id === "lanes") && x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h);
 		for (const w of this.walls) if (x + r > w.x && x - r < w.x + w.w && y + r > w.y && y - r < w.y + w.h) return true;
 		for (const box of this.poiBoxes) if (circleHitsRect(x, y, r, box)) return true;
 		if (!this.vehicle) {
 			const van = POIS.find((p) => p.id === "dropvan");
 			if (van && circleHitsRect(x, y, r, { x: van.x + 8, y: van.y + 10, w: van.w - 16, h: van.h - 16 })) return true;
+			const lot = POIS.find((p) => p.id === "rcmworx");
+			if (lot) {
+				const sprinter = rcmParked(lot, "sprinter");
+				const escalade = rcmParked(lot, "escalade");
+				if (circleHitsRect(x, y, r, { x: sprinter.x - 28, y: sprinter.y - 16, w: 56, h: 32 })) return true;
+				if (circleHitsRect(x, y, r, { x: escalade.x - 26, y: escalade.y - 16, w: 52, h: 32 })) return true;
+			}
 		}
 		if (this.vehicle && (carBlocked(x, y, r + 10) || inCourtPx(x, y))) return true;
 		if (!indoor) {
@@ -1752,8 +1920,10 @@ export class GameEngine {
 		if (this.foodApproach && this.foodApproach !== this.nearPoi) this.foodApproach = null;
 		let best = 92;
 		const store = POIS.find((p) => p.id === "store");
+		const lanes = POIS.find((p) => p.id === "lanes");
 		for (const n of this.npcLive) {
 			if (n.id === "k_blanco" && store && !insidePoi(this.px, this.py, store, 8)) continue;
+			if (n.id === "lane_clerk" && lanes && !insidePoi(this.px, this.py, lanes, 8)) continue;
 			const d = dist(this.px, this.py, n.x, n.y);
 			if (d < best) {
 				best = d;
@@ -1794,8 +1964,10 @@ export class GameEngine {
 				this.interactHint = "Wait for green";
 				return;
 			}
-			if (this.nearPoi && this.nearPoi !== "dropvan") {
+			if (this.nearPoi && this.nearPoi !== "dropvan" && this.nearPoi !== "rcmworx") {
 				this.interactHint = `Pull up · ${POIS.find((x) => x.id === this.nearPoi)?.name ?? "spot"}`;
+			} else if (this.rcmJob) {
+				this.interactHint = this.rcmChauffeur ? (tap ? "Sit back · Rico driving" : "Rico's got it · E on arrival") : (tap ? "Drive to the drop · PARK to arrive" : "WASD · E park on arrival");
 			} else this.interactHint = tap ? "PARK · stick to drive" : "E park it · WASD drive";
 			return;
 		}
@@ -1829,7 +2001,17 @@ export class GameEngine {
 					this.hintWalk = true;
 				}
 			}
-		} else if (this.nearPoi === "court") this.interactHint = this.missionComplete ? (tap ? "TAP · timed / HORSE / 3s" : "E · timed, HORSE, 3-point") : (tap ? "Hold SHOOT · TAP timed run" : "Hold Space · 4 hoops · E timed run");
+		} else if (this.nearPoi === "court") this.interactHint = tap ? "TAP · hoop · lanes east" : "E · hoop · 901 Lanes is the pink building east";
+		else if (this.nearPoi === "lanes") {
+			const lanes = POIS.find((p) => p.id === "lanes")!;
+			const inside = insidePoi(this.px, this.py, lanes, 0);
+			if (this.bowl.active) this.interactHint = this.bowl.phase === "over" ? (tap ? "TAP · bowl again" : "E · another game") : null;
+			else if (inside) this.interactHint = tap ? "TAP · bowl a game" : "E · bowl a game · 901 Lanes";
+			else {
+				this.interactHint = tap ? "Walk in · 901 Lanes" : "Walk inside · 901 Lanes";
+				this.hintWalk = true;
+			}
+		}
 		else if (this.nearPoi === "river") this.interactHint = tap ? "TAP · fish the Mississippi" : "E · fish the Mississippi";
 		else if (this.nearPoi === "strip") this.interactHint = tap ? "TAP · race Cam" : "E · 901 Strip race vs Cam";
 		else if (isFoodTruck(this.nearPoi)) {
@@ -1845,6 +2027,7 @@ export class GameEngine {
 		}
 		else if (this.nearPoi === "alley") this.interactHint = this.unlocks.has("gold_alley") ? "Gold Alley" : "Gold Alley · 25 Respect";
 		else if (this.nearPoi === "welcome") this.interactHint = tap ? "TAP · Welkome packages" : "E · Welkome packages · 30 days";
+		else if (this.nearPoi === "rcmworx") this.interactHint = tap ? "TAP · book RCM WORX" : "E · RCM WORX · Sprinter & Escalade";
 		else if (this.nearPoi === "listenpost") this.interactHint = tap ? "TAP · open artist slot" : "E · artist listening post · OPEN";
 		else if (this.nearPoi === "billboard") this.interactHint = tap ? "TAP · premium billboard" : "E · premium $250 billboard · OPEN";
 		else if (this.nearPoi === "beale" || this.nearPoi === "culture") this.interactHint = this.jooking ? (tap ? "JOOK to stop" : "E / J stop jookin") : (tap ? "JOOK to dance" : "J or E · jook");
@@ -1864,7 +2047,7 @@ export class GameEngine {
 		return on(beale) || on(culture);
 	}
 	toggleJook() {
-		if (this.vehicle || this.mode === "basketball" || this.mode === "shop" || this.mode === "dialogue") return;
+		if (this.vehicle || this.mode === "basketball" || this.mode === "shop" || this.mode === "dialogue" || this.bowl.active) return;
 		this.jooking = !this.jooking;
 		if (this.jooking) {
 			this.showToast("Jookin · Memphis feet");
@@ -1949,6 +2132,157 @@ export class GameEngine {
 		audio.ui();
 		this.emitHud();
 	}
+	openRcm() {
+		this.rcmMenu = true;
+		if (!this.rcmPick) this.rcmPick = "sprinter";
+		if (!this.rcmDest) this.rcmDest = "pyramid";
+		audio.confirm();
+		this.showToast(RCM.motto, 1.6);
+		this.emitHud();
+	}
+	closeRcm() {
+		if (!this.rcmMenu) return;
+		this.rcmMenu = false;
+		audio.ui();
+		this.emitHud();
+	}
+	pickRcmVehicle(id: string) {
+		this.rcmPick = id === "escalade" ? "escalade" : "sprinter";
+		audio.ui();
+		this.emitHud();
+	}
+	pickRcmDrop(id: string) {
+		this.rcmDest = (rcmDrop(id).id) as LocationId;
+		audio.ui();
+		this.emitHud();
+	}
+	bookRcm(vehicle: RcmVehicleId, dest: LocationId, chauffeur = false) {
+		this.rcmPick = vehicle;
+		this.rcmDest = dest;
+		this.rcmMenu = false;
+		this.rcmJob = true;
+		this.rcmChauffeur = chauffeur;
+		const v = rcmVehicle(vehicle);
+		const d = rcmDrop(dest);
+		const fare = rcmFare(vehicle, this.rcmRuns);
+		this.enterVehicle(vehicle);
+		this.showToast(
+			chauffeur
+				? `Rico · ${d.name} · ${this.rcmRuns <= 0 ? "partner rate $" : "$"}${fare}`
+				: `${v.name.split(" ").pop()} · ${d.name} · $${fare}`,
+			2.4,
+		);
+		this.emitHud();
+	}
+	tryFinishRcm() {
+		if (!this.rcmJob || !this.rcmDest || !this.vehicle) return false;
+		const dest = POIS.find((p) => p.id === this.rcmDest);
+		if (!dest) return false;
+		const tx = dest.x + dest.w / 2;
+		const ty = dest.id === "river" ? dest.y - 36 : dest.y + dest.h + 28;
+		if (dist(this.px, this.py, tx, ty) > RCM_ARRIVE) return false;
+		const v = rcmVehicle(this.rcmPick);
+		const fare = rcmFare(v.id, this.rcmRuns);
+		this.sackdollars += fare;
+		this.respect += 3;
+		this.rcmRuns += 1;
+		this.float(`+$${fare}`, "#c9a84c");
+		this.showToast(this.rcmRuns === 1 ? `${RCM.motto} · partner rate` : RCM.motto, 2.8);
+		this.burst(this.px, this.py, "#c9a84c");
+		audio.cash();
+		if (this.rcmRuns >= 3) {
+			this.unlockTrophy("always_ready");
+			this.completeSide("vip_runs");
+		}
+		this.rcmJob = false;
+		this.rcmChauffeur = false;
+		this.exitVehicle(true);
+		this.save();
+		this.emitHud();
+		return true;
+	}
+	cancelRcm() {
+		this.rcmJob = false;
+		this.rcmChauffeur = false;
+		this.exitVehicle(true);
+		this.showToast("Ride cancelled");
+		this.emitHud();
+	}
+	setPlaytestOpen(on: boolean) {
+		this.playtestOpen = on;
+		this.emitHud();
+	}
+	setPlaytestNoclip(on: boolean) {
+		this.playtestNoclip = on;
+		this.showToast(on ? "Noclip on · walk through anything" : "Noclip off");
+		this.emitHud();
+	}
+	warpTo(loc: string) {
+		if (this.mode === "basketball") this.exitBasketball();
+		if (this.bowl.active) this.leaveBowl();
+		if (this.mode === "shop") this.closeShop();
+		if (this.foodMenu) this.closeFood();
+		if (this.rcmMenu) this.closeRcm();
+		if (this.mode === "dialogue") {
+			this.mode = "world";
+			this.dialogue = null;
+		}
+		this.exitVehicle();
+		this.cinematic = null;
+		if (this.fish.active) this.stopFishing();
+		const p = POIS.find((x) => x.id === loc);
+		if (!p) return;
+		this.px = p.x + p.w / 2;
+		this.py = p.id === "river" ? p.y - 28 : p.id === "store" || p.id === "apartment" || p.id === "lanes" ? p.y + p.h * 0.72 : p.y + p.h + 24;
+		this.leftSpawn = true;
+		this.yaw = 0;
+		this.updateProximity();
+		this.showToast(`Warped · ${p.name}`);
+		this.emitHud();
+	}
+	grantCash(n = 200) {
+		this.sackdollars += n;
+		this.float(`+$${n}`, "#c9a84c");
+		if (this.sackdollars >= 400) this.unlockTrophy("deep_pockets");
+		this.save();
+		this.emitHud();
+	}
+	grantRespect(n = 10) {
+		this.respect += n;
+		this.applyRespectUnlocks();
+		this.float(`+${n} Respect`, "#1db954");
+		this.save();
+		this.emitHud();
+	}
+	setWorldHour(h: number) {
+		this.worldHour = ((h % 24) + 24) % 24;
+		this.showToast(`Clock · ${Math.floor(this.worldHour) % 12 || 12}${this.worldHour >= 12 ? "PM" : "AM"}`);
+		this.emitHud();
+	}
+	forceDropLive() {
+		if (this.dropLive) {
+			this.showToast("Drop already live");
+			return;
+		}
+		this.dropLive = true;
+		audio.dropLive = true;
+		this.unlockTrophy("drop_live");
+		this.seedDropLiveCity();
+		this.showToast("DROP LIVE · forced");
+		this.save();
+		this.emitHud();
+	}
+	unlockAllFits() {
+		for (const a of APPAREL) {
+			if (a.irlOnly) continue;
+			if (!this.owned.includes(a.id)) this.owned.push(a.id);
+		}
+		this.grantTourTees();
+		this.checkSideOwn();
+		this.showToast("Locker full");
+		this.save();
+		this.emitHud();
+	}
 	orderFood(itemId: string) {
 		const truck = foodTruckById(this.foodMenu);
 		if (!truck) return;
@@ -1984,7 +2318,7 @@ export class GameEngine {
 		this.emitHud();
 	}
 	startFishing() {
-		if (this.vehicle || this.mode === "basketball" || this.mode === "shop" || this.mode === "dialogue") return;
+		if (this.vehicle || this.mode === "basketball" || this.mode === "shop" || this.mode === "dialogue" || this.bowl.active) return;
 		this.jooking = false;
 		this.fish = beginFishing(this.fish, this.px, this.py);
 		this.showToast("Mississippi · hold to cast, set the hook, reel the green");
@@ -1994,6 +2328,115 @@ export class GameEngine {
 	stopFishing() {
 		this.fish = cancelFishing(this.fish);
 		this.emitHud();
+	}
+	inLanes() {
+		const lanes = POIS.find((p) => p.id === "lanes");
+		return !!lanes && insidePoi(this.px, this.py, lanes, 4);
+	}
+	startBowl() {
+		if (this.vehicle || this.mode === "basketball" || this.mode === "shop" || this.mode === "dialogue") return;
+		const lanes = POIS.find((p) => p.id === "lanes");
+		if (!lanes || !this.inLanes()) return;
+		this.jooking = false;
+		const cx = lanes.x + lanes.w / 2;
+		const cy = lanes.y + lanes.h / 2;
+		const lane = nearestLane(this.px, this.py, cx, cy);
+		this.bowl = startBowlState(lane);
+		const spot = laneApproachGame(cx, cy, lane);
+		this.px = spot.x;
+		this.py = spot.y;
+		this.yaw = 0;
+		this.facing = "up";
+		this.mover.reset(this.yaw);
+		this.showToast("901 Lanes · 10 frames · pocket's right");
+		audio.whoosh();
+		this.emitHud();
+	}
+	leaveBowl(pay = true) {
+		if (!this.bowl.active) return;
+		if (pay && (this.bowl.total > 0 || this.bowl.frames.some((f) => f.rolls.length))) {
+			const payOut = this.bowl.phase === "over" ? this.bowl.payout : payoutFor(this.bowl);
+			if (payOut > 0) {
+				this.sackdollars += payOut;
+				this.float(`+$${payOut}`, "#1db954");
+				this.showToast(`Lanes payout: +$${payOut} $ackdollars`);
+				audio.cash();
+			}
+			if (this.bowl.total > this.bowlingHighScore) this.bowlingHighScore = this.bowl.total;
+			this.save();
+		}
+		this.bowl = idleBowl();
+		this.emitHud();
+	}
+	beginBowlCharge() {
+		if (!this.bowl.active) return;
+		if (this.bowl.phase === "over") {
+			this.startBowl();
+			return;
+		}
+		if (this.bowl.phase !== "setup") return;
+		const lanes = POIS.find((p) => p.id === "lanes");
+		if (lanes) {
+			const cx = lanes.x + lanes.w / 2;
+			const cy = lanes.y + lanes.h / 2;
+			this.bowl.lane = nearestLane(this.px, this.py, cx, cy);
+			const spot = laneApproachGame(cx, cy, this.bowl.lane);
+			this.px = spot.x;
+			this.py = spot.y;
+			this.yaw = 0;
+			this.facing = "up";
+		}
+		this.bowl = beginBowlChargeState(this.bowl);
+		audio.interact();
+		this.emitHud();
+	}
+	releaseBowl() {
+		if (!this.bowl.active || this.bowl.phase !== "charging") return;
+		this.bowl = releaseRoll(this.bowl);
+		audio.bowlRoll();
+		this.emitHud();
+	}
+	updateBowling(dt: number, act: { mx: number; lookX: number; shootPressed: boolean; shootReleased: boolean; run: boolean; my: number; shoot: boolean }) {
+		const frozen = this.bowl.phase === "charging" || this.bowl.phase === "rolling" || this.bowl.phase === "pins" || this.bowl.phase === "mark";
+		if (frozen) this.updatePlayer(dt, 0, 0, false, false, false);
+		else this.updatePlayer(dt, act.mx, act.my, act.run, false, false);
+		if (this.bowl.phase === "setup" && act.shootPressed) this.beginBowlCharge();
+		if (this.bowl.phase === "charging" && act.shootReleased) this.releaseBowl();
+		const prev = this.bowl.phase;
+		this.bowl = tickBowl(this.bowl, dt, act.lookX + act.mx * 0.45);
+		if (prev === "rolling" && this.bowl.phase === "pins") {
+			audio.pinCrash(this.bowl.lastKnocked);
+			if (this.bowl.gutter) audio.groan();
+		}
+		if (prev === "pins" && this.bowl.phase === "mark") {
+			const mark = this.bowl.lastMark;
+			if (mark === "STRIKE") {
+				audio.strike();
+				this.punch = 1;
+				this.celebrate = 1;
+				this.addTrauma(0.42);
+				this.float(this.bowl.turkey >= 3 ? "TURKEY" : "STRIKE", "#d4af37");
+				if (this.bowl.turkey >= 3) {
+					this.unlockTrophy("lane_king");
+					this.completeSide("turkey_night");
+				}
+			} else if (mark === "SPARE") {
+				audio.cheer();
+				this.float("SPARE", "#1db954");
+			} else if (mark === "GUTTER") {
+				this.float("GUTTER", "#8a8174");
+			} else if (this.bowl.lastKnocked > 0) {
+				this.float(`${this.bowl.lastKnocked}`, "#f5f0e1");
+			}
+		}
+		if (prev !== "over" && this.bowl.phase === "over") {
+			this.bowl.payout = payoutFor(this.bowl);
+			this.float(`${this.bowl.total}`, "#d4af37");
+			this.showToast(`Game ${this.bowl.total} · +$${this.bowl.payout}`);
+			if (this.bowl.total > this.bowlingHighScore) this.bowlingHighScore = this.bowl.total;
+			audio.cash();
+			this.save();
+		}
 	}
 	updateFishing(dt: number, hold: boolean, pressed: boolean, released: boolean) {
 		const tap = this.input.device === "touch";
@@ -2036,6 +2479,12 @@ export class GameEngine {
 			this.emitHud();
 			return;
 		}
+		if (this.bowl.active) {
+			if (this.bowl.phase === "over") this.startBowl();
+			else if (this.bowl.phase === "setup") this.beginBowlCharge();
+			this.emitHud();
+			return;
+		}
 		if (this.mode === "dialogue") {
 			this.advanceDialogue();
 			return;
@@ -2053,7 +2502,8 @@ export class GameEngine {
 				this.showToast("Finish the lap or Leave race");
 				return;
 			}
-			if (this.nearPoi && this.nearPoi !== "dropvan") {
+			if (this.rcmJob && this.tryFinishRcm()) return;
+			if (this.nearPoi && this.nearPoi !== "dropvan" && this.nearPoi !== "rcmworx") {
 				const step = this.activeQuest().steps[this.activeQuest().activeStep];
 				if (step && !step.done && step.target === this.nearPoi && (step.kind === "deliver" || step.kind === "goto")) {
 					this.tryMissionAction(this.nearPoi);
@@ -2082,6 +2532,10 @@ export class GameEngine {
 				return;
 			}
 		}
+		if (this.nearPoi === "rcmworx") {
+			this.openRcm();
+			return;
+		}
 		if (this.nearNpc) {
 			this.openDialogue(this.nearNpc);
 			return;
@@ -2096,12 +2550,15 @@ export class GameEngine {
 			return;
 		}
 		if (this.nearPoi === "court") {
-			if (this.missionComplete) {
-				this.courtMenu = true;
-				this.emitHud();
-				return;
-			}
-			this.startCourt("timed");
+			this.openCourtMenu();
+			return;
+		}
+		if (this.nearPoi === "lanes") {
+			const lanes = POIS.find((p) => p.id === "lanes");
+			const inside = lanes && insidePoi(this.px, this.py, lanes, 0);
+			if (!inside) return;
+			if (!this.bowl.active || this.bowl.phase === "over") this.startBowl();
+			else if (this.bowl.phase === "setup") this.beginBowlCharge();
 			return;
 		}
 		if (this.nearPoi === "store") {
@@ -2195,6 +2652,7 @@ export class GameEngine {
 				this.completeStep("flash");
 			}
 			if (this.dialogueNpcId === "cam") this.raceMenu = true;
+			if (this.dialogueNpcId === "rcm_chauffeur") this.openRcm();
 			this.mode = "world";
 			this.dialogue = null;
 			this.dialogueNpcId = null;
@@ -2525,7 +2983,7 @@ export class GameEngine {
 		audio.ui();
 		this.emitHud();
 	}
-	enterVehicle(kind: "van" | "car", carIndex = -1) {
+	enterVehicle(kind: "van" | "car" | "sprinter" | "escalade", carIndex = -1) {
 		if (this.vehicle || this.mode !== "world") return;
 		this.vehicle = { kind, carIndex };
 		if (kind === "car" && carIndex >= 0) {
@@ -2535,13 +2993,24 @@ export class GameEngine {
 				this.py = c.y;
 			}
 		}
-		this.showToast(kind === "van" ? (this.input.device === "touch" ? "Drop van · stick to roll" : "Drop van · WASD to roll") : (this.input.device === "touch" ? "Whip hopped · stick to roll" : "Whip hopped · WASD to roll"));
+		if (kind === "sprinter" || kind === "escalade") {
+			const lot = POIS.find((p) => p.id === "rcmworx");
+			if (lot) {
+				const park = rcmParked(lot, kind);
+				this.px = park.x;
+				this.py = park.y;
+				this.yaw = park.yaw;
+			}
+			this.showToast(kind === "sprinter" ? "Sprinter · 8 pax luxury" : "Escalade ESV · executive");
+		} else {
+			this.showToast(kind === "van" ? (this.input.device === "touch" ? "Drop van · stick to roll" : "Drop van · WASD to roll") : (this.input.device === "touch" ? "Whip hopped · stick to roll" : "Whip hopped · WASD to roll"));
+		}
 		if (kind === "van" && this.dropLive && (this.worldHour >= 20 || this.worldHour < 5)) this.completeSide("night_van");
 		if (kind === "van" && this.mission.complete) this.completeStep("nightvan");
 		audio.whoosh();
 		this.emitHud();
 	}
-	exitVehicle() {
+	exitVehicle(silent = false) {
 		if (!this.vehicle) return;
 		const v = this.vehicle;
 		if (v.kind === "car" && v.carIndex >= 0) {
@@ -2552,7 +3021,7 @@ export class GameEngine {
 			}
 		}
 		this.vehicle = null;
-		this.showToast("Parked it");
+		if (!silent) this.showToast("Parked it");
 		audio.ui();
 		this.emitHud();
 	}
@@ -2704,7 +3173,7 @@ export class GameEngine {
 			audio.ui();
 			this.showToast("MISS · SLOWED", 0.85);
 		}
-		const passed = tickAutoDrive(this.race.player, dt, this.race.cruise, 10);
+		const passed = tickAutoDrive(this.race.player, dt, this.race.cruise, 8);
 		if (passed) {
 			armNextSegment(this.race);
 			audio.ui();
@@ -2731,16 +3200,18 @@ export class GameEngine {
 		this.moving = true;
 		tickRival(this.race.rival, dt, progressOf(this.race.player), this.race.boostT > 0);
 		if (inCourtPx(this.race.player.x, this.race.player.y) || carBlocked(this.race.player.x, this.race.player.y, 14)) {
-			const safe = nearestAsphalt(this.race.player.x, this.race.player.y);
+			const safe = snapToRacePath(this.race.player.x, this.race.player.y, this.race.player.pathI);
 			this.race.player.x = safe.x;
 			this.race.player.y = safe.y;
+			this.race.player.pathI = safe.pathI;
 			this.px = safe.x;
 			this.py = safe.y;
 		}
 		if (inCourtPx(this.race.rival.x, this.race.rival.y) || carBlocked(this.race.rival.x, this.race.rival.y, 14)) {
-			const safe = nearestAsphalt(this.race.rival.x, this.race.rival.y);
+			const safe = snapToRacePath(this.race.rival.x, this.race.rival.y, this.race.rival.pathI);
 			this.race.rival.x = safe.x;
 			this.race.rival.y = safe.y;
+			this.race.rival.pathI = safe.pathI;
 		}
 		if (this.race.rival.finished && !this.race.player.finished) {
 			this.race.rival.finishT = this.race.rival.finishT || this.race.time;
@@ -2818,7 +3289,7 @@ export class GameEngine {
 		this.emitHud();
 	}
 	grantTourTees() {
-		for (const id of ["tour_black", "tour_white", "tour_red"] as const) {
+		for (const id of ["tour_black", "tour_white", "tour_red", "jersey_white_224", "jersey_blue_fresh", "jersey_black_fresh", "black_sackrow_11", "blue_901_day"] as const) {
 			if (!this.owned.includes(id)) this.owned.push(id);
 		}
 	}
@@ -2880,11 +3351,29 @@ export class GameEngine {
 		this.emitHud();
 	}
 	enterBasketball() {
-		this.startCourt("timed");
+		this.startCourt(this.courtChallenge || "timed");
+	}
+	openCourtMenu() {
+		this.courtMenu = true;
+		this.emitHud();
+	}
+	setCourtVenue(id: string) {
+		this.courtVenue = venueFor(id).id;
+		this.showToast(venueFor(id).name);
+		this.save();
+		this.emitHud();
+	}
+	setCourtChallenge(mode: CourtChallenge) {
+		this.courtChallenge = mode;
+		this.emitHud();
+	}
+	setCourtDifficulty(id: CourtDifficulty) {
+		this.courtDifficulty = id;
+		this.emitHud();
 	}
 	cycleCourtDifficulty() {
 		this.courtDifficulty = cycleDifficulty(this.courtDifficulty);
-		this.showToast(`${DIFFICULTY[this.courtDifficulty].label} court`);
+		this.showToast(`${DIFFICULTY[this.courtDifficulty].label} heat`);
 		this.emitHud();
 	}
 	startCourt(mode: CourtChallenge = "timed") {
@@ -2924,16 +3413,20 @@ export class GameEngine {
 		if (mode === "threes") {
 			this.ball.timeLeft = 42;
 			this.ball.targetScore = 6;
-			this.showToast(`${spec.label} · 3-POINT · 6 makes from downtown`);
+			this.showToast(`${venueFor(this.courtVenue).name} · 3-POINT · 6 makes from downtown`);
 		} else if (mode === "horse") {
 			this.ball.timeLeft = 999;
 			this.ball.targetScore = HORSE_CALLS.length;
 			this.showToast(`HORSE · call is ${HORSE_CALLS[0]} · miss = letter`);
+		} else if (mode === "pickup") {
+			this.ball.timeLeft = 9999;
+			this.ball.targetScore = 999;
+			this.showToast(`${venueFor(this.courtVenue).name} · pickup · hoop till you leave`);
 		} else {
 			this.ball.timeLeft = spec.time;
 			const night = this.activeQuest().steps[this.activeQuest().activeStep]?.id === "nightball";
 			this.ball.targetScore = night ? 10 : this.missionComplete ? spec.target : this.currentTier().courtTarget;
-			this.showToast(night ? `Night court · score ${this.ball.targetScore}` : `${spec.label} timed run · need ${this.ball.targetScore}`);
+			this.showToast(night ? `Night court · score ${this.ball.targetScore}` : `${venueFor(this.courtVenue).name} · ${spec.label} · need ${this.ball.targetScore}`);
 		}
 		this.bark("Don't rush the release. Green window.");
 		this.emitHud();
@@ -3062,7 +3555,14 @@ export class GameEngine {
 		return { ...best, court, sway: 0 };
 	}
 	updateBasketball(dt: number) {
-		if (this.onCourt() && !this.vehicle) this.ball.active = true;
+		if (this.onCourt() && !this.vehicle) {
+			this.ball.active = true;
+			if (!this.ball.inFlight && !this.ball.held && this.ball.releaseT <= 0 && this.ball.followThroughT <= 0) {
+				const reach = dist(this.px, this.py, this.ball.ballX, this.ball.ballY);
+				if (reach < 120 || this.ball.ballX === 0 || this.ball.returnIn > 0) this.giveBall();
+			}
+		}
+		if (this.ball.followThroughT > 0) this.ball.followThroughT = Math.max(0, this.ball.followThroughT - dt);
 		this.ball.heat = Math.max(0, this.ball.heat - dt * 0.045);
 		if (this.ball.flash > 0) this.ball.flash -= dt;
 		if (this.ogBarkT > 0) {
@@ -3082,9 +3582,10 @@ export class GameEngine {
 		if (this.ball.releaseT > 0) {
 			this.ball.releaseT -= dt;
 			const f = this.fwd();
-			this.ball.ballX = this.px + f.x * 12;
-			this.ball.ballY = this.py + f.y * 12;
-			this.ball.ballZ = 52;
+			const r = this.right();
+			this.ball.ballX = this.px + f.x * 8 + r.x * 3;
+			this.ball.ballY = this.py + f.y * 8 + r.y * 3;
+			this.ball.ballZ = 62;
 			if (this.ball.releaseT <= 0 && this.ball.pending) {
 				this.ball.ballVx = this.ball.pending.vx;
 				this.ball.ballVy = this.ball.pending.vy;
@@ -3098,11 +3599,23 @@ export class GameEngine {
 		if (this.ball.charging && this.ball.held) this.ball.power = Math.min(1, this.ball.power + dt * 0.88);
 		if (this.ball.held) {
 			const f = this.fwd();
+			const r = this.right();
 			const moving = Math.hypot(this.vx, this.vy) > 12;
-			this.ball.ballX = this.px + f.x * 10;
-			this.ball.ballY = this.py + f.y * 10;
-			const dribble = moving ? 12 + Math.abs(Math.sin(this.clock * 11)) * 24 : 28 + Math.sin(this.clock * 3) * 3;
-			this.ball.ballZ = this.ball.charging ? 38 + this.ball.power * 20 : dribble;
+			if (this.ball.charging) {
+				const t = this.ball.power;
+				this.ball.ballX = this.px + f.x * (4 + t * 12) + r.x * (10 - t * 12);
+				this.ball.ballY = this.py + f.y * (4 + t * 12) + r.y * (10 - t * 12);
+				this.ball.ballZ = 22 + t * 48;
+			} else if (moving) {
+				const bounce = Math.abs(Math.sin(this.clock * 11));
+				this.ball.ballX = this.px + f.x * 7 + r.x * 12;
+				this.ball.ballY = this.py + f.y * 7 + r.y * 12;
+				this.ball.ballZ = 5 + bounce * 28;
+			} else {
+				this.ball.ballX = this.px + f.x * 4 + r.x * 11;
+				this.ball.ballY = this.py + f.y * 4 + r.y * 11;
+				this.ball.ballZ = 22;
+			}
 			if (moving) this.mover.animT += dt * 2.1;
 			return;
 		}
@@ -3268,6 +3781,7 @@ export class GameEngine {
 		this.ball.scrambleT = 0;
 		this.ball.returnIn = 0;
 		this.ball.releaseT = 0;
+		this.ball.followThroughT = 0;
 		this.ball.pending = null;
 		this.ball.ballZ = 28;
 		if (this.input.keys.has("Space") || this.input.keys.has("KeyF") || this.input.touch.shoot) this.beginCharge();
@@ -3328,27 +3842,24 @@ export class GameEngine {
 		this.ball.active = true;
 		this.ball.power = 0;
 		this.ball.pending = { vx, vy, vz };
-		this.ball.releaseT = close ? 0.04 : 0.07;
+		this.ball.releaseT = close ? 0.08 : 0.12;
+		this.ball.followThroughT = 0.42;
 		this.mover.triggerShoot();
-		if (close) {
-			this.mover.vz = 2.6;
-			this.mover.air = 0.05;
-			this.mover.grounded = false;
-		}
 	}
 	beginCharge() {
 		if (!this.canShoot() || this.ball.releaseT > 0) return;
 		if (this.ball.inFlight) return;
 		if (!this.ball.held) {
 			const reach = dist(this.px, this.py, this.ball.ballX, this.ball.ballY);
-			if (reach < 96 && this.ball.ballZ < 48) this.giveBall();
-			else if (this.ball.returnIn > 0) this.giveBall();
+			if (reach < 140 && this.ball.ballZ < 56) this.giveBall();
+			else if (this.ball.returnIn > 0 || this.onCourt()) this.giveBall();
 			else return;
 		}
 		this.ball.active = true;
 		if (this.ball.charging) return;
 		this.ball.charging = true;
 		this.ball.power = 0.02;
+		this.ball.followThroughT = 0;
 		this.mover.triggerShoot();
 	}
 	burst(_x: number, _y: number, color: string) {
@@ -3391,7 +3902,23 @@ export class GameEngine {
 	}
 	getObjectiveTarget() {
 		const step = this.mission.steps[this.mission.activeStep];
-		if (!step?.target || this.mission.complete) return null;
+		if (!step?.target || this.mission.complete) {
+			const turkey = this.side.find((s) => s.id === "turkey_night");
+			if (turkey && !turkey.done) {
+				const lanes = POIS.find((p) => p.id === "lanes");
+				if (lanes) return { x: lanes.x + lanes.w / 2, y: lanes.y + lanes.h + 20 };
+			}
+			if (this.rcmJob && this.rcmDest) {
+				const dest = POIS.find((p) => p.id === this.rcmDest);
+				if (dest) return { x: dest.x + dest.w / 2, y: dest.id === "river" ? dest.y - 36 : dest.y + dest.h + 28 };
+			}
+			const vip = this.side.find((s) => s.id === "vip_runs");
+			if (vip && !vip.done) {
+				const lot = POIS.find((p) => p.id === "rcmworx");
+				if (lot) return { x: lot.x + lot.w / 2, y: lot.y + lot.h + 16 };
+			}
+			return null;
+		}
 		const p = POIS.find((x) => x.id === step.target);
 		if (step.id === "wake" && p) {
 			return { x: p.x + TILE, y: p.y + p.h + 40 };
@@ -3413,7 +3940,7 @@ export class GameEngine {
 		const ctx = this.ctx;
 		const w = this.canvas.clientWidth;
 		const h = this.canvas.clientHeight;
-		const dpr = Math.min(window.devicePixelRatio || 1, 2);
+		const dpr = pixelRatio();
 		if (this.world3d) {
 			this.world3d.sync({
 				px: this.px,
@@ -3440,12 +3967,7 @@ export class GameEngine {
 				npcs: this.npcLive
 					.filter((n) => {
 						if (n.id === "cam" && this.race.active) return false;
-						if (n.id === "k_blanco") {
-							const hq = POIS.find((p) => p.id === "store");
-							if (!hq) return false;
-							return this.px > hq.x + 28 && this.px < hq.x + hq.w - 28
-								&& this.py > hq.y + 36 && this.py < hq.y + hq.h - 70;
-						}
+						if (n.id === "k_blanco") return false;
 						return true;
 					})
 					.map((n) => ({
@@ -3461,12 +3983,13 @@ export class GameEngine {
 				lean: this.mover.lean,
 				animT: this.mover.animT,
 				loco: this.mover.state,
-				indoor: this.mode === "interior" || this.mode === "shop" || this.nearPoi === "store" || this.nearPoi === "apartment" ||
+				indoor: venueFor(this.courtVenue).indoor && this.onCourt() || this.mode === "interior" || this.mode === "shop" || this.nearPoi === "store" || this.nearPoi === "apartment" || this.nearPoi === "lanes" || this.bowl.active ||
 					(() => {
 						const home = POIS.find((p) => p.id === "apartment")!;
 						const hq = POIS.find((p) => p.id === "store")!;
+						const lanes = POIS.find((p) => p.id === "lanes")!;
 						const hit = (p: typeof home) => this.px >= p.x && this.px <= p.x + p.w && this.py >= p.y && this.py <= p.y + p.h;
-						return hit(home) || hit(hq);
+						return hit(home) || hit(hq) || hit(lanes);
 					})(),
 				punch: this.punch,
 				hoopPulse: this.hoopPulse,
@@ -3490,14 +4013,14 @@ export class GameEngine {
 					};
 					return near("velis", 168) || near("listenpost", 150);
 				})(),
-				worldHour: this.worldHour,
-				dribbling: this.ball.held && !this.ball.charging && this.ball.releaseT <= 0 && this.canShoot() && Math.hypot(this.vx, this.vy) > 12,
-				releasing: this.ball.releaseT > 0,
+				worldHour: this.onCourt() ? venueFor(this.courtVenue).hour : this.worldHour,
+				dribbling: this.ball.held && !this.ball.charging && this.ball.releaseT <= 0 && this.ball.followThroughT <= 0 && this.canShoot() && Math.hypot(this.vx, this.vy) > 12,
+				releasing: this.ball.releaseT > 0 || this.ball.followThroughT > 0,
 				crowdPulse: this.crowdPulse,
 				celebrate: this.celebrate,
 				talking: this.mode === "dialogue",
 				interacting: !this.vehicle && !!this.nearNpc && this.mode === "world" && Math.hypot(this.vx, this.vy) < 24,
-				rebounding: this.canShoot() && !this.ball.held && !this.ball.inFlight && this.ball.releaseT <= 0,
+				rebounding: this.canShoot() && !this.ball.held && !this.ball.inFlight && this.ball.releaseT <= 0 && this.ball.followThroughT <= 0 && dist(this.px, this.py, this.ball.ballX, this.ball.ballY) < 88,
 				vanSkin: this.vanSkin,
 				fishing: this.fish.active
 					? {
@@ -3521,6 +4044,28 @@ export class GameEngine {
 					}))
 					: [],
 				foodServe: this.foodServe,
+				courtVenue: this.courtVenue,
+				bowling: this.bowl.active
+					? {
+						active: true,
+						phase: this.bowl.phase,
+						lane: this.bowl.lane,
+						progress: this.bowl.progress,
+						ballX: this.bowl.ballX,
+						standing: this.bowl.standing,
+						knocked: this.bowl.knocked,
+						pinT: this.bowl.pinT,
+						flash: this.bowl.flash,
+						gutter: this.bowl.gutter,
+					}
+					: null,
+				rcmDest: this.rcmJob && this.rcmDest
+					? (() => {
+						const dest = POIS.find((p) => p.id === this.rcmDest);
+						if (!dest) return null;
+						return { x: dest.x + dest.w / 2, y: dest.id === "river" ? dest.y - 36 : dest.y + dest.h + 28 };
+					})()
+					: null,
 			});
 			this.world3d.render(w, h);
 		}
@@ -3807,16 +4352,21 @@ export class GameEngine {
 		ctx.ellipse(this.px, this.py + 6, 16, 7, 0, 0, Math.PI * 2);
 		ctx.fill();
 		const view = this.facing === "up" ? "back" : this.facing === "down" ? "front" : this.facing === "left" ? "left" : "right";
-		const img =
-			(view === "front" ? this.images.frontHi : view === "back" ? this.images.backHi : view === "left" ? this.images.leftHi : this.images.rightHi)
+		const fit = this.equipped ? this.images[outfitImageKey(this.equipped, view)] || this.images[outfitImageKey(this.equipped, "front")] : undefined;
+		const img = fit
+			?? (view === "front" ? this.images.frontHi : view === "back" ? this.images.backHi : view === "left" ? this.images.leftHi : this.images.rightHi)
 			?? this.images[view];
 		if (img) {
-			const look = lookFor(this.equipped);
-			const key = stampFor(look, view);
-			const stamp = (key && this.images[key]) || this.images.icon;
-			const ovKey = overlayKey(look, view);
-			const overlay = (ovKey && this.images[ovKey]) || null;
-			const dressed = dressBenji(cleanSprite(img), look, view, stamp, overlay);
+			const dressed = fit
+				? img
+				: (() => {
+					const look = lookFor(this.equipped);
+					const key = stampFor(look, view);
+					const stamp = (key && this.images[key]) || this.images.icon;
+					const ovKey = overlayKey(look, view);
+					const overlay = (ovKey && this.images[ovKey]) || null;
+					return dressBenji(cleanSprite(img), look, view, stamp, overlay);
+				})();
 			const h = 80;
 			const w = dressed.width / dressed.height * h;
 			const sx = this.moving ? 1 + Math.sin(this.animT) * .05 : 1;
@@ -3877,7 +4427,9 @@ export class GameEngine {
 						? "Free roam · side missions live"
 						: step ? step.label : "—",
 			missionProgress: `${done}/${quest.steps.length}`,
-			interactHint: this.fish.active
+			interactHint: this.bowl.active
+				? bowlHud(this.bowl, this.input.device === "touch").prompt
+				: this.fish.active
 				? fishingHud(this.fish, this.input.device === "touch").prompt
 				: this.mode === "world"
 				? this.interactHint
@@ -3912,8 +4464,15 @@ export class GameEngine {
 				horse: this.courtChallenge === "horse" ? horseDisplay(this.horseMisses) : null,
 				call: this.courtChallenge === "horse" ? HORSE_CALLS[this.horseIndex] ?? "DONE" : this.courtChallenge === "threes" ? "THREES ONLY" : null,
 				board: this.courtBoard.slice(0, 5).map((r) => ({ score: r.score, label: `${r.mode} · ${r.difficulty}` })),
+				venue: venueFor(this.courtVenue).name,
 			} : null,
-			courtMenu: this.courtMenu ? { difficulty: DIFFICULTY[this.courtDifficulty].label, unlocked: this.missionComplete } : null,
+			courtMenu: this.courtMenu ? {
+				difficulty: DIFFICULTY[this.courtDifficulty].label,
+				unlocked: this.missionComplete,
+				venue: this.courtVenue,
+				challenge: this.courtChallenge,
+				venues: COURT_VENUES.map((v) => ({ id: v.id, name: v.name, tag: v.tag, thumb: v.thumb })),
+			} : null,
 			canShoot: this.canShoot(),
 			paused: this.paused,
 			started: this.started,
@@ -3962,11 +4521,42 @@ export class GameEngine {
 			race: toRaceHud(this.race),
 			raceMenu: this.raceMenu,
 			fishing: this.fish.active ? fishingHud(this.fish, this.input.device === "touch") : null,
+			bowling: this.bowl.active ? bowlHud(this.bowl, this.input.device === "touch") : null,
 			food: this.foodMenu ? foodHud(foodTruckById(this.foodMenu)!, this.cooler, this.sackdollars) : null,
 			coolerCount: this.cooler.length,
 			fed: this.fedT > 0,
 			sponsor: sponsorHud(),
 			sponsorOpen: this.sponsorOpen,
+			rcm: rcmHud({
+				open: this.rcmMenu,
+				vehicle: this.rcmPick,
+				destId: this.rcmDest,
+				runs: this.rcmRuns,
+				job: this.rcmJob,
+				chauffeur: this.rcmChauffeur,
+			}),
+			playtestOpen: this.playtestOpen,
+			playtest: {
+				fps: this.fpsEma,
+				dtMs: this.lastDt * 1000,
+				px: this.px,
+				py: this.py,
+				tileX: this.px / TILE,
+				tileY: this.py / TILE,
+				yaw: this.yaw,
+				facing: this.facing,
+				loco: this.mover.state,
+				air: this.mover.air,
+				nearPoi: this.nearPoi,
+				hint: this.interactHint,
+				equipped: this.equipped,
+				vehicle: this.vehicle?.kind ?? null,
+				indoor: POIS.some((p) => (p.id === "store" || p.id === "apartment" || p.id === "lanes") && this.px >= p.x && this.px <= p.x + p.w && this.py >= p.y && this.py <= p.y + p.h),
+				hour: this.worldHour,
+				artRev: ART_REV,
+				quality: this.settings.quality,
+				noclip: this.playtestNoclip,
+			},
 		};
 	}
 };

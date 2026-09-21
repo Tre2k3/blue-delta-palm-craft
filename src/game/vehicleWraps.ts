@@ -66,7 +66,7 @@ export function bootVehicleWraps() {
       await Promise.all(
         faces.map(async (face) => {
           try {
-            pack[face] = await loadTex(`/game/wraps/${name}/${face}.png`);
+            pack[face] = await loadTex(`/game/wraps/${name}/${face}.webp`);
           } catch {
             /* optional face */
           }
@@ -76,6 +76,14 @@ export function bootVehicleWraps() {
     }),
   ).then(() => undefined);
   return booting;
+}
+
+export function disposeVehicleWraps() {
+  for (const pack of cache.values()) {
+    for (const tex of Object.values(pack)) tex?.dispose();
+  }
+  cache.clear();
+  booting = null;
 }
 
 function wrapMat(face: WrapFace, packName: WrapPackName) {

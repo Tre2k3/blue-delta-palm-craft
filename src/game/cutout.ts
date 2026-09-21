@@ -2,13 +2,9 @@ import * as THREE from "three";
 
 /**
  * Alpha cutout for the 2.5D cast.
- *
- * The threshold is deliberately below 0.5. A high binary threshold plus nearest
- * filtering gives the hard staircase silhouette that reads as a sloppy cut-out;
- * a lower threshold combined with alphaToCoverage lets MSAA resolve the edge, so
- * Benji keeps a crisp outline without the jagged steps.
+ * Keep this low so dark irises and glossy eye highlights don't get discarded.
  */
-export const CUTOUT_ALPHA = 0.3;
+export const CUTOUT_ALPHA = 0.12;
 
 /**
  * Texture setup for cast/prop atlases.
@@ -24,14 +20,16 @@ export const CUTOUT_ALPHA = 0.3;
  * transparent region at asset-build time. With that in place, normal filtering
  * is safe and looks far better at every distance.
  */
-export function hardenCutoutTexture(tex: THREE.Texture, maxAnisotropy = 8) {
+export function hardenCutoutTexture(tex: THREE.Texture, maxAnisotropy = 4) {
   tex.colorSpace = THREE.SRGBColorSpace;
+  // Linear, no mipmaps. Mips average across atlas/cell edges and pull in the
+  // neighbouring frame (ghost eyes, grey slabs in hair). Smooth mag filter
+  // keeps the silhouette; ClampToEdge stops wrap bleed.
   tex.magFilter = THREE.LinearFilter;
-  tex.minFilter = THREE.LinearMipmapLinearFilter;
-  tex.generateMipmaps = true;
-  tex.anisotropy = maxAnisotropy;
+  tex.minFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
+  tex.anisotropy = Math.min(maxAnisotropy, 4);
   tex.premultiplyAlpha = false;
-  // Atlas cells sit edge to edge; clamping stops a frame sampling its neighbour.
   tex.wrapS = THREE.ClampToEdgeWrapping;
   tex.wrapT = THREE.ClampToEdgeWrapping;
   tex.needsUpdate = true;
@@ -44,13 +42,11 @@ export function cutoutMeshMaterial(map: THREE.Texture | null) {
     color: 0xffffff,
     transparent: false,
     alphaTest: map ? CUTOUT_ALPHA : 0,
-    // The renderer is created with antialias: true, so coverage-based alpha
-    // gets resolved by MSAA and the silhouette stops stair-stepping.
-    alphaToCoverage: true,
+    alphaToCoverage: false,
     depthWrite: true,
     depthTest: true,
     side: THREE.DoubleSide,
-    toneMapped: false,
+    toneMapped: true,
     fog: true,
   });
 }
@@ -63,7 +59,7 @@ export function cutoutSpriteMaterial(map: THREE.Texture | null) {
     alphaTest: map ? CUTOUT_ALPHA : 0,
     depthWrite: true,
     depthTest: true,
-    toneMapped: false,
+    toneMapped: true,
     sizeAttenuation: true,
     fog: true,
   });

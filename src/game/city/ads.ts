@@ -104,5 +104,5 @@ export function mountCityAds(scene: THREE.Scene, buildings: BuildingRef[], tex?:
     map.needsUpdate = true;
     apply(map);
   };
-  img.src = `/game/ads/sacks-giving.jpg?v=${ART_REV}`;
+  img.src = `/game/ads/sacks-giving.webp?v=${ART_REV}`;
 }

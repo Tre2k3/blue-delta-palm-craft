@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { wantsAntialias, wantsLogDepth } from "./graphics";
 
 type GL = WebGLRenderingContext | WebGL2RenderingContext;
 
@@ -36,7 +37,8 @@ function isUsable(gl: GL | null): gl is GL {
 }
 
 function tryContext(canvas: HTMLCanvasElement): { gl: GL; attrs: WebGLContextAttributes } | null {
-  for (const attrs of ATTRS) {
+  const list = wantsAntialias() ? ATTRS : ATTRS.filter((a) => !a.antialias);
+  for (const attrs of list.length ? list : ATTRS) {
     let gl: GL | null = null;
     try {
       gl = (canvas.getContext("webgl2", attrs) || canvas.getContext("webgl", attrs)) as GL | null;
@@ -100,10 +102,13 @@ export function createWebGLRenderer(canvas: HTMLCanvasElement) {
     canvas.height = Math.max(canvas.height, 540);
   }
 
-  const attempts: { target: HTMLCanvasElement; logDepth: boolean }[] = [
-    { target: canvas, logDepth: true },
-    { target: canvas, logDepth: false },
-  ];
+  const log = wantsLogDepth();
+  const attempts: { target: HTMLCanvasElement; logDepth: boolean }[] = log
+    ? [
+        { target: canvas, logDepth: true },
+        { target: canvas, logDepth: false },
+      ]
+    : [{ target: canvas, logDepth: false }];
 
   for (const attempt of attempts) {
     const pack = tryContext(attempt.target);
@@ -118,7 +123,7 @@ export function createWebGLRenderer(canvas: HTMLCanvasElement) {
     fresh.width = Math.max(fresh.width, 960);
     fresh.height = Math.max(fresh.height, 540);
   }
-  for (const logDepth of [true, false]) {
+  for (const logDepth of log ? [true, false] : [false]) {
     const pack = tryContext(fresh);
     if (!pack) break;
     const renderer = makeRenderer(fresh, pack, logDepth);
@@ -127,6 +132,52 @@ export function createWebGLRenderer(canvas: HTMLCanvasElement) {
   }
 
   throw new Error("THREE.WebGLRenderer: Error creating WebGL context.");
+}
+
+const MAP_KEYS = [
+  "map",
+  "alphaMap",
+  "aoMap",
+  "bumpMap",
+  "displacementMap",
+  "emissiveMap",
+  "envMap",
+  "lightMap",
+  "metalnessMap",
+  "normalMap",
+  "roughnessMap",
+  "specularMap",
+] as const;
+
+/** Three.js will not GC GPU buffers. Walk the graph and release them. */
+export function disposeGpuObject(root: THREE.Object3D) {
+  const geos = new Set<THREE.BufferGeometry>();
+  const mats = new Set<THREE.Material>();
+  const texs = new Set<THREE.Texture>();
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    const geo = mesh.geometry;
+    if (geo && !geos.has(geo)) {
+      geos.add(geo);
+      geo.dispose();
+    }
+    const raw = mesh.material;
+    if (!raw) return;
+    const list = Array.isArray(raw) ? raw : [raw];
+    for (const mat of list) {
+      if (!mat || mats.has(mat)) continue;
+      mats.add(mat);
+      for (const key of MAP_KEYS) {
+        const tex = (mat as unknown as Record<string, THREE.Texture | undefined>)[key];
+        if (tex && tex.isTexture && !texs.has(tex)) {
+          texs.add(tex);
+          tex.dispose();
+        }
+      }
+      mat.dispose();
+    }
+  });
+  while (root.children.length) root.remove(root.children[0]!);
 }
 
 export function disposeRenderer(renderer: THREE.WebGLRenderer) {

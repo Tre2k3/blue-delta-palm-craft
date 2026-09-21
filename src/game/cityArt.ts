@@ -1,51 +1,52 @@
 import * as THREE from "three";
 import { ART_REV } from "./data";
-import { keyedTexture, cleanSprite } from "./chroma";
+import { keyedTexture, preparePeoplePlate } from "./chroma";
 import { hardenCutoutTexture } from "./cutout";
 
 export const PEOPLE_URLS = {
-  "k-blanco": "/game/people/k-blanco-front.png",
-  supporter: "/game/people/supporter.png",
-  fan: "/game/people/fan.png",
-  host: "/game/people/host.png",
-  local: "/game/people/local.png",
-  "court-og": "/game/people/court-og.png",
-  dj: "/game/people/dj.png",
-  baller: "/game/people/baller-1.png",
-  walker0: "/game/people/walker-00.png",
-  walker1: "/game/people/walker-01.png",
-  walker2: "/game/people/walker-02.png",
-  walker3: "/game/people/walker-03.png",
-  walker4: "/game/people/walker-04.png",
-  walker5: "/game/people/walker-05.png",
-  walker6: "/game/people/walker-06.png",
-  walker7: "/game/people/walker-07.png",
+  "k-blanco": "/game/people/k-blanco-front.webp",
+  supporter: "/game/people/supporter.webp",
+  fan: "/game/people/fan.webp",
+  host: "/game/people/host.webp",
+  local: "/game/people/local.webp",
+  "court-og": "/game/people/court-og.webp",
+  dj: "/game/people/dj.webp",
+  baller: "/game/people/baller-1.webp",
+  walker0: "/game/people/walker-00.webp",
+  walker1: "/game/people/walker-01.webp",
+  walker2: "/game/people/walker-02.webp",
+  walker3: "/game/people/walker-03.webp",
+  walker4: "/game/people/walker-04.webp",
+  walker5: "/game/people/walker-05.webp",
+  walker6: "/game/people/walker-06.webp",
+  walker7: "/game/people/walker-07.webp",
 } as const;
 
 export const CAR_URLS = {
-  sedan: "/game/cars/sedan.png",
-  suv: "/game/cars/suv.png",
-  chevy: "/game/cars/chevy.png",
-  coupe: "/game/cars/coupe.png",
-  van: "/game/cars/van.png",
+  sedan: "/game/cars/sedan.webp",
+  suv: "/game/cars/suv.webp",
+  chevy: "/game/cars/chevy.webp",
+  coupe: "/game/cars/coupe.webp",
+  van: "/game/cars/van.webp",
 } as const;
 
 export const FACADE_URLS = {
-  hq: "/game/facades/hq.jpg",
-  apartment: "/game/facades/apartment.jpg",
-  beale: "/game/facades/beale.jpg",
-  court: "/game/facades/court-floor.jpg",
+  hq: "/game/facades/hq.webp",
+  apartment: "/game/facades/apartment.webp",
+  beale: "/game/facades/beale.webp",
+  court: "/game/facades/court-901-day.webp",
+  courtSackrow: "/game/facades/court-floor.webp",
 } as const;
 
 export const STORE_URLS = {
-  main: "/game/store/main-floor.jpg",
-  checkout: "/game/store/checkout.jpg",
-  entry: "/game/store/entry.jpg",
-  exit: "/game/store/exit.jpg",
-  merch: "/game/store/merch-wall.jpg",
-  featured: "/game/store/featured.jpg",
-  counter: "/game/store/counter.jpg",
-  welcome: "/game/store/welcome.jpg",
+  main: "/game/store/main-floor.webp",
+  checkout: "/game/store/checkout.webp",
+  entry: "/game/store/entry.webp",
+  exit: "/game/store/exit.webp",
+  merch: "/game/store/merch-wall.webp",
+  featured: "/game/store/featured.webp",
+  counter: "/game/store/counter.webp",
+  welcome: "/game/store/welcome.webp",
 } as const;
 
 export const NPC_SPRITE: Record<string, keyof typeof PEOPLE_URLS> = {
@@ -58,6 +59,8 @@ export const NPC_SPRITE: Record<string, keyof typeof PEOPLE_URLS> = {
   beale_dj: "dj",
   photog: "baller",
   cam: "walker3",
+  lane_clerk: "local",
+  rcm_chauffeur: "host",
 };
 
 export const PED_SKINS: (keyof typeof PEOPLE_URLS)[] = [
@@ -72,13 +75,17 @@ export const PED_SKINS: (keyof typeof PEOPLE_URLS)[] = [
 ];
 export const CAR_SKINS: (keyof typeof CAR_URLS)[] = ["sedan", "suv", "chevy", "coupe"];
 export const FOOD_URLS = {
-  velis: "/game/food/velis-wings.png",
-  brothers: "/game/food/brothers-wingz.png",
+  velis: "/game/food/velis-wings.webp",
+  brothers: "/game/food/brothers-wingz.webp",
   catch: "/game/food/901-catch.png",
 } as const;
 
 export const AD_URLS = {
-  "sacks-giving": "/game/ads/sacks-giving.jpg",
+  "sacks-giving": "/game/ads/sacks-giving.webp",
+  "901-ballers": "/game/ads/901-ballers.webp",
+  "901-emblem": "/game/ads/901-emblem.webp",
+  "901-luxury": "/game/ads/901-luxury.webp",
+  "rcm-worx": "/game/ads/rcm-worx.png",
 } as const;
 
 export type CityArt = {
@@ -92,7 +99,7 @@ export type CityArt = {
 
 function spriteTex(src: HTMLImageElement | HTMLCanvasElement, keyed: boolean, cutout = false) {
   const prepared = cutout
-    ? cleanSprite(src)
+    ? preparePeoplePlate(src)
     : keyed && src instanceof HTMLImageElement
       ? keyedTexture(src)
       : src;
@@ -144,7 +151,7 @@ async function loadMap<T extends string>(
     (Object.keys(urls) as T[]).map(async (k) => {
       try {
         const img = await loadImage(urls[k]!);
-        const src = k === "court" ? cropCourtFloor(img) : img;
+        const src = k === "court" || k === "courtSackrow" ? cropCourtFloor(img) : img;
         out[k] = spriteTex(src, keyed, cutout);
       } catch {
         /* optional city art */
@@ -174,5 +181,6 @@ export function facadeFor(id: string): keyof typeof FACADE_URLS | null {
   if (id === "store" || id === "downtown") return "hq";
   if (id === "apartment" || id === "neighborhood") return "apartment";
   if (id === "beale" || id === "culture") return "beale";
+  if (id === "lanes") return "hq";
   return null;
 }

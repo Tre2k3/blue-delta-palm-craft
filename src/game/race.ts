@@ -71,6 +71,7 @@ export type RacerState = {
   finished: boolean;
   finishT: number;
   pathI: number;
+  stuckT: number;
 };
 
 export type RaceCue = {
@@ -159,10 +160,10 @@ export function idleRace(bestTime = 0): RaceState {
 }
 
 function emptyRacer(): RacerState {
-  return { x: 0, y: 0, vx: 0, vy: 0, yaw: 0, next: 1, lap: 0, finished: false, finishT: 0, pathI: 0 };
+  return { x: 0, y: 0, vx: 0, vy: 0, yaw: 0, next: 1, lap: 0, finished: false, finishT: 0, pathI: 0, stuckT: 0 };
 }
 
-function nearestPathIndex(x: number, y: number) {
+export function nearestPathIndex(x: number, y: number) {
   let best = 0;
   let bestD = Infinity;
   for (let i = 0; i < RACE_PATH.length; i++) {
@@ -179,8 +180,8 @@ function nearestPathIndex(x: number, y: number) {
 export function gridStart() {
   const s = RACE_CHECKPOINTS[0]!;
   return {
-    player: { x: s.x + 20, y: s.y + 86, yaw: 0 },
-    rival: { x: s.x - 18, y: s.y + 36, yaw: 0 },
+    player: { x: s.x + 14, y: s.y + 22, yaw: 0 },
+    rival: { x: s.x - 14, y: s.y - 10, yaw: 0 },
   };
 }
 
@@ -265,6 +266,30 @@ function advancePath(r: RacerState) {
   r.pathI = (r.pathI + 1) % n;
 }
 
+function pathPoint(i: number) {
+  const n = RACE_PATH.length;
+  return RACE_PATH[((i % n) + n) % n]!;
+}
+
+export function snapToRacePath(x: number, y: number, fromIndex = nearestPathIndex(x, y)) {
+  const n = RACE_PATH.length;
+  for (let k = 0; k < n; k++) {
+    const p = pathPoint(fromIndex + k);
+    if (!isRaceBlocked(p.x, p.y)) return { x: p.x, y: p.y, pathI: (fromIndex + k) % n };
+  }
+  const safe = nearestAsphalt(x, y);
+  return { x: safe.x, y: safe.y, pathI: fromIndex % n };
+}
+
+function skipBlockedWaypoints(r: RacerState) {
+  const n = RACE_PATH.length;
+  for (let k = 0; k < 10; k++) {
+    const p = pathPoint(r.pathI);
+    if (!isRaceBlocked(p.x, p.y)) return;
+    r.pathI = (r.pathI + 1) % n;
+  }
+}
+
 /** Follow the asphalt polyline — one street at a time, around buildings. */
 export function tickAutoDrive(r: RacerState, dt: number, spd: number, lateral = 0) {
   if (r.finished) {
@@ -274,28 +299,34 @@ export function tickAutoDrive(r: RacerState, dt: number, spd: number, lateral = 
     r.y += r.vy * dt;
     return false;
   }
+  skipBlockedWaypoints(r);
   let goal = pathTarget(r, lateral);
   if (isRaceBlocked(goal.x, goal.y)) goal = pathTarget(r, 0);
-  if (isRaceBlocked(goal.x, goal.y)) {
-    const n = RACE_PATH.length;
-    goal = RACE_PATH[r.pathI % n]!;
-  }
+  if (isRaceBlocked(goal.x, goal.y)) goal = pathPoint(r.pathI);
   const dx = goal.x - r.x;
   const dy = goal.y - r.y;
   const dist = Math.hypot(dx, dy);
-  const passed = dist < 52 || (dist < 96 && dx * r.vx + dy * r.vy < 0);
+  const speed = Math.hypot(r.vx, r.vy);
+  const overshot = dist < 110 && dx * r.vx + dy * r.vy < 0;
+  if (dist > 28 && speed < 55) r.stuckT += dt;
+  else r.stuckT = 0;
+  const passed = dist < 48 || overshot || r.stuckT > 0.28;
   if (passed) {
+    r.stuckT = 0;
     advancePath(r);
+    skipBlockedWaypoints(r);
     if (hitCheckpoint(r)) {
       snapRacer(r);
       return true;
     }
+    goal = pathTarget(r, lateral);
+    if (isRaceBlocked(goal.x, goal.y)) goal = pathPoint(r.pathI);
   }
-  const mag = dist < 1 ? 1 : dist;
-  const wx = dx / mag;
-  const wy = dy / mag;
-  r.vx += (wx * spd - r.vx) * Math.min(1, dt * 8.2);
-  r.vy += (wy * spd - r.vy) * Math.min(1, dt * 8.2);
+  const aimX = goal.x - r.x;
+  const aimY = goal.y - r.y;
+  const mag = Math.max(1, Math.hypot(aimX, aimY));
+  r.vx += ((aimX / mag) * spd - r.vx) * Math.min(1, dt * 8.2);
+  r.vy += ((aimY / mag) * spd - r.vy) * Math.min(1, dt * 8.2);
   r.x += r.vx * dt;
   r.y += r.vy * dt;
   snapRacer(r);
@@ -306,9 +337,10 @@ export function tickAutoDrive(r: RacerState, dt: number, spd: number, lateral = 
 
 function snapRacer(r: RacerState) {
   if (!isRaceBlocked(r.x, r.y)) return;
-  const safe = nudgeOffSolids(r.x, r.y);
+  const safe = snapToRacePath(r.x, r.y, r.pathI);
   r.x = safe.x;
   r.y = safe.y;
+  r.pathI = safe.pathI;
 }
 
 export function tickRival(r: RacerState, dt: number, playerProgress: number, playerBoosting = false) {
@@ -317,7 +349,7 @@ export function tickRival(r: RacerState, dt: number, playerProgress: number, pla
   if (gap > 0.12) spd = 428 + Math.min(1.1, gap) * 42;
   else if (gap < -0.1) spd = 448 + Math.min(1.6, -gap) * (playerBoosting ? 18 : 64);
   else spd = 418;
-  return tickAutoDrive(r, dt, spd, -10);
+  return tickAutoDrive(r, dt, spd, -8);
 }
 
 export function upcomingTurn(r: RacerState): ArrowDir {

@@ -33,7 +33,9 @@ export type LocationId =
   | "strip"
   | "welcome"
   | "listenpost"
-  | "billboard";
+  | "billboard"
+  | "lanes"
+  | "rcmworx";
 
 export type ApparelId =
   | "starter_tee"
@@ -49,7 +51,12 @@ export type ApparelId =
   | "kollab_jersey"
   | "tour_black"
   | "tour_white"
-  | "tour_red";
+  | "tour_red"
+  | "jersey_white_224"
+  | "jersey_blue_fresh"
+  | "jersey_black_fresh"
+  | "black_sackrow_11"
+  | "blue_901_day";
 
 export type TrophyId =
   | "first_steps"
@@ -68,7 +75,9 @@ export type TrophyId =
   | "after_hours"
   | "strip_king"
   | "river_rat"
-  | "block_eats";
+  | "block_eats"
+  | "lane_king"
+  | "always_ready";
 
 export interface ApparelItem {
   id: ApparelId;
@@ -188,6 +197,9 @@ export interface SaveData {
   unlocks?: string[];
   vanSkin?: "chrome" | "gold" | null;
   afterHoursProgress?: Record<string, boolean>;
+  courtVenue?: string;
+  bowlingHighScore?: number;
+  rcmRuns?: number;
 }
 
 export interface GameSettings {
@@ -228,6 +240,28 @@ export interface FishingHud {
   legendary: boolean;
 }
 
+export interface PlaytestHud {
+  fps: number;
+  dtMs: number;
+  px: number;
+  py: number;
+  tileX: number;
+  tileY: number;
+  yaw: number;
+  facing: string;
+  loco: string;
+  air: number;
+  nearPoi: string | null;
+  hint: string | null;
+  equipped: string | null;
+  vehicle: string | null;
+  indoor: boolean;
+  hour: number;
+  artRev: number;
+  quality: string;
+  noclip: boolean;
+}
+
 export interface HudSnapshot {
   mode: GameMode;
   sackdollars: number;
@@ -263,8 +297,15 @@ export interface HudSnapshot {
     horse?: string | null;
     call?: string | null;
     board?: { score: number; label: string }[];
+    venue?: string;
   } | null;
-  courtMenu?: { difficulty: string; unlocked: boolean } | null;
+  courtMenu?: {
+    difficulty: string;
+    unlocked: boolean;
+    venue: string;
+    challenge: string;
+    venues: { id: string; name: string; tag: string; thumb: string }[];
+  } | null;
   canShoot?: boolean;
   paused: boolean;
   started: boolean;
@@ -296,11 +337,15 @@ export interface HudSnapshot {
   race?: import("./race").RaceHud | null;
   raceMenu?: boolean;
   fishing?: FishingHud | null;
+  bowling?: import("./bowling").BowlHud | null;
   food?: import("./foodTrucks").FoodHud | null;
   coolerCount?: number;
   fed?: boolean;
   sponsor?: import("./sponsors").SponsorHud | null;
   sponsorOpen?: boolean;
+  rcm?: import("./rcmWorx").RcmHud | null;
+  playtest?: PlaytestHud | null;
+  playtestOpen?: boolean;
 }
 
 export type GameTestState = {
@@ -322,7 +367,7 @@ export type GameTestState = {
   saveVersion?: number;
   dropLive?: boolean;
   driving?: boolean;
-  vehicleKind?: "van" | "car" | null;
+  vehicleKind?: "van" | "car" | "sprinter" | "escalade" | null;
   raceActive?: boolean;
   racePhase?: string;
   raceLap?: number;
@@ -345,12 +390,22 @@ export type GameTestApi = {
   buyItem?: (id: string) => void;
   openShop?: () => void;
   wearProduct?: (id: string) => void;
+  enterCourt?: () => void;
+  beginCharge?: () => void;
+  releaseShot?: () => void;
   enterHQ?: () => void;
   enterHQShop?: () => void;
   startRace?: (skipCountdown?: boolean) => void;
   leaveRace?: () => void;
   completeRace?: (win?: boolean) => void;
   startFishing?: () => void;
+  openCourtMenu?: () => void;
+  setCourtVenue?: (id: string) => void;
+  enterLanes?: () => void;
+  startBowl?: () => void;
+  leaveBowl?: () => void;
+  enterRcm?: () => void;
+  bookRcm?: (vehicle: string, dest: string, chauffeur?: boolean) => void;
 };
 
 export type ControlsTestApi = {

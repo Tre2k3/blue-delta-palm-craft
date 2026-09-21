@@ -55,7 +55,7 @@ export const FOOD_TRUCKS: FoodTruckDef[] = [
     blurb: "Gold-rim plate. Lemon pepper or extra hot. Don't play about the sauce.",
     accent: "#d4af37",
     accentHex: 0xd4af37,
-    logo: `/game/food/velis-wings.png?v=${ART_REV}`,
+    logo: `/game/food/velis-wings.webp?v=${ART_REV}`,
     social: "@yungveli · Deluxe sponsor this cycle",
     contact: "IG / streaming on the board",
     items: [
@@ -71,7 +71,7 @@ export const FOOD_TRUCKS: FoodTruckDef[] = [
     blurb: "Two kings, one window. Wingz, burger, fries. Crown included.",
     accent: "#e11d48",
     accentHex: 0xe11d48,
-    logo: `/game/food/brothers-wingz.png?v=${ART_REV}`,
+    logo: `/game/food/brothers-wingz.webp?v=${ART_REV}`,
     social: "@brotherswingznthings · Standard sponsor this cycle",
     contact: "Menu + socials at the window",
     items: [

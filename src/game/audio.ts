@@ -389,6 +389,25 @@ export class GameAudio {
     this.noiseBurst(0.09, 0.025, 400, 2200);
   }
 
+  bowlRoll() {
+    this.tone(70, 0.28, "sine", 0.08);
+    this.tone(48, 0.4, "triangle", 0.06);
+    this.noiseBurst(0.32, 0.05, 80, 700);
+  }
+
+  pinCrash(n = 6) {
+    const hits = Math.max(1, Math.min(10, n));
+    this.tone(160 + hits * 18, 0.12, "square", 0.05);
+    this.tone(90, 0.18, "sine", 0.07);
+    this.noiseBurst(0.14 + hits * 0.012, 0.05, 400, 2800 + hits * 180);
+  }
+
+  strike() {
+    this.cheer();
+    this.perfect();
+    this.tone(988, 0.2, "triangle", 0.05);
+  }
+
   jump() {
     this.tone(210, 0.07, "sine", 0.05);
     this.tone(390, 0.08, "triangle", 0.028);

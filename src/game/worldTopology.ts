@@ -145,7 +145,7 @@ export function punchCourt(r: Rect): Rect[] {
   return punchHole(r, courtHole());
 }
 
-const ROAD_PUNCH_SKIP = new Set(["court", "river", "dropvan", "strip", "alley"]);
+const ROAD_PUNCH_SKIP = new Set(["court", "river", "dropvan", "strip", "alley", "rcmworx"]);
 
 export function roadBlockers(): Rect[] {
   const holes: Rect[] = [courtHole(), riverHole()];
@@ -215,7 +215,7 @@ export function trafficLanes(): Lane[] {
   return lanes;
 }
 
-const MESH_SKIP = new Set(["court", "river", "dropvan", "strip", "alley", "foodtruck", "velis", "brothers", "welcome", "listenpost", "billboard"]);
+const MESH_SKIP = new Set(["court", "river", "dropvan", "strip", "alley", "foodtruck", "velis", "brothers", "welcome", "listenpost", "billboard", "rcmworx"]);
 const ROAD_CLEAR = TILE * 1.7;
 
 function blockInteriorNear(cx: number, cy: number, w: number, h: number): Rect | null {
@@ -302,7 +302,12 @@ export function driveBlockers(): Rect[] {
   for (const p of POIS) {
     if (p.id === "river" || p.id === "dropvan" || p.id === "strip" || p.id === "alley") continue;
     if (p.id === "court" || p.id === "foodtruck" || p.id === "velis" || p.id === "brothers") continue;
-    if (p.id === "welcome" || p.id === "listenpost" || p.id === "billboard") continue;
+    if (p.id === "welcome" || p.id === "listenpost" || p.id === "billboard" || p.id === "rcmworx") continue;
+    // Full footprint — shrinking HQ off the road let FRONT ST drive through the shop.
+    if (p.id === "store" || p.id === "apartment" || p.id === "lanes") {
+      out.push({ x: p.x - 18, y: p.y - 18, w: p.w + 36, h: p.h + 36 });
+      continue;
+    }
     out.push(poiBuildingRect(p));
   }
   out.push(...cityBlockBuildings());
@@ -380,7 +385,7 @@ export function oppositeLaneId(id: string) {
 
 // Enterable buildings are traversable volumes with explicit wall strips below;
 // world zones stay non-solid as before.
-const NON_SOLID_POIS = new Set(["apartment", "store", "court", "river", "dropvan", "beale", "foodtruck", "velis", "brothers", "alley", "strip", "welcome", "listenpost", "billboard"]);
+const NON_SOLID_POIS = new Set(["apartment", "store", "court", "river", "dropvan", "beale", "foodtruck", "velis", "brothers", "alley", "strip", "welcome", "listenpost", "billboard", "lanes", "rcmworx"]);
 
 function shellWithSouthDoor(p: { x: number; y: number; w: number; h: number }, doorCenterX: number, doorWidth: number): Rect[] {
   const t = INTERIOR_WALL;
@@ -411,6 +416,12 @@ export function poiColliders(): Rect[] {
   if (store) {
     const center = store.x + store.w / 2;
     out.push(...shellWithSouthDoor(store, center, TILE * 1.7));
+  }
+
+  const lanes = POIS.find((p) => p.id === "lanes");
+  if (lanes) {
+    const center = lanes.x + lanes.w / 2;
+    out.push(...shellWithSouthDoor(lanes, center, TILE * 1.85));
   }
 
   for (const id of ["foodtruck", "velis", "brothers"] as const) {

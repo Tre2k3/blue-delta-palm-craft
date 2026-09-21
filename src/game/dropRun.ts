@@ -34,6 +34,7 @@ export interface DropRunState {
   points: number;
   grade: RunGrade | null;
   recap: boolean;
+  failed?: boolean;
   lastPayout: number;
   lastRespect: number;
 }
@@ -47,6 +48,7 @@ export interface DropRunHud {
   courtTarget: number;
   grade: RunGrade | null;
   recap: boolean;
+  failed?: boolean;
   deliveries: number;
   ballMakes: number;
   ballPerfects: number;
@@ -99,6 +101,7 @@ export function createRun(runIndex: number): DropRunState {
     points: 0,
     grade: null,
     recap: false,
+    failed: false,
     lastPayout: 0,
     lastRespect: 0,
   };
@@ -178,7 +181,18 @@ export function finalizeRun(run: DropRunState, parSeconds: number, basePayout: n
   run.lastRespect = Math.max(1, Math.round(baseRespect * (mul - 1) + (run.grade === "S" ? 12 : run.grade === "A" ? 6 : 0)));
   run.active = false;
   run.recap = true;
+  run.failed = false;
   return { grade: run.grade, bonusDollars: run.lastPayout, bonusRespect: run.lastRespect, mul };
+}
+
+export function expireRun(run: DropRunState) {
+  run.active = false;
+  run.recap = true;
+  run.failed = true;
+  run.grade = "D";
+  run.lastPayout = 0;
+  run.lastRespect = 0;
+  run.combo = 0;
 }
 
 export function toHud(run: DropRunState, courtTarget: number, par: number): DropRunHud {
@@ -191,6 +205,7 @@ export function toHud(run: DropRunState, courtTarget: number, par: number): Drop
     courtTarget,
     grade: run.grade,
     recap: run.recap,
+    failed: !!run.failed,
     deliveries: run.deliveries,
     ballMakes: run.ballMakes,
     ballPerfects: run.ballPerfects,

@@ -1,5 +1,5 @@
 /** In-game clock: ~1 hour every 2.5 real minutes. A full day is about an hour of play. */
-export const DAY_START_HOUR = 13;
+export const DAY_START_HOUR = 12;
 export const HOURS_PER_SECOND = 0.0065;
 
 export type LightLook = {
@@ -106,49 +106,49 @@ const DAY: LightLook = {
 };
 
 const DUSK: LightLook = {
-  sky: ["#1a1520", "#3a2a28", "#c47848", "#f2c66a", "#1a1612"],
-  fog: 0x3a2a22,
-  fogNear: 22,
-  fogFar: 145,
-  clear: 0x1a1612,
-  sun: 0xffc878,
-  sunI: 1.45,
-  hemiSky: 0xffc878,
-  hemiGround: 0x2a241c,
-  hemiI: 0.82,
-  amb: 0x4a3828,
-  ambI: 0.42,
-  exposure: 1.12,
-  sunY: 22,
+  sky: ["#24344f", "#4a5c78", "#e08a4a", "#f4d08a", "#6b5a4a"],
+  fog: 0x6b5a4a,
+  fogNear: 45,
+  fogFar: 190,
+  clear: 0x4a3a32,
+  sun: 0xffd9a8,
+  sunI: 2.3,
+  hemiSky: 0x9ec4e8,
+  hemiGround: 0x4a3a2c,
+  hemiI: 1.15,
+  amb: 0x5d6b7a,
+  ambI: 0.75,
+  exposure: 1.35,
+  sunY: 46,
   sunX: -52,
   sunZ: -18,
-  disk: 0xffcf8a,
-  glow: 0xff9a4a,
-  glowOp: 0.26,
-  overlay: 0.22,
+  disk: 0xffe0b0,
+  glow: 0xffb060,
+  glowOp: 0.2,
+  overlay: 0.1,
 };
 
 const NIGHT: LightLook = {
   sky: ["#07080f", "#101322", "#1a2438", "#0c1018", "#07080c"],
-  fog: 0x0c1018,
-  fogNear: 16,
-  fogFar: 95,
-  clear: 0x07080c,
+  fog: 0x1a2438,
+  fogNear: 22,
+  fogFar: 120,
+  clear: 0x0c1018,
   sun: 0xc8d4ee,
-  sunI: 0.32,
+  sunI: 0.45,
   hemiSky: 0x6a7aa8,
-  hemiGround: 0x12141c,
-  hemiI: 0.32,
-  amb: 0x1a2030,
-  ambI: 0.2,
-  exposure: 0.84,
-  sunY: 10,
+  hemiGround: 0x1a2030,
+  hemiI: 0.48,
+  amb: 0x243044,
+  ambI: 0.34,
+  exposure: 1.02,
+  sunY: 14,
   sunX: 40,
   sunZ: 28,
   disk: 0xe8eef8,
   glow: 0xa8b8d8,
-  glowOp: 0.12,
-  overlay: 0.55,
+  glowOp: 0.14,
+  overlay: 0.38,
 };
 
 /** 0 = full day, 1 = dusk, 2 = night. */

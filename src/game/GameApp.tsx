@@ -9,9 +9,12 @@ import {
   Volume2,
   SwitchCamera,
   Megaphone,
+  Bug,
 } from "lucide-react";
 import { GameEngine } from "./engine";
 import { APPAREL, ART_REV, BRAND, POIS, TROPHIES, TIPS } from "./data";
+import { COURT_VENUES, COURT_CHALLENGES, DIFFICULTY } from "./courtPlay";
+import type { CourtChallenge, CourtDifficulty } from "./courtPlay";
 import { lookFor } from "./outfitLook";
 import { formatRunClock } from "./dropRun";
 import type { ApparelId, HudSnapshot, PauseTab } from "./types";
@@ -19,8 +22,11 @@ import { commerce, installCommerceTestHook, type CommerceSnapshot, type StorePro
 import { installAnalyticsTestHook } from "./analytics";
 import { GAME_BUILD_VERSION, GAME_TITLE } from "./config";
 import type { SponsorHud } from "./sponsors";
+import { RCM, RCM_DROPS, RCM_VEHICLES } from "./rcmWorx";
 import { ErrorBoundary } from "./ui/ErrorBoundary";
 import { RotatePrompt } from "./ui/RotatePrompt";
+import { PlaytestKit, PlaytestTicker } from "./ui/PlaytestKit";
+import { loadTickerOn, saveTickerOn } from "./playtest";
 import { arrowGlyph, formatGap, formatMph, formatRaceClock, RACE_CHECKPOINTS } from "./race";
 
 const emptyHud: HudSnapshot = {
@@ -41,12 +47,13 @@ const emptyHud: HudSnapshot = {
   equipped: null,
   owned: [],
   basketball: null,
+  courtMenu: null,
   paused: false,
   started: false,
   missionComplete: false,
   cinematic: null,
   letterbox: 0,
-  worldHour: 16,
+  worldHour: 12,
   inputDevice: "keyboard",
   promptButton: "E",
   trophies: [],
@@ -86,11 +93,15 @@ const emptyHud: HudSnapshot = {
   race: null,
   raceMenu: false,
   fishing: null,
+  bowling: null,
   food: null,
   coolerCount: 0,
   fed: false,
   sponsor: null,
   sponsorOpen: false,
+  rcm: null,
+  playtest: null,
+  playtestOpen: false,
 };
 
 function formatHour(h: number) {
@@ -148,6 +159,9 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
   const [inspect, setInspect] = useState<{ product: StoreProduct; size: string } | null>(null);
   const [touchUI, setTouchUI] = useState(false);
   const [landscape, setLandscape] = useState(false);
+  const [fitsOpen, setFitsOpen] = useState(false);
+  const [ticker, setTicker] = useState(loadTickerOn);
+  const [hideHud, setHideHud] = useState(false);
 
   useEffect(() => {
     const read = () => {
@@ -163,6 +177,22 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
       window.removeEventListener("orientationchange", read);
     };
   }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "F3" && e.code !== "Backquote") return;
+      e.preventDefault();
+      const eng = engineRef.current;
+      if (!eng?.started) return;
+      eng.setPlaytestOpen(!eng.playtestOpen);
+      if (!ticker) {
+        setTicker(true);
+        saveTickerOn(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [ticker]);
 
   useEffect(() => {
     installAnalyticsTestHook();
@@ -321,7 +351,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
           }}
         >
           <img
-            src="/game/opening-title.jpg"
+            src="/game/opening-title.webp"
             alt=""
             className="absolute inset-0 h-full w-full object-cover"
             style={{ objectPosition: "68% 46%" }}
@@ -355,20 +385,21 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                   <p className="mt-1 text-[11px] text-subtle">{Math.round(loadPct * 100)}%</p>
                 </div>
               )}
-              {ready && (
-                <div className="mt-8 flex flex-col gap-2 max-w-xs">
-                  <button
-                    type="button"
-                    onClick={() => boot(false)}
-                    className="min-h-12 rounded-lg bg-primary px-6 font-display text-2xl text-primary-fg transition hover:brightness-110 active:scale-[0.98]"
-                  >
-                    ENTER MEMPHIS
-                  </button>
+              <div className="mt-8 flex flex-col gap-2 max-w-xs">
+                <button
+                  type="button"
+                  disabled={!ready}
+                  onClick={() => boot(false)}
+                  className="min-h-12 rounded-lg bg-primary px-6 font-display text-2xl text-primary-fg transition hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
+                >
+                  {ready ? "ENTER MEMPHIS" : "LOADING…"}
+                </button>
                   {hud.hasSave && (
                     <button
                       type="button"
+                      disabled={!ready}
                       onClick={() => boot(false)}
-                      className="min-h-11 rounded-lg border border-gold/50 bg-surface/70 px-6 font-display text-xl text-gold hover:bg-surface-2"
+                      className="min-h-11 rounded-lg border border-gold/50 bg-surface/70 px-6 font-display text-xl text-gold hover:bg-surface-2 disabled:opacity-50"
                     >
                       CONTINUE
                     </button>
@@ -376,8 +407,9 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                   {hud.hasSave && (
                     <button
                       type="button"
+                      disabled={!ready}
                       onClick={() => boot(true)}
-                      className="min-h-12 rounded-lg border border-border bg-surface/80 px-6 font-display text-2xl text-fg hover:bg-surface-2"
+                      className="min-h-12 rounded-lg border border-border bg-surface/80 px-6 font-display text-2xl text-fg hover:bg-surface-2 disabled:opacity-50"
                     >
                       NEW GAME
                     </button>
@@ -390,7 +422,6 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                     Settings
                   </button>
                 </div>
-              )}
               {bootError && (
                 <div className="mt-3 max-w-xs">
                   <p className="text-sm text-danger">We couldn't load Memphis.</p>
@@ -426,8 +457,34 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
 
       {hud.started && (
         <>
+          {ticker && !hud.cinematic && <PlaytestTicker hud={hud} />}
+          <PlaytestKit
+            hud={hud}
+            engine={engineRef.current}
+            open={!!hud.playtestOpen}
+            ticker={ticker}
+            hideHud={hideHud}
+            onClose={() => {
+              engineRef.current?.setPlaytestOpen(false);
+              setHideHud(false);
+            }}
+            onTicker={setTicker}
+            onHideHud={setHideHud}
+          />
+          {hideHud && (
+            <button
+              type="button"
+              className="pointer-events-auto absolute right-3 top-3 z-[70] rounded-lg border border-gold/40 bg-black/70 px-2 py-1 text-[10px] uppercase tracking-wider text-gold"
+              onClick={() => {
+                setHideHud(false);
+                engineRef.current?.setPlaytestOpen(true);
+              }}
+            >
+              HUD
+            </button>
+          )}
           {/* Top HUD */}
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-3 p-3 sm:p-4">
+          <div className={`pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-3 p-3 sm:p-4 ${hideHud ? "opacity-0" : ""}`}>
             <div className="sack-hud-chip flex flex-col gap-2">
               <div
                 className="flex items-center gap-2 rounded-xl border border-border bg-panel px-3 py-2 backdrop-blur-sm"
@@ -436,7 +493,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                 <img src="/game/sack-icon.png" alt="" className="h-7 w-7" />
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-muted">$ackdollars</p>
-                  <p className="tabular font-display text-2xl leading-none text-gold">${hud.sackdollars}</p>
+                  <Tally value={hud.sackdollars} prefix="$" className="tabular font-display text-2xl leading-none text-gold" />
                 </div>
               </div>
               {store.connected && (
@@ -459,7 +516,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
               <div className="flex items-center gap-3 rounded-xl border border-border bg-panel px-3 py-2 backdrop-blur-sm">
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-muted">Respect</p>
-                  <p className="tabular font-display text-xl leading-none text-gold">{hud.respect}</p>
+                  <Tally value={hud.respect} className="tabular font-display text-xl leading-none text-gold" />
                 </div>
                 <div className="h-8 w-px bg-border" />
                 <div>
@@ -469,6 +526,46 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
               </div>
             </div>
 
+            <div className="flex flex-col items-end gap-2">
+              {hud.started && !hud.paused && !hud.cinematic && (
+                <div className="pointer-events-auto flex gap-2">
+                  <button
+                    type="button"
+                    className={`flex min-h-11 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold uppercase tracking-wider shadow-lg backdrop-blur-sm ${
+                      hud.playtestOpen ? "border-gold bg-gold text-black" : "border-border bg-panel text-fg"
+                    }`}
+                    onClick={() => {
+                      const eng = engineRef.current;
+                      if (!eng) return;
+                      const next = !eng.playtestOpen;
+                      eng.setPlaytestOpen(next);
+                      if (next && !ticker) {
+                        setTicker(true);
+                        saveTickerOn(true);
+                      }
+                    }}
+                  >
+                    <Bug className="h-4 w-4" />
+                    Kit
+                  </button>
+                  <button
+                    type="button"
+                    className="flex min-h-11 items-center gap-1.5 rounded-xl border border-border bg-panel px-3 py-2 text-xs font-semibold uppercase tracking-wider text-fg shadow-lg backdrop-blur-sm"
+                    onClick={() => setFitsOpen(true)}
+                  >
+                    <Shirt className="h-4 w-4 text-gold" />
+                    Fits
+                  </button>
+                  <button
+                    type="button"
+                    className="flex min-h-11 items-center gap-1.5 rounded-xl border border-border bg-panel px-3 py-2 text-xs font-semibold uppercase tracking-wider text-fg shadow-lg backdrop-blur-sm"
+                    onClick={() => engineRef.current?.openPause("settings")}
+                  >
+                    <Settings className="h-4 w-4 text-gold" />
+                    Options
+                  </button>
+                </div>
+              )}
             <div className="max-w-[15rem] rounded-xl border border-border bg-panel px-3 py-2 text-right backdrop-blur-sm sm:max-w-xs">
               <p className="text-[10px] uppercase tracking-[0.18em] text-primary">{hud.missionChapter}</p>
               <p className="font-display text-lg leading-none text-gold">{hud.missionTitle}</p>
@@ -479,10 +576,11 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
               )}
               {(hud.dropRun.active || hud.dropRun.points > 0) && !hud.missionComplete && (
                 <p className="mt-1 text-[11px] tabular text-primary">
-                  RUN {hud.dropRun.run} · {formatRunClock(hud.dropRun.time)} · {hud.dropRun.points}
+                  RUN {hud.dropRun.run} · {formatRunClock(hud.dropRun.time)} / {formatRunClock(hud.dropRun.par)} · {hud.dropRun.points}
                   {hud.dropRun.combo > 1 ? ` · x${hud.dropRun.combo}` : ""}
                 </p>
               )}
+            </div>
             </div>
           </div>
 
@@ -498,7 +596,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
             </div>
           </div>
 
-          {hud.interactHint && hud.mode === "world" && !hud.cinematic && !hud.fishing?.active && (
+          {hud.interactHint && hud.mode === "world" && !hud.cinematic && !hud.fishing?.active && !hud.bowling?.active && !hud.rcm?.open && (
             <div className="pointer-events-none absolute left-3 top-[12.6rem] z-20 sm:top-[13.6rem]">
               <div
                 className="flex items-center gap-2 rounded-full border border-primary/35 bg-panel px-3 py-1.5 text-xs font-medium text-fg shadow-lg backdrop-blur-sm sm:text-sm"
@@ -536,16 +634,89 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
 
           {hud.mode === "basketball" && hud.basketball && !hud.race?.active && (
             <div className="pointer-events-none absolute right-3 top-28 z-20 rounded-xl border border-border bg-panel px-4 py-3 backdrop-blur-sm">
+              <p className="text-[10px] uppercase tracking-wider text-gold">{hud.basketball.venue ?? "901 Court"}</p>
               <p className="tabular text-4xl font-semibold leading-none text-fg">{hud.basketball.score}</p>
               {hud.basketball.timeLeft > 0 && hud.basketball.timeLeft < 900 && (
                 <p className="mt-1 text-xs text-muted">{hud.basketball.timeLeft}s</p>
               )}
+              <p className="mt-1 text-[10px] uppercase tracking-wider text-muted">
+                {hud.basketball.difficulty} · {hud.basketball.challenge}
+              </p>
               <button
                 type="button"
-                className="pointer-events-auto mt-2 w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-muted"
+                className="pointer-events-auto mt-2 w-full rounded-lg border border-gold/40 bg-gold/10 px-2 py-1.5 text-xs text-gold"
+                onClick={() => engineRef.current?.openCourtMenu()}
+              >
+                Change court
+              </button>
+              <button
+                type="button"
+                className="pointer-events-auto mt-1.5 w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-muted"
                 onClick={() => engineRef.current?.exitBasketball()}
               >
                 Leave court
+              </button>
+            </div>
+          )}
+
+          {hud.rcm?.job && !hud.cinematic && !hud.rcm.open && (
+            <div className="pointer-events-none absolute right-3 top-28 z-20 w-[min(15.5rem,calc(100%-6.5rem))] rounded-xl border border-gold/45 bg-[#0a0a0c]/85 px-3 py-3 backdrop-blur-sm">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-gold">{RCM.name}</p>
+              <p className="font-display text-3xl leading-none text-fg">{hud.rcm.destName}</p>
+              <p className="mt-1 text-sm text-muted">{hud.rcm.prompt}</p>
+              <p className="mt-2 text-[11px] uppercase tracking-wider text-gold">{RCM.motto}</p>
+              <p className="tabular text-xs text-primary">${hud.rcm.fare} · run {hud.rcm.runs + 1}/3</p>
+            </div>
+          )}
+
+          {hud.bowling?.active && !hud.cinematic && (
+            <div className="pointer-events-none absolute right-3 top-28 z-20 w-[min(16.5rem,calc(100%-6.5rem))] rounded-xl border border-[#ff2bd6]/40 bg-panel px-3 py-3 backdrop-blur-sm">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-[#ff7ad9]">901 Lanes · Lane {hud.bowling.lane}</p>
+              <p className="tabular font-display text-5xl leading-none text-fg">{hud.bowling.total}</p>
+              <p className="mt-1 text-[11px] uppercase tracking-wider text-gold">
+                Frame {hud.bowling.frame} · {hud.bowling.lastMark ?? "10 frames"}
+                {hud.bowling.turkey >= 2 ? ` · x${hud.bowling.turkey}` : ""}
+              </p>
+              <div className="mt-2 grid grid-cols-5 gap-1">
+                {hud.bowling.frames.map((fr, i) => (
+                  <div key={i} className={`rounded-md border px-1 py-0.5 text-center ${i + 1 === hud.bowling?.frame ? "border-primary bg-primary/15" : "border-border bg-black/30"}`}>
+                    <p className="text-[9px] text-muted">{i + 1}</p>
+                    <p className="font-display text-sm leading-none text-fg">{fr.mark || "·"}</p>
+                    <p className="text-[9px] tabular text-gold">{fr.score ?? ""}</p>
+                  </div>
+                ))}
+              </div>
+              {(hud.bowling.phase === "charging" || hud.bowling.phase === "setup") && (
+                <div className="mt-2 space-y-1.5">
+                  <div className="h-2 overflow-hidden rounded-full bg-black/50">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${Math.round(hud.bowling.power * 100)}%`,
+                        background: hud.bowling.power > 0.55 && hud.bowling.power < 0.84 ? "#39ff14" : "#ff2bd6",
+                      }}
+                    />
+                  </div>
+                  <div className="relative h-2 overflow-hidden rounded-full bg-black/50">
+                    <div className="absolute inset-y-0 left-[58%] w-[18%] bg-primary/50" />
+                    <div
+                      className="absolute top-[-3px] h-[calc(100%+6px)] w-1.5 rounded-sm bg-[#f4e27c]"
+                      style={{ left: `${Math.round((hud.bowling.hook * 0.5 + 0.5) * 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] uppercase tracking-wider text-muted">Power · hook</p>
+                </div>
+              )}
+              <p className="mt-2 text-sm text-fg">{hud.bowling.prompt}</p>
+              {hud.bowling.over && (
+                <p className="mt-1 font-display text-xl text-gold">+${hud.bowling.payout}</p>
+              )}
+              <button
+                type="button"
+                className="pointer-events-auto mt-2 w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-muted"
+                onClick={() => engineRef.current?.leaveBowl()}
+              >
+                Leave lanes
               </button>
             </div>
           )}
@@ -700,7 +871,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                 <div className="flex items-start gap-3">
                   {hud.dialogue.speaker === "K Blanco" && (
                     <img
-                      src="/game/k-blanco-portrait.png"
+                      src="/game/k-blanco-portrait.webp"
                       alt=""
                       className="h-16 w-16 shrink-0 rounded-xl object-cover object-top"
                       crossOrigin="anonymous"
@@ -724,7 +895,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
               <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl">
                 <div className="relative h-28 shrink-0 overflow-hidden sm:h-36">
                   <img
-                    src="/game/featured-products.png"
+                    src="/game/featured-products.webp"
                     alt=""
                     className="h-full w-full object-cover object-center"
                     crossOrigin="anonymous"
@@ -963,6 +1134,95 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
             </div>
           )}
 
+          {hud.rcm?.open && (
+            <div
+              className="absolute inset-0 z-40 flex items-end justify-center bg-bg/70 p-3 backdrop-blur-sm sm:items-center"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <div className="flex max-h-[min(92dvh,44rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-gold/50 bg-[#0a0a0c]/95 shadow-2xl">
+                <div className="shrink-0 border-b border-gold/25 px-4 py-3">
+                  <p className="text-[10px] uppercase tracking-[0.22em] text-gold">{RCM.line}</p>
+                  <p className="font-display text-3xl leading-none text-fg">{RCM.name}</p>
+                  <p className="mt-1 text-sm text-gold">{RCM.motto}</p>
+                  {hud.rcm.partner && (
+                    <p className="mt-1 text-[11px] uppercase tracking-wider text-primary">{RCM.partner} · first ride half fare</p>
+                  )}
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+                  <img src={`${RCM.flyer}?v=${ART_REV}`} alt="RCM WORX" className="mb-3 max-h-36 w-full rounded-lg border border-gold/20 object-cover object-top" />
+                  <p className="text-[10px] uppercase tracking-wider text-gold">The fleet</p>
+                  <div className="mt-2 grid gap-2">
+                    {RCM_VEHICLES.map((v) => {
+                      const on = hud.rcm?.vehicle === v.id;
+                      const fare = hud.rcm?.partner ? Math.round(v.fare * 0.5) : v.fare;
+                      return (
+                        <button
+                          key={v.id}
+                          type="button"
+                          onClick={() => engineRef.current?.pickRcmVehicle(v.id)}
+                          className={`rounded-xl border px-3 py-2.5 text-left ${on ? "border-gold bg-gold/10" : "border-border bg-panel"}`}
+                        >
+                          <div className="flex items-baseline justify-between gap-2">
+                            <p className="font-display text-xl leading-none text-fg">{v.name}</p>
+                            <p className="tabular text-sm text-gold">${fare}</p>
+                          </div>
+                          <p className="mt-1 text-[11px] uppercase tracking-wider text-muted">{v.tag}</p>
+                          <p className="mt-0.5 text-xs text-muted">{v.line}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-3 text-[10px] uppercase tracking-wider text-gold">Drop</p>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    {RCM_DROPS.map((d) => {
+                      const on = hud.rcm?.destId === d.id;
+                      return (
+                        <button
+                          key={d.id}
+                          type="button"
+                          onClick={() => engineRef.current?.pickRcmDrop(d.id)}
+                          className={`rounded-xl border px-2.5 py-2 text-left ${on ? "border-gold bg-gold/10" : "border-border bg-panel"}`}
+                        >
+                          <p className="text-sm font-medium text-fg">{d.name}</p>
+                          <p className="text-[10px] uppercase tracking-wider text-muted">{d.tag}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-3 text-xs text-muted">{hud.rcm.prompt}</p>
+                  <p className="mt-1 text-[10px] uppercase tracking-wider text-subtle">{RCM.phone} · {RCM.web} · {RCM.city}</p>
+                </div>
+                <div className="shrink-0 grid grid-cols-2 gap-2 border-t border-gold/25 p-3">
+                  <button
+                    type="button"
+                    className="min-h-12 rounded-xl bg-gold px-3 font-display text-xl text-bg"
+                    onClick={() => {
+                      if (hud.rcm?.vehicle && hud.rcm.destId) engineRef.current?.bookRcm(hud.rcm.vehicle, hud.rcm.destId, false);
+                    }}
+                  >
+                    I'LL DRIVE
+                  </button>
+                  <button
+                    type="button"
+                    className="min-h-12 rounded-xl border border-gold/50 bg-panel px-3 font-display text-xl text-gold"
+                    onClick={() => {
+                      if (hud.rcm?.vehicle && hud.rcm.destId) engineRef.current?.bookRcm(hud.rcm.vehicle, hud.rcm.destId, true);
+                    }}
+                  >
+                    CHAUFFEUR
+                  </button>
+                  <button
+                    type="button"
+                    className="col-span-2 min-h-10 text-xs text-muted"
+                    onClick={() => engineRef.current?.closeRcm()}
+                  >
+                    Not now
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {hud.raceMenu && (
             <div className="absolute inset-0 z-40 flex items-end justify-center bg-bg/50 p-4 backdrop-blur-sm sm:items-center">
               <div className="w-full max-w-sm rounded-2xl border border-gold/40 bg-panel p-4">
@@ -979,6 +1239,95 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                 <button type="button" className="mt-3 w-full text-xs text-muted" onClick={() => engineRef.current?.closeRaceMenu()}>
                   Not now
                 </button>
+              </div>
+            </div>
+          )}
+
+          {hud.courtMenu && (
+            <div
+              className="absolute inset-0 z-40 flex items-end justify-center bg-bg/55 p-3 backdrop-blur-sm sm:items-center"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <div className="flex max-h-[min(90dvh,42rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-gold/40 bg-surface/95 shadow-2xl">
+                <div className="shrink-0 border-b border-border px-4 py-3">
+                  <p className="font-display text-3xl text-fg">COURTS</p>
+                  <p className="text-sm text-muted">Pick a floor, then run it.</p>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    {COURT_VENUES.map((v) => {
+                      const on = hud.courtMenu?.venue === v.id;
+                      return (
+                        <button
+                          key={v.id}
+                          type="button"
+                          onClick={() => engineRef.current?.setCourtVenue(v.id)}
+                          className={`overflow-hidden rounded-xl border text-left ${
+                            on ? "border-primary bg-primary/10" : "border-border bg-panel"
+                          }`}
+                        >
+                          <img src={`${v.thumb}?v=${ART_REV}`} alt="" className="h-20 w-full object-cover" />
+                          <div className="px-2 py-1.5">
+                            <p className="font-display text-lg leading-none text-fg">{v.name}</p>
+                            <p className="mt-0.5 text-[10px] uppercase tracking-wider text-muted">{v.tag}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-3 text-[10px] uppercase tracking-wider text-gold">Mode</p>
+                  <div className="mt-1 grid grid-cols-4 gap-1.5">
+                    {COURT_CHALLENGES.map((c) => {
+                      const on = hud.courtMenu?.challenge === c.id;
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => engineRef.current?.setCourtChallenge(c.id as CourtChallenge)}
+                          className={`rounded-lg border px-1 py-2 text-center ${
+                            on ? "border-primary bg-primary text-primary-fg" : "border-border bg-panel text-fg"
+                          }`}
+                        >
+                          <p className="text-xs font-semibold">{c.name}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-3 text-[10px] uppercase tracking-wider text-gold">Heat</p>
+                  <div className="mt-1 grid grid-cols-3 gap-1.5">
+                    {(Object.keys(DIFFICULTY) as CourtDifficulty[]).map((id) => {
+                      const on = hud.courtMenu?.difficulty === DIFFICULTY[id].label;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => engineRef.current?.setCourtDifficulty(id)}
+                          className={`rounded-lg border px-2 py-2 text-sm font-medium ${
+                            on ? "border-gold bg-gold/15 text-gold" : "border-border bg-panel text-fg"
+                          }`}
+                        >
+                          {DIFFICULTY[id].label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="shrink-0 space-y-2 border-t border-border px-4 py-3">
+                  <button
+                    type="button"
+                    className="min-h-11 w-full rounded-xl bg-primary font-display text-2xl text-primary-fg"
+                    onClick={() => engineRef.current?.startCourt((hud.courtMenu?.challenge as CourtChallenge) || "timed")}
+                  >
+                    PLAY {COURT_VENUES.find((v) => v.id === hud.courtMenu?.venue)?.name ?? "COURT"}
+                  </button>
+                  <button
+                    type="button"
+                    className="w-full text-xs text-muted"
+                    onClick={() => engineRef.current?.closeCourtMenu()}
+                  >
+                    {hud.mode === "basketball" ? "Keep hooping" : "Not now"}
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -1015,10 +1364,16 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
 
           {hud.dropRun.recap && !hud.cinematic && !hud.shopOpen && (
             <div className="absolute inset-0 z-40 flex items-end justify-center bg-bg/65 p-3 backdrop-blur-sm sm:items-center">
-              <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-5 shadow-2xl">
-                <p className="text-[11px] uppercase tracking-[0.22em] text-primary">Drop Day · Run {hud.dropRun.run}</p>
-                <p className="font-display mt-1 text-6xl leading-none text-gold">{hud.dropRun.grade ?? "D"}</p>
-                <p className="mt-1 text-sm text-muted">Play better, earn more, look fresher.</p>
+              <div className="w-full max-w-md rounded-2xl border border-gold/40 bg-surface p-5 shadow-2xl">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-primary">
+                  {hud.dropRun.failed ? "Drop Day · Late" : `Drop Day · Run ${hud.dropRun.run}`}
+                </p>
+                <p className={`font-display mt-1 text-6xl leading-none ${hud.dropRun.failed ? "text-danger" : "text-gold"}`}>
+                  {hud.dropRun.failed ? "LATE" : hud.dropRun.grade ?? "D"}
+                </p>
+                <p className="mt-1 text-sm text-muted">
+                  {hud.dropRun.failed ? "Par clock popped. Respect took the hit. Run it back." : "Play better, earn more, look fresher."}
+                </p>
                 <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
                   <div className="rounded-lg border border-border bg-surface-2 px-3 py-2">
                     <dt className="text-[10px] uppercase tracking-wider text-muted">Time</dt>
@@ -1069,7 +1424,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
             </div>
           )}
 
-          {touchUI && hud.started && !hud.paused && !hud.cinematic && !hud.shopOpen && !hud.food && !hud.dialogue && (
+          {touchUI && hud.started && !hud.paused && !hud.cinematic && !hud.shopOpen && !hud.food && !hud.dialogue && !fitsOpen && (
           <div className={`sack-touch-bar absolute inset-x-0 bottom-0 z-20 flex items-end justify-between p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] ${landscape ? "origin-bottom scale-90 p-2" : ""}`}>
             <div className="flex flex-col items-start gap-2">
             <div
@@ -1148,7 +1503,28 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                 </button>
               </div>
               )}
-              {hud.fishing?.active ? (
+              {hud.bowling?.active ? (
+                <button
+                  type="button"
+                  className="flex h-16 w-16 items-center justify-center rounded-full bg-[#ff2bd6] font-display text-sm text-bg shadow-lg active:scale-95"
+                  onTouchStart={(e) => {
+                    e.preventDefault();
+                    const eng = engineRef.current;
+                    if (!eng) return;
+                    eng.input.touch.shoot = true;
+                    eng.beginBowlCharge();
+                  }}
+                  onTouchEnd={(e) => {
+                    e.preventDefault();
+                    const eng = engineRef.current;
+                    if (!eng) return;
+                    eng.input.touch.shoot = false;
+                    eng.releaseBowl();
+                  }}
+                >
+                  {hud.bowling.phase === "over" ? "AGAIN" : "BOWL"}
+                </button>
+              ) : hud.fishing?.active ? (
                 <button
                   type="button"
                   className="flex h-16 w-16 items-center justify-center rounded-full bg-[#4f9ddf] font-display text-sm text-bg shadow-lg active:scale-95"
@@ -1167,7 +1543,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                 >
                   {hud.fishing.phase === "cast" ? "CAST" : hud.fishing.phase === "strike" || hud.fishing.phase === "nibble" ? "HOOK" : hud.fishing.phase === "reel" ? "REEL" : "OK"}
                 </button>
-              ) : hud.mode === "basketball" ? (
+              ) : hud.canShoot || hud.mode === "basketball" ? (
                 <div className="flex items-end gap-2">
                 <button
                   type="button"
@@ -1248,20 +1624,49 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
           )}
 
           <div className={`pointer-events-none absolute bottom-3 right-3 z-10 rounded-lg border border-border bg-panel/70 px-2 py-1 text-[10px] text-muted ${touchUI ? "hidden" : "hidden sm:block"}`}>
-            {hud.race?.active ? "Arrows on turns · Esc DNF" : `WASD drive · Shift boost · Q/R look · V camera · ${hud.promptButton} · Space jump`}
+            {hud.race?.active ? "Arrows on turns · Esc DNF" : hud.bowling?.active ? "Hold Space to roll · look hooks · Esc leave" : hud.rcm?.job ? (hud.rcm.chauffeur ? "Rico driving · E on arrival · Esc cancel" : "WASD to the gold ring · E arrive · Esc cancel") : `WASD drive · Shift boost · Q/R look · V camera · ${hud.promptButton} · Space jump`}
           </div>
 
           {/* Pause */}
+          {fitsOpen && hud.started && !hud.paused && (
+            <div
+              className="pointer-events-auto absolute inset-0 z-40 flex items-end justify-center bg-bg/55 p-3 backdrop-blur-sm sm:items-center"
+              onPointerDown={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+              onWheel={(e) => e.stopPropagation()}
+            >
+              <div className="flex max-h-[min(88dvh,40rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl">
+                <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
+                  <p className="font-display text-2xl text-fg">FITS</p>
+                  <button
+                    type="button"
+                    className="min-h-10 rounded-lg border border-border px-3 text-sm text-muted"
+                    onClick={() => setFitsOpen(false)}
+                  >
+                    Close
+                  </button>
+                </div>
+                <PauseWardrobe
+                  owned={hud.owned}
+                  equipped={hud.equipped}
+                  onEquip={(id) => {
+                    onBuy(id);
+                  }}
+                  onDone={() => setFitsOpen(false)}
+                />
+              </div>
+            </div>
+          )}
           {hud.paused && (
             <div className="absolute inset-0 z-50 flex items-stretch bg-bg/80 backdrop-blur-md">
               <img
-                src="/game/memphis-dusk.jpg"
+                src="/game/memphis-dusk.webp"
                 alt=""
                 className="absolute inset-0 h-full w-full object-cover opacity-25"
                 crossOrigin="anonymous"
               />
               <div className="relative flex w-full max-w-5xl mx-auto">
-                <nav className="flex w-44 shrink-0 flex-col gap-1 border-r border-border p-4 sm:w-56">
+                <nav className="flex w-44 shrink-0 flex-col gap-1 border-r border-gold/30 bg-surface/70 p-4 sm:w-56">
                   <p className="mb-3 font-display text-2xl text-primary">PAUSED</p>
                   {TABS.map((t) => {
                     const Icon = t.icon;
@@ -1284,7 +1689,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                     );
                   })}
                 </nav>
-                <div className="min-w-0 flex-1 overflow-y-auto p-5">
+                <div className="min-w-0 flex-1 overflow-y-auto bg-surface/60 p-5">
                   {hud.pauseTab === "map" && <PauseMap district={hud.locationName} />}
                   {hud.pauseTab === "missions" && (
                     <PauseMissions
@@ -1357,6 +1762,35 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
       )}
     </div>
   );
+}
+
+function Tally({
+  value,
+  prefix = "",
+  className,
+}: {
+  value: number;
+  prefix?: string;
+  className?: string;
+}) {
+  const [shown, setShown] = useState(value);
+  const shownRef = useRef(value);
+  useEffect(() => {
+    const start = shownRef.current;
+    if (start === value) return;
+    let raf = 0;
+    const t0 = performance.now();
+    const step = (t: number) => {
+      const u = Math.min(1, (t - t0) / 380);
+      const next = Math.round(start + (value - start) * (1 - (1 - u) * (1 - u)));
+      shownRef.current = next;
+      setShown(next);
+      if (u < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+  return <p className={className}>{prefix}{shown}</p>;
 }
 
 function RaceRadar({ race }: { race: NonNullable<HudSnapshot["race"]> }) {
@@ -1437,7 +1871,7 @@ function PauseMissions({
           <li
             key={s.id}
             className={`rounded-lg border px-3 py-2 ${
-              s.done ? "border-border bg-surface-2 text-muted" : "border-primary/30 bg-surface text-fg"
+              s.done ? "border-border bg-surface-2 text-muted" : "border-gold/40 bg-surface-2 text-fg shadow-md"
             }`}
           >
             <p className="text-sm font-medium">{s.label}</p>
@@ -1457,7 +1891,7 @@ function PauseMissions({
       <p className="mt-6 text-[11px] uppercase tracking-wider text-muted">Side jobs</p>
       <ul className="mt-2 space-y-2">
         {sides.map((s) => (
-          <li key={s.id} className="flex items-start justify-between gap-3 rounded-lg border border-border bg-surface-2 px-3 py-2">
+          <li key={s.id} className="flex items-start justify-between gap-3 rounded-lg border border-gold/25 bg-surface-2 px-3 py-2 shadow-sm">
             <div>
               <p className={`text-sm font-medium ${s.done ? "text-muted" : "text-fg"}`}>{s.title}</p>
               <p className="text-xs text-muted">{s.description}</p>
@@ -1474,33 +1908,52 @@ function PauseWardrobe({
   owned,
   equipped,
   onEquip,
+  onDone,
 }: {
   owned: ApparelId[];
   equipped: ApparelId | null;
   onEquip: (id: ApparelId) => void;
+  onDone?: () => void;
 }) {
+  const wearing = APPAREL.find((a) => a.id === equipped);
   return (
-    <div>
-      <p className="text-[11px] uppercase tracking-wider text-muted">Locker</p>
-      <p className="font-display text-3xl text-fg">WARDROBE</p>
-      <div className="mt-4 grid gap-2">
-        {APPAREL.filter((a) => owned.includes(a.id)).map((a) => (
-          <button
-            key={a.id}
-            type="button"
-            onClick={() => onEquip(a.id)}
-            className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left ${
-              equipped === a.id ? "border-primary bg-primary/10" : "border-border bg-surface-2"
-            }`}
-          >
-            <span className="flex min-w-0 items-center gap-3">
-              <img src={lookFor(a.id).thumb.src} alt="" className="h-10 w-10 shrink-0 rounded object-cover bg-black" />
-              <span className="truncate text-sm font-medium text-fg">{a.name}</span>
-            </span>
-            <span className="text-xs text-muted">{equipped === a.id ? "Equipped" : "Equip"}</span>
-          </button>
-        ))}
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3" style={{ WebkitOverflowScrolling: "touch" }}>
+        <p className="text-[11px] uppercase tracking-wider text-muted">Locker</p>
+        <p className="font-display text-3xl text-fg">WARDROBE</p>
+        <div className="mt-4 grid gap-2 pb-2">
+          {APPAREL.filter((a) => owned.includes(a.id)).map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              onClick={() => onEquip(a.id)}
+              className={`flex min-h-12 items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left ${
+                equipped === a.id ? "border-primary bg-primary/10" : "border-gold/25 bg-surface-2 shadow-sm"
+              }`}
+            >
+              <span className="flex min-w-0 items-center gap-3">
+                <img src={lookFor(a.id).thumb.src} alt="" className="h-10 w-10 shrink-0 rounded object-cover bg-black" />
+                <span className="truncate text-sm font-medium text-fg">{a.name}</span>
+              </span>
+              <span className="shrink-0 text-xs text-muted">{equipped === a.id ? "On" : "Equip"}</span>
+            </button>
+          ))}
+        </div>
       </div>
+      {onDone && (
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-surface px-4 py-3">
+          <p className="min-w-0 truncate text-xs text-muted">
+            {wearing ? `Wearing ${wearing.name}` : "Pick a fit"}
+          </p>
+          <button
+            type="button"
+            className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-fg"
+            onClick={() => onDone()}
+          >
+            Confirm
+          </button>
+        </div>
+      )}
     </div>
   );
 }

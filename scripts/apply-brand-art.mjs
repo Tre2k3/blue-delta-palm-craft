@@ -58,10 +58,9 @@ def flood_alpha(im, thresh=38):
         r,g,b,a = px[x,y]
         if a==0: return
         dist = abs(r-br)+abs(g-bg)+abs(b-bb)
-        # gold frames / labels also go
-        gold = r>140 and g>110 and b<90 and r>g
-        dark = r<48 and g<48 and b<48
-        if dist < thresh*3 or gold or (dark and (x<6 or y<6 or x>w-7 or y>h-7)):
+        luma = (r+g+b)/3
+        paper = luma>200 and abs(r-g)<24 and abs(g-b)<24 and (x<6 or y<6 or x>w-7 or y>h-7)
+        if dist < thresh*3 or paper:
             vis[i]=1
             stack.append((x,y))
     for x in range(w):
@@ -78,8 +77,7 @@ def flood_alpha(im, thresh=38):
                 if vis[i]: continue
                 r,g,b,a = px[nx,ny]
                 dist = abs(r-br)+abs(g-bg)+abs(b-bb)
-                gold = r>150 and g>115 and b<100 and r>g and g>b
-                if dist < thresh*3 or gold:
+                if dist < thresh*3:
                     vis[i]=1
                     stack.append((nx,ny))
     return im

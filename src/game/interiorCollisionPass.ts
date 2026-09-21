@@ -4,6 +4,7 @@ import { circleHitsRect, type Rect } from "./worldTopology";
 
 const APARTMENT = POIS.find((p) => p.id === "apartment")!;
 const STORE = POIS.find((p) => p.id === "store")!;
+const LANES = POIS.find((p) => p.id === "lanes")!;
 type PatchedEngine = GameEngine & {
   __interiorCollisionPatched?: boolean;
   __interiorCollisionOriginal?: GameEngine["collides"];
@@ -18,6 +19,8 @@ const apartmentCx = APARTMENT.x + APARTMENT.w / 2;
 const apartmentCy = APARTMENT.y + APARTMENT.h / 2;
 const hqCx = STORE.x + STORE.w / 2;
 const hqCy = STORE.y + STORE.h / 2;
+const lanesCx = LANES.x + LANES.w / 2;
+const lanesCy = LANES.y + LANES.h / 2;
 
 // Visual furniture in world3d.ts is authored in Three.js world units where
 // one unit = 16 gameplay pixels. Mirror only meaningful footprints here. The
@@ -44,6 +47,23 @@ const HQ_FURNITURE: Rect[] = [
   loc(-7.5, 5.8, 1.25, 0.85), // entry vitrine
 ];
 
+function locL(lx: number, lz: number, w: number, d: number): Rect {
+  return gameRect(lanesCx + lx * 16, lanesCy + lz * 16, w * 16, d * 16);
+}
+
+const LANES_FURNITURE: Rect[] = [
+  locL(6.55, 4.55, 2.35, 1.15), // shoe / snack counter
+  locL(-5.35, 6.35, 4.4, 0.72), // west bench
+  locL(5.35, 6.35, 4.4, 0.72), // east bench
+  locL(-6.2, -5.15, 1.55, 1.7), // pin deck 0
+  locL(-2.08, -5.15, 1.55, 1.7),
+  locL(2.08, -5.15, 1.55, 1.7),
+  locL(6.2, -5.15, 1.55, 1.7),
+  locL(-4.14, 1.4, 0.55, 1.1), // ball returns
+  locL(0, 1.4, 0.55, 1.1),
+  locL(4.14, 1.4, 0.55, 1.1),
+];
+
 function loc(lx: number, lz: number, w: number, d: number): Rect {
   return gameRect(hqCx + lx * 16, hqCy + lz * 16, w * 16, d * 16);
 }
@@ -59,7 +79,13 @@ export function installInteriorCollisionPass() {
   GameEngine.prototype.collides = function furnitureAwareCollision(this: GameEngine, x: number, y: number, r: number) {
     if (originalCollides.call(this, x, y, r)) return true;
     if (this.mover.air >= 0.62) return false;
-    const furniture = inside(APARTMENT, x, y) ? APARTMENT_FURNITURE : inside(STORE, x, y) ? HQ_FURNITURE : null;
+    const furniture = inside(APARTMENT, x, y)
+      ? APARTMENT_FURNITURE
+      : inside(STORE, x, y)
+        ? HQ_FURNITURE
+        : inside(LANES, x, y)
+          ? LANES_FURNITURE
+          : null;
     if (!furniture) return false;
     return furniture.some((rect) => circleHitsRect(x, y, r, rect));
   };

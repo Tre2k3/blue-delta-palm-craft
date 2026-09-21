@@ -56,16 +56,13 @@ def flood_alpha(im, thresh=42, near_white=False):
 
     def is_bg(r, g, b):
         dist = abs(r - br) + abs(g - bg) + abs(b - bb)
-        gold = r > 145 and g > 110 and b < 110 and r > b
+        if dist < thresh * 3:
+            return True
         if near_white:
             luma = (r + g + b) / 3
             if luma > 210 and abs(r - g) < 28 and abs(g - b) < 28:
                 return True
-            # green/grey studio
-            if g > 90 and abs(r - g) < 45 and abs(g - b) < 45 and luma > 130:
-                return True
-        dark = r < 42 and g < 42 and b < 42
-        return dist < thresh * 3 or gold or dark
+        return False
 
     def push(x, y):
         i = y * w + x

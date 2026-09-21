@@ -256,6 +256,8 @@ export class WorldLifePass {
       { id: "foodtruck", text: "901 CATCH KITCHEN", accent: "#1db954", y: 3.6 },
       { id: "velis", text: "VELI'S WINGS", accent: "#d4af37", y: 3.6 },
       { id: "brothers", text: "WINGZ N THINGS", accent: "#e11d48", y: 3.6 },
+      { id: "lanes", text: "901 LANES", accent: "#ff7ad9", y: 6.0 },
+      { id: "rcmworx", text: "RCM WORX", accent: "#c9a84c", y: 4.2 },
     ];
     for (const def of defs) {
       const poi = POIS.find((p) => p.id === def.id);
@@ -316,6 +318,8 @@ export class WorldLifePass {
     for (let i = 0; i < placements.length; i++) {
       const [tx, ty, rot] = placements[i]!;
       if (inCourtPx(tx * TILE, ty * TILE) || Math.abs(tx - 15) < 6 && ty > 27 && ty < 38) continue;
+      const rcm = POIS.find((p) => p.id === "rcmworx");
+      if (rcm && tx * TILE > rcm.x - 24 && tx * TILE < rcm.x + rcm.w + 24 && ty * TILE > rcm.y - 24 && ty * TILE < rcm.y + rcm.h + 24) continue;
       const car = this.makeParkedCar(i);
       car.position.set(wx(tx * TILE), CAR_RIDE, wz(ty * TILE));
       car.rotation.y = rot;

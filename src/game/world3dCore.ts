@@ -10,9 +10,13 @@ import { decorateBuildings, getSignMaterial, type BuildingRef } from "./city/sig
 import { mountCityAds } from "./city/ads";
 import { cutoutMeshMaterial, cutoutSpriteMaterial } from "./cutout";
 import { createWebGLRenderer, disposeRenderer } from "./webgl";
-import { makeDropVan, CAR_RIDE } from "./carRig";
+import { makeDropVan, makeLuxurySprinter, makeLuxuryEscalade, CAR_RIDE } from "./carRig";
 import { bootVehicleWraps } from "./vehicleWraps";
 import { ALL_PACKAGES, CYCLE_LABEL, CYCLE_SLOTS } from "./sponsors";
+import { basketballImageKey, basketballPackFor } from "./basketballSprites";
+import type { ApparelId } from "./types";
+import { venueFor, type CourtVenueId } from "./courtPlay";
+import { lightLook } from "./dayCycle";
 
 export const S = 1 / 16;
 
@@ -167,17 +171,18 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
-function makeSkyTex() {
+function makeSkyTex(stops?: [string, string, string, string, string]) {
   const c = document.createElement("canvas");
   c.width = 8;
   c.height = 256;
   const g = c.getContext("2d")!;
   const grd = g.createLinearGradient(0, 0, 0, 256);
-  grd.addColorStop(0, "#1a1520");
-  grd.addColorStop(0.32, "#3a2a28");
-  grd.addColorStop(0.58, "#c47848");
-  grd.addColorStop(0.76, "#f2c66a");
-  grd.addColorStop(1, "#1a1612");
+  const sky = stops ?? ["#6ec4f2", "#8fd0f4", "#d7eefc", "#f3f1ea", "#e7e4d8"];
+  grd.addColorStop(0, sky[0]!);
+  grd.addColorStop(0.28, sky[1]!);
+  grd.addColorStop(0.55, sky[2]!);
+  grd.addColorStop(0.78, sky[3]!);
+  grd.addColorStop(1, sky[4]!);
   g.fillStyle = grd;
   g.fillRect(0, 0, 8, 256);
   const tex = new THREE.CanvasTexture(c);
@@ -220,7 +225,7 @@ export type WorldFrame = {
   outfitColor?: string | null;
   dropLive?: boolean;
   driving?: boolean;
-  vehicleKind?: "van" | "car" | null;
+  vehicleKind?: "van" | "car" | "sprinter" | "escalade" | null;
   jooking?: boolean;
   listening?: boolean;
   worldHour?: number;
@@ -246,6 +251,20 @@ export type WorldFrame = {
   raceGates?: { x: number; y: number; next: boolean }[];
   raceClear?: boolean;
   foodServe?: { truckId: string; t: number; duration: number; item: string } | null;
+  courtVenue?: string;
+  bowling?: {
+    active: boolean;
+    phase: string;
+    lane: number;
+    progress: number;
+    ballX: number;
+    standing: boolean[];
+    knocked: boolean[];
+    pinT: number;
+    flash: number;
+    gutter: boolean;
+  } | null;
+  rcmDest?: { x: number; y: number } | null;
 };
 
 type TexPack = Partial<Record<MatKey, THREE.Texture>>;
@@ -266,11 +285,19 @@ export class World3D {
   peds: THREE.Group[] = [];
   npcSprites = new Map<string, THREE.Sprite>();
   sun: THREE.DirectionalLight;
+  private hemi: THREE.HemisphereLight;
+  private amb: THREE.AmbientLight;
+  private skyDome!: THREE.Mesh;
+  private sunDisk!: THREE.Mesh;
+  private sunGlow!: THREE.Mesh;
   overlay: HTMLCanvasElement;
   mats: TexPack = {};
   private spriteMats: Partial<Record<string, THREE.SpriteMaterial>> = {};
   protected art: CityArt = { people: {}, cars: {}, facades: {}, store: {}, food: {}, ads: {} };
   dropVan: THREE.Group | null = null;
+  rcmSprinter: THREE.Group | null = null;
+  rcmEscalade: THREE.Group | null = null;
+  private rcmMarker: THREE.Mesh | null = null;
   private foodRigs: THREE.Group[] = [];
   private veliVideo: HTMLVideoElement | null = null;
   private veliScreen: THREE.Mesh | null = null;
@@ -285,15 +312,23 @@ export class World3D {
   private camFov = 62;
   private lastDt = 1 / 60;
   private benjiReady = false;
+  private bbOutfit: string | null = null;
+  private courtFloor: THREE.Mesh | null = null;
+  private courtLines: THREE.Mesh | null = null;
+  private courtFence = new THREE.Group();
+  private courtParapet = new THREE.Group();
+  private courtGym = new THREE.Group();
+  private courtVenue: CourtVenueId = "901_day";
+  private lastLightKey = "";
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = createWebGLRenderer(canvas);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
-    this.renderer.setClearColor(0x1a1612, 1);
+    this.renderer.setClearColor(0x8fc8ea, 1);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.12;
+    this.renderer.toneMappingExposure = 1.32;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     setAnisotropy(this.renderer.capabilities.getMaxAnisotropy());
 
@@ -301,15 +336,16 @@ export class World3D {
     this.overlay.className = "pointer-events-none absolute inset-0 h-full w-full";
     canvas.parentElement?.appendChild(this.overlay);
 
-    this.scene.fog = new THREE.Fog(0x3a2a22, 22, 145);
+    this.scene.fog = new THREE.Fog(0xc5d4dc, 38, 210);
     this.scene.background = makeSkyTex();
 
-    const hemi = new THREE.HemisphereLight(0xffc878, 0x2a241c, 0.82);
-    this.scene.add(hemi);
-    this.scene.add(new THREE.AmbientLight(0x4a3828, 0.42));
+    this.hemi = new THREE.HemisphereLight(0xd7ecff, 0x6f8a5c, 1.22);
+    this.scene.add(this.hemi);
+    this.amb = new THREE.AmbientLight(0xc4d0c0, 0.78);
+    this.scene.add(this.amb);
 
-    this.sun = new THREE.DirectionalLight(0xffc878, 1.45);
-    this.sun.position.set(-52, 28, -18);
+    this.sun = new THREE.DirectionalLight(0xfff3d0, 2.35);
+    this.sun.position.set(-28, 58, 12);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(1024, 1024);
     this.sun.shadow.camera.near = 4;
@@ -331,10 +367,11 @@ export class World3D {
     this.camPos.set(10, 8, 18);
 
     this.ball = new THREE.Mesh(
-      new THREE.SphereGeometry(0.12, 20, 16),
-      new THREE.MeshStandardMaterial({ color: 0xc46a32, roughness: 0.55, metalness: 0.05 }),
+      new THREE.SphereGeometry(0.22, 24, 18),
+      new THREE.MeshStandardMaterial({ color: 0xc9a84c, roughness: 0.48, metalness: 0.18 }),
     );
     this.ball.castShadow = true;
+    this.ball.renderOrder = 3;
     this.scene.add(this.ball);
     this.ballShadow = new THREE.Mesh(
       new THREE.CircleGeometry(0.14, 16),
@@ -364,29 +401,62 @@ export class World3D {
   }
 
   private buildSky() {
-    const sky = new THREE.Mesh(
+    this.skyDome = new THREE.Mesh(
       new THREE.SphereGeometry(200, 24, 16),
       new THREE.MeshBasicMaterial({ map: makeSkyTex(), side: THREE.BackSide, fog: false, depthWrite: false }),
     );
-    this.scene.add(sky);
-    const sunDisk = new THREE.Mesh(
+    this.scene.add(this.skyDome);
+    this.sunDisk = new THREE.Mesh(
       new THREE.SphereGeometry(6.5, 16, 12),
-      new THREE.MeshBasicMaterial({ color: 0xffcf8a, fog: false, toneMapped: false }),
+      new THREE.MeshBasicMaterial({ color: 0xfff4c8, fog: false, toneMapped: false }),
     );
-    sunDisk.position.set(-78, 22, -86);
-    this.scene.add(sunDisk);
-    const glow = new THREE.Mesh(
+    this.sunDisk.position.set(-28, 58, 12);
+    this.scene.add(this.sunDisk);
+    this.sunGlow = new THREE.Mesh(
       new THREE.SphereGeometry(16, 16, 12),
       new THREE.MeshBasicMaterial({
-        color: 0xff9a4a,
+        color: 0xffe08a,
         transparent: true,
-        opacity: 0.26,
+        opacity: 0.18,
         fog: false,
         depthWrite: false,
       }),
     );
-    glow.position.copy(sunDisk.position);
-    this.scene.add(glow);
+    this.sunGlow.position.copy(this.sunDisk.position);
+    this.scene.add(this.sunGlow);
+  }
+
+  applyDaylight(hour: number, indoor = false) {
+    const look = lightLook(indoor ? 20.6 : hour);
+    const key = `${indoor ? "in" : "out"}:${Math.round(hour * 8)}`;
+    this.hemi.color.setHex(look.hemiSky);
+    this.hemi.groundColor.setHex(look.hemiGround);
+    this.hemi.intensity = indoor ? look.hemiI * 0.45 : look.hemiI;
+    this.amb.color.setHex(look.amb);
+    this.amb.intensity = indoor ? look.ambI * 0.7 : look.ambI;
+    this.sun.color.setHex(look.sun);
+    this.sun.intensity = indoor ? 0.28 : look.sunI;
+    this.sun.position.set(look.sunX, look.sunY, look.sunZ);
+    this.sunDisk.position.set(look.sunX * 1.6, look.sunY * 1.15, look.sunZ * 1.6);
+    this.sunGlow.position.copy(this.sunDisk.position);
+    if (key === this.lastLightKey) return;
+    this.lastLightKey = key;
+    this.renderer.setClearColor(look.clear, 1);
+    this.renderer.toneMappingExposure = look.exposure;
+    (this.sunDisk.material as THREE.MeshBasicMaterial).color.setHex(look.disk);
+    const glowMat = this.sunGlow.material as THREE.MeshBasicMaterial;
+    glowMat.color.setHex(look.glow);
+    glowMat.opacity = look.glowOp;
+    if (this.scene.fog instanceof THREE.Fog) {
+      this.scene.fog.color.setHex(look.fog);
+      this.scene.fog.near = indoor ? 8 : look.fogNear;
+      this.scene.fog.far = indoor ? 42 : look.fogFar;
+    }
+    const skyMat = this.skyDome.material as THREE.MeshBasicMaterial;
+    const old = skyMat.map;
+    skyMat.map = makeSkyTex(look.sky);
+    old?.dispose();
+    this.scene.background = skyMat.map;
   }
 
   private t(key: MatKey) {
@@ -483,11 +553,15 @@ export class World3D {
       }
       if (poi.id === "foodtruck" || poi.id === "velis" || poi.id === "brothers") continue;
       if (poi.id === "welcome" || poi.id === "listenpost" || poi.id === "billboard") continue;
+      if (poi.id === "rcmworx") {
+        this.buildRcmLot(poi);
+        continue;
+      }
       const br = poiBuildingRect(poi);
-      const h = poi.id === "store" ? 6.6 : poi.id === "beale" ? 5.4 : 4.6 + hash(poi.x) * 3;
+      const h = poi.id === "store" ? 6.6 : poi.id === "beale" ? 5.4 : poi.id === "lanes" ? 5.7 : 4.6 + hash(poi.x) * 3;
       const g = new THREE.Group();
       g.userData.poiId = poi.id;
-      const bodyMat = poi.id === "store" || poi.id === "beale" ? hqMat : poi.id === "culture" ? woodMat : cinderMat;
+      const bodyMat = poi.id === "store" || poi.id === "beale" ? hqMat : poi.id === "culture" ? woodMat : poi.id === "lanes" ? hqMat : cinderMat;
       const bw = wx(br.w);
       const bd = wz(br.h);
       const body = new THREE.Mesh(new THREE.BoxGeometry(bw, h, bd), bodyMat);
@@ -1125,24 +1199,30 @@ export class World3D {
     const cz = wz(court.y + court.h / 2);
     const cw = wx(court.w);
     const cd = wz(court.h);
-    const courtMap = this.art.facades.court;
+    const slabH = 0.1;
+    const slabY = 0.06;
+    const top = slabY + slabH / 2;
     const floor = new THREE.Mesh(
-      new THREE.BoxGeometry(cw, 0.1, cd),
-      courtMap
-        ? new THREE.MeshStandardMaterial({ map: courtMap, roughness: 0.72 })
-        : std(this.t("court"), { roughness: 0.76, repeat: [3, 2.4] }),
+      new THREE.BoxGeometry(cw, slabH, cd),
+      new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.72,
+        map: this.art.facades.court ?? this.t("court") ?? null,
+      }),
     );
-    floor.position.set(cx, 0.06, cz);
+    floor.position.set(cx, slabY, cz);
     floor.receiveShadow = true;
     this.scene.add(floor);
-    if (!this.art.facades.court) {
-      const lines = new THREE.Mesh(
-        new THREE.BoxGeometry(2.7, 0.04, 3.5),
-        std(this.t("courtLines"), { roughness: 0.72, repeat: [1, 1] }),
-      );
-      lines.position.set(cx, 0.13, wz(court.y) + 2.2);
-      this.scene.add(lines);
-    }
+    this.courtFloor = floor;
+
+    const lines = new THREE.Mesh(
+      new THREE.BoxGeometry(cw * 0.92, 0.02, cd * 0.92),
+      std(this.t("courtLines"), { roughness: 0.7, repeat: [1, 1] }),
+    );
+    lines.position.set(cx, top + 0.012, cz);
+    lines.visible = false;
+    this.scene.add(lines);
+    this.courtLines = lines;
 
     const fenceMat = std(this.t("fence"), {
       roughness: 0.45,
@@ -1151,6 +1231,7 @@ export class World3D {
       opacity: 0.72,
       repeat: [4, 1.2],
     });
+    this.courtFence = new THREE.Group();
     for (const [dx, dz, rw, rd] of [
       [0, -cd / 2 - 0.05, cw, 0.06],
       [-cw / 2 - 0.05, 0, 0.06, cd],
@@ -1158,8 +1239,45 @@ export class World3D {
     ] as const) {
       const f = new THREE.Mesh(new THREE.BoxGeometry(rw, 1.6, rd), fenceMat);
       f.position.set(cx + dx, 0.85, cz + dz);
-      this.scene.add(f);
+      this.courtFence.add(f);
     }
+    this.scene.add(this.courtFence);
+
+    const parapetMat = std(this.t("cinder"), { roughness: 0.9, color: 0x3a3530, repeat: [3, 1] });
+    this.courtParapet = new THREE.Group();
+    for (const [dx, dz, rw, rd] of [
+      [0, -cd / 2 - 0.08, cw + 0.3, 0.18],
+      [0, cd / 2 + 0.08, cw + 0.3, 0.18],
+      [-cw / 2 - 0.08, 0, 0.18, cd],
+      [cw / 2 + 0.08, 0, 0.18, cd],
+    ] as const) {
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(rw, 0.62, rd), parapetMat);
+      wall.position.set(cx + dx, 0.36, cz + dz);
+      this.courtParapet.add(wall);
+    }
+    this.courtParapet.visible = false;
+    this.scene.add(this.courtParapet);
+
+    const gymMat = std(this.t("cinder"), { roughness: 0.88, color: 0x2a2622, repeat: [2.2, 1.6] });
+    const gymAccent = std(this.t("hqBrick"), { roughness: 0.82, repeat: [2, 1.4] });
+    this.courtGym = new THREE.Group();
+    const south = new THREE.Mesh(new THREE.BoxGeometry(cw + 0.8, 4.4, 0.28), gymMat);
+    south.position.set(cx, 2.2, cz + cd / 2 + 0.2);
+    this.courtGym.add(south);
+    const west = new THREE.Mesh(new THREE.BoxGeometry(0.28, 4.4, cd + 0.5), gymAccent);
+    west.position.set(cx - cw / 2 - 0.22, 2.2, cz);
+    this.courtGym.add(west);
+    const east = new THREE.Mesh(new THREE.BoxGeometry(0.28, 4.4, cd + 0.5), gymAccent);
+    east.position.set(cx + cw / 2 + 0.22, 2.2, cz);
+    this.courtGym.add(east);
+    const rafters = new THREE.Mesh(
+      new THREE.BoxGeometry(cw + 0.6, 0.16, cd + 0.4),
+      std(this.t("charcoal"), { metalness: 0.4, roughness: 0.45 }),
+    );
+    rafters.position.set(cx, 4.35, cz);
+    this.courtGym.add(rafters);
+    this.courtGym.visible = false;
+    this.scene.add(this.courtGym);
 
     const hoopZ = wz(court.y + 26);
     const pole = new THREE.Mesh(
@@ -1175,16 +1293,20 @@ export class World3D {
     );
     board.position.set(cx, 3.15, hoopZ - 0.42);
     this.scene.add(board);
-    const flyer = this.art.ads["sacks-giving"];
+    const flyer = this.art.ads["901-ballers"] ?? this.art.ads["sacks-giving"];
     if (flyer) {
       const ad = new THREE.Mesh(
         new THREE.PlaneGeometry(1.55, 2.25),
         new THREE.MeshBasicMaterial({ map: flyer, toneMapped: false, side: THREE.DoubleSide }),
       );
-      ad.position.set(cx + 2.4, 2.7, hoopZ - 0.2);
+      ad.position.set(cx + 2.55, 2.7, hoopZ - 0.18);
       this.scene.add(ad);
-      const ad2 = ad.clone();
-      ad2.position.set(cx - 2.4, 2.7, hoopZ - 0.2);
+      const luxury = this.art.ads["901-luxury"];
+      const ad2 = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.55, 2.25),
+        new THREE.MeshBasicMaterial({ map: luxury ?? flyer, toneMapped: false, side: THREE.DoubleSide }),
+      );
+      ad2.position.set(cx - 2.55, 2.7, hoopZ - 0.18);
       this.scene.add(ad2);
     }
     this.scene.add(board);
@@ -1213,7 +1335,54 @@ export class World3D {
     this.scene.add(net);
     this.hoopNet = net;
     this.hoopNetHome.copy(net.position);
+    this.applyCourtVenue("901_day");
     return this.hoopRim;
+  }
+
+  applyCourtVenue(id: string) {
+    const venue = venueFor(id);
+    this.courtVenue = venue.id;
+    const floor = this.courtFloor;
+    if (!floor) return;
+    const mat = floor.material as THREE.MeshStandardMaterial;
+    if (venue.id === "901_day") {
+      mat.map = this.art.facades.court ?? this.t("court") ?? null;
+      mat.color.set(0xffffff);
+      mat.roughness = 0.74;
+    } else if (venue.id === "sackrow") {
+      mat.map = this.art.facades.courtSackrow ?? this.art.facades.court ?? null;
+      mat.color.set(0xffffff);
+      mat.roughness = 0.62;
+    } else if (venue.id === "rooftop") {
+      mat.map = this.t("roof") ?? null;
+      mat.color.set(0xc4b8a8);
+      mat.roughness = 0.9;
+    } else {
+      mat.map = this.t("court") ?? null;
+      mat.color.set(0xffffff);
+      mat.roughness = 0.7;
+    }
+    mat.needsUpdate = true;
+    if (this.courtLines) this.courtLines.visible = venue.id === "rooftop" || venue.id === "classic";
+    this.courtFence.visible = venue.id === "901_day";
+    this.courtParapet.visible = venue.id === "rooftop";
+    this.courtGym.visible = venue.id === "sackrow" || venue.id === "classic";
+    if (this.scene.fog instanceof THREE.Fog) {
+      if (venue.indoor) {
+        this.scene.fog.color.setHex(0x3a2a22);
+        this.scene.fog.near = 8;
+        this.scene.fog.far = 42;
+      } else if (venue.id === "rooftop") {
+        this.scene.fog.color.setHex(0x1a1824);
+        this.scene.fog.near = 18;
+        this.scene.fog.far = 110;
+      } else {
+        this.scene.fog.color.setHex(0x3a2a22);
+        this.scene.fog.near = 22;
+        this.scene.fog.far = 145;
+      }
+    }
+    this.sun.intensity = venue.indoor ? 0.35 : venue.id === "rooftop" ? 0.55 : this.sun.intensity;
   }
 
   private matFor(img: HTMLImageElement, key: string) {
@@ -1321,23 +1490,142 @@ export class World3D {
     }
   }
 
+  private buildRcmLot(poi: (typeof POIS)[number]) {
+    const root = new THREE.Group();
+    root.name = "rcm-worx-lot";
+    root.userData.poiId = poi.id;
+    const cx = wx(poi.x + poi.w / 2);
+    const cz = wz(poi.y + poi.h / 2);
+    const bw = wx(poi.w);
+    const bd = wz(poi.h);
+    root.position.set(cx, 0, cz);
+
+    const asphalt = new THREE.MeshStandardMaterial({ color: 0x161514, roughness: 0.92 });
+    const gold = new THREE.MeshStandardMaterial({ color: 0xc9a84c, roughness: 0.38, metalness: 0.62, emissive: 0x5a4310, emissiveIntensity: 0.35 });
+    const black = new THREE.MeshStandardMaterial({ color: 0x0a0a0c, roughness: 0.55, metalness: 0.25 });
+    const pad = new THREE.Mesh(new THREE.BoxGeometry(bw, 0.06, bd), asphalt);
+    pad.position.y = 0.03;
+    pad.receiveShadow = true;
+    root.add(pad);
+
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(bw * 0.92, 0.02, 0.06), gold);
+    stripe.position.set(0, 0.065, bd * 0.18);
+    root.add(stripe);
+    const stripe2 = stripe.clone();
+    stripe2.position.z = -bd * 0.18;
+    root.add(stripe2);
+
+    for (const [sx, sz] of [
+      [-bw * 0.46, -bd * 0.42],
+      [bw * 0.46, -bd * 0.42],
+      [-bw * 0.46, bd * 0.42],
+      [bw * 0.46, bd * 0.42],
+    ] as const) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.85, 8), gold);
+      post.position.set(sx, 0.45, sz);
+      root.add(post);
+      const rope = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.03, bd * 0.18), gold);
+      rope.position.set(sx, 0.78, sz > 0 ? sz - bd * 0.12 : sz + bd * 0.12);
+      root.add(rope);
+    }
+
+    const kiosk = new THREE.Mesh(new THREE.BoxGeometry(1.35, 1.15, 0.55), black);
+    kiosk.position.set(0, 0.62, -bd * 0.38);
+    kiosk.castShadow = true;
+    root.add(kiosk);
+    const desk = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.08, 0.7), gold);
+    desk.position.set(0, 1.22, -bd * 0.38);
+    root.add(desk);
+
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.55, 0.08), black);
+    sign.position.set(0, 2.35, -bd * 0.42);
+    root.add(sign);
+    const c = document.createElement("canvas");
+    c.width = 1024;
+    c.height = 256;
+    const ctx = c.getContext("2d")!;
+    ctx.fillStyle = "#0a0a0c";
+    ctx.fillRect(0, 0, 1024, 256);
+    ctx.fillStyle = "#c9a84c";
+    ctx.font = "700 72px ui-sans-serif, system-ui";
+    ctx.textAlign = "center";
+    ctx.fillText("RCM WORX", 512, 100);
+    ctx.fillStyle = "#f4efe4";
+    ctx.font = "600 32px ui-sans-serif, system-ui";
+    ctx.fillText("ELITE LUXURY TRANSPORT", 512, 150);
+    ctx.fillStyle = "#c9a84c";
+    ctx.font = "600 28px ui-sans-serif, system-ui";
+    ctx.fillText("ON TIME. EVERY TIME.", 512, 200);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 0.5), new THREE.MeshBasicMaterial({ map: tex }));
+    face.position.set(0, 2.35, -bd * 0.42 + 0.05);
+    root.add(face);
+
+    const flyerMat = this.art.ads["rcm-worx"]
+      ? new THREE.MeshBasicMaterial({ map: this.art.ads["rcm-worx"] })
+      : new THREE.MeshStandardMaterial({ color: 0x111111 });
+    const flyer = new THREE.Mesh(new THREE.PlaneGeometry(1.35, 2.15), flyerMat);
+    flyer.position.set(bw * 0.38, 1.25, bd * 0.48);
+    root.add(flyer);
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(1.45, 2.25, 0.06), gold);
+    frame.position.set(bw * 0.38, 1.25, bd * 0.48 - 0.04);
+    root.add(frame);
+
+    this.scene.add(root);
+
+    this.rcmSprinter = makeLuxurySprinter();
+    this.rcmEscalade = makeLuxuryEscalade();
+    this.scene.add(this.rcmSprinter);
+    this.scene.add(this.rcmEscalade);
+    this.placeRcmParked();
+
+    const mark = new THREE.Mesh(
+      new THREE.RingGeometry(0.55, 0.78, 28),
+      new THREE.MeshBasicMaterial({ color: 0xc9a84c, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false }),
+    );
+    mark.rotation.x = -Math.PI / 2;
+    mark.visible = false;
+    this.scene.add(mark);
+    this.rcmMarker = mark;
+  }
+
+  private placeRcmParked() {
+    const poi = POIS.find((p) => p.id === "rcmworx");
+    if (!poi) return;
+    if (this.rcmSprinter) {
+      this.rcmSprinter.position.set(wx(poi.x + poi.w * 0.3), CAR_RIDE, wz(poi.y + poi.h * 0.52));
+      this.rcmSprinter.rotation.y = Math.PI / 2;
+      this.rcmSprinter.visible = true;
+    }
+    if (this.rcmEscalade) {
+      this.rcmEscalade.position.set(wx(poi.x + poi.w * 0.7), CAR_RIDE, wz(poi.y + poi.h * 0.52));
+      this.rcmEscalade.rotation.y = Math.PI / 2;
+      this.rcmEscalade.visible = true;
+    }
+  }
+
   sync(f: WorldFrame) {
     this.clock = f.clock;
     const dt = Math.min(f.dt || this.lastDt, 0.05);
     this.lastDt = dt;
+    if (f.courtVenue && f.courtVenue !== this.courtVenue) this.applyCourtVenue(f.courtVenue);
+    this.applyDaylight(f.worldHour ?? 12, !!f.indoor);
     const x = wx(f.px);
     const z = wz(f.py);
-    this.player.position.set(x, 0, z);
+    this.player.position.set(x, inCourtPx(f.px, f.py) ? 0.12 : 0, z);
     if (!this.benjiReady && (f.images.frontHi || f.images.front)) {
       this.benji.applyApprovedTextures(f.images);
       this.benjiReady = true;
     }
+    this.benji.setOutfit(f.equipped ?? "starter_tee");
+    this.benji.setOutfitTint(f.outfitColor ?? null);
+    const hoopin = f.mode === "basketball" || !!f.ball.active;
+    this.ensureBasketballPack(f.equipped ?? null, f.images);
     const video = this.veliVideo;
     const listening = !!f.listening;
     const musicT = video && !video.paused ? video.currentTime : f.clock;
-    this.benji.update(dt, f.heading, f.yaw, f.moveSpeed, f.lean, f.loco, f.animT, f.cameraView === "third" && !f.driving, f.air, f.vz, !!f.jooking, !!f.dribbling, !!f.ballCharging, !!f.releasing, listening, musicT, f.celebrate ?? 0, !!f.talking, !!f.interacting, !!f.rebounding);
-    this.benji.setOutfit(f.equipped ?? "starter_tee");
-    this.benji.setOutfitTint(f.outfitColor ?? null);
+    this.benji.update(dt, f.heading, f.yaw, f.moveSpeed, f.lean, f.loco, f.animT, f.cameraView === "third" && !f.driving, f.air, f.vz, !!f.jooking, !!f.dribbling, !!f.ballCharging, !!f.releasing, listening, musicT, f.celebrate ?? 0, !!f.talking, !!f.interacting, !!f.rebounding, !!f.ball.held, hoopin);
     this.player.visible = !f.driving;
 
     if (this.dropVan) {
@@ -1353,10 +1641,46 @@ export class World3D {
       }
     }
 
+    const rcmKind = f.vehicleKind === "sprinter" || f.vehicleKind === "escalade" ? f.vehicleKind : null;
+    const driveRcm = f.driving && rcmKind;
+    if (this.rcmSprinter) {
+      if (driveRcm && rcmKind === "sprinter") {
+        this.rcmSprinter.position.set(x, CAR_RIDE, z);
+        this.rcmSprinter.rotation.y = f.yaw + Math.PI / 2;
+        this.rcmSprinter.visible = f.cameraView !== "first";
+      } else {
+        const poi = POIS.find((p) => p.id === "rcmworx");
+        if (poi) this.rcmSprinter.position.set(wx(poi.x + poi.w * 0.3), CAR_RIDE, wz(poi.y + poi.h * 0.52));
+        this.rcmSprinter.rotation.y = Math.PI / 2;
+        this.rcmSprinter.visible = true;
+      }
+    }
+    if (this.rcmEscalade) {
+      if (driveRcm && rcmKind === "escalade") {
+        this.rcmEscalade.position.set(x, CAR_RIDE, z);
+        this.rcmEscalade.rotation.y = f.yaw + Math.PI / 2;
+        this.rcmEscalade.visible = f.cameraView !== "first";
+      } else {
+        const poi = POIS.find((p) => p.id === "rcmworx");
+        if (poi) this.rcmEscalade.position.set(wx(poi.x + poi.w * 0.7), CAR_RIDE, wz(poi.y + poi.h * 0.52));
+        this.rcmEscalade.rotation.y = Math.PI / 2;
+        this.rcmEscalade.visible = true;
+      }
+    }
+    if (this.rcmMarker) {
+      if (f.rcmDest) {
+        this.rcmMarker.visible = true;
+        this.rcmMarker.position.set(wx(f.rcmDest.x), 0.08, wz(f.rcmDest.y));
+        const pulse = 0.85 + Math.sin(f.clock * 4.2) * 0.12;
+        this.rcmMarker.scale.setScalar(pulse);
+      } else {
+        this.rcmMarker.visible = false;
+      }
+    }
+
     const hoopY = 2.72;
-    const by = Math.max(0.12, f.ball.z * (hoopY / 86));
-    const hoopin = f.mode === "basketball" || !!f.ball.active;
-    if (hoopin && (f.ball.inFlight || !f.ball.held || f.ballCharging || f.cameraView === "third")) {
+    const by = Math.max(0.18, f.ball.z * (hoopY / 86));
+    if (hoopin && (f.ball.inFlight || f.ball.held || f.ballCharging || f.cameraView === "third" || !!f.releasing)) {
       this.ball.visible = !(f.ball.held && f.cameraView === "first" && !f.ballCharging);
       this.ball.position.set(wx(f.ball.x), by, wz(f.ball.y));
       this.ballShadow.visible = this.ball.visible;
@@ -1464,8 +1788,8 @@ export class World3D {
     const air = f.air ?? 0;
     const step = Math.sin(f.animT) * (f.loco === "run" ? 0.028 : f.loco === "walk" ? 0.014 : 0);
     const lookAhead = Math.min(f.moveSpeed / 268, 1);
-    const follow = (f.driving ? 11.5 : f.indoor ? 3.45 : f.loco === "run" ? 6.15 : 5.45);
-    const height = (f.indoor ? 1.48 : f.driving ? 5.4 : 2.38) + air * 0.35;
+    const follow = (f.driving ? (f.vehicleKind === "sprinter" ? 13.2 : 11.5) : f.indoor ? 3.45 : f.loco === "run" ? 6.15 : 5.45);
+    const height = (f.indoor ? 1.48 : f.driving ? (f.vehicleKind === "sprinter" ? 6.2 : 5.4) : 2.38) + air * 0.35;
     const k = f.indoor ? 11 : f.driving ? 4.6 : f.loco === "run" ? 5.4 : 7.6;
     const ease = 1 - Math.exp(-k * dt);
     const targetFov = f.cameraView === "first"
@@ -1518,6 +1842,22 @@ export class World3D {
     }
     this.camera.fov = this.camFov;
     this.sun.target.position.set(x, 0, z);
+    if (f.cameraView === "third" && !f.driving) this.benji.alignToCamera(this.camera);
+  }
+
+  private ensureBasketballPack(outfit: string | null, images?: Record<string, HTMLImageElement>) {
+    const spec = basketballPackFor(outfit);
+    if (!spec) return;
+    const id = outfit as ApparelId;
+    const ready = images?.[basketballImageKey(id, "ready")];
+    const drive = images?.[basketballImageKey(id, "drive")];
+    const shotFront = images?.[basketballImageKey(id, "shotFront")];
+    const shotBack = images?.[basketballImageKey(id, "shotBack")];
+    if (ready || drive || shotFront || shotBack) {
+      if (this.bbOutfit === id) return;
+      this.benji.applyBasketballPack({ ready, drive, shotFront, shotBack });
+      this.bbOutfit = id;
+    }
   }
 
   private ensureFishingRig() {

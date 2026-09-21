@@ -219,7 +219,49 @@ export function punchStudioPlate(img: CanvasImageSource, w: number, h: number): 
   }
 
   ctx.putImageData(data, 0, 0);
+  dilateColorIntoAlpha(c, 2);
   return c;
+}
+
+/** Push opaque RGB into neighboring transparent texels so linear filtering doesn't sample black. */
+function dilateColorIntoAlpha(canvas: HTMLCanvasElement, radius: number) {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+  const w = canvas.width;
+  const h = canvas.height;
+  const img = ctx.getImageData(0, 0, w, h);
+  const src = img.data;
+  const out = new Uint8ClampedArray(src);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      if (src[i + 3]! > 8) continue;
+      let sr = 0;
+      let sg = 0;
+      let sb = 0;
+      let c = 0;
+      for (let dy = -radius; dy <= radius; dy++) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= h) continue;
+        for (let dx = -radius; dx <= radius; dx++) {
+          const xx = x + dx;
+          if (xx < 0 || xx >= w) continue;
+          const j = (yy * w + xx) * 4;
+          if (src[j + 3]! < 180) continue;
+          sr += src[j]!;
+          sg += src[j + 1]!;
+          sb += src[j + 2]!;
+          c++;
+        }
+      }
+      if (!c) continue;
+      out[i] = (sr / c) | 0;
+      out[i + 1] = (sg / c) | 0;
+      out[i + 2] = (sb / c) | 0;
+      out[i + 3] = 0;
+    }
+  }
+  img.data.set(out);
+  ctx.putImageData(img, 0, 0);
 }
 
 export function normalizeCharacterPlate(src: HTMLCanvasElement): HTMLCanvasElement {
@@ -264,4 +306,59 @@ export function cleanSprite(img: HTMLImageElement | HTMLCanvasElement): HTMLCanv
   const w = img instanceof HTMLImageElement ? img.naturalWidth || img.width : img.width;
   const h = img instanceof HTMLImageElement ? img.naturalHeight || img.height : img.height;
   return normalizeCharacterPlate(punchStudioPlate(img, w, h));
+}
+
+/** People plates already have alpha. Don't chroma-key them — that punches eye whites and teeth. */
+export function preparePeoplePlate(img: HTMLImageElement | HTMLCanvasElement): HTMLCanvasElement {
+  const w = img instanceof HTMLImageElement ? img.naturalWidth || img.width : img.width;
+  const h = img instanceof HTMLImageElement ? img.naturalHeight || img.height : img.height;
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext("2d", { willReadFrequently: true })!;
+  ctx.drawImage(img, 0, 0, w, h);
+  const data = ctx.getImageData(0, 0, w, h);
+  const p = data.data;
+  const n = w * h;
+  const faceTop = Math.floor(h * 0.18);
+  const faceBottom = Math.floor(h * 0.42);
+  const faceLeft = Math.floor(w * 0.22);
+  const faceRight = Math.floor(w * 0.78);
+  let filled = 1;
+  let guard = 0;
+  while (filled && guard++ < 8) {
+    filled = 0;
+    for (let y = faceTop; y < faceBottom; y++) {
+      for (let x = faceLeft; x < faceRight; x++) {
+        const i = y * w + x;
+        const o = i * 4;
+        if (p[o + 3]! >= 80) continue;
+        let sr = 0;
+        let sg = 0;
+        let sb = 0;
+        let hits = 0;
+        const sample = (j: number) => {
+          const u = j * 4;
+          if (p[u + 3]! < 160) return;
+          sr += p[u]!;
+          sg += p[u + 1]!;
+          sb += p[u + 2]!;
+          hits++;
+        };
+        sample(i - 1);
+        sample(i + 1);
+        if (y > 0) sample(i - w);
+        if (y + 1 < h) sample(i + w);
+        if (hits < 3) continue;
+        p[o] = (sr / hits) | 0;
+        p[o + 1] = (sg / hits) | 0;
+        p[o + 2] = (sb / hits) | 0;
+        p[o + 3] = 255;
+        filled++;
+      }
+    }
+  }
+  ctx.putImageData(data, 0, 0);
+  dilateColorIntoAlpha(c, 2);
+  return c;
 }

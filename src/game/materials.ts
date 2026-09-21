@@ -2,26 +2,26 @@ import * as THREE from "three";
 import { applyPolygonOffset, type OffsetLayer } from "./polygonOffset";
 
 export const MAT_URLS = {
-  asphalt: "/game/materials/01_asphalt_basecolor.png",
-  sidewalk: "/game/materials/02_sidewalk_basecolor.png",
-  brick: "/game/materials/03_old_memphis_brick_basecolor.png",
-  windows: "/game/materials/04_window_facade_emissive_reference.png",
-  roof: "/game/materials/05_rooftop_tar_gravel_basecolor.png",
-  court: "/game/materials/06_court_wood_basecolor.png",
-  courtLines: "/game/materials/07_court_lines_and_clay_reference.png",
-  canopy: "/game/materials/08_tree_canopy_topdown.png",
-  carMetal: "/game/materials/09_dark_car_body_metal_basecolor.png",
-  hqBrick: "/game/materials/10_hq_beale_dark_brick_accent.png",
-  fence: "/game/materials/11_chain_link_fence.png",
-  stripe: "/game/materials/12_asphalt_road_stripe.png",
-  concrete: "/game/materials/13_polished_warm_concrete.png",
-  wood: "/game/materials/14_dark_wood_panel.png",
-  shutter: "/game/materials/15_rollup_metal_shutter.png",
-  stucco: "/game/materials/16_weathered_stucco.png",
-  cinder: "/game/materials/17_green_cinder_block_wall.png",
-  storefront: "/game/materials/18_storefront_window_grid.png",
-  charcoal: "/game/materials/19_charcoal_metal_surface.png",
-  fabric: "/game/materials/20_green_gold_fabric_stripe.png",
+  asphalt: "/game/materials/01_asphalt_basecolor.webp",
+  sidewalk: "/game/materials/02_sidewalk_basecolor.webp",
+  brick: "/game/materials/03_old_memphis_brick_basecolor.webp",
+  windows: "/game/materials/04_window_facade_emissive_reference.webp",
+  roof: "/game/materials/05_rooftop_tar_gravel_basecolor.webp",
+  court: "/game/materials/06_court_wood_basecolor.webp",
+  courtLines: "/game/materials/07_court_lines_and_clay_reference.webp",
+  canopy: "/game/materials/08_tree_canopy_topdown.webp",
+  carMetal: "/game/materials/09_dark_car_body_metal_basecolor.webp",
+  hqBrick: "/game/materials/10_hq_beale_dark_brick_accent.webp",
+  fence: "/game/materials/11_chain_link_fence.webp",
+  stripe: "/game/materials/12_asphalt_road_stripe.webp",
+  concrete: "/game/materials/13_polished_warm_concrete.webp",
+  wood: "/game/materials/14_dark_wood_panel.webp",
+  shutter: "/game/materials/15_rollup_metal_shutter.webp",
+  stucco: "/game/materials/16_weathered_stucco.webp",
+  cinder: "/game/materials/17_green_cinder_block_wall.webp",
+  storefront: "/game/materials/18_storefront_window_grid.webp",
+  charcoal: "/game/materials/19_charcoal_metal_surface.webp",
+  fabric: "/game/materials/20_green_gold_fabric_stripe.webp",
 } as const;
 
 export type MatKey = keyof typeof MAT_URLS;
@@ -76,6 +76,11 @@ export async function loadAllMaterials(
     onProgress?.(done, keys.length);
   }
   return out;
+}
+
+export function disposeMaterialCache() {
+  for (const tex of cache.values()) tex.dispose();
+  cache.clear();
 }
 
 export function std(

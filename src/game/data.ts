@@ -33,7 +33,7 @@ export const PAL = {
 } as const;
 
 /** Bump to force the live preview to remount the world bake. */
-export const ART_REV = 63;
+export const ART_REV = 90;
 
 export const BRAND = {
   name: "$ackReligious",
@@ -194,6 +194,46 @@ export const APPAREL: ApparelItem[] = [
     color: "#c41e3a",
     description: "Red tour tee. Klothing Kompany worldwide.",
     productId: "sr-tour-red",
+  },
+  {
+    id: "jersey_white_224",
+    name: "SR 224 Jersey — White",
+    price: 70,
+    category: "top",
+    color: "#f4f4f4",
+    description: "White $ackReligious 224. Court fit.",
+  },
+  {
+    id: "jersey_blue_fresh",
+    name: "SR Fresh Jersey — Blue",
+    price: 70,
+    category: "top",
+    color: "#2563eb",
+    description: "Blue Fresh jersey. Basketball action pack pending.",
+  },
+  {
+    id: "jersey_black_fresh",
+    name: "SR Fresh Jersey — Black",
+    price: 70,
+    category: "top",
+    color: "#111111",
+    description: "Black Fresh jersey. Empty-hand hoops plates.",
+  },
+  {
+    id: "black_sackrow_11",
+    name: "Sackrow Ballers #11",
+    price: 0,
+    category: "top",
+    color: "#111111",
+    description: "Black Sackrow jersey, gold #11. 901 Day court kit.",
+  },
+  {
+    id: "blue_901_day",
+    name: "901 Day Jersey",
+    price: 0,
+    category: "top",
+    color: "#1d4ed8",
+    description: "Blue 901 Day jersey. Memphis on the back.",
   },
 ];
 
@@ -395,6 +435,28 @@ export const POIS: WorldPoi[] = [
     color: "#c9a84c",
     label: "BOARD",
     district: "East Memphis",
+  },
+  {
+    id: "lanes",
+    name: "901 Lanes",
+    x: 20.2 * TILE,
+    y: 28.4 * TILE,
+    w: 6.2 * TILE,
+    h: 5.2 * TILE,
+    color: "#6d28d9",
+    label: "LANES",
+    district: "South Memphis",
+  },
+  {
+    id: "rcmworx",
+    name: "RCM WORX",
+    x: 18.15 * TILE,
+    y: 6.95 * TILE,
+    w: 5.7 * TILE,
+    h: 4.7 * TILE,
+    color: "#0a0a0c",
+    label: "RCM",
+    district: "Midtown",
   },
 ];
 
@@ -716,6 +778,26 @@ export function createSideMissions(): SideMission[] {
       kind: "visit",
       target: "welcome",
     },
+    {
+      id: "turkey_night",
+      title: "Turkey Night",
+      description: "String three strikes at 901 Lanes.",
+      reward: 90,
+      done: false,
+      kind: "score",
+      target: "lanes",
+      need: 3,
+    },
+    {
+      id: "vip_runs",
+      title: "Always Ready",
+      description: "Book 3 RCM WORX VIP drops. Sprinter or Escalade. On time, every time.",
+      reward: 110,
+      done: false,
+      kind: "score",
+      target: "rcmworx",
+      need: 3,
+    },
   ];
 }
 
@@ -737,6 +819,8 @@ export const TROPHIES: TrophyDef[] = [
   { id: "strip_king", name: "Strip King", description: "Beat Cam on the 901 loop.", rank: "gold" },
   { id: "river_rat", name: "River Rat", description: "Land a fish on the Mississippi.", rank: "bronze" },
   { id: "block_eats", name: "Block Eats", description: "Eat at every food truck on Beale.", rank: "silver" },
+  { id: "lane_king", name: "Lane King", description: "Throw a turkey at 901 Lanes.", rank: "gold" },
+  { id: "always_ready", name: "Always Ready", description: "Complete 3 RCM WORX VIP runs. On time, every time.", rank: "gold" },
 ];
 
 export const NPCS: NpcDef[] = [
@@ -834,6 +918,30 @@ export const NPCS: NpcDef[] = [
       "Three laps. Beale, Highland, Poplar, 3rd, Union, Front. Don't brake for the lights — I won't.",
     ],
   },
+  {
+    id: "lane_clerk",
+    name: "Dee",
+    x: 24.9 * TILE,
+    y: 32 * TILE,
+    color: "#c084fc",
+    dialogue: [
+      "Right off 901 Court. Shoes on the house if you got the arm.",
+      "Hold to charge. Lean for hook. Pocket lives on the right.",
+      "Turkey pays. Don't gutter on my floor.",
+    ],
+  },
+  {
+    id: "rcm_chauffeur",
+    name: "Rico",
+    x: 21 * TILE,
+    y: 11.15 * TILE,
+    color: "#c9a84c",
+    dialogue: [
+      "RCM WORX. SackReligious rides first class now. On time, every time.",
+      "Sprinter holds eight — captain chairs, Wi-Fi, fridge. Escalade ESV is the executive whip.",
+      "Harbor FBO, Beale, the Pyramid. Book it. We don't miss.",
+    ],
+  },
 ];
 
 export const DROP_LIVE_LINES = [
@@ -860,6 +968,9 @@ export const TIPS = [
   "Welkome Plaza books 2 sponsors and 2 artists every 30 days.",
   "Worldwide Tour tees are in the locker. Black, white, or red.",
   "Sacks Giving Weekend flyers are up on Beale, the court, and HQ.",
+  "901 Lanes is east of 901 Court. Pink neon. Walk in and bowl.",
+  "RCM WORX sits west of HQ on Union. Black Sprinter and Escalade. Book a VIP drop.",
+  "Playtest Kit is KIT or F3. Warp, pin a bug dump, live coords while you play.",
 ];
 
 export const SAVE_KEY = "sackreligious-memphis-v3";
