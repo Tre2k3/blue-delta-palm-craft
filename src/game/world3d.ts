@@ -103,9 +103,9 @@ export class World3D {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
     this.renderer.setClearColor(0x1a1612, 1);
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.12;
+    this.renderer.toneMappingExposure = 1.22;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     setAnisotropy(this.renderer.capabilities.getMaxAnisotropy());
 
@@ -118,7 +118,7 @@ export class World3D {
 
     this.hemi = new THREE.HemisphereLight(0xffe6bf,0x354434,1.3);
     this.scene.add(this.hemi);
-    this.scene.add(new THREE.AmbientLight(0x4a3828, 0.42));
+    this.scene.add(new THREE.AmbientLight(0x9aafa0, 0.55));
 
     this.sun = new THREE.DirectionalLight(0xffc878, 1.45);
     this.sun.position.set(-52, 28, -18);
@@ -585,7 +585,7 @@ export class World3D {
   sync(f: WorldFrame) {
     const dt=Math.min(0.1,Math.max(0,f.clock-this.lastClock));this.lastClock=f.clock;this.clock=f.clock;
     const daylight=Math.max(0,Math.sin((f.worldHour-6)/24*Math.PI*2));
-    this.hemi.intensity=0.65+daylight*0.85;this.sun.intensity=0.12+daylight*1.7;
+    this.hemi.intensity=0.85+daylight*1.1;this.sun.intensity=0.12+daylight*1.7;
     this.sky.material.color.setRGB(0.2+daylight*0.8,0.26+daylight*0.74,0.44+daylight*0.56);
     this.sunDisk.visible=this.glow.visible=daylight>0.04;
     if(this.scene.fog instanceof THREE.Fog)this.scene.fog.color.setRGB(0.08+daylight*0.15,0.09+daylight*0.12,0.14+daylight*0.03);
@@ -597,7 +597,11 @@ export class World3D {
     const z = wz(f.py);
     this.player.position.set(x, 0, z);
 
-    const key = f.facing === "up" ? "back" : f.facing === "down" ? "front" : f.facing === "left" ? "left" : "right";
+    // Billboard frames must face the camera-relative movement direction.
+    const direction = { up: [0,-1], down: [0,1], left: [-1,0], right: [1,0] }[f.facing]!;
+    const forward = direction[0]! * -Math.sin(f.yaw) + direction[1]! * -Math.cos(f.yaw);
+    const right = direction[0]! * Math.cos(f.yaw) + direction[1]! * -Math.sin(f.yaw);
+    const key = !f.moving ? "back" : Math.abs(forward) >= Math.abs(right) ? (forward > 0 ? "back" : "front") : right > 0 ? "right" : "left";
     const img = f.images[key] ?? f.images.front;
     if (img) this.sprite.material = this.matFor(img, key);
     this.sprite.visible=f.cameraView==="third"&&!f.vehicle.active;
@@ -698,10 +702,6 @@ export class World3D {
     const dpr=Math.min(window.devicePixelRatio||1,this.quality==="low"?1:1.75);
     if (this.renderer.domElement.width !== Math.floor(w * dpr) || this.renderer.domElement.height !== Math.floor(h * dpr)) {
       this.renderer.setSize(w, h, false);
-      this.overlay.width = Math.floor(w * dpr);
-      this.overlay.height = Math.floor(h * dpr);
-      this.overlay.style.width = `${w}px`;
-      this.overlay.style.height = `${h}px`;
     }
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();

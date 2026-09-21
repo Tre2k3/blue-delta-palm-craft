@@ -19,7 +19,7 @@ permissions:
 env:
   CI: true
   SMOKE_HEADED: "1"
-  GAME_URL: http://127.0.0.1:8080/
+  GAME_URL: http://127.0.0.1:8080/?qa=1
 
 jobs:
   verify:
@@ -33,7 +33,7 @@ jobs:
       - name: Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Install
@@ -44,6 +44,9 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      - name: Gameplay regression tests
+        run: npm test
 
       - name: Production build
         run: npm run build
@@ -67,6 +70,9 @@ jobs:
           echo "Preview did not become ready on port 8080"
           cat artifacts/preview.log || true
           exit 1
+
+      - name: Upgrade regression smoke
+        run: xvfb-run -a npm run test:game
 
       - name: Game smoke
         run: xvfb-run -a node scripts/game-smoke.mjs

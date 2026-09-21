@@ -141,6 +141,7 @@ export interface SaveData {
   worldHour: number;
   settings: GameSettings;
   position: { x: number; y: number; yaw: number };
+  vehicle: { x: number; y: number; yaw: number };
   talked: string[];
   visited: LocationId[];
 }

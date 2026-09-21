@@ -82,6 +82,27 @@ export function GameApp() {
   const [confirmReset,setConfirmReset]=useState(false);
 
   useEffect(() => {
+    const modal = document.querySelector<HTMLElement>('[aria-modal="true"]');
+    if (!modal) {
+      if (hud.started && !hud.dialogue) canvasRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    const elements = () => [...modal.querySelectorAll<HTMLElement>('button:not(:disabled),input,select,[tabindex="0"]')];
+    elements()[0]?.focus({ preventScroll: true });
+    const trap = (event: KeyboardEvent) => {
+      if (event.code === "Escape" && (titleSettings || confirmReset)) {
+        event.preventDefault(); setTitleSettings(false); setConfirmReset(false);
+      }
+      if (event.key !== "Tab") return;
+      const focusable = elements(), first = focusable[0], last = focusable.at(-1);
+      if (event.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement))) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && (document.activeElement === last || !modal.contains(document.activeElement))) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener("keydown", trap);
+    return () => document.removeEventListener("keydown", trap);
+  }, [titleSettings, confirmReset, hud.paused, hud.shopOpen, hud.started, hud.dialogue]);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     let eng: GameEngine;
@@ -153,6 +174,8 @@ export function GameApp() {
     <div key={ART_REV} className="game-shell relative h-full w-full overflow-hidden bg-bg text-fg select-none">
       <canvas
         ref={canvasRef}
+        tabIndex={0}
+        aria-label="Memphis game world. WASD to move, E to interact, M for map."
         className="absolute inset-0 h-full w-full touch-none"
         style={{ imageRendering: "auto" }}
         onClick={() => {
@@ -288,14 +311,14 @@ export function GameApp() {
               </div>
             </div>
 
-            <div className="max-w-[15rem] rounded-xl border border-border bg-panel px-3 py-2 text-right backdrop-blur-sm sm:max-w-xs">
+            {!hud.basketball && <div className="max-w-[15rem] rounded-xl border border-border bg-panel px-3 py-2 text-right backdrop-blur-sm sm:max-w-xs">
               <p className="text-[10px] uppercase tracking-[0.18em] text-primary">{hud.missionChapter}</p>
               <p className="font-display text-lg leading-none text-gold">{hud.missionTitle}</p>
               <p className="mt-1 text-sm font-medium leading-snug text-fg">{hud.missionStep}</p>
               <p className="mt-1 text-xs text-muted tabular">{hud.missionProgress} objectives</p>
               <div className="mission-meter"><span style={{width:`${Number(hud.missionProgress.split("/")[0])/Math.max(1,Number(hud.missionProgress.split("/")[1]))*100}%`}}/></div>
               {hud.objective&&<p className="mt-2 text-xs text-primary">{hud.waypoint?"WAYPOINT":"DESTINATION"} · {hud.objective.distance}m</p>}
-            </div>
+            </div>}
           </div>
 
           <div className="pointer-events-none absolute left-3 top-[9.6rem] z-20 sm:top-[10.6rem]">
@@ -340,13 +363,13 @@ export function GameApp() {
           )}
 
           {hud.basketball && (
-            <div className="pointer-events-none absolute right-3 top-28 z-20 rounded-xl border border-border bg-panel px-4 py-3 backdrop-blur-sm">
+            <div className="basketball-panel pointer-events-none absolute right-3 top-3 z-20 rounded-xl border border-border bg-panel px-4 py-3 backdrop-blur-sm">
               <p className="font-display text-lg text-primary">901 COURT</p>
               <p className="tabular text-3xl font-semibold leading-none text-fg">{hud.basketball.score}</p>
               <p className="mt-1 text-xs text-muted">
                 {hud.basketball.timeLeft}s · {hud.basketball.shots} shots · need 8
               </p>
-              <p className="mt-2 text-xs text-primary">{hud.basketball.held?"Hold Space / SHOOT, release in green":"Rebound returning…"}</p><div className="shot-meter"><span className="green-window"/><span className="shot-cursor" style={{left:`${hud.basketball.power*100}%`}}/></div><button className="secondary-button pointer-events-auto mt-2 w-full" onClick={()=>{const e=engineRef.current;if(e){const h=e.hoop();e.yaw=Math.atan2(e.px-h.x,e.py-h.y);}}}>Face hoop</button>
+              <p className="mt-2 text-xs text-primary">{hud.basketball.held?"Hold Space / SHOOT, release in green":"Rebound returning…"}</p><div className="shot-meter"><span className="green-window"/><span className="shot-cursor" style={{left:`${hud.basketball.power*100}%`}}/></div><button className="secondary-button pointer-events-auto mt-2 w-full" onClick={()=>{const e=engineRef.current;if(e){const h=e.hoop();e.yaw=Math.atan2(e.px-h.x,e.py-h.y);e.canvas.focus();}}}>Face hoop</button>
               {hud.basketball.combo > 1 && (
                 <p className="mt-1 font-display text-xl text-primary">x{hud.basketball.combo} STREAK</p>
               )}
@@ -406,7 +429,7 @@ export function GameApp() {
 
           {/* Shop */}
           {hud.shopOpen && (
-            <div className="absolute inset-0 z-40 flex items-end justify-center bg-bg/70 p-3 backdrop-blur-sm sm:items-center">
+            <div role="dialog" aria-modal="true" aria-label="HQ apparel shop" className="absolute inset-0 z-40 flex items-end justify-center bg-bg/70 p-3 backdrop-blur-sm sm:items-center">
               <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl">
                 <div className="relative h-28 shrink-0 overflow-hidden sm:h-36">
                   <img
@@ -487,7 +510,7 @@ export function GameApp() {
 
           {/* Pause */}
           {hud.paused && (
-            <div className="absolute inset-0 z-50 flex items-stretch bg-bg/80 backdrop-blur-md">
+            <div role="dialog" aria-modal="true" aria-label="Pause menu" className="absolute inset-0 z-50 flex items-stretch bg-bg/80 backdrop-blur-md">
               <img
                 src="/game/memphis-dusk.jpg"
                 alt=""

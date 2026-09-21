@@ -65,7 +65,7 @@ export class InputManager {
   private bound = false;
 
   private kd = (e: KeyboardEvent) => {
-    if (e.target instanceof HTMLElement && (e.target.matches("input, textarea, select, button") || e.target.isContentEditable)) return;
+    if (e.target instanceof HTMLElement && (e.target.matches("input, textarea, select") || e.target.isContentEditable || (e.target.matches("button") && ["Enter", "Space"].includes(e.code)))) return;
     this.keys.add(e.code);
     this.device = "keyboard";
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(e.code)) {
@@ -267,6 +267,7 @@ export class InputManager {
       }
       break;
     }
+    if (!this.lastPad) this.prevPadView = false;
   }
 
   rumble(ms: number, strong = 0.35, weak = 0.55) {

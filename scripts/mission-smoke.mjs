@@ -2,7 +2,7 @@
 import { mkdir, stat } from "node:fs/promises";
 import { captureShot, closeBrowser, createOk, installHardTimeout, launchBrowser, preparePage } from "./smoke-lib.mjs";
 
-const url = process.env.GAME_URL || "http://127.0.0.1:8080/";
+const url = process.env.GAME_URL || "http://127.0.0.1:8080/?qa=1";
 const failures = [];
 const pageErrors = [];
 const ok = createOk(failures);

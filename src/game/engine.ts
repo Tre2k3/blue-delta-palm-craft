@@ -620,6 +620,7 @@ export class GameEngine {
       this.trophies = data.trophies; this.highScore = data.basketballHighScore; this.worldHour = data.worldHour; this.settings = data.settings;
       this.talked = new Set(data.talked); this.visited = new Set(data.visited);
       this.px = data.position.x; this.py = data.position.y; this.yaw = data.position.yaw;
+      if (!this.collides(data.vehicle.x, data.vehicle.y, 28)) Object.assign(this.vehicle, data.vehicle);
       if (this.collides(this.px,this.py,14)) { this.px = 288; this.py = 558; }
       this.leftSpawn = data.missionActiveStep > 0;
       for (const s of this.side) s.done = data.sideProgress[s.id];
@@ -633,6 +634,7 @@ export class GameEngine {
 		const data = {
 			version: 3,
       position: { x: this.px, y: this.py, yaw: wrapAngle(this.yaw) },
+      vehicle: { x: this.vehicle.x, y: this.vehicle.y, yaw: wrapAngle(this.vehicle.yaw) },
       talked: [...this.talked], visited: [...this.visited],
 			sackdollars: this.sackdollars,
 			respect: this.respect,
@@ -835,9 +837,9 @@ export class GameEngine {
 	facingFromAngle(angle: number) {
 		const a = ((angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
 		if (a >= Math.PI * 1.75 || a < Math.PI * 0.25) this.facing = "up";
-		else if (a < Math.PI * 0.75) this.facing = "right";
+		else if (a < Math.PI * 0.75) this.facing = "left";
 		else if (a < Math.PI * 1.25) this.facing = "down";
-		else this.facing = "left";
+		else this.facing = "right";
 		this.dir = this.facing;
 	}
 	updatePlayer(dt: number, mx: number, my: number, runHeld: boolean) {
@@ -1204,6 +1206,7 @@ export class GameEngine {
 		this.ball.power = 0;
 		this.ball.flash = 0;
 		this.ball.combo = 0;
+		this.ball.best = 0;
 		this.ball.missionCredited = false;
 		this.ball.grade = "";
 		this.ball.ballZ = 36; this.ball.retrieveT = 0; this.courtResult = null;
@@ -1386,6 +1389,7 @@ export class GameEngine {
 	}
   getObjectiveTarget() {
     const step = this.mission.steps[this.mission.activeStep];
+    if (!this.waypoint && step?.id === "wake") return { x: 480, y: 558, label: "Leave the apartment" };
     const id = this.waypoint ?? (!this.mission.complete ? step?.target : null);
     if (!id) return null;
     if (!this.waypoint && (step?.kind === "talk" || step?.kind === "return")) {

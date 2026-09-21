@@ -14,7 +14,9 @@
     "preview": "node scripts/preview-prod.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "test": "node --import ./scripts/register-test-loader.mjs --test tests/*.test.mjs",
+    "test:game": "node scripts/upgrade-smoke.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.3",
