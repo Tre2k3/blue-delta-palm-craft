@@ -14,6 +14,11 @@ export type Actions = {
   shootPressed: boolean;
   shootReleased: boolean;
   viewPressed: boolean;
+  mapPressed: boolean;
+  vehiclePressed: boolean;
+  brake: boolean;
+  mouseX: number;
+  mouseY: number;
 };
 
 const DEAD = 0.16;
@@ -27,7 +32,7 @@ function radial(x: number, y: number, dz = DEAD) {
 
 export class InputManager {
   keys = new Set<string>();
-  touch = { mx: 0, my: 0, shoot: false, lookX: 0 };
+  touch = { mx: 0, my: 0, shoot: false, lookX: 0, run: false, brake: false };
   device: InputDevice = "keyboard";
   private prevShoot = false;
   private prevInteract = false;
@@ -54,13 +59,21 @@ export class InputManager {
   private queuedShootPress = false;
   private queuedShootRelease = false;
   private queuedView = false;
+  private queuedMap = false;
+  private queuedVehicle = false;
+  private prevPadView = false;
+  private bound = false;
 
   private kd = (e: KeyboardEvent) => {
+    if (e.target instanceof HTMLElement && (e.target.matches("input, textarea, select, button") || e.target.isContentEditable)) return;
     this.keys.add(e.code);
     this.device = "keyboard";
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(e.code)) {
       e.preventDefault();
     }
+    if (e.repeat) return;
+    if (e.code === "KeyM") this.queuedMap = true;
+    if (e.code === "KeyG") this.queuedVehicle = true;
     if (e.code === "KeyE" || e.code === "Enter") this.queuedInteract = true;
     if (e.code === "Space") {
       this.queuedInteract = true;
@@ -78,7 +91,19 @@ export class InputManager {
     this.keys.delete(e.code);
     if (e.code === "Space" || e.code === "KeyF") this.queuedShootRelease = true;
   };
-  private blur = () => this.keys.clear();
+  reset() {
+    this.keys.clear();
+    this.touch = { mx: 0, my: 0, shoot: false, lookX: 0, run: false, brake: false };
+    this.mouseDX = this.mouseDY = 0;
+    this.prevShoot = this.prevInteract = this.prevBack = this.prevPause = this.prevView = false;
+    this.queuedInteract = this.queuedPause = this.queuedBack = this.queuedView = false;
+    this.queuedShootPress = this.queuedShootRelease = this.queuedMap = this.queuedVehicle = false;
+  }
+  private blur = () => this.reset();
+  private visibility = () => { if (document.hidden) this.reset(); };
+  private contextMenu = (e: MouseEvent) => { if (e.target instanceof HTMLCanvasElement) e.preventDefault(); };
+  private connected = () => { this.device = "gamepad"; };
+
 
   private mm = (e: MouseEvent) => {
     if (this.pointerLocked || e.buttons === 2) {
@@ -92,18 +117,24 @@ export class InputManager {
   };
 
   bind() {
+    if (this.bound) return;
+    this.bound = true;
     window.addEventListener("keydown", this.kd);
     window.addEventListener("keyup", this.ku);
     window.addEventListener("blur", this.blur);
     window.addEventListener("mousemove", this.mm);
     document.addEventListener("pointerlockchange", this.lock);
-    window.addEventListener("contextmenu", (e) => e.preventDefault());
-    window.addEventListener("gamepadconnected", () => {
-      this.device = "gamepad";
-    });
+    window.addEventListener("contextmenu", this.contextMenu);
+    window.addEventListener("gamepadconnected", this.connected);
+    document.addEventListener("visibilitychange", this.visibility);
   }
 
   unbind() {
+    this.bound = false;
+    this.reset();
+    window.removeEventListener("contextmenu", this.contextMenu);
+    window.removeEventListener("gamepadconnected", this.connected);
+    document.removeEventListener("visibilitychange", this.visibility);
     window.removeEventListener("keydown", this.kd);
     window.removeEventListener("keyup", this.ku);
     window.removeEventListener("blur", this.blur);
@@ -131,8 +162,9 @@ export class InputManager {
     if (this.keys.has("KeyR")) lookX += 1;
     lookX += this.padLookX;
     lookX += this.touch.lookX;
-    lookX += this.mouseDX * 0.045;
-    const lookY = this.padLookY + this.mouseDY * 0.045;
+    const lookY = this.padLookY;
+    const mouseX = this.mouseDX;
+    const mouseY = this.mouseDY;
     this.mouseDX = 0;
     this.mouseDY = 0;
 
@@ -147,7 +179,7 @@ export class InputManager {
     const backHeld = this.keys.has("Escape") || this.keys.has("Backspace") || this.padBack;
     const pauseHeld = this.keys.has("Escape") || this.keys.has("KeyP") || this.padPause;
     const shootHeld = this.keys.has("Space") || this.keys.has("KeyF") || this.padShoot || this.touch.shoot;
-    const run = this.keys.has("ShiftLeft") || this.keys.has("ShiftRight") || this.padRun;
+    const run = this.keys.has("ShiftLeft") || this.keys.has("ShiftRight") || this.padRun || this.touch.run;
 
     const interactPressed = (interactHeld && !this.prevInteract) || this.queuedInteract;
     const backPressed = (backHeld && !this.prevBack) || this.queuedBack;
@@ -157,6 +189,11 @@ export class InputManager {
     this.queuedInteract = false;
     this.queuedBack = false;
     this.queuedPause = false;
+    this.queuedShootPress = false;
+    this.queuedShootRelease = false;
+    const mapPressed = this.queuedMap;
+    const vehiclePressed = this.queuedVehicle;
+    this.queuedMap = this.queuedVehicle = false;
     const viewHeld = this.keys.has("KeyV") || this.keys.has("KeyC");
     const viewPressed = (viewHeld && !this.prevView) || this.queuedView;
     this.queuedView = false;
@@ -181,6 +218,11 @@ export class InputManager {
       shootPressed,
       shootReleased,
       viewPressed,
+      mapPressed,
+      vehiclePressed,
+      brake: this.keys.has("Space") || this.touch.brake || this.padShoot,
+      mouseX,
+      mouseY,
     };
   }
 
@@ -194,6 +236,7 @@ export class InputManager {
     this.padPause = false;
     this.padShoot = false;
     this.padRun = false;
+    this.lastPad = null;
     const pads = navigator.getGamepads?.() ?? [];
     for (const p of pads) {
       if (!p) continue;
@@ -211,7 +254,10 @@ export class InputManager {
       const look = radial(p.axes[2] ?? 0, p.axes[3] ?? 0, 0.2);
       this.padLookX += look.x;
       this.padLookY += look.y;
-      if (p.buttons[11]?.pressed) this.queuedView = true;
+      const padView = !!p.buttons[11]?.pressed;
+      if (padView && !this.prevPadView) this.queuedView = true;
+      this.prevPadView = padView;
+      this.padRun = !!(p.buttons[3]?.pressed || p.buttons[10]?.pressed);
       this.padPause = !!(p.buttons[9]?.pressed);
       if (
         Math.abs(st.x) + Math.abs(st.y) > 0.2 ||
@@ -234,7 +280,7 @@ export class InputManager {
       duration: ms,
       strongMagnitude: strong,
       weakMagnitude: weak,
-    });
+    }).catch(() => { /* Optional controller effect. */ });
   }
 
   prompt(device: InputDevice): { interact: string; pause: string; run: string; shoot: string } {

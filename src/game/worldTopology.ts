@@ -12,7 +12,7 @@ export type Lane = {
   speed: number;
 };
 
-const ROAD_HALF = TILE * 0.92;
+export const ROAD_HALF = TILE * 0.92;
 const LANE_OFFSET = TILE * 0.34;
 const SIDEWALK = TILE * 0.28;
 
@@ -55,7 +55,7 @@ export function trafficLanes(): Lane[] {
   return lanes;
 }
 
-const NON_SOLID_POIS = new Set(["apartment", "court", "river", "dropvan", "beale"]);
+const NON_SOLID_POIS = new Set(["court", "river", "dropvan"]);
 
 export function poiColliders(): Rect[] {
   return POIS.filter((p) => !NON_SOLID_POIS.has(p.id)).map((p) => ({
@@ -114,4 +114,12 @@ export function aheadDistance(
   if (along <= 0) return Infinity;
   const lateral = Math.abs(dx * -fy + dy * fx);
   return lateral < TILE * 0.72 ? along : Infinity;
+}
+
+export function overlaps(a: Rect, b: Rect, padding = 0) {
+  return a.x < b.x + b.w + padding && a.x + a.w > b.x - padding && a.y < b.y + b.h + padding && a.y + a.h > b.y - padding;
+}
+export function poiEntrance(id: string) {
+  const p = POIS.find(p => p.id === id);
+  return p ? { x: p.x + p.w / 2, y: p.y + p.h + 30 } : null;
 }
