@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { POIS, TILE, WORLD_PX_H, WORLD_PX_W } from "./data";
+import { roadRects, sidewalkRects } from "./worldTopology";
+import { POIS, STREETS, TILE, WORLD_PX_H, WORLD_PX_W } from "./data";
 import { loadAllMaterials, setAnisotropy, std, type MatKey } from "./materials";
 
 export const S = 1 / 16;
@@ -51,6 +52,9 @@ export type WorldFrame = {
   peds: { x: number; y: number; color: string; t: number }[];
   npcs: { id: string; x: number; y: number; isK: boolean }[];
   images: Record<string, HTMLImageElement>;
+  objective: { x: number; y: number; label: string } | null;
+  worldHour: number;
+  vehicle: { x: number; y: number; yaw: number; active: boolean; speed: number };
 };
 
 type TexPack = Partial<Record<MatKey, THREE.Texture>>;
@@ -72,6 +76,20 @@ export class World3D {
   mats: TexPack = {};
   private spriteMats: Partial<Record<string, THREE.SpriteMaterial>> = {};
   private clock = 0;
+  private lastClock = 0;
+  private cameraReady = false;
+  private quality: "low" | "high" = "high";
+  private hemi: THREE.HemisphereLight;
+  private sky!: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
+  private sunDisk!: THREE.Mesh;
+  private glow!: THREE.Mesh;
+  private van: THREE.Group | null = null;
+  private marker = new THREE.Group();
+  private solidMeshes: THREE.Object3D[] = [];
+  private ray = new THREE.Raycaster();
+  private rayStart = new THREE.Vector3();
+  private rayDirection = new THREE.Vector3();
+  private disposed = false;
   private tmp = new THREE.Vector3();
   private camPos = new THREE.Vector3();
 
@@ -98,8 +116,8 @@ export class World3D {
     this.scene.fog = new THREE.Fog(0x3a2a22, 22, 145);
     this.scene.background = makeSkyTex();
 
-    const hemi = new THREE.HemisphereLight(0xffc878, 0x2a241c, 0.82);
-    this.scene.add(hemi);
+    this.hemi = new THREE.HemisphereLight(0xffe6bf,0x354434,1.3);
+    this.scene.add(this.hemi);
     this.scene.add(new THREE.AmbientLight(0x4a3828, 0.42));
 
     this.sun = new THREE.DirectionalLight(0xffc878, 1.45);
@@ -146,7 +164,11 @@ export class World3D {
     this.scene.add(this.ballShadow);
 
     this.hoopRim = new THREE.Mesh(new THREE.TorusGeometry(0.23, 0.028, 10, 24));
-    this.camera.position.set(10, 8, 18);
+    this.camera.position.set(10,8,18);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.8,0.045,8,32),new THREE.MeshBasicMaterial({color:0x44ed85,toneMapped:false}));
+    ring.rotation.x=-Math.PI/2;ring.position.y=0.15;this.marker.add(ring);
+    const pin=new THREE.Mesh(new THREE.OctahedronGeometry(0.25),new THREE.MeshBasicMaterial({color:0xd4af37,toneMapped:false}));
+    pin.position.y=2.8;this.marker.add(pin);this.scene.add(this.marker);
   }
 
   async loadTextures(onProgress?: (d: number, t: number) => void) {
@@ -162,12 +184,14 @@ export class World3D {
       new THREE.SphereGeometry(200, 24, 16),
       new THREE.MeshBasicMaterial({ map: makeSkyTex(), side: THREE.BackSide, fog: false, depthWrite: false }),
     );
+    sky.position.set(wx(WORLD_PX_W)/2,0,wz(WORLD_PX_H)/2);this.sky=sky;
     this.scene.add(sky);
     const sunDisk = new THREE.Mesh(
       new THREE.SphereGeometry(6.5, 16, 12),
       new THREE.MeshBasicMaterial({ color: 0xffcf8a, fog: false, toneMapped: false }),
     );
     sunDisk.position.set(-78, 22, -86);
+    this.sunDisk=sunDisk;
     this.scene.add(sunDisk);
     const glow = new THREE.Mesh(
       new THREE.SphereGeometry(16, 16, 12),
@@ -180,6 +204,7 @@ export class World3D {
       }),
     );
     glow.position.copy(sunDisk.position);
+    this.glow=glow;
     this.scene.add(glow);
   }
 
@@ -211,7 +236,7 @@ export class World3D {
       body.position.y = stories / 2;
       body.castShadow = true;
       body.receiveShadow = true;
-      g.add(body);
+      g.add(body);this.solidMeshes.push(body);
       const face = new THREE.Mesh(new THREE.PlaneGeometry(bw * 0.92, stories * 0.78), facadeMat);
       face.position.set(0, stories * 0.52, bd / 2 + 0.03);
       g.add(face);
@@ -254,7 +279,8 @@ export class World3D {
         continue;
       }
       if (poi.id === "dropvan") {
-        this.scene.add(this.makeVan(wx(poi.x + poi.w / 2), wz(poi.y + poi.h / 2)));
+        this.van=this.makeVan(wx(poi.x+poi.w/2),wz(poi.y+poi.h/2));
+        this.scene.add(this.van);
         continue;
       }
       const h = poi.id === "store" ? 6.6 : poi.id === "beale" ? 5.4 : 4.6 + hash(poi.x) * 3;
@@ -264,19 +290,12 @@ export class World3D {
       body.position.y = h / 2;
       body.castShadow = true;
       body.receiveShadow = true;
-      g.add(body);
+      g.add(body);this.solidMeshes.push(body);
       const glass = new THREE.Mesh(new THREE.PlaneGeometry(wx(poi.w) * 0.72, 1.8), storefrontMat);
       glass.position.set(0, 1.4, wz(poi.h) / 2 + 0.05);
       g.add(glass);
-      const sign = new THREE.Mesh(
-        new THREE.BoxGeometry(wx(poi.w) * 0.55, 0.38, 0.1),
-        new THREE.MeshStandardMaterial({
-          color: poi.id === "store" ? 0x1db954 : 0xd4af37,
-          emissive: poi.id === "store" ? 0x1db954 : 0xd4af37,
-          emissiveIntensity: 0.55,
-        }),
-      );
-      sign.position.set(0, h * 0.72, wz(poi.h) / 2 + 0.08);
+      const sign=this.makeSign(poi.id==="store"?"$ackReligious · KLOTHING":poi.name,Math.min(wx(poi.w)*0.9,13),poi.id==="store");
+      sign.position.set(0,h*0.7,wz(poi.h)/2+0.08);
       g.add(sign);
       const awning = new THREE.Mesh(new THREE.BoxGeometry(wx(poi.w) * 0.95, 0.1, 0.72), fabricMat);
       awning.position.set(0, 2.2, wz(poi.h) / 2 + 0.28);
@@ -319,7 +338,7 @@ export class World3D {
           light.position.y = 3.3;
           g.add(light);
         }
-        g.position.set(wx(i * TILE + 12), 0, wz(yt * TILE + 10));
+        g.position.set(wx(i*TILE+12),0,wz(yt*TILE+TILE*1.18));
         this.scene.add(g);
       }
     }
@@ -327,33 +346,37 @@ export class World3D {
     this.buildCourt();
   }
 
+  private makeSign(text:string,width:number,brand=false) {
+    const c=document.createElement("canvas");c.width=1024;c.height=128;const ctx=c.getContext("2d")!;
+    ctx.fillStyle="#101c17";ctx.fillRect(0,0,1024,128);ctx.strokeStyle=brand?"#1db954":"#d4af37";ctx.lineWidth=5;ctx.strokeRect(3,3,1018,122);
+    ctx.fillStyle="#efe8de";ctx.font="bold 48px sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(text,512,67,960);
+    const texture=new THREE.CanvasTexture(c);texture.colorSpace=THREE.SRGBColorSpace;
+    return new THREE.Mesh(new THREE.PlaneGeometry(width,width/8),new THREE.MeshBasicMaterial({map:texture,toneMapped:false}));
+  }
   private buildGround() {
-    const asphaltMat = std(this.t("asphalt"), { roughness: 0.94, metalness: 0.02, repeat: [36, 28] });
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(wx(WORLD_PX_W) + 20, wz(WORLD_PX_H) + 20), asphaltMat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.set(wx(WORLD_PX_W) / 2, 0, wz(WORLD_PX_H) / 2);
-    ground.receiveShadow = true;
-    this.scene.add(ground);
-
-    const sidewalkMat = std(this.t("sidewalk"), { roughness: 0.9, repeat: [18, 2] });
-    const mkWalk = (x: number, z: number, w: number, d: number) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.08, d), sidewalkMat);
-      m.position.set(x, 0.04, z);
-      m.receiveShadow = true;
-      this.scene.add(m);
-    };
-    mkWalk(wx(WORLD_PX_W) / 2, wz(20 * TILE), wx(WORLD_PX_W), 2.4);
-    mkWalk(wx(WORLD_PX_W) / 2, wz(6 * TILE), wx(WORLD_PX_W), 2.2);
-    mkWalk(wx(WORLD_PX_W) / 2, wz(34 * TILE), wx(WORLD_PX_W), 2.2);
-    mkWalk(wx(16 * TILE), wz(WORLD_PX_H) / 2, 2.2, wz(WORLD_PX_H));
-    mkWalk(wx(34 * TILE), wz(WORLD_PX_H) / 2, 2.2, wz(WORLD_PX_H));
-
-    const stripeMat = std(this.t("stripe"), { roughness: 0.85, repeat: [8, 1] });
-    for (let i = 0; i < 28; i++) {
-      const dash = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.03, 0.16), stripeMat);
-      dash.position.set(6 + i * 6.4, 0.07, wz(20 * TILE));
-      this.scene.add(dash);
+    const ground=new THREE.Mesh(new THREE.PlaneGeometry(wx(WORLD_PX_W)+20,wz(WORLD_PX_H)+20),new THREE.MeshStandardMaterial({color:0x474d3b,roughness:1}));
+    ground.rotation.x=-Math.PI/2;ground.position.set(wx(WORLD_PX_W)/2,-0.04,wz(WORLD_PX_H)/2);ground.receiveShadow=true;this.scene.add(ground);
+    const roadMaterial=std(this.t("asphalt"),{roughness:0.94,repeat:[18,2]});
+    const walkMaterial=std(this.t("sidewalk"),{roughness:0.9,repeat:[18,1]});
+    for (const [rects,material,height] of [[roadRects(),roadMaterial,0.02],[sidewalkRects(),walkMaterial,0.08]] as const) {
+      for(const r of rects) {
+        const mesh=new THREE.Mesh(new THREE.BoxGeometry(wx(r.w),height,wz(r.h)),material);
+        mesh.position.set(wx(r.x+r.w/2),height/2,wz(r.y+r.h/2));mesh.receiveShadow=true;this.scene.add(mesh);
+      }
     }
+    const matrix=new THREE.Matrix4(),dashes:{x:number;z:number;angle:number}[]=[];
+    for(const street of STREETS) {
+      const length=street.axis==="y"?WORLD_PX_W:WORLD_PX_H;
+      for(let p=60;p<length;p+=88) {
+        if(STREETS.some(cross=>cross.axis!==street.axis&&Math.abs(cross.tile*TILE-p)<65))continue;
+        dashes.push({x:wx(street.axis==="y"?p:street.tile*TILE),z:wz(street.axis==="y"?street.tile*TILE:p),angle:street.axis==="y"?0:Math.PI/2});
+      }
+    }
+    const marks=new THREE.InstancedMesh(new THREE.BoxGeometry(2.3,0.02,0.08),new THREE.MeshStandardMaterial({color:0xc7aa69,roughness:0.9}),dashes.length);
+    dashes.forEach((d,i)=>{matrix.makeRotationY(d.angle);matrix.setPosition(d.x,0.04,d.z);marks.setMatrixAt(i,matrix);});this.scene.add(marks);
+    const river=POIS.find(p=>p.id==="river")!;
+    const water=new THREE.Mesh(new THREE.PlaneGeometry(wx(river.w),wz(river.h)),new THREE.MeshStandardMaterial({color:0x314f57,metalness:0.55,roughness:0.25}));
+    water.rotation.x=-Math.PI/2;water.position.set(wx(river.x+river.w/2),0.01,wz(river.y+river.h/2));this.scene.add(water);
   }
 
   private makeVan(x: number, z: number) {
@@ -400,7 +423,7 @@ export class World3D {
     ];
     for (const [x, z] of spots) {
       const w = new THREE.Mesh(geo, tire);
-      w.rotation.z = Math.PI / 2;
+      w.rotation.x = Math.PI / 2;
       w.position.set(x * 0.7, 0.28, z);
       g.add(w);
     }
@@ -493,6 +516,7 @@ export class World3D {
   }
 
   private ensureCars(n: number) {
+    if(this.cars.length>=n)return;
     const metal = std(this.t("carMetal"), { roughness: 0.36, metalness: 0.58 });
     while (this.cars.length < n) {
       const g = new THREE.Group();
@@ -559,7 +583,16 @@ export class World3D {
   }
 
   sync(f: WorldFrame) {
-    this.clock = f.clock;
+    const dt=Math.min(0.1,Math.max(0,f.clock-this.lastClock));this.lastClock=f.clock;this.clock=f.clock;
+    const daylight=Math.max(0,Math.sin((f.worldHour-6)/24*Math.PI*2));
+    this.hemi.intensity=0.65+daylight*0.85;this.sun.intensity=0.12+daylight*1.7;
+    this.sky.material.color.setRGB(0.2+daylight*0.8,0.26+daylight*0.74,0.44+daylight*0.56);
+    this.sunDisk.visible=this.glow.visible=daylight>0.04;
+    if(this.scene.fog instanceof THREE.Fog)this.scene.fog.color.setRGB(0.08+daylight*0.15,0.09+daylight*0.12,0.14+daylight*0.03);
+    if(this.van){this.van.position.set(wx(f.vehicle.x),0,wz(f.vehicle.y));this.van.rotation.y=f.vehicle.yaw+Math.PI/2;}
+    this.marker.visible=!!f.objective&&f.mode==="world";
+    if(f.objective){this.marker.position.set(wx(f.objective.x),0,wz(f.objective.y));this.marker.children[1]!.position.y=2.8+Math.sin(f.clock*3)*0.18;this.marker.children[1]!.rotation.y=f.clock;}
+
     const x = wx(f.px);
     const z = wz(f.py);
     this.player.position.set(x, 0, z);
@@ -567,7 +600,7 @@ export class World3D {
     const key = f.facing === "up" ? "back" : f.facing === "down" ? "front" : f.facing === "left" ? "left" : "right";
     const img = f.images[key] ?? f.images.front;
     if (img) this.sprite.material = this.matFor(img, key);
-    this.sprite.visible = f.cameraView === "third";
+    this.sprite.visible=f.cameraView==="third"&&!f.vehicle.active;
     this.sprite.position.y = 0.95 + f.bob * 0.02;
 
     const hoopY = 2.72;
@@ -593,7 +626,7 @@ export class World3D {
       }
       g.visible = true;
       g.position.set(wx(c.x), 0, wz(c.y));
-      g.rotation.y = Math.abs(c.vy) > Math.abs(c.vx) ? (c.vy > 0 ? 0 : Math.PI) : c.vx < 0 ? Math.PI / 2 : -Math.PI / 2;
+      g.rotation.y=Math.atan2(-c.vy,c.vx);
       const body = g.children[0] as THREE.Mesh;
       (body.material as THREE.MeshStandardMaterial).color.set(c.color);
     }
@@ -615,9 +648,9 @@ export class World3D {
     for (const n of f.npcs) {
       let s = this.npcSprites.get(n.id);
       if (!s) {
-        const mat = new THREE.SpriteMaterial({ color: n.isK ? 0xffffff : 0xc4b8a8, transparent: true });
-        if (n.isK && f.images.k) {
-          const tex = new THREE.Texture(f.images.k);
+        const mat = new THREE.SpriteMaterial({color:0xffffff,transparent:true,depthWrite:false});
+        if (f.images.k || f.images.front) {
+          const tex = new THREE.Texture(n.isK ? f.images.k : f.images.front);
           tex.needsUpdate = true;
           tex.colorSpace = THREE.SRGBColorSpace;
           mat.map = tex;
@@ -636,24 +669,33 @@ export class World3D {
     const sx = Math.sin(f.clock * 47) * shake * 0.12;
     const sy = Math.cos(f.clock * 39) * shake * 0.08;
 
-    if (f.cameraView === "first") {
+    if (f.cameraView === "first" && !f.vehicle.active) {
       this.camera.position.set(x + sx, 1.68 + f.bob * 0.012, z + sy);
       const ly = Math.sin(f.pitch);
       const lh = Math.cos(f.pitch);
       this.camera.lookAt(x + fwdX * lh * 8, 1.62 + ly * 8, z + fwdZ * lh * 8);
       this.camera.fov = f.mode === "basketball" ? 74 : 70;
     } else {
-      this.camPos.set(x - fwdX * 5.6 + sx, 2.35, z - fwdZ * 5.6 + sy);
-      this.camera.position.lerp(this.camPos, 0.18);
+      const distance=f.vehicle.active?7.8:5.6;
+      this.camPos.set(x-fwdX*distance+sx,(f.vehicle.active?3.8:2.8)+Math.sin(f.pitch)*2,z-fwdZ*distance+sy);
+      this.rayStart.set(x,1.35,z);this.rayDirection.copy(this.camPos).sub(this.rayStart);this.ray.far=this.rayDirection.length();this.ray.set(this.rayStart,this.rayDirection.normalize());
+      const hit=this.ray.intersectObjects(this.solidMeshes,false)[0];
+      if(hit)this.camPos.copy(this.rayStart).addScaledVector(this.rayDirection,Math.max(0.55,hit.distance-0.3));
+      if(!this.cameraReady||this.camera.position.distanceTo(this.camPos)>25)this.camera.position.copy(this.camPos);
+      else this.camera.position.lerp(this.camPos,1-Math.exp(-12*dt));
       this.camera.lookAt(x, 1.28, z);
       this.camera.fov = 62;
     }
-    this.sun.target.position.set(x, 0, z);
+    this.cameraReady=true;this.sun.position.set(x-52,34,z-18);
+    this.sun.target.position.set(x,0,z);
   }
 
+  setQuality(quality:"low"|"high") {
+    this.quality=quality;this.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,quality==="low"?1:1.75));this.renderer.shadowMap.enabled=quality==="high";
+  }
   render(w: number, h: number) {
     if (w < 2 || h < 2) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+    const dpr=Math.min(window.devicePixelRatio||1,this.quality==="low"?1:1.75);
     if (this.renderer.domElement.width !== Math.floor(w * dpr) || this.renderer.domElement.height !== Math.floor(h * dpr)) {
       this.renderer.setSize(w, h, false);
       this.overlay.width = Math.floor(w * dpr);
@@ -667,6 +709,13 @@ export class World3D {
   }
 
   dispose() {
+    if(this.disposed)return;this.disposed=true;
+    const geometries=new Set<THREE.BufferGeometry>(),materials=new Set<THREE.Material>(),textures=new Set<THREE.Texture>();
+    this.scene.traverse(o=>{if(o instanceof THREE.Mesh||o instanceof THREE.Sprite){if(o instanceof THREE.Mesh)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material])materials.add(m);}});
+    Object.values(this.spriteMats).forEach(m=>{if(m)materials.add(m);});
+    for(const m of materials)for(const v of Object.values(m))if(v instanceof THREE.Texture)textures.add(v);
+    if(this.scene.background instanceof THREE.Texture)textures.add(this.scene.background);
+    geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());
     this.renderer.dispose();
     this.overlay.remove();
   }

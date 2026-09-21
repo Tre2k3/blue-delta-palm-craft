@@ -7,10 +7,12 @@ import {
   Settings,
   Play,
   Volume2,
-  SwitchCamera,
 } from "lucide-react";
 import { GameEngine } from "./engine";
-import { APPAREL, ART_REV, BRAND, POIS, TROPHIES, TIPS } from "./data";
+import { CityMap } from "./CityMap";
+import { TouchControls } from "./TouchControls";
+import { UpgradeHUD } from "./UpgradeHUD";
+import { APPAREL, ART_REV, BRAND, DEFAULT_SETTINGS, TROPHIES, TIPS } from "./data";
 import type { ApparelId, HudSnapshot, PauseTab } from "./types";
 
 const emptyHud: HudSnapshot = {
@@ -41,12 +43,13 @@ const emptyHud: HudSnapshot = {
   trophies: [],
   trophyPopup: null,
   pauseTab: "resume",
-  settings: { master: 0.85, music: 0.42, sfx: 0.7, shake: true, rumble: true, cameraView: "third" },
+  settings: { ...DEFAULT_SETTINGS },
   sideMissions: [],
   highScore: 0,
   hasSave: false,
   cameraView: "third",
   steps: [],
+  position:{x:288,y:558,yaw:0},objective:null,waypoint:null,visited:[],driving:false,speed:0,vehicleAvailable:false,saveStatus:"new",courtResult:null,
 };
 
 function formatHour(h: number) {
@@ -76,11 +79,7 @@ export function GameApp() {
   const [titlePhase, setTitlePhase] = useState<"press" | "choose">("press");
   const [titleSettings, setTitleSettings] = useState(false);
   const [tip, setTip] = useState(TIPS[0]!);
-  const stickRef = useRef<{ id: number | null; ox: number; oy: number }>({
-    id: null,
-    ox: 0,
-    oy: 0,
-  });
+  const [confirmReset,setConfirmReset]=useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -121,6 +120,7 @@ export function GameApp() {
   useEffect(() => {
     if (hud.started || !ready) return;
     const go = (e: KeyboardEvent) => {
+      if(titleSettings||confirmReset||e.repeat||(e.target instanceof HTMLElement&&e.target.matches("button,input,select")))return;
       if (e.code === "Tab" || e.code.startsWith("F")) return;
       if (titlePhase === "press") {
         setTitlePhase("choose");
@@ -132,7 +132,7 @@ export function GameApp() {
     };
     window.addEventListener("keydown", go);
     return () => window.removeEventListener("keydown", go);
-  }, [hud.started, ready, titlePhase, boot]);
+  }, [hud.started, ready, titlePhase, boot, titleSettings, confirmReset]);
 
   const onBuy = useCallback((id: ApparelId) => {
     engineRef.current?.buyItem(id);
@@ -146,55 +146,17 @@ export function GameApp() {
     engineRef.current?.advanceDialogue();
   }, []);
 
-  const onStickStart = (e: React.TouchEvent) => {
-    const t = e.changedTouches[0];
-    if (!t) return;
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    stickRef.current = {
-      id: t.identifier,
-      ox: rect.left + rect.width / 2,
-      oy: rect.top + rect.height / 2,
-    };
-    e.preventDefault();
-  };
-  const onStickMove = (e: React.TouchEvent) => {
-    const eng = engineRef.current;
-    if (!eng) return;
-    for (const t of Array.from(e.changedTouches)) {
-      if (t.identifier !== stickRef.current.id) continue;
-      const dx = t.clientX - stickRef.current.ox;
-      const dy = t.clientY - stickRef.current.oy;
-      const max = 48;
-      const len = Math.hypot(dx, dy) || 1;
-      const s = Math.min(1, len / max);
-      eng.input.touch.mx = (dx / len) * s;
-      eng.input.touch.my = (dy / len) * s;
-    }
-    e.preventDefault();
-  };
-  const onStickEnd = (e: React.TouchEvent) => {
-    const eng = engineRef.current;
-    if (!eng) return;
-    for (const t of Array.from(e.changedTouches)) {
-      if (t.identifier === stickRef.current.id) {
-        eng.input.touch.mx = 0;
-        eng.input.touch.my = 0;
-        stickRef.current.id = null;
-      }
-    }
-  };
-
   const lb = Math.max(0, Math.min(1, hud.letterbox));
   const bar = Math.round(52 * lb);
 
   return (
-    <div key={ART_REV} className="relative h-full w-full overflow-hidden bg-bg text-fg select-none">
+    <div key={ART_REV} className="game-shell relative h-full w-full overflow-hidden bg-bg text-fg select-none">
       <canvas
         ref={canvasRef}
         className="absolute inset-0 h-full w-full touch-none"
         style={{ imageRendering: "auto" }}
         onClick={() => {
-          if (hud.started && !hud.paused) canvasRef.current?.requestPointerLock?.();
+          if(hud.started&&!hud.paused&&!hud.cinematic&&(hud.mode==="world"||hud.mode==="basketball")&&!window.matchMedia("(pointer:coarse)").matches){try{canvasRef.current?.requestPointerLock?.()?.catch(()=>engineRef.current?.showToast("Hold right mouse to look, or use Q/R."));}catch{/* optional */}}
         }}
       />
 
@@ -226,7 +188,7 @@ export function GameApp() {
           <div className="absolute top-0 inset-x-0 h-8 bg-black" />
           <div className="absolute bottom-0 inset-x-0 h-8 bg-black" />
 
-          <div className="relative z-10 flex h-full flex-col justify-between px-6 py-10 sm:px-12">
+          <div className="title-layout relative z-10 flex h-full flex-col justify-between px-6 py-10 sm:px-12">
             <div>
               <p className="font-display text-primary text-xl tracking-[0.22em]">{BRAND.name}</p>
               <p className="mt-1 text-[11px] uppercase tracking-[0.42em] text-gold">{BRAND.line}</p>
@@ -270,7 +232,7 @@ export function GameApp() {
                   {hud.hasSave && (
                     <button
                       type="button"
-                      onClick={() => boot(true)}
+                      onClick={() => setConfirmReset(true)}
                       className="min-h-12 rounded-lg border border-border bg-surface/80 px-6 font-display text-2xl text-fg hover:bg-surface-2"
                     >
                       NEW GAME
@@ -286,14 +248,7 @@ export function GameApp() {
                 </div>
               )}
               {bootError && <p className="mt-3 text-sm text-danger">{bootError}</p>}
-              {titleSettings && ready && (
-                <div className="mt-4 max-w-xs rounded-xl border border-border bg-panel p-3">
-                  <PauseSettings
-                    settings={hud.settings}
-                    onChange={(s) => engineRef.current?.applySettings(s)}
-                  />
-                </div>
-              )}
+
             </div>
 
             <div className="flex flex-wrap items-end justify-between gap-4">
@@ -306,6 +261,8 @@ export function GameApp() {
         </div>
       )}
 
+      {titleSettings&&ready&&<div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Game settings"><div className="settings-dialog"><PauseSettings settings={hud.settings} onChange={p=>engineRef.current?.applySettings(p)}/><button className="primary-button mt-5 w-full" onClick={()=>setTitleSettings(false)}>Done</button></div></div>}
+      {confirmReset&&<div className="modal-backdrop" role="alertdialog" aria-modal="true" aria-label="Start a new game"><div className="settings-dialog"><h2 className="font-display text-3xl">START FRESH?</h2><p className="mt-3 text-sm text-muted">This replaces your saved progress, money, clothing and records.</p><div className="mt-5 flex gap-3"><button autoFocus className="secondary-button flex-1" onClick={()=>setConfirmReset(false)}>Keep my save</button><button className="primary-button flex-1" onClick={()=>{setConfirmReset(false);boot(true);}}>Start new game</button></div></div></div>}
       {hud.started && (
         <>
           {/* Top HUD */}
@@ -335,7 +292,9 @@ export function GameApp() {
               <p className="text-[10px] uppercase tracking-[0.18em] text-primary">{hud.missionChapter}</p>
               <p className="font-display text-lg leading-none text-gold">{hud.missionTitle}</p>
               <p className="mt-1 text-sm font-medium leading-snug text-fg">{hud.missionStep}</p>
-              <p className="mt-1 text-xs text-muted tabular">{hud.missionProgress}</p>
+              <p className="mt-1 text-xs text-muted tabular">{hud.missionProgress} objectives</p>
+              <div className="mission-meter"><span style={{width:`${Number(hud.missionProgress.split("/")[0])/Math.max(1,Number(hud.missionProgress.split("/")[1]))*100}%`}}/></div>
+              {hud.objective&&<p className="mt-2 text-xs text-primary">{hud.waypoint?"WAYPOINT":"DESTINATION"} · {hud.objective.distance}m</p>}
             </div>
           </div>
 
@@ -359,7 +318,7 @@ export function GameApp() {
           )}
 
           {hud.toast && !hud.cinematic && (
-            <div className="pointer-events-none absolute left-1/2 top-24 z-30 -translate-x-1/2">
+            <div role="status" aria-live="polite" className="game-toast pointer-events-none absolute left-1/2 z-30 -translate-x-1/2">
               <div className="rounded-xl border border-primary/30 bg-surface-2 px-4 py-2 text-sm font-medium text-fg shadow-xl">
                 {hud.toast}
               </div>
@@ -387,6 +346,7 @@ export function GameApp() {
               <p className="mt-1 text-xs text-muted">
                 {hud.basketball.timeLeft}s · {hud.basketball.shots} shots · need 8
               </p>
+              <p className="mt-2 text-xs text-primary">{hud.basketball.held?"Hold Space / SHOOT, release in green":"Rebound returning…"}</p><div className="shot-meter"><span className="green-window"/><span className="shot-cursor" style={{left:`${hud.basketball.power*100}%`}}/></div><button className="secondary-button pointer-events-auto mt-2 w-full" onClick={()=>{const e=engineRef.current;if(e){const h=e.hoop();e.yaw=Math.atan2(e.px-h.x,e.py-h.y);}}}>Face hoop</button>
               {hud.basketball.combo > 1 && (
                 <p className="mt-1 font-display text-xl text-primary">x{hud.basketball.combo} STREAK</p>
               )}
@@ -400,16 +360,7 @@ export function GameApp() {
             </div>
           )}
 
-          {hud.started && !hud.paused && (
-            <button
-              type="button"
-              className="absolute left-3 bottom-24 z-20 flex items-center gap-2 rounded-xl border border-border bg-panel px-3 py-2 text-xs text-fg backdrop-blur-sm sm:bottom-3"
-              onClick={() => engineRef.current?.toggleView()}
-            >
-              <SwitchCamera className="h-4 w-4 text-gold" />
-              {hud.cameraView === "first" ? "First person" : "Third person"}
-            </button>
-          )}
+          {engineRef.current&&!hud.paused&&<UpgradeHUD engine={engineRef.current} hud={hud}/>}
 
           {/* Cinematic card */}
           {hud.cinematic && (
@@ -499,7 +450,8 @@ export function GameApp() {
                             type="button"
                             data-testid={`buy-${item.id}`}
                             onClick={() => onBuy(item.id)}
-                            className={`min-h-10 shrink-0 rounded-lg px-3 py-2 text-sm font-semibold ${
+                            disabled={eq||(!owned&&hud.sackdollars<item.price)}
+                            className={`disabled:opacity-45 disabled:cursor-not-allowed min-h-11 shrink-0 rounded-lg px-3 py-2 text-sm font-semibold ${
                               eq
                                 ? "bg-primary/20 text-primary"
                                 : owned
@@ -527,84 +479,10 @@ export function GameApp() {
             </div>
           )}
 
-          {/* Mobile controls */}
-          <div className="absolute inset-x-0 bottom-0 z-20 flex items-end justify-between p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:hidden">
-            <div
-              className="relative h-28 w-28 touch-none rounded-full border border-border bg-panel/80 backdrop-blur-sm"
-              onTouchStart={onStickStart}
-              onTouchMove={onStickMove}
-              onTouchEnd={onStickEnd}
-              onTouchCancel={onStickEnd}
-            >
-              <div className="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/40 bg-primary/20" />
-              <span className="absolute bottom-2 left-0 right-0 text-center text-[10px] text-muted">MOVE</span>
-            </div>
-            <div className="flex flex-col items-end gap-2">
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-panel font-display text-lg text-fg"
-                  onTouchStart={(e) => {
-                    e.preventDefault();
-                    if (engineRef.current) engineRef.current.input.touch.lookX = -1;
-                  }}
-                  onTouchEnd={(e) => {
-                    e.preventDefault();
-                    if (engineRef.current) engineRef.current.input.touch.lookX = 0;
-                  }}
-                >
-                  ←
-                </button>
-                <button
-                  type="button"
-                  className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-panel font-display text-lg text-fg"
-                  onTouchStart={(e) => {
-                    e.preventDefault();
-                    if (engineRef.current) engineRef.current.input.touch.lookX = 1;
-                  }}
-                  onTouchEnd={(e) => {
-                    e.preventDefault();
-                    if (engineRef.current) engineRef.current.input.touch.lookX = 0;
-                  }}
-                >
-                  →
-                </button>
-              </div>
-              {hud.mode === "basketball" ? (
-                <button
-                  type="button"
-                  className="flex h-16 w-16 items-center justify-center rounded-full bg-primary font-display text-lg text-primary-fg shadow-lg active:scale-95"
-                  onTouchStart={(e) => {
-                    e.preventDefault();
-                    const eng = engineRef.current;
-                    if (!eng) return;
-                    eng.input.touch.shoot = true;
-                    eng.beginCharge();
-                  }}
-                  onTouchEnd={(e) => {
-                    e.preventDefault();
-                    const eng = engineRef.current;
-                    if (!eng) return;
-                    eng.input.touch.shoot = false;
-                    eng.releaseShot();
-                  }}
-                >
-                  SHOOT
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="flex h-16 w-16 items-center justify-center rounded-full bg-primary font-display text-2xl text-primary-fg shadow-lg active:scale-95"
-                  onClick={() => engineRef.current?.tryInteract()}
-                >
-                  {hud.promptButton}
-                </button>
-              )}
-            </div>
-          </div>
+          {engineRef.current&&!hud.paused&&!hud.cinematic&&(hud.mode==="world"||hud.mode==="basketball")&&<TouchControls engine={engineRef.current} hud={hud}/>}
 
           <div className="pointer-events-none absolute bottom-3 right-3 z-10 hidden rounded-lg border border-border bg-panel/70 px-2 py-1 text-[10px] text-muted sm:block">
-            WASD · Q/R look · V camera · {hud.promptButton} · Space
+            {hud.driving?"W/S drive · A/D steer · Space brake · G exit":"WASD move · Shift sprint · Q/R look · E interact · M map"}
           </div>
 
           {/* Pause */}
@@ -616,8 +494,8 @@ export function GameApp() {
                 className="absolute inset-0 h-full w-full object-cover opacity-25"
                 crossOrigin="anonymous"
               />
-              <div className="relative flex w-full max-w-5xl mx-auto">
-                <nav className="flex w-44 shrink-0 flex-col gap-1 border-r border-border p-4 sm:w-56">
+              <div className="pause-layout relative flex w-full max-w-5xl mx-auto">
+                <nav className="pause-nav flex w-44 shrink-0 flex-col gap-1 border-r border-border p-4 sm:w-56">
                   <p className="mb-3 font-display text-2xl text-primary">PAUSED</p>
                   {TABS.map((t) => {
                     const Icon = t.icon;
@@ -641,7 +519,7 @@ export function GameApp() {
                   })}
                 </nav>
                 <div className="min-w-0 flex-1 overflow-y-auto p-5">
-                  {hud.pauseTab === "map" && <PauseMap district={hud.locationName} />}
+                  {hud.pauseTab === "map" && <CityMap hud={hud} onWaypoint={id=>engineRef.current?.setWaypoint(id)}/>}
                   {hud.pauseTab === "missions" && (
                     <PauseMissions
                       chapter={hud.missionChapter}
@@ -664,8 +542,7 @@ export function GameApp() {
                     <div className="flex h-full flex-col justify-center">
                       <p className="font-display text-5xl text-fg">MEMPHIS</p>
                       <p className="mt-2 text-sm text-muted">
-                        {hud.locationName} · {formatHour(hud.worldHour)} · High score {hud.highScore}
-                      </p>
+                        {hud.locationName} · {formatHour(hud.worldHour)} · High score {hud.highScore}</p><p className="mt-4 text-xs text-muted">{hud.saveStatus==="unavailable"?"Saving unavailable in this browser":hud.saveStatus==="saved"?"Progress saved on this device":"Progress saves as you play"}</p><div className="mt-6 grid max-w-sm gap-3"><button className="primary-button" onClick={()=>engineRef.current?.resume()}>Resume game</button><button className="secondary-button" onClick={()=>engineRef.current?.recoverPlayer()}>Return to apartment</button></div><div className="controls-guide mt-6"><p className="eyebrow">CONTROLS</p><p>WASD / arrows — move · Shift — sprint</p><p>E — interact · Q/R or right-drag — look</p><p>M — map · V — camera · Esc — pause</p><p>G — enter / exit van · Space — brake or shoot</p></div>
                     </div>
                   )}
                 </div>
@@ -674,27 +551,6 @@ export function GameApp() {
           )}
         </>
       )}
-    </div>
-  );
-}
-
-function PauseMap({ district }: { district: string }) {
-  return (
-    <div>
-      <p className="text-[11px] uppercase tracking-wider text-muted">City map · {district}</p>
-      <p className="font-display text-3xl text-fg">MEMPHIS 901</p>
-      <div className="relative mt-4 aspect-[4/3] overflow-hidden rounded-xl border border-border bg-surface-2">
-        {POIS.map((p) => (
-          <div
-            key={p.id}
-            className="absolute -translate-x-1/2 -translate-y-1/2 text-center"
-            style={{ left: `${(p.x / (64 * 48)) * 100}%`, top: `${(p.y / (48 * 48)) * 100}%` }}
-          >
-            <div className="mx-auto h-2.5 w-2.5 rounded-full bg-primary" />
-            <p className="mt-0.5 text-[9px] uppercase tracking-wide text-fg">{p.label}</p>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
@@ -715,14 +571,14 @@ function PauseMissions({
       <p className="text-[11px] uppercase tracking-wider text-primary">{chapter}</p>
       <p className="font-display text-3xl text-fg">{title}</p>
       <ul className="mt-4 space-y-2">
-        {steps.map((s) => (
+        {steps.map((s,index) => (
           <li
             key={s.id}
             className={`rounded-lg border px-3 py-2 ${
               s.done ? "border-border bg-surface-2 text-muted" : "border-primary/30 bg-surface text-fg"
             }`}
           >
-            <p className="text-sm font-medium">{s.done ? s.label : s.label}</p>
+            <p className="text-sm font-medium">{s.done?"✓ ":index===steps.findIndex(step=>!step.done)?"→ ":""}{s.label}</p>
             <p className="text-xs text-muted">{s.description}</p>
           </li>
         ))}
@@ -836,6 +692,7 @@ function PauseSettings({
             />
           </label>
         ))}
+        <label className="block text-sm text-muted">Graphics quality<select className="mt-2 w-full rounded-lg border border-border bg-surface-2 p-3 text-fg" value={settings.quality} onChange={e=>onChange({quality:e.target.value as "low"|"high"})}><option value="high">High · shadows and sharper detail</option><option value="low">Performance · lighter on your device</option></select></label><label className="block text-sm text-muted">Look sensitivity · {settings.sensitivity.toFixed(2)}×<input aria-label="Look sensitivity" type="range" min={0.25} max={2} step={0.05} value={settings.sensitivity} onChange={e=>onChange({sensitivity:Number(e.target.value)})} className="mt-2 w-full accent-primary"/></label><label className="flex items-center justify-between rounded-lg border border-border bg-surface-2 px-3 py-3 text-sm">Always show touch controls<input type="checkbox" checked={settings.showTouch} onChange={e=>onChange({showTouch:e.target.checked})}/></label>
         <label className="flex items-center justify-between rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm">
           Camera shake
           <input

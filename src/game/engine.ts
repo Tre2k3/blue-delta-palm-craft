@@ -18,6 +18,9 @@ import {
   createSideMissions,
 } from "./data";
 import { audio } from "./audio";
+import { parseSave, sanitizeSettings } from "./persistence";
+import { FIXED_STEP, GRAVITY, shotVelocity, crossesHoop, driveStep, wrapAngle } from "./physics";
+import { roadRects, sidewalkRects, trafficLanes, laneVelocity, poiColliders, circleHitsRect, overlaps, poiEntrance } from "./worldTopology";
 import { InputManager } from "./input";
 import { World3D } from "./world3d";
 import type {
@@ -82,7 +85,7 @@ export class GameEngine {
 	toastT = 0;
 	pauseTab: PauseTab = "resume";
 	px = 288;
-	py = 528;
+	py = 558;
 	vx = 0;
 	vy = 0;
 	dir: Dir = "down";
@@ -94,7 +97,7 @@ export class GameEngine {
 	camY = 0;
 	lookX = 0;
 	lookY = 0;
-	yaw = 0;
+	yaw = -Math.PI / 2;
 	pitch = 0;
 	trauma = 0;
 	hitstop = 0;
@@ -134,9 +137,11 @@ export class GameEngine {
 		combo: 0,
 		best: 0,
 		shotDist: 0,
-		grade: "" as "" | "PERFECT" | "GOOD" | "LATE",
+		retrieveT: 0,
+		grade: "" as "" | "PERFECT" | "GOOD" | "EARLY" | "LATE",
 	};
 	highScore = 0;
+	solidRects: { x: number; y: number; w: number; h: number }[] = [];
 	walls: { x: number; y: number; w: number; h: number }[] = [];
 	trees: { x: number; y: number }[] = [];
 	cars: { x: number; y: number; vx: number; vy: number; w: number; color: string }[] = [];
@@ -164,11 +169,26 @@ export class GameEngine {
 	leftSpawn = false;
 	hasSave = false;
 	world3d: World3D | null = null;
+  accumulator = 0;
+  autosaveT = 0;
+  saveStatus: "saved" | "unavailable" | "new" = "new";
+  visited = new Set<LocationId>();
+  waypoint: LocationId | null = null;
+  courtResult: HudSnapshot["courtResult"] = null;
+  vehicle = { x: 38 * 48 + 72, y: 21 * 48 + 60, yaw: -Math.PI / 2, speed: 0, active: false };
+  private disposed = false;
+  private onVisibility = () => { if (document.hidden && this.started) { this.pause(); this.save(); } };
+  private onPageHide = () => { if (this.started) this.save(); };
+  private onContextLost = (event: Event) => {
+    event.preventDefault(); this.pause(); this.save();
+    this.showToast("Graphics interrupted. Your progress is saved; reload to continue.", 60); this.emitHud();
+  };
 	constructor(canvas: HTMLCanvasElement) {
 		this.canvas = canvas;
 		this.world3d = new World3D(canvas);
 		this.ctx = this.world3d.overlay.getContext("2d")!;
 		this.buildWorld();
+    this.solidRects = [...this.walls, ...poiColliders()];
 	}
 	async init() {
 		await Promise.all(Object.entries({
@@ -184,11 +204,17 @@ export class GameEngine {
 				this.images[k] = await loadImage(src);
 			} catch { /* missing optional sprite */ }
 		}));
+    if (this.disposed) return;
 		this.loadSave();
 		this.paintMap();
 		await this.world3d?.loadTextures((d, t) => this.onLoad?.(d / t));
+    if (this.disposed) return;
 		this.world3d?.buildCity(this.walls, this.trees);
-		this.input.bind();
+    audio.setVolumes(this.settings); this.world3d?.setQuality(this.settings.quality);
+    this.input.bind();
+    document.addEventListener("visibilitychange", this.onVisibility);
+    window.addEventListener("pagehide", this.onPageHide);
+    this.canvas.addEventListener("webglcontextlost", this.onContextLost);
 		this.wireQa();
 		this.emitHud();
 	}
@@ -214,8 +240,7 @@ export class GameEngine {
 			w: 48 * .55,
 			h: WORLD_PX_H
 		});
-		for (let gy = 2; gy < 46; gy += 5) for (let gx = 2; gx < 62; gx += 5) {
-			if (gx % 10 === 2 || gy % 10 === 2) continue;
+		for (let gy = 2; gy < 44; gy += 5) for (let gx = 2; gx < 60; gx += 5) {
 			const bx = gx * 48;
 			const by = gy * 48;
 			const bw = 144;
@@ -225,8 +250,8 @@ export class GameEngine {
 				blocked = true;
 				break;
 			}
-			if (blocked) continue;
-			if (bx < 768 && by < 768) continue;
+			if (blocked || [...roadRects(), ...sidewalkRects()].some(r => overlaps({ x: bx, y: by, w: bw, h: bh }, r, 22))) continue;
+
 			this.walls.push({
 				x: bx,
 				y: by,
@@ -234,10 +259,10 @@ export class GameEngine {
 				h: bh - 18
 			});
 		}
-		for (let i = 0; i < 48; i++) this.trees.push({
-			x: (3 + i * 17 % 58) * 48,
-			y: (3 + i * 29 % 42) * 48
-		});
+    for (let i = 0; i < 48; i++) {
+      const t = { x: (3 + i * 17 % 58) * 48, y: (3 + i * 29 % 42) * 48 };
+      if (!roadRects().some(r => circleHitsRect(t.x,t.y,25,r)) && !POIS.some(p => circleHitsRect(t.x,t.y,25,p))) this.trees.push(t);
+    }
 		const carColors = [
 			"#1db954",
 			"#111111",
@@ -246,45 +271,12 @@ export class GameEngine {
 			"#b91c1c",
 			"#854d0e"
 		];
-		const lanes = [];
-		for (let i = 0; i < 10; i++) {
-			lanes.push({
-				x: (4 + i * 6) * 48,
-				y: 968,
-				vx: 90,
-				vy: 0
-			});
-			lanes.push({
-				x: (2 + i * 6) * 48,
-				y: 942,
-				vx: -80,
-				vy: 0
-			});
-		}
-		for (let i = 0; i < 6; i++) {
-			lanes.push({
-				x: 774,
-				y: (3 + i * 7) * 48,
-				vx: 0,
-				vy: 85
-			});
-			lanes.push({
-				x: 1622,
-				y: (4 + i * 7) * 48,
-				vx: 0,
-				vy: -78
-			});
-		}
-		lanes.forEach((l, i) => {
-			this.cars.push({
-				x: l.x,
-				y: l.y,
-				vx: l.vx,
-				vy: l.vy,
-				w: 38 + i % 3 * 8,
-				color: carColors[i % carColors.length]
-			});
-		});
+    trafficLanes().forEach((lane, i) => {
+      for (let j = 0; j < 2; j++) {
+        const along = (lane.max - lane.min) * (0.2 + j * 0.5) + i * 17;
+        this.cars.push({ x: lane.axis === "x" ? along : lane.fixed, y: lane.axis === "y" ? along : lane.fixed, ...laneVelocity(lane), w: 38 + i % 3 * 8, color: carColors[i % carColors.length] });
+      }
+    });
 		const pedColors = [
 			"#d6d3d1",
 			"#a8a29e",
@@ -478,9 +470,9 @@ export class GameEngine {
 		this.mapCanvas = c;
 	}
 	wireQa() {
-		if (typeof window === "undefined") return;
+		if (typeof window === "undefined" || !(import.meta.env.DEV || new URLSearchParams(location.search).get("qa") === "1")) return;
 		window.__controlsTest = {
-			getYaw: () => this.yaw,
+			getYaw: () => this.vehicle.active ? this.vehicle.yaw : this.yaw,
 			getSpeed: () => Math.hypot(this.vx, this.vy),
 			getFacing: () => this.facing,
 			setKeys: (codes) => {
@@ -490,6 +482,7 @@ export class GameEngine {
 		};
 		window.__gameTest = {
 			teleport: (loc) => {
+				this.vehicle.active = false; this.vehicle.speed = 0; this.courtResult = null;
 				if (this.mode === "basketball") this.exitBasketball();
 				if (this.mode === "shop") this.closeShop();
 				if (this.mode === "dialogue") {
@@ -516,6 +509,7 @@ export class GameEngine {
 				py: this.py,
 				vx: this.vx,
 				vy: this.vy,
+        driving: this.vehicle.active, paused: this.paused, power: this.ball.power, shots: this.ball.shots, held: this.ball.held, ball: { ...this.ball }, hud: this.getHud(),
 			}),
 			setBallScore: (n) => {
 				this.ball.score = n;
@@ -527,11 +521,19 @@ export class GameEngine {
 				this.lastInteract = 0;
 				this.tryInteract();
 			},
-			resetSave: () => this.resetProgress()
+			getEngine: () => this,
+      toggleVehicle: () => this.toggleVehicle(),
+      step: (seconds) => { for (let t = 0; t < seconds; t += FIXED_STEP) this.update(FIXED_STEP); this.emitHud(); },
+      resetSave: () => this.resetProgress()
 		};
 	}
 	destroy() {
-		this.running = false;
+    if (this.disposed) return;
+    this.disposed = true; this.running = false;
+    document.removeEventListener("visibilitychange", this.onVisibility);
+    window.removeEventListener("pagehide", this.onPageHide);
+    this.canvas.removeEventListener("webglcontextlost", this.onContextLost);
+    this.onHud = this.onLoad = null;
 		cancelAnimationFrame(this.raf);
 		this.input.unbind();
 		this.world3d?.dispose();
@@ -541,7 +543,8 @@ export class GameEngine {
 		audio.unlock();
 		audio.confirm();
 		if (fresh) this.resetProgress(false);
-		this.started = true;
+		this.input.reset(); audio.setVolumes(this.settings);
+    this.started = true;
 		this.paused = false;
 		this.cinematic = {
 			kind: "briefing",
@@ -568,13 +571,19 @@ export class GameEngine {
 		this.trophies = [];
 		this.talked.clear();
 		this.px = 288;
-		this.py = 528;
+		this.py = 558;
 		this.leftSpawn = false;
 		this.mode = "world";
 		this.shopOpen = false;
 		this.dialogue = null;
 		this.ball.missionCredited = false;
 		this.ball.best = 0;
+    this.ball.active = this.ball.inFlight = this.ball.charging = false; this.ball.held = true;
+    this.ball.score = this.ball.power = this.ball.shots = this.highScore = 0;
+    this.vx = this.vy = this.pitch = 0; this.yaw = -Math.PI / 2;
+    this.courtResult = null; this.waypoint = null; this.visited.clear();
+    this.vehicle = { x: 38 * 48 + 72, y: 21 * 48 + 60, yaw: -Math.PI / 2, speed: 0, active: false };
+    this.input.reset(); this.saveStatus = "new";
 		this.worldHour = 16.2;
 		this.hasSave = false;
 		if (emit) this.emitHud();
@@ -598,39 +607,33 @@ export class GameEngine {
 		if (!this.settings.shake) return;
 		this.trauma = clamp(this.trauma + v, 0, 1);
 	}
-	loadSave() {
-		try {
-			let raw = localStorage.getItem(SAVE_KEY);
-			if (!raw) raw = localStorage.getItem(SAVE_KEY_LEGACY);
-			this.hasSave = !!raw;
-			if (!raw) return;
-			const data = JSON.parse(raw);
-			this.sackdollars = data.sackdollars ?? 25;
-			this.respect = data.respect ?? 0;
-			this.owned = data.owned?.length ? data.owned : ["starter_tee"];
-			this.equipped = data.equipped;
-			this.mission.complete = data.missionComplete ?? false;
-			this.missionComplete = this.mission.complete;
-			for (const s of this.mission.steps) s.done = !!data.missionProgress?.[s.id];
-			const firstUndone = this.mission.steps.findIndex((s) => !s.done);
-			this.mission.activeStep = firstUndone === -1 ? this.mission.steps.length : firstUndone;
-			this.trophies = data.trophies ?? [];
-			this.highScore = data.basketballHighScore ?? 0;
-			this.worldHour = data.worldHour ?? 16.2;
-			if (data.settings) this.settings = {
-				...DEFAULT_SETTINGS,
-				...data.settings
-			};
-			if (data.sideProgress) for (const s of this.side) s.done = !!data.sideProgress[s.id];
-		} catch { /* storage */ }
-	}
+  loadSave() {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY) ?? localStorage.getItem(SAVE_KEY_LEGACY);
+      if (!raw) return;
+      const data = parseSave(raw);
+      if (!data) { this.showToast("Save could not be read. Start a new game when ready.",8); return; }
+      this.hasSave = true; this.saveStatus = "saved";
+      this.sackdollars = data.sackdollars; this.respect = data.respect; this.owned = data.owned; this.equipped = data.equipped;
+      for (const s of this.mission.steps) s.done = data.missionProgress[s.id];
+      this.mission.activeStep = data.missionActiveStep; this.mission.complete = this.missionComplete = data.missionComplete;
+      this.trophies = data.trophies; this.highScore = data.basketballHighScore; this.worldHour = data.worldHour; this.settings = data.settings;
+      this.talked = new Set(data.talked); this.visited = new Set(data.visited);
+      this.px = data.position.x; this.py = data.position.y; this.yaw = data.position.yaw;
+      if (this.collides(this.px,this.py,14)) { this.px = 288; this.py = 558; }
+      this.leftSpawn = data.missionActiveStep > 0;
+      for (const s of this.side) s.done = data.sideProgress[s.id];
+    } catch { this.saveStatus = "unavailable"; }
+  }
 	save() {
 		const progress = {};
 		for (const s of this.mission.steps) progress[s.id] = s.done;
 		const sideProgress = {};
 		for (const s of this.side) sideProgress[s.id] = s.done;
 		const data = {
-			version: 2,
+			version: 3,
+      position: { x: this.px, y: this.py, yaw: wrapAngle(this.yaw) },
+      talked: [...this.talked], visited: [...this.visited],
 			sackdollars: this.sackdollars,
 			respect: this.respect,
 			owned: this.owned,
@@ -647,37 +650,53 @@ export class GameEngine {
 		};
 		try {
 			localStorage.setItem(SAVE_KEY, JSON.stringify(data));
-			this.hasSave = true;
-		} catch { /* storage */ }
+			this.hasSave = true; this.saveStatus = "saved";
+		} catch { this.saveStatus = "unavailable"; }
 	}
 	applySettings(next) {
-		this.settings = {
-			...this.settings,
-			...next
-		};
+		this.settings = sanitizeSettings({ ...this.settings, ...next });
+    this.world3d?.setQuality(this.settings.quality);
 		audio.setVolumes(this.settings);
 		this.save();
 		this.emitHud();
 	}
+  pause(tab: PauseTab = "resume") {
+    this.paused = true; this.pauseTab = tab; this.input.reset();
+    if (this.ball.charging) { this.ball.charging = false; this.ball.power = 0; }
+    if (document.pointerLockElement) document.exitPointerLock(); this.emitHud();
+  }
+  setWaypoint(id: LocationId | null) {
+    this.waypoint = id;
+    this.showToast(id ? `Waypoint: ${POIS.find(p => p.id === id)?.name}` : "Following story objective"); this.emitHud();
+  }
+  recoverPlayer() {
+    this.vehicle.active = false; this.vehicle.speed = 0; this.mode = "world";
+    this.ball.active = this.ball.charging = this.ball.inFlight = false;
+    this.shopOpen = false; this.dialogue = this.cinematic = null;
+    this.px = 288; this.py = 558; this.yaw = -Math.PI / 2; this.pitch = this.vx = this.vy = 0;
+    this.resume(); this.save(); this.showToast("Back at the apartment. Progress kept.");
+  }
 	setPauseTab(tab) {
 		this.pauseTab = tab;
 		audio.ui();
 		this.emitHud();
 	}
 	resume() {
-		this.paused = false;
+		this.input.reset(); this.paused = false; audio.unlock();
 		audio.ui();
 		this.emitHud();
 	}
 	startLoop() {
-		this.running = true;
+		if (this.running || this.disposed) return;
+    this.running = true;
 		this.lastT = performance.now();
 		const frame = (t) => {
 			if (!this.running) return;
 			let dt = (t - this.lastT) / 1e3;
 			this.lastT = t;
 			dt = Math.min(dt, .1);
-			this.update(dt);
+      this.accumulator = Math.min(this.accumulator + dt, 0.1);
+      while (this.accumulator >= FIXED_STEP) { this.update(FIXED_STEP); this.accumulator -= FIXED_STEP; }
 			this.draw();
 			this.hudAcc += dt;
 			if (this.hudAcc > .08) {
@@ -692,15 +711,15 @@ export class GameEngine {
 		this.clock += dt;
 		const act = this.input.poll();
 		audio.tick(dt, this.started && !this.paused, nightAmount(this.worldHour));
-		if (this.started && act.pausePressed && !this.cinematic) if (this.mode === "shop") this.closeShop();
-		else if (this.mode === "dialogue") this.advanceDialogue();
-		else if (this.mode === "basketball" && act.backPressed) this.exitBasketball();
-		else {
-			this.paused = !this.paused;
-			this.pauseTab = "resume";
-			audio.ui();
-			this.emitHud();
-		}
+    if (this.started && act.mapPressed && !this.cinematic) {
+      if (this.paused && this.pauseTab === "map") this.resume(); else this.pause("map"); return;
+    }
+    if (this.started && act.pausePressed) {
+      if (this.paused) this.resume(); else if (this.mode === "shop") this.closeShop();
+      else if (this.mode === "dialogue") { this.dialogue = null; this.mode = "world"; this.emitHud(); }
+      else this.pause(); return;
+    }
+    if (this.paused) return;
 		if (this.hitstop > 0) {
 			this.hitstop -= dt;
 			this.trauma = Math.max(0, this.trauma - dt * 1.6);
@@ -741,10 +760,11 @@ export class GameEngine {
 		}
 		if (!this.started || this.paused) return;
 		if (act.viewPressed) this.toggleView();
-		if (Math.abs(act.lookX) <= 1.25) this.yaw -= act.lookX * 2.2 * dt;
-		else this.yaw -= act.lookX * 0.032;
-		if (Math.abs(act.lookY) <= 1.25) this.pitch -= act.lookY * 1.7 * dt;
-		else this.pitch -= act.lookY * 0.028;
+    this.yaw = wrapAngle(this.yaw - (act.lookX * 2.2 * dt + act.mouseX * 0.0028) * this.settings.sensitivity);
+    this.pitch -= (act.lookY * 1.7 * dt + act.mouseY * 0.0028) * this.settings.sensitivity;
+    this.autosaveT += dt;
+    if (this.autosaveT >= 15) { this.autosaveT = 0; this.save(); }
+    if (act.vehiclePressed) this.toggleVehicle();
 		this.pitch = clamp(this.pitch, -1.15, 1.15);
 		this.worldHour = (this.worldHour + dt * .042) % 24;
 		if (this.worldHour >= 20 && this.worldHour < 20.1) this.unlockTrophy("night_owl");
@@ -758,13 +778,14 @@ export class GameEngine {
 		if (this.mode === "basketball") {
 			if (act.shootPressed) this.beginCharge();
 			if (act.shootReleased) this.releaseShot();
-			if (act.backPressed) this.exitBasketball();
+			if (act.backPressed) { this.pause(); return; }
 			this.updatePlayer(dt, act.mx, act.my, act.run);
 			this.updateBasketball(dt);
 			return;
 		}
 		if (this.cinematic) return;
-		this.updatePlayer(dt, act.mx, act.my, act.run);
+		if (this.vehicle.active) this.updateVehicle(dt, act.mx, -act.my, act.brake);
+    else this.updatePlayer(dt, act.mx, act.my, act.run);
 		this.updateProximity();
 		this.checkMissionAuto();
 		this.checkSideVisits();
@@ -783,8 +804,8 @@ export class GameEngine {
 	updatePeds(dt) {
 		for (const p of this.peds) {
 			p.t += dt;
-			p.x += p.vx * dt;
-			p.y += p.vy * dt;
+			if (this.collides(p.x + p.vx * dt,p.y,12)) p.vx *= -1; else p.x += p.vx * dt;
+      if (this.collides(p.x,p.y + p.vy * dt,12)) p.vy *= -1; else p.y += p.vy * dt;
 			if (p.x < 96 || p.x > 2976) p.vx *= -1;
 			if (p.y < 96 || p.y > 2112) p.vy *= -1;
 		}
@@ -826,8 +847,8 @@ export class GameEngine {
 		let wx = 0;
 		let wy = 0;
 		if (len > 0.01) {
-			mx /= len;
-			my /= len;
+			mx /= Math.max(1,len);
+			my /= Math.max(1,len);
 			wx = mx * r.x + -my * f.x;
 			wy = mx * r.y + -my * f.y;
 			this.moving = true;
@@ -863,7 +884,7 @@ export class GameEngine {
 		this.bob = this.moving ? Math.sin(this.animT * 2) * 3.2 : Math.sin(this.animT) * 0.6;
 	}
 	collides(x: number, y: number, r: number) {
-		for (const w of this.walls) if (x + r > w.x && x - r < w.x + w.w && y + r > w.y && y - r < w.y + w.h) return true;
+		for (const w of this.solidRects) if (circleHitsRect(x,y,r,w)) return true;
 		return false;
 	}
 	npcPos(id) {
@@ -893,6 +914,10 @@ export class GameEngine {
 				this.nearNpc = n.id;
 			}
 		}
+    if (this.nearPoi) this.visited.add(this.nearPoi);
+    if (this.vehicle.active) { this.interactHint = "G · Park and get out"; return; }
+    const current = this.mission.steps[this.mission.activeStep];
+    if (current?.target === this.nearPoi && ["pickup","deliver"].includes(current.kind)) { this.interactHint = current.label; return; }
 		if (this.nearNpc) {
 			const name = NPCS.find((x) => x.id === this.nearNpc).name;
 			this.interactHint = `Talk to ${name}`;
@@ -902,7 +927,7 @@ export class GameEngine {
 		else if (this.nearPoi) this.interactHint = `Explore ${POIS.find((x) => x.id === this.nearPoi).name}`;
 	}
 	tryInteract() {
-		if (!this.started || this.paused || this.cinematic) return;
+		if (!this.started || this.paused || this.cinematic || this.vehicle.active) return;
 		if (this.mode === "dialogue") {
 			this.advanceDialogue();
 			return;
@@ -951,6 +976,7 @@ export class GameEngine {
 		audio.talk();
 		this.talked.add(npcId);
 		this.checkSideTalk();
+    this.save(); if (document.pointerLockElement) document.exitPointerLock();
 		this.dialogueNpcId = npcId;
 		this.dialogueIndex = 0;
 		const step = this.mission.steps[this.mission.activeStep];
@@ -1031,7 +1057,8 @@ export class GameEngine {
 	checkSideVisits() {
 		for (const s of this.side) {
 			if (s.done || s.kind !== "visit" || !s.target) continue;
-			if (this.nearPoi === s.target) this.completeSide(s.id);
+			if (s.id === "beale_night" && this.worldHour < 19 && this.worldHour > 5.5) continue;
+      if (this.nearPoi === s.target) this.completeSide(s.id);
 		}
 	}
 	checkSideTalk() {
@@ -1048,7 +1075,7 @@ export class GameEngine {
 		if (!s || s.done) return;
 		s.done = true;
 		this.sackdollars += s.reward;
-		this.respect += 4;
+		this.respect += 4; this.checkMilestones();
 		this.float(`+$${s.reward}`, "#1db954");
 		this.showToast(`SIDE MISSION · ${s.title}`);
 		audio.mission();
@@ -1056,8 +1083,8 @@ export class GameEngine {
 	}
 	completeStep(id) {
 		const step = this.mission.steps.find((s) => s.id === id);
-		if (!step || step.done) return;
-		step.done = true;
+		if (!step || step.done || step !== this.mission.steps[this.mission.activeStep]) return;
+		step.done = true; this.waypoint = null;
 		this.sackdollars += step.reward;
 		this.respect += Math.ceil(step.reward / 10);
 		this.burst(this.px, this.py - 20, "#1db954");
@@ -1090,6 +1117,10 @@ export class GameEngine {
 		this.save();
 		this.emitHud();
 	}
+	checkMilestones() {
+    if (this.sackdollars >= 400) this.unlockTrophy("deep_pockets");
+    if (this.respect >= 40) this.unlockTrophy("city_legend");
+  }
 	unlockTrophy(id) {
 		if (this.trophies.includes(id)) return;
 		const def = TROPHIES.find((t) => t.id === id);
@@ -1105,6 +1136,7 @@ export class GameEngine {
 		this.emitHud();
 	}
 	openShop() {
+    if (document.pointerLockElement) document.exitPointerLock();
 		audio.confirm();
 		this.cinematic = {
 			kind: "enter",
@@ -1174,7 +1206,7 @@ export class GameEngine {
 		this.ball.combo = 0;
 		this.ball.missionCredited = false;
 		this.ball.grade = "";
-		this.ball.ballZ = 36;
+		this.ball.ballZ = 36; this.ball.retrieveT = 0; this.courtResult = null;
 		this.showToast("Move · look · V camera · hold shoot");
 		this.emitHud();
 	}
@@ -1188,19 +1220,21 @@ export class GameEngine {
 		const side = this.side.find((s) => s.id === "pickup_kings");
 		if (side && !side.done && this.ball.score >= (side.need ?? 16)) this.completeSide("pickup_kings");
 		if (this.ball.score >= 20) this.unlockTrophy("court_king");
-		if (this.ball.score > this.highScore) this.highScore = this.ball.score;
+		if (this.ball.score > this.highScore) { this.highScore = this.ball.score; this.save(); }
 	}
 	exitBasketball() {
+    if (this.mode !== "basketball" || !this.ball.active) return;
 		this.tryCreditBasketball();
-		const comboPay = Math.max(0, this.ball.combo) * 4;
+		const comboPay = Math.max(0, this.ball.best) * 4;
 		const pay = this.ball.score * 5 + comboPay;
+    this.courtResult = { score: this.ball.score, shots: this.ball.shots, best: this.ball.best, payout: pay };
 		if (pay > 0) {
-			this.sackdollars += pay;
+			this.sackdollars += pay; this.checkMilestones();
 			this.float(`+$${pay}`, "#1db954");
 			this.showToast(`Court payout: +$${pay} $ackdollars`);
 			audio.cash();
 		}
-		this.mode = "world";
+		this.mode = "world"; this.paused = false; this.input.reset();
 		this.ball.active = false;
 		this.ball.charging = false;
 		this.ball.inFlight = false;
@@ -1231,16 +1265,17 @@ export class GameEngine {
 			return;
 		}
 		if (this.ball.inFlight || this.ball.ballZ > 8) {
-			this.ball.ballX += this.ball.ballVx * dt;
+			const before = { x: this.ball.ballX, y: this.ball.ballY, z: this.ball.ballZ };
+      this.ball.ballX += this.ball.ballVx * dt;
 			this.ball.ballY += this.ball.ballVy * dt;
-			this.ball.ballZ += this.ball.ballVz * dt;
-			this.ball.ballVz -= 780 * dt;
+			this.ball.ballZ += this.ball.ballVz * dt - 0.5 * GRAVITY * dt * dt;
+			this.ball.ballVz -= GRAVITY * dt;
 			const hoop = this.hoop();
 			const dx = this.ball.ballX - hoop.x;
 			const dy = this.ball.ballY - hoop.y;
 			const planar = Math.hypot(dx, dy);
-			if (this.ball.ballVz < 0 && this.ball.ballZ <= hoop.z + 10 && this.ball.ballZ >= hoop.z - 14) {
-				if (planar < 11) {
+			if (this.ball.inFlight && this.ball.ballVz < 0 && before.z > hoop.z && this.ball.ballZ <= hoop.z) {
+        if (crossesHoop(before,{x:this.ball.ballX,y:this.ball.ballY,z:this.ball.ballZ},hoop)) {
 					const pts = this.ball.shotDist > 158 ? 3 : 2;
 					const perfect = this.ball.grade === "PERFECT";
 					this.ball.score += perfect ? pts + 1 : pts;
@@ -1254,7 +1289,7 @@ export class GameEngine {
 					audio.swish();
 					if (this.settings.rumble) this.input.rumble(perfect ? 140 : 80, 0.3, 0.55);
 					this.tryCreditBasketball();
-					this.ball.inFlight = false;
+					this.ball.inFlight = false; this.ball.made = true;
 					this.ball.ballVz = -40;
 					this.ball.ballVx *= 0.2;
 					this.ball.ballVy *= 0.2;
@@ -1300,6 +1335,11 @@ export class GameEngine {
 				this.ball.inFlight = false;
 			}
 		}
+    if (!this.ball.held) this.ball.retrieveT += dt;
+    if (!this.ball.held && this.ball.retrieveT > (this.ball.made ? 1.65 : 2.8)) {
+      if (!this.ball.made) this.ball.combo = 0;
+      this.ball.held = true; this.ball.inFlight = false; this.ball.power = 0; this.ball.charging = false;
+    }
 		if (!this.ball.held && !this.ball.inFlight && dist(this.px, this.py, this.ball.ballX, this.ball.ballY) < 32 && this.ball.ballZ < 22) {
 			this.ball.held = true;
 			this.ball.power = 0;
@@ -1317,34 +1357,14 @@ export class GameEngine {
 		this.ball.shots++;
 		audio.bounce();
 		const hoop = this.hoop();
-		const pwr = this.ball.power;
-		const perfect = pwr >= 0.54 && pwr <= 0.76;
-		const good = pwr >= 0.42 && pwr <= 0.88;
-		this.ball.grade = perfect ? "PERFECT" : good ? "GOOD" : "LATE";
-		const d = dist(this.px, this.py, hoop.x, hoop.y);
-		const lookTo = Math.atan2(-(hoop.x - this.px), -(hoop.y - this.py));
-		let err = this.yaw - lookTo;
-		while (err > Math.PI) err -= Math.PI * 2;
-		while (err < -Math.PI) err += Math.PI * 2;
-		const assist = (perfect ? 0.72 : good ? 0.42 : 0.08) * clamp(1 - Math.abs(err) / 0.9, 0, 1);
-		const shootYaw = this.yaw + (lookTo - this.yaw) * assist;
-		const speedErr = perfect ? 1 : good ? 0.94 + pwr * 0.08 : 0.62 + pwr * 0.55;
-		const horiz = (155 + d * 0.92) * speedErr;
-		const f = this.fwd();
-		this.ball.ballX = this.px + f.x * 10;
-		this.ball.ballY = this.py + f.y * 10;
-		this.ball.ballZ = 42;
-		this.ball.ballVx = -Math.sin(shootYaw) * horiz;
-		this.ball.ballVy = -Math.cos(shootYaw) * horiz;
-		this.ball.ballVz = 240 + pwr * 210 + d * 0.12;
-		this.ball.shotDist = d;
-		this.ball.inFlight = true;
-		this.ball.held = false;
-		this.ball.power = 0;
-		this.ball.made = good;
+    const shot = shotVelocity(this.px,this.py,this.yaw,this.ball.power,hoop);
+    this.ball.grade = shot.grade; this.ball.ballX = this.px; this.ball.ballY = this.py; this.ball.ballZ = 42;
+    this.ball.ballVx = shot.vx; this.ball.ballVy = shot.vy; this.ball.ballVz = shot.vz;
+    this.ball.shotDist = shot.distance; this.ball.inFlight = true; this.ball.held = false;
+    this.ball.power = 0; this.ball.made = false; this.ball.retrieveT = 0;
 	}
 	beginCharge() {
-		if (this.mode === "basketball" && this.ball.held && !this.ball.inFlight) {
+		if (!this.paused && this.mode === "basketball" && this.ball.held && !this.ball.inFlight && !this.ball.charging) {
 			this.ball.charging = true;
 			this.ball.power = 0;
 		}
@@ -1364,23 +1384,43 @@ export class GameEngine {
 			});
 		}
 	}
-	getObjectiveTarget() {
-		const step = this.mission.steps[this.mission.activeStep];
-		if (!step?.target || this.mission.complete) return null;
-		if (step.kind === "talk" || step.kind === "return") {
-			const k = this.npcPos("k_blanco");
-			if (k) return {
-				x: k.x,
-				y: k.y
-			};
-		}
-		const p = POIS.find((x) => x.id === step.target);
-		if (!p) return null;
-		return {
-			x: p.x + p.w / 2,
-			y: p.y + p.h / 2
-		};
-	}
+  getObjectiveTarget() {
+    const step = this.mission.steps[this.mission.activeStep];
+    const id = this.waypoint ?? (!this.mission.complete ? step?.target : null);
+    if (!id) return null;
+    if (!this.waypoint && (step?.kind === "talk" || step?.kind === "return")) {
+      const k = this.npcPos("k_blanco"); return { x:k.x, y:k.y, label:"K Blanco · HQ" };
+    }
+    const target = id === "dropvan" ? {x:this.vehicle.x,y:this.vehicle.y+35} : poiEntrance(id);
+    return target ? {...target,label:POIS.find(p=>p.id===id)?.name ?? "Objective"} : null;
+  }
+  toggleVehicle() {
+    if (!this.started || this.paused || this.mode !== "world" || this.cinematic) return;
+    if (this.vehicle.active) {
+      if (Math.abs(this.vehicle.speed)>70) { this.showToast("Slow down before getting out."); return; }
+      for (const [dx,dy] of [[52,0],[-52,0],[0,60],[0,-60]]) {
+        const x=this.vehicle.x+dx,y=this.vehicle.y+dy;
+        if (x>=62 && y>=62 && x<WORLD_PX_W-62 && y<WORLD_PX_H-62 && !this.collides(x,y,14)) {
+          this.vehicle.active=false; this.vehicle.speed=0; this.px=x; this.py=y;
+          this.input.reset(); this.save(); this.emitHud(); return;
+        }
+      }
+      this.showToast("Move the van into an open space to get out."); return;
+    }
+    if (!this.mission.steps.find(s=>s.id==="pickup")?.done) { this.showToast("Pick up the drop first to unlock the van."); return; }
+    if (dist(this.px,this.py,this.vehicle.x,this.vehicle.y)>135) { this.showToast("Get closer to the Drop Van."); return; }
+    this.vehicle.active=true; this.vehicle.speed=0; this.px=this.vehicle.x; this.py=this.vehicle.y; this.yaw=this.vehicle.yaw;
+    this.showToast("W accelerate · S reverse · A/D steer · Space brake · G exit",6); this.emitHud();
+  }
+  updateVehicle(dt:number,steer:number,throttle:number,brake:boolean) {
+    const v=driveStep(this.vehicle.speed,this.vehicle.yaw,steer,throttle,brake,dt);
+    this.vehicle.speed=v.speed; this.vehicle.yaw=v.yaw;
+    const nx=this.px+v.vx*dt,ny=this.py+v.vy*dt;
+    if(nx<62||ny<62||nx>WORLD_PX_W-62||ny>WORLD_PX_H-62||this.collides(nx,ny,28)) {this.vehicle.speed*=-0.15;this.addTrauma(0.12);}
+    else {this.px=nx;this.py=ny;}
+    this.vehicle.x=this.px;this.vehicle.y=this.py;this.vx=v.vx;this.vy=v.vy;
+    this.yaw+=wrapAngle(this.vehicle.yaw-this.yaw)*(1-Math.exp(-4*dt)); this.moving=Math.abs(v.speed)>1;this.leftSpawn=true;
+  }
 	draw() {
 		const ctx = this.ctx;
 		const w = this.canvas.clientWidth;
@@ -1415,6 +1455,7 @@ export class GameEngine {
 					isK: !!NPCS.find((d) => d.id === n.id)?.isKBlanco,
 				})),
 				images: this.images,
+        objective: this.getObjectiveTarget(), worldHour: this.worldHour, vehicle: this.vehicle,
 			});
 			this.world3d.render(w, h);
 		}
@@ -1512,49 +1553,19 @@ export class GameEngine {
 	drawCompass(ctx, w, h) {
 		const target = this.getObjectiveTarget();
 		if (!target) return;
-		const sx = target.x - this.camX;
-		const sy = target.y - this.camY;
-		const margin = 48;
-		if (sx > margin && sx < w - margin && sy > margin && sy < h - margin) return;
-		const cx = w / 2;
-		const cy = h / 2;
-		const ang = Math.atan2(target.y - this.py, target.x - this.px);
-		const edgePad = 56;
-		const cos = Math.cos(ang);
-		const sin = Math.sin(ang);
-		const tX = cos > 0 ? (w - edgePad - cx) / cos : cos < 0 ? (edgePad - cx) / cos : Infinity;
-		const tY = sin > 0 ? (h - edgePad - cy) / sin : sin < 0 ? (edgePad - cy) / sin : Infinity;
-		const t = Math.min(Math.abs(tX), Math.abs(tY));
-		const ax = clamp(cx + cos * t, edgePad, w - edgePad);
-		const ay = clamp(cy + sin * t, 96, h - edgePad - 80);
-		ctx.save();
-		ctx.translate(ax, ay);
-		ctx.rotate(ang);
-		ctx.fillStyle = "rgba(29,185,84,0.95)";
-		ctx.beginPath();
-		ctx.moveTo(14, 0);
-		ctx.lineTo(-10, 9);
-		ctx.lineTo(-6, 0);
-		ctx.lineTo(-10, -9);
-		ctx.closePath();
-		ctx.fill();
-		ctx.restore();
-		const meters = Math.round(dist(this.px, this.py, target.x, target.y) / 12);
-		ctx.fillStyle = "rgba(10,12,11,0.75)";
-		ctx.font = "600 11px DM Sans, sans-serif";
-		const label = `${meters}m`;
-		const tw = ctx.measureText(label).width;
-		const lx = clamp(ax - tw / 2, 8, w - tw - 8);
-		const ly = clamp(ay + 22, 20, h - 20);
-		ctx.fillRect(lx - 4, ly - 11, tw + 8, 16);
-		ctx.fillStyle = "#1db954";
-		ctx.fillText(label, lx, ly);
+    const bearing=wrapAngle(Math.atan2(-(target.x-this.px),-(target.y-this.py))-this.yaw);
+    const ax=w/2+clamp(-bearing/Math.PI,-1,1)*Math.min(w*0.25,230), ay=h<520?38:190;
+    ctx.save();ctx.translate(ax,ay);ctx.rotate(-bearing);ctx.fillStyle=PAL.accent;
+    ctx.beginPath();ctx.moveTo(0,-10);ctx.lineTo(-7,7);ctx.lineTo(0,3);ctx.lineTo(7,7);ctx.closePath();ctx.fill();ctx.restore();
+    ctx.fillStyle="#efe8de";ctx.font="600 11px sans-serif";ctx.textAlign="center";
+    ctx.fillText(`${Math.round(dist(this.px,this.py,target.x,target.y)/16)}m`,ax,ay+24);ctx.textAlign="start";
+
 	}
 	drawMinimap(ctx, w, h) {
 		const size = Math.min(136, Math.max(100, w * .15));
 		const pad = 12;
 		const mx = pad;
-		const my = h - size - pad - (w < 640 ? 108 : 10);
+		const my = h - size - pad - (w < 640 ? 155 : 64);
 		const scaleX = size / WORLD_PX_W;
 		const scaleY = size / WORLD_PX_H;
 		ctx.fillStyle = "rgba(10,12,11,0.86)";
@@ -1571,11 +1582,9 @@ export class GameEngine {
 		ctx.fillStyle = "#1a211c";
 		ctx.fillRect(mx, my, size, size);
 		ctx.fillStyle = "#2a332c";
-		ctx.fillRect(mx, my + 960 * scaleY - 2, size, 4);
-		ctx.fillRect(mx + 768 * scaleX - 2, my, 4, size);
-		ctx.fillRect(mx + 1632 * scaleX - 2, my, 4, size);
+		for (const r of roadRects()) ctx.fillRect(mx+r.x*scaleX,my+r.y*scaleY,r.w*scaleX,r.h*scaleY);
 		for (const p of POIS) {
-			const isTarget = this.mission.steps[this.mission.activeStep]?.target === p.id;
+			const isTarget = (this.waypoint ?? this.mission.steps[this.mission.activeStep]?.target) === p.id;
 			ctx.fillStyle = isTarget ? "#1db954" : p.color;
 			const px = mx + p.x * scaleX;
 			const py = my + p.y * scaleY;
@@ -1699,11 +1708,18 @@ export class GameEngine {
 	emitHud() {
 		this.onHud?.(this.getHud());
 	}
-	getHud() {
+	getHud(): HudSnapshot {
+    const target = this.getObjectiveTarget();
 		const step = this.mission.steps[this.mission.activeStep];
 		const done = this.mission.steps.filter((s) => s.done).length;
 		const prompts = this.input.prompt(this.input.device);
 		return {
+      position: {x:this.px,y:this.py,yaw:this.yaw},
+      objective: target ? {...target,distance:Math.round(dist(this.px,this.py,target.x,target.y)/16)} : null,
+      waypoint:this.waypoint, visited:[...this.visited], driving:this.vehicle.active,
+      speed:Math.round(Math.abs(this.vehicle.speed)/16*2.237),
+      vehicleAvailable:!!this.mission.steps.find(s=>s.id==="pickup")?.done && dist(this.px,this.py,this.vehicle.x,this.vehicle.y)<135,
+      saveStatus:this.saveStatus,courtResult:this.courtResult,
 			mode: this.mode,
 			sackdollars: this.sackdollars,
 			respect: this.respect,
@@ -1727,7 +1743,7 @@ export class GameEngine {
 				combo: this.ball.combo,
 				power: this.ball.power,
 				charging: this.ball.charging,
-				best: this.ball.best
+				best: this.ball.best, held: this.ball.held, grade: this.ball.grade
 			} : null,
 			paused: this.paused,
 			started: this.started,
