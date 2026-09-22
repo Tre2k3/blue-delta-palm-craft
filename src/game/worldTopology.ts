@@ -444,9 +444,9 @@ export function circleHitsRect(x: number, y: number, r: number, q: Rect) {
   return (x - nx) ** 2 + (y - ny) ** 2 < r ** 2;
 }
 
-export function isRoadPoint(x: number, y: number) {
+export function isRoadPoint(x: number, y: number, pad = 0) {
   if (inRiverPx(x, y) || inCourtPx(x, y)) return false;
-  return roadRects().some((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
+  return roadRects().some((r) => x >= r.x - pad && x <= r.x + r.w + pad && y >= r.y - pad && y <= r.y + r.h + pad);
 }
 
 export function nearestLane(x: number, y: number, preferredAxis?: LaneAxis) {

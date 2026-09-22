@@ -572,7 +572,7 @@ export class GameEngine {
 		this.laneMap = new Map(lanes.map((l) => [l.id, l]));
 		let ci = 0;
 		for (const lane of lanes) {
-			const count = lane.axis === "x" ? 4 : 3;
+			const count = lane.axis === "x" ? 2 : 2;
 			for (let i = 0; i < count; i++) {
 				const t = (i + 0.22) / count;
 				const along = lane.min + (lane.max - lane.min) * t;
@@ -1513,7 +1513,7 @@ export class GameEngine {
 					const vel = laneVelocity(dest, 0.7);
 					c.vx += (vel.vx - c.vx) * 0.2;
 					c.vy += (vel.vy - c.vy) * 0.2;
-					c.yaw = Math.atan2(-c.vy, c.vx);
+					if (Math.hypot(c.vx, c.vy) > 10) c.yaw = Math.atan2(-c.vy, c.vx);
 					c.braking = false;
 					if (c.turnT >= 1) {
 						c.laneId = dest.id;
@@ -1593,7 +1593,8 @@ export class GameEngine {
 			c.vx += (desired.vx - c.vx) * (1 - Math.exp(-6 * dt));
 			c.vy += (desired.vy - c.vy) * (1 - Math.exp(-6 * dt));
 			c.braking = scale < 0.55 || Math.hypot(desired.vx, desired.vy) + 8 < spd;
-			c.yaw = Math.atan2(-c.vy, c.vx);
+			const live = Math.hypot(c.vx, c.vy);
+			if (live > 14) c.yaw = Math.atan2(-c.vy, c.vx);
 			c.x += c.vx * dt;
 			c.y += c.vy * dt;
 			if (carBlocked(c.x, c.y, 16) || inCourtPx(c.x, c.y)) {
@@ -1644,8 +1645,8 @@ export class GameEngine {
 				const dx = b.x - a.x;
 				const dy = b.y - a.y;
 				const d = Math.hypot(dx, dy);
-				if (d < 38 && d > 0.1) {
-					const push = (38 - d) * 0.5;
+				if (d < 48 && d > 0.1) {
+					const push = (48 - d) * 0.45;
 					const nx = dx / d;
 					const ny = dy / d;
 					a.x -= nx * push;
@@ -1671,7 +1672,7 @@ export class GameEngine {
 				}
 				continue;
 			}
-			if (inCourtPx(c.x, c.y) || carBlocked(c.x, c.y, 16) || !isRoadPoint(c.x, c.y)) {
+			if (inCourtPx(c.x, c.y) || carBlocked(c.x, c.y, 16) || !isRoadPoint(c.x, c.y, 24)) {
 				const safe = nearestAsphalt(c.x, c.y);
 				c.x = safe.x;
 				c.y = safe.y;

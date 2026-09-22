@@ -49,7 +49,7 @@ export function installVehicleVisualPass() {
         continue;
       }
       const rig = (group.userData.vehicleRig as StreetCarRig | undefined) ?? installRig(group, i);
-      bindStreetCar(rig);
+      if (rig.pack && !rig.hull.userData.wrapBound) bindStreetCar(rig);
       group.position.y = CAR_RIDE;
       const driven = frame.driving && frame.vehicleKind === "car" && Math.hypot(car.x - frame.px, car.y - frame.py) < 28;
       const speed = Math.hypot(car.vx, car.vy);
@@ -66,15 +66,15 @@ export function installVehicleVisualPass() {
         rig.root.rotation.x = 0;
         rig.root.rotation.z = 0;
       } else {
-        const target = typeof car.yaw === "number" ? car.yaw : yawForVelocity(car.vx, car.vy);
+        const target = typeof car.yaw === "number" && Number.isFinite(car.yaw) ? car.yaw : yawForVelocity(car.vx, car.vy);
         const previous = typeof group.userData.gameYaw === "number" ? group.userData.gameYaw : target;
         const delta = Math.atan2(Math.sin(target - previous), Math.cos(target - previous));
-        const yaw = previous + delta * ease;
+        const yaw = previous + delta * (speed < 10 ? Math.min(1, ease * 0.35) : ease);
         group.userData.gameYaw = yaw;
         group.rotation.y = yaw;
         const spin = (speed / 16) * dt / 0.26;
         for (const wheel of rig.wheels) wheel.rotation.z -= spin;
-        const bounce = Math.sin(frame.clock * (7.2 + speed * 0.04) + i) * Math.min(speed / 90, 1) * 0.012;
+        const bounce = Math.sin(frame.clock * (7.2 + speed * 0.04) + i) * Math.min(speed / 90, 1) * 0.008;
         rig.root.position.y = bounce;
         rig.root.rotation.x = THREE.MathUtils.clamp(-accel * 0.0002, -0.02, 0.025);
         rig.root.rotation.z = THREE.MathUtils.clamp(delta * 0.12, -0.03, 0.03);
@@ -82,9 +82,10 @@ export function installVehicleVisualPass() {
 
       const head = car.parked ? night * 0.35 : 0.22 + night * 2.6;
       for (const mat of rig.headlights) mat.emissiveIntensity = head;
-      for (const mat of rig.brakes) mat.emissiveIntensity = braking ? 3.4 : 0.22;
-      const turning = Math.abs(car.yaw ?? 0) > 0 && speed > 12 ? (frame.clock * 8) % 1 > 0.5 : false;
-      for (const mat of rig.blinkers) mat.emissiveIntensity = turning ? 2.4 : 0.08;
+      for (const mat of rig.brakes) mat.emissiveIntensity = braking ? 2.4 : 0.18;
+      const turning = !!car.turnTo || (Math.abs((group.userData.gameYaw ?? 0) - (car.yaw ?? 0)) > 0.22 && speed > 16);
+      const blinkOn = turning && (frame.clock * 2.2) % 1 > 0.5;
+      for (const mat of rig.blinkers) mat.emissiveIntensity = blinkOn ? 1.8 : 0.05;
     }
 
     const w = window as typeof window & { __SACK_TRAFFIC__?: Record<string, unknown> };

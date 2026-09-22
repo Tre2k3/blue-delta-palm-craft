@@ -106,13 +106,27 @@ function wrapMat(face: WrapFace, packName: WrapPackName) {
 }
 
 export function bindWrapTextures(hull: THREE.Group) {
+  if (hull.userData.wrapBound) return;
+  let pending = false;
   hull.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh)) return;
     const face = obj.userData.wrapFace as WrapFace | undefined;
     const packName = obj.userData.wrapPack as WrapPackName | undefined;
     if (!face || !packName) return;
+    if (obj.userData.wrapMatApplied) return;
+    const pack = cache.get(packName);
+    const tex =
+      pack?.[face] ??
+      (face === "right" ? pack?.left : face === "left" ? pack?.right : undefined) ??
+      pack?.side;
+    if (!tex) {
+      pending = true;
+      return;
+    }
     obj.material = wrapMat(face, packName);
+    obj.userData.wrapMatApplied = true;
   });
+  if (!pending) hull.userData.wrapBound = true;
 }
 
 function bodyProfile(kind: CarKind, L: number, H: number) {

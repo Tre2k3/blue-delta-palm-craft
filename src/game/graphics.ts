@@ -72,10 +72,9 @@ export function applyRendererQuality(world: QualityWorld) {
 
 /** If the phone can't hold 30fps, step graphics down. Returns the new quality or null. */
 export function noteFrame(dt: number): Quality | null {
-  if (!isHandheld()) return null;
-  if (dt > 0.048) slowFrames += 1;
+  if (dt > 0.042) slowFrames += 1;
   else slowFrames = Math.max(0, slowFrames - 2);
-  if (slowFrames < 40 || quality === "low") return null;
+  if (slowFrames < 24 || quality === "low") return null;
   quality = quality === "high" ? "medium" : "low";
   slowFrames = 0;
   autoDropped = true;

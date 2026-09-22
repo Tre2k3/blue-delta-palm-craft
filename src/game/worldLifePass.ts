@@ -496,6 +496,7 @@ export class WorldLifePass {
       const car = f.cars[i];
       const group = groups[i];
       if (!car || !group || !group.visible) continue;
+      if (group.userData.vehicleRig) continue;
       const target = Math.abs(car.vy) > Math.abs(car.vx)
         ? car.vy > 0 ? 0 : Math.PI
         : car.vx < 0 ? Math.PI / 2 : -Math.PI / 2;

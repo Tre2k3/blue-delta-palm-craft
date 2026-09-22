@@ -203,7 +203,7 @@ export type WorldFrame = {
   trauma: number;
   clock: number;
   ball: { x: number; y: number; z: number; held: boolean; inFlight: boolean; active?: boolean };
-  cars: { x: number; y: number; vx: number; vy: number; w: number; color: string; skin?: number; laneId?: string; yaw?: number; braking?: boolean; parked?: boolean }[];
+  cars: { x: number; y: number; vx: number; vy: number; w: number; color: string; skin?: number; laneId?: string; yaw?: number; braking?: boolean; parked?: boolean; turnTo?: string | null }[];
   peds: { x: number; y: number; color: string; t: number; skin?: number; vx?: number; vy?: number; facing?: number; waving?: number; talking?: number; inside?: boolean }[];
   npcs: { id: string; x: number; y: number; isK: boolean }[];
   images: Record<string, HTMLImageElement>;
@@ -1726,7 +1726,6 @@ export class World3D {
           }
           g.userData.raceKind = null;
         }
-        g.rotation.y = Math.abs(c.vy) > Math.abs(c.vx) ? (c.vy > 0 ? 0 : Math.PI) : c.vx < 0 ? Math.PI / 2 : -Math.PI / 2;
       }
     }
 

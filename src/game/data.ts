@@ -33,7 +33,7 @@ export const PAL = {
 } as const;
 
 /** Bump to force the live preview to remount the world bake. */
-export const ART_REV = 90;
+export const ART_REV = 91;
 
 export const BRAND = {
   name: "$ackReligious",
