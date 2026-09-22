@@ -19,7 +19,10 @@ export function createOk(failures) {
   };
 }
 
-export function installHardTimeout(label, ms = Number(process.env.SMOKE_HARD_TIMEOUT_MS || 240000)) {
+export function installHardTimeout(
+  label,
+  ms = Number(process.env.SMOKE_HARD_TIMEOUT_MS || 240000),
+) {
   const killer = setTimeout(() => {
     console.error(`${label} hard timeout`);
     process.exit(1);
@@ -40,7 +43,8 @@ export async function launchBrowser(webgl = true) {
     "--disable-renderer-backgrounding",
     "--disable-backgrounding-occluded-windows",
   ];
-  if (process.env.SMOKE_SINGLE_PROCESS === "1") args.push("--single-process", "--in-process-gpu", "--no-zygote");
+  if (process.env.SMOKE_SINGLE_PROCESS === "1")
+    args.push("--single-process", "--in-process-gpu", "--no-zygote");
   if (webgl) args.push("--enable-webgl");
   return chromium.launch({
     headless: !headed,
@@ -77,7 +81,7 @@ export async function captureShot(page, dest) {
     return true;
   });
   try {
-    await page.screenshot({path: dest, fullPage: false, timeout: 20000, animations: "disabled"});
+    await page.screenshot({ path: dest, fullPage: false, timeout: 20000, animations: "disabled" });
     console.log(`shot: ${dest}`);
     return true;
   } finally {

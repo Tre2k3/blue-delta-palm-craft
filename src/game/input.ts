@@ -26,7 +26,7 @@ const DEAD = 0.16;
 function radial(x: number, y: number, dz = DEAD) {
   const m = Math.hypot(x, y);
   if (m < dz) return { x: 0, y: 0 };
-  const scale = ((m - dz) / (1 - dz)) / m;
+  const scale = (m - dz) / (1 - dz) / m;
   return { x: x * scale, y: y * scale };
 }
 
@@ -62,16 +62,25 @@ export class InputManager {
   private queuedMap = false;
   private queuedVehicle = false;
   private prevPadView = false;
+  private prevPadMap = false;
+  private prevPadVehicle = false;
   private bound = false;
 
   private kd = (e: KeyboardEvent) => {
-    if (e.target instanceof HTMLElement && (e.target.matches("input, textarea, select") || e.target.isContentEditable || (e.target.matches("button") && ["Enter", "Space"].includes(e.code)))) return;
+    if (
+      e.code !== "Escape" &&
+      e.target instanceof HTMLElement &&
+      (e.target.matches("input, textarea, select") ||
+        e.target.isContentEditable ||
+        (e.target.matches("button") && ["Enter", "Space"].includes(e.code)))
+    )
+      return;
+    if (e.repeat) return;
     this.keys.add(e.code);
     this.device = "keyboard";
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(e.code)) {
       e.preventDefault();
     }
-    if (e.repeat) return;
     if (e.code === "KeyM") this.queuedMap = true;
     if (e.code === "KeyG") this.queuedVehicle = true;
     if (e.code === "KeyE" || e.code === "Enter") this.queuedInteract = true;
@@ -95,15 +104,21 @@ export class InputManager {
     this.keys.clear();
     this.touch = { mx: 0, my: 0, shoot: false, lookX: 0, run: false, brake: false };
     this.mouseDX = this.mouseDY = 0;
-    this.prevShoot = this.prevInteract = this.prevBack = this.prevPause = this.prevView = false;
+    // Retain edge state until the next poll sees release. A held controller
+    // Start button must not toggle pause again immediately after resetting keys.
     this.queuedInteract = this.queuedPause = this.queuedBack = this.queuedView = false;
     this.queuedShootPress = this.queuedShootRelease = this.queuedMap = this.queuedVehicle = false;
   }
   private blur = () => this.reset();
-  private visibility = () => { if (document.hidden) this.reset(); };
-  private contextMenu = (e: MouseEvent) => { if (e.target instanceof HTMLCanvasElement) e.preventDefault(); };
-  private connected = () => { this.device = "gamepad"; };
-
+  private visibility = () => {
+    if (document.hidden) this.reset();
+  };
+  private contextMenu = (e: MouseEvent) => {
+    if (e.target instanceof HTMLCanvasElement) e.preventDefault();
+  };
+  private connected = () => {
+    this.device = "gamepad";
+  };
 
   private mm = (e: MouseEvent) => {
     if (this.pointerLocked || e.buttons === 2) {
@@ -178,8 +193,10 @@ export class InputManager {
       this.keys.has("KeyE") || this.keys.has("Enter") || this.keys.has("Space") || this.padInteract;
     const backHeld = this.keys.has("Escape") || this.keys.has("Backspace") || this.padBack;
     const pauseHeld = this.keys.has("Escape") || this.keys.has("KeyP") || this.padPause;
-    const shootHeld = this.keys.has("Space") || this.keys.has("KeyF") || this.padShoot || this.touch.shoot;
-    const run = this.keys.has("ShiftLeft") || this.keys.has("ShiftRight") || this.padRun || this.touch.run;
+    const shootHeld =
+      this.keys.has("Space") || this.keys.has("KeyF") || this.padShoot || this.touch.shoot;
+    const run =
+      this.keys.has("ShiftLeft") || this.keys.has("ShiftRight") || this.padRun || this.touch.run;
 
     const interactPressed = (interactHeld && !this.prevInteract) || this.queuedInteract;
     const backPressed = (backHeld && !this.prevBack) || this.queuedBack;
@@ -248,8 +265,8 @@ export class InputManager {
       if (p.buttons[13]?.pressed) this.padMy += 1;
       if (p.buttons[14]?.pressed) this.padMx -= 1;
       if (p.buttons[15]?.pressed) this.padMx += 1;
-      this.padInteract = !!(p.buttons[0]?.pressed);
-      this.padBack = !!(p.buttons[1]?.pressed);
+      this.padInteract = !!p.buttons[0]?.pressed;
+      this.padBack = !!p.buttons[1]?.pressed;
       this.padShoot = !!(p.buttons[2]?.pressed || p.buttons[7]?.pressed);
       const look = radial(p.axes[2] ?? 0, p.axes[3] ?? 0, 0.2);
       this.padLookX += look.x;
@@ -257,31 +274,37 @@ export class InputManager {
       const padView = !!p.buttons[11]?.pressed;
       if (padView && !this.prevPadView) this.queuedView = true;
       this.prevPadView = padView;
+      const padMap = !!p.buttons[8]?.pressed,
+        padVehicle = !!p.buttons[4]?.pressed;
+      if (padMap && !this.prevPadMap) this.queuedMap = true;
+      if (padVehicle && !this.prevPadVehicle) this.queuedVehicle = true;
+      this.prevPadMap = padMap;
+      this.prevPadVehicle = padVehicle;
       this.padRun = !!(p.buttons[3]?.pressed || p.buttons[10]?.pressed);
-      this.padPause = !!(p.buttons[9]?.pressed);
-      if (
-        Math.abs(st.x) + Math.abs(st.y) > 0.2 ||
-        p.buttons.some((b) => b.pressed)
-      ) {
+      this.padPause = !!p.buttons[9]?.pressed;
+      if (Math.abs(st.x) + Math.abs(st.y) > 0.2 || p.buttons.some((b) => b.pressed)) {
         this.device = "gamepad";
       }
       break;
     }
-    if (!this.lastPad) this.prevPadView = false;
+    if (!this.lastPad) this.prevPadView = this.prevPadMap = this.prevPadVehicle = false;
   }
 
   rumble(ms: number, strong = 0.35, weak = 0.55) {
     const p = this.lastPad;
     const act = p?.vibrationActuator as
-      | { playEffect?: (t: string, o: Record<string, number>) => Promise<void> }
-      | undefined;
+      { playEffect?: (t: string, o: Record<string, number>) => Promise<void> } | undefined;
     if (!act?.playEffect) return;
-    void act.playEffect("dual-rumble", {
-      startDelay: 0,
-      duration: ms,
-      strongMagnitude: strong,
-      weakMagnitude: weak,
-    }).catch(() => { /* Optional controller effect. */ });
+    void act
+      .playEffect("dual-rumble", {
+        startDelay: 0,
+        duration: ms,
+        strongMagnitude: strong,
+        weakMagnitude: weak,
+      })
+      .catch(() => {
+        /* Optional controller effect. */
+      });
   }
 
   prompt(device: InputDevice): { interact: string; pause: string; run: string; shoot: string } {

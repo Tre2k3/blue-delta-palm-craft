@@ -1,13 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import {
-  Map as MapIcon,
-  Target,
-  Shirt,
-  Trophy,
-  Settings,
-  Play,
-  Volume2,
-} from "lucide-react";
+import { Map as MapIcon, Target, Shirt, Trophy, Settings, Play, Volume2 } from "lucide-react";
 import { GameEngine } from "./engine";
 import { CityMap } from "./CityMap";
 import { TouchControls } from "./TouchControls";
@@ -49,7 +41,15 @@ const emptyHud: HudSnapshot = {
   hasSave: false,
   cameraView: "third",
   steps: [],
-  position:{x:288,y:558,yaw:0},objective:null,waypoint:null,visited:[],driving:false,speed:0,vehicleAvailable:false,saveStatus:"new",courtResult:null,
+  position: { x: 288, y: 558, yaw: 0 },
+  objective: null,
+  waypoint: null,
+  visited: [],
+  driving: false,
+  speed: 0,
+  vehicleAvailable: false,
+  saveStatus: "new",
+  courtResult: null,
 };
 
 function formatHour(h: number) {
@@ -79,7 +79,7 @@ export function GameApp() {
   const [titlePhase, setTitlePhase] = useState<"press" | "choose">("press");
   const [titleSettings, setTitleSettings] = useState(false);
   const [tip, setTip] = useState(TIPS[0]!);
-  const [confirmReset,setConfirmReset]=useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   useEffect(() => {
     const modal = document.querySelector<HTMLElement>('[aria-modal="true"]');
@@ -87,16 +87,33 @@ export function GameApp() {
       if (hud.started && !hud.dialogue) canvasRef.current?.focus({ preventScroll: true });
       return;
     }
-    const elements = () => [...modal.querySelectorAll<HTMLElement>('button:not(:disabled),input,select,[tabindex="0"]')];
+    const elements = () => [
+      ...modal.querySelectorAll<HTMLElement>('button:not(:disabled),input,select,[tabindex="0"]'),
+    ];
     elements()[0]?.focus({ preventScroll: true });
     const trap = (event: KeyboardEvent) => {
       if (event.code === "Escape" && (titleSettings || confirmReset)) {
-        event.preventDefault(); setTitleSettings(false); setConfirmReset(false);
+        event.preventDefault();
+        setTitleSettings(false);
+        setConfirmReset(false);
       }
       if (event.key !== "Tab") return;
-      const focusable = elements(), first = focusable[0], last = focusable.at(-1);
-      if (event.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement))) { event.preventDefault(); last?.focus(); }
-      else if (!event.shiftKey && (document.activeElement === last || !modal.contains(document.activeElement))) { event.preventDefault(); first?.focus(); }
+      const focusable = elements(),
+        first = focusable[0],
+        last = focusable.at(-1);
+      if (
+        event.shiftKey &&
+        (document.activeElement === first || !modal.contains(document.activeElement))
+      ) {
+        event.preventDefault();
+        last?.focus();
+      } else if (
+        !event.shiftKey &&
+        (document.activeElement === last || !modal.contains(document.activeElement))
+      ) {
+        event.preventDefault();
+        first?.focus();
+      }
     };
     document.addEventListener("keydown", trap);
     return () => document.removeEventListener("keydown", trap);
@@ -141,7 +158,13 @@ export function GameApp() {
   useEffect(() => {
     if (hud.started || !ready) return;
     const go = (e: KeyboardEvent) => {
-      if(titleSettings||confirmReset||e.repeat||(e.target instanceof HTMLElement&&e.target.matches("button,input,select")))return;
+      if (
+        titleSettings ||
+        confirmReset ||
+        e.repeat ||
+        (e.target instanceof HTMLElement && e.target.matches("button,input,select"))
+      )
+        return;
       if (e.code === "Tab" || e.code.startsWith("F")) return;
       if (titlePhase === "press") {
         setTitlePhase("choose");
@@ -171,7 +194,10 @@ export function GameApp() {
   const bar = Math.round(52 * lb);
 
   return (
-    <div key={ART_REV} className="game-shell relative h-full w-full overflow-hidden bg-bg text-fg select-none">
+    <div
+      key={ART_REV}
+      className="game-shell relative h-full w-full overflow-hidden bg-bg text-fg select-none"
+    >
       <canvas
         ref={canvasRef}
         tabIndex={0}
@@ -179,15 +205,37 @@ export function GameApp() {
         className="absolute inset-0 h-full w-full touch-none"
         style={{ imageRendering: "auto" }}
         onClick={() => {
-          if(hud.started&&!hud.paused&&!hud.cinematic&&(hud.mode==="world"||hud.mode==="basketball")&&!window.matchMedia("(pointer:coarse)").matches){try{canvasRef.current?.requestPointerLock?.()?.catch(()=>engineRef.current?.showToast("Hold right mouse to look, or use Q/R."));}catch{/* optional */}}
+          if (
+            hud.started &&
+            !hud.paused &&
+            !hud.cinematic &&
+            (hud.mode === "world" || hud.mode === "basketball") &&
+            !window.matchMedia("(pointer:coarse)").matches
+          ) {
+            try {
+              canvasRef.current
+                ?.requestPointerLock?.()
+                ?.catch(() =>
+                  engineRef.current?.showToast("Hold right mouse to look, or use Q/R."),
+                );
+            } catch {
+              /* optional */
+            }
+          }
         }}
       />
 
       {/* Letterbox */}
       {bar > 0 && (
         <>
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-40 bg-black" style={{ height: bar }} />
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-40 bg-black" style={{ height: bar }} />
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 z-40 bg-black"
+            style={{ height: bar }}
+          />
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-0 z-40 bg-black"
+            style={{ height: bar }}
+          />
         </>
       )}
 
@@ -215,21 +263,29 @@ export function GameApp() {
             <div>
               <p className="font-display text-primary text-xl tracking-[0.22em]">{BRAND.name}</p>
               <p className="mt-1 text-[11px] uppercase tracking-[0.42em] text-gold">{BRAND.line}</p>
-              <p className="mt-3 text-[11px] uppercase tracking-[0.28em] text-muted">A Memphis Open World</p>
+              <p className="mt-3 text-[11px] uppercase tracking-[0.28em] text-muted">
+                A Memphis Open World
+              </p>
             </div>
 
             <div className="max-w-lg">
-              <h1 className="font-display text-6xl leading-[0.85] text-fg sm:text-8xl">{BRAND.city.toUpperCase()}</h1>
+              <h1 className="font-display text-6xl leading-[0.85] text-fg sm:text-8xl">
+                {BRAND.city.toUpperCase()}
+              </h1>
               <p className="mt-2 font-display text-3xl text-primary sm:text-4xl">{BRAND.zip}</p>
               <p className="mt-4 max-w-sm text-sm leading-relaxed text-muted">
-                Play as Benji. Run Drop Day, ball the 901 Court, earn {BRAND.currency}, and re-up the fit.
+                Play as Benji. Run Drop Day, ball the 901 Court, earn {BRAND.currency}, and re-up
+                the fit.
               </p>
 
               {!ready && (
                 <div className="mt-8 max-w-xs">
                   <p className="text-sm tracking-widest text-muted">LOADING MEMPHIS</p>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15">
-                    <div className="h-full bg-primary transition-all" style={{ width: `${Math.round(loadPct * 100)}%` }} />
+                    <div
+                      className="h-full bg-primary transition-all"
+                      style={{ width: `${Math.round(loadPct * 100)}%` }}
+                    />
                   </div>
                   <p className="mt-1 text-[11px] text-subtle">{Math.round(loadPct * 100)}%</p>
                 </div>
@@ -271,7 +327,6 @@ export function GameApp() {
                 </div>
               )}
               {bootError && <p className="mt-3 text-sm text-danger">{bootError}</p>}
-
             </div>
 
             <div className="flex flex-wrap items-end justify-between gap-4">
@@ -284,8 +339,52 @@ export function GameApp() {
         </div>
       )}
 
-      {titleSettings&&ready&&<div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Game settings"><div className="settings-dialog"><PauseSettings settings={hud.settings} onChange={p=>engineRef.current?.applySettings(p)}/><button className="primary-button mt-5 w-full" onClick={()=>setTitleSettings(false)}>Done</button></div></div>}
-      {confirmReset&&<div className="modal-backdrop" role="alertdialog" aria-modal="true" aria-label="Start a new game"><div className="settings-dialog"><h2 className="font-display text-3xl">START FRESH?</h2><p className="mt-3 text-sm text-muted">This replaces your saved progress, money, clothing and records.</p><div className="mt-5 flex gap-3"><button autoFocus className="secondary-button flex-1" onClick={()=>setConfirmReset(false)}>Keep my save</button><button className="primary-button flex-1" onClick={()=>{setConfirmReset(false);boot(true);}}>Start new game</button></div></div></div>}
+      {titleSettings && ready && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Game settings">
+          <div className="settings-dialog">
+            <PauseSettings
+              settings={hud.settings}
+              onChange={(p) => engineRef.current?.applySettings(p)}
+            />
+            <button className="primary-button mt-5 w-full" onClick={() => setTitleSettings(false)}>
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+      {confirmReset && (
+        <div
+          className="modal-backdrop"
+          role="alertdialog"
+          aria-modal="true"
+          aria-label="Start a new game"
+        >
+          <div className="settings-dialog">
+            <h2 className="font-display text-3xl">START FRESH?</h2>
+            <p className="mt-3 text-sm text-muted">
+              This replaces your saved progress, money, clothing and records.
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                autoFocus
+                className="secondary-button flex-1"
+                onClick={() => setConfirmReset(false)}
+              >
+                Keep my save
+              </button>
+              <button
+                className="primary-button flex-1"
+                onClick={() => {
+                  setConfirmReset(false);
+                  boot(true);
+                }}
+              >
+                Start new game
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {hud.started && (
         <>
           {/* Top HUD */}
@@ -295,13 +394,17 @@ export function GameApp() {
                 <img src="/game/sack-icon.png" alt="" className="h-7 w-7" />
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-muted">$ackdollars</p>
-                  <p className="tabular font-display text-2xl leading-none text-gold">${hud.sackdollars}</p>
+                  <p className="tabular font-display text-2xl leading-none text-gold">
+                    ${hud.sackdollars}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-3 rounded-xl border border-border bg-panel px-3 py-2 backdrop-blur-sm">
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-muted">Respect</p>
-                  <p className="tabular font-display text-xl leading-none text-gold">{hud.respect}</p>
+                  <p className="tabular font-display text-xl leading-none text-gold">
+                    {hud.respect}
+                  </p>
                 </div>
                 <div className="h-8 w-px bg-border" />
                 <div>
@@ -311,14 +414,28 @@ export function GameApp() {
               </div>
             </div>
 
-            {!hud.basketball && <div className="max-w-[15rem] rounded-xl border border-border bg-panel px-3 py-2 text-right backdrop-blur-sm sm:max-w-xs">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-primary">{hud.missionChapter}</p>
-              <p className="font-display text-lg leading-none text-gold">{hud.missionTitle}</p>
-              <p className="mt-1 text-sm font-medium leading-snug text-fg">{hud.missionStep}</p>
-              <p className="mt-1 text-xs text-muted tabular">{hud.missionProgress} objectives</p>
-              <div className="mission-meter"><span style={{width:`${Number(hud.missionProgress.split("/")[0])/Math.max(1,Number(hud.missionProgress.split("/")[1]))*100}%`}}/></div>
-              {hud.objective&&<p className="mt-2 text-xs text-primary">{hud.waypoint?"WAYPOINT":"DESTINATION"} · {hud.objective.distance}m</p>}
-            </div>}
+            {!hud.basketball && (
+              <div className="max-w-[15rem] rounded-xl border border-border bg-panel px-3 py-2 text-right backdrop-blur-sm sm:max-w-xs">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-primary">
+                  {hud.missionChapter}
+                </p>
+                <p className="font-display text-lg leading-none text-gold">{hud.missionTitle}</p>
+                <p className="mt-1 text-sm font-medium leading-snug text-fg">{hud.missionStep}</p>
+                <p className="mt-1 text-xs text-muted tabular">{hud.missionProgress} objectives</p>
+                <div className="mission-meter">
+                  <span
+                    style={{
+                      width: `${(Number(hud.missionProgress.split("/")[0]) / Math.max(1, Number(hud.missionProgress.split("/")[1]))) * 100}%`,
+                    }}
+                  />
+                </div>
+                {hud.objective && (
+                  <p className="mt-2 text-xs text-primary">
+                    {hud.waypoint ? "WAYPOINT" : "DESTINATION"} · {hud.objective.distance}m
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="pointer-events-none absolute left-3 top-[9.6rem] z-20 sm:top-[10.6rem]">
@@ -341,7 +458,11 @@ export function GameApp() {
           )}
 
           {hud.toast && !hud.cinematic && (
-            <div role="status" aria-live="polite" className="game-toast pointer-events-none absolute left-1/2 z-30 -translate-x-1/2">
+            <div
+              role="status"
+              aria-live="polite"
+              className="game-toast pointer-events-none absolute left-1/2 z-30 -translate-x-1/2"
+            >
               <div className="rounded-xl border border-primary/30 bg-surface-2 px-4 py-2 text-sm font-medium text-fg shadow-xl">
                 {hud.toast}
               </div>
@@ -350,7 +471,9 @@ export function GameApp() {
 
           {/* Trophy pop */}
           {hud.trophyPopup && (
-            <div className={`pointer-events-none absolute z-40 ${hud.basketball ? "left-3 top-[13.5rem]" : "right-3 top-28 sm:top-32"}`}>
+            <div
+              className={`pointer-events-none absolute z-40 ${hud.basketball ? "left-3 top-[13.5rem]" : "right-3 top-28 sm:top-32"}`}
+            >
               <div className="flex items-center gap-3 rounded-xl border border-border bg-panel px-3 py-2 shadow-2xl backdrop-blur-md">
                 <Trophy className="h-5 w-5 text-primary" />
                 <div>
@@ -365,13 +488,38 @@ export function GameApp() {
           {hud.basketball && (
             <div className="basketball-panel pointer-events-none absolute right-3 top-3 z-20 rounded-xl border border-border bg-panel px-4 py-3 backdrop-blur-sm">
               <p className="font-display text-lg text-primary">901 COURT</p>
-              <p className="tabular text-3xl font-semibold leading-none text-fg">{hud.basketball.score}</p>
+              <p className="tabular text-3xl font-semibold leading-none text-fg">
+                {hud.basketball.score}
+              </p>
               <p className="mt-1 text-xs text-muted">
                 {hud.basketball.timeLeft}s · {hud.basketball.shots} shots · need 8
               </p>
-              <p className="mt-2 text-xs text-primary">{hud.basketball.held?"Hold Space / SHOOT, release in green":"Rebound returning…"}</p><div className="shot-meter"><span className="green-window"/><span className="shot-cursor" style={{left:`${hud.basketball.power*100}%`}}/></div><button className="secondary-button pointer-events-auto mt-2 w-full" onClick={()=>{const e=engineRef.current;if(e){const h=e.hoop();e.yaw=Math.atan2(e.px-h.x,e.py-h.y);e.canvas.focus();}}}>Face hoop</button>
+              <p className="mt-2 text-xs text-primary">
+                {hud.basketball.held
+                  ? "Hold Space / SHOOT, release in green"
+                  : "Rebound returning…"}
+              </p>
+              <div className="shot-meter">
+                <span className="green-window" />
+                <span className="shot-cursor" style={{ left: `${hud.basketball.power * 100}%` }} />
+              </div>
+              <button
+                className="secondary-button pointer-events-auto mt-2 w-full"
+                onClick={() => {
+                  const e = engineRef.current;
+                  if (e) {
+                    const h = e.hoop();
+                    e.yaw = Math.atan2(e.px - h.x, e.py - h.y);
+                    e.canvas.focus();
+                  }
+                }}
+              >
+                Face hoop
+              </button>
               {hud.basketball.combo > 1 && (
-                <p className="mt-1 font-display text-xl text-primary">x{hud.basketball.combo} STREAK</p>
+                <p className="mt-1 font-display text-xl text-primary">
+                  x{hud.basketball.combo} STREAK
+                </p>
               )}
               <button
                 type="button"
@@ -383,14 +531,18 @@ export function GameApp() {
             </div>
           )}
 
-          {engineRef.current&&!hud.paused&&<UpgradeHUD engine={engineRef.current} hud={hud}/>}
+          {engineRef.current && !hud.paused && <UpgradeHUD engine={engineRef.current} hud={hud} />}
 
           {/* Cinematic card */}
           {hud.cinematic && (
             <div className="pointer-events-none absolute inset-0 z-30 flex items-end justify-start p-8 sm:p-12">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.28em] text-primary">{hud.cinematic.subtitle}</p>
-                <h2 className="font-display mt-1 text-5xl text-fg sm:text-6xl">{hud.cinematic.title}</h2>
+                <p className="text-[11px] uppercase tracking-[0.28em] text-primary">
+                  {hud.cinematic.subtitle}
+                </p>
+                <h2 className="font-display mt-1 text-5xl text-fg sm:text-6xl">
+                  {hud.cinematic.title}
+                </h2>
               </div>
             </div>
           )}
@@ -429,7 +581,12 @@ export function GameApp() {
 
           {/* Shop */}
           {hud.shopOpen && (
-            <div role="dialog" aria-modal="true" aria-label="HQ apparel shop" className="absolute inset-0 z-40 flex items-end justify-center bg-bg/70 p-3 backdrop-blur-sm sm:items-center">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="HQ apparel shop"
+              className="absolute inset-0 z-40 flex items-end justify-center bg-bg/70 p-3 backdrop-blur-sm sm:items-center"
+            >
               <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl">
                 <div className="relative h-28 shrink-0 overflow-hidden sm:h-36">
                   <img
@@ -462,7 +619,11 @@ export function GameApp() {
                             style={{ backgroundColor: item.color }}
                           >
                             <span className="font-display text-lg text-white/90">
-                              {item.category === "hat" ? "CAP" : item.category === "chain" ? "$" : "SR"}
+                              {item.category === "hat"
+                                ? "CAP"
+                                : item.category === "chain"
+                                  ? "$"
+                                  : "SR"}
                             </span>
                           </div>
                           <div className="min-w-0 flex-1">
@@ -473,7 +634,7 @@ export function GameApp() {
                             type="button"
                             data-testid={`buy-${item.id}`}
                             onClick={() => onBuy(item.id)}
-                            disabled={eq||(!owned&&hud.sackdollars<item.price)}
+                            disabled={eq || (!owned && hud.sackdollars < item.price)}
                             className={`disabled:opacity-45 disabled:cursor-not-allowed min-h-11 shrink-0 rounded-lg px-3 py-2 text-sm font-semibold ${
                               eq
                                 ? "bg-primary/20 text-primary"
@@ -502,15 +663,27 @@ export function GameApp() {
             </div>
           )}
 
-          {engineRef.current&&!hud.paused&&!hud.cinematic&&(hud.mode==="world"||hud.mode==="basketball")&&<TouchControls engine={engineRef.current} hud={hud}/>}
+          {engineRef.current &&
+            !hud.paused &&
+            !hud.cinematic &&
+            (hud.mode === "world" || hud.mode === "basketball") && (
+              <TouchControls engine={engineRef.current} hud={hud} />
+            )}
 
           <div className="pointer-events-none absolute bottom-3 right-3 z-10 hidden rounded-lg border border-border bg-panel/70 px-2 py-1 text-[10px] text-muted sm:block">
-            {hud.driving?"W/S drive · A/D steer · Space brake · G exit":"WASD move · Shift sprint · Q/R look · E interact · M map"}
+            {hud.driving
+              ? "W/S drive · A/D steer · Space brake · G exit"
+              : "WASD move · Shift sprint · Q/R look · E interact · M map"}
           </div>
 
           {/* Pause */}
           {hud.paused && (
-            <div role="dialog" aria-modal="true" aria-label="Pause menu" className="absolute inset-0 z-50 flex items-stretch bg-bg/80 backdrop-blur-md">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Pause menu"
+              className="absolute inset-0 z-50 flex items-stretch bg-bg/80 backdrop-blur-md"
+            >
               <img
                 src="/game/memphis-dusk.jpg"
                 alt=""
@@ -542,7 +715,9 @@ export function GameApp() {
                   })}
                 </nav>
                 <div className="min-w-0 flex-1 overflow-y-auto p-5">
-                  {hud.pauseTab === "map" && <CityMap hud={hud} onWaypoint={id=>engineRef.current?.setWaypoint(id)}/>}
+                  {hud.pauseTab === "map" && (
+                    <CityMap hud={hud} onWaypoint={(id) => engineRef.current?.setWaypoint(id)} />
+                  )}
                   {hud.pauseTab === "missions" && (
                     <PauseMissions
                       chapter={hud.missionChapter}
@@ -565,7 +740,37 @@ export function GameApp() {
                     <div className="flex h-full flex-col justify-center">
                       <p className="font-display text-5xl text-fg">MEMPHIS</p>
                       <p className="mt-2 text-sm text-muted">
-                        {hud.locationName} · {formatHour(hud.worldHour)} · High score {hud.highScore}</p><p className="mt-4 text-xs text-muted">{hud.saveStatus==="unavailable"?"Saving unavailable in this browser":hud.saveStatus==="saved"?"Progress saved on this device":"Progress saves as you play"}</p><div className="mt-6 grid max-w-sm gap-3"><button className="primary-button" onClick={()=>engineRef.current?.resume()}>Resume game</button><button className="secondary-button" onClick={()=>engineRef.current?.recoverPlayer()}>Return to apartment</button></div><div className="controls-guide mt-6"><p className="eyebrow">CONTROLS</p><p>WASD / arrows — move · Shift — sprint</p><p>E — interact · Q/R or right-drag — look</p><p>M — map · V — camera · Esc — pause</p><p>G — enter / exit van · Space — brake or shoot</p></div>
+                        {hud.locationName} · {formatHour(hud.worldHour)} · High score{" "}
+                        {hud.highScore}
+                      </p>
+                      <p className="mt-4 text-xs text-muted">
+                        {hud.saveStatus === "unavailable"
+                          ? "Saving unavailable in this browser"
+                          : hud.saveStatus === "saved"
+                            ? "Progress saved on this device"
+                            : "Progress saves as you play"}
+                      </p>
+                      <div className="mt-6 grid max-w-sm gap-3">
+                        <button
+                          className="primary-button"
+                          onClick={() => engineRef.current?.resume()}
+                        >
+                          Resume game
+                        </button>
+                        <button
+                          className="secondary-button"
+                          onClick={() => engineRef.current?.recoverPlayer()}
+                        >
+                          Return to apartment
+                        </button>
+                      </div>
+                      <div className="controls-guide mt-6">
+                        <p className="eyebrow">CONTROLS</p>
+                        <p>WASD / arrows — move · Shift — sprint</p>
+                        <p>E — interact · Q/R or right-drag — look</p>
+                        <p>M — map · V — camera · Esc — pause</p>
+                        <p>G — enter / exit van · Space — brake or shoot</p>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -594,14 +799,19 @@ function PauseMissions({
       <p className="text-[11px] uppercase tracking-wider text-primary">{chapter}</p>
       <p className="font-display text-3xl text-fg">{title}</p>
       <ul className="mt-4 space-y-2">
-        {steps.map((s,index) => (
+        {steps.map((s, index) => (
           <li
             key={s.id}
             className={`rounded-lg border px-3 py-2 ${
-              s.done ? "border-border bg-surface-2 text-muted" : "border-primary/30 bg-surface text-fg"
+              s.done
+                ? "border-border bg-surface-2 text-muted"
+                : "border-primary/30 bg-surface text-fg"
             }`}
           >
-            <p className="text-sm font-medium">{s.done?"✓ ":index===steps.findIndex(step=>!step.done)?"→ ":""}{s.label}</p>
+            <p className="text-sm font-medium">
+              {s.done ? "✓ " : index === steps.findIndex((step) => !step.done) ? "→ " : ""}
+              {s.label}
+            </p>
             <p className="text-xs text-muted">{s.description}</p>
           </li>
         ))}
@@ -609,9 +819,14 @@ function PauseMissions({
       <p className="mt-6 text-[11px] uppercase tracking-wider text-muted">Side jobs</p>
       <ul className="mt-2 space-y-2">
         {sides.map((s) => (
-          <li key={s.id} className="flex items-start justify-between gap-3 rounded-lg border border-border bg-surface-2 px-3 py-2">
+          <li
+            key={s.id}
+            className="flex items-start justify-between gap-3 rounded-lg border border-border bg-surface-2 px-3 py-2"
+          >
             <div>
-              <p className={`text-sm font-medium ${s.done ? "text-muted" : "text-fg"}`}>{s.title}</p>
+              <p className={`text-sm font-medium ${s.done ? "text-muted" : "text-fg"}`}>
+                {s.title}
+              </p>
               <p className="text-xs text-muted">{s.description}</p>
             </div>
             <p className="tabular text-xs text-primary">{s.done ? "DONE" : `$${s.reward}`}</p>
@@ -715,7 +930,38 @@ function PauseSettings({
             />
           </label>
         ))}
-        <label className="block text-sm text-muted">Graphics quality<select className="mt-2 w-full rounded-lg border border-border bg-surface-2 p-3 text-fg" value={settings.quality} onChange={e=>onChange({quality:e.target.value as "low"|"high"})}><option value="high">High · shadows and sharper detail</option><option value="low">Performance · lighter on your device</option></select></label><label className="block text-sm text-muted">Look sensitivity · {settings.sensitivity.toFixed(2)}×<input aria-label="Look sensitivity" type="range" min={0.25} max={2} step={0.05} value={settings.sensitivity} onChange={e=>onChange({sensitivity:Number(e.target.value)})} className="mt-2 w-full accent-primary"/></label><label className="flex items-center justify-between rounded-lg border border-border bg-surface-2 px-3 py-3 text-sm">Always show touch controls<input type="checkbox" checked={settings.showTouch} onChange={e=>onChange({showTouch:e.target.checked})}/></label>
+        <label className="block text-sm text-muted">
+          Graphics quality
+          <select
+            className="mt-2 w-full rounded-lg border border-border bg-surface-2 p-3 text-fg"
+            value={settings.quality}
+            onChange={(e) => onChange({ quality: e.target.value as "low" | "high" })}
+          >
+            <option value="high">High · shadows and sharper detail</option>
+            <option value="low">Performance · lighter on your device</option>
+          </select>
+        </label>
+        <label className="block text-sm text-muted">
+          Look sensitivity · {settings.sensitivity.toFixed(2)}×
+          <input
+            aria-label="Look sensitivity"
+            type="range"
+            min={0.25}
+            max={2}
+            step={0.05}
+            value={settings.sensitivity}
+            onChange={(e) => onChange({ sensitivity: Number(e.target.value) })}
+            className="mt-2 w-full accent-primary"
+          />
+        </label>
+        <label className="flex items-center justify-between rounded-lg border border-border bg-surface-2 px-3 py-3 text-sm">
+          Always show touch controls
+          <input
+            type="checkbox"
+            checked={settings.showTouch}
+            onChange={(e) => onChange({ showTouch: e.target.checked })}
+          />
+        </label>
         <label className="flex items-center justify-between rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm">
           Camera shake
           <input

@@ -396,16 +396,46 @@ export function createSideMissions(): SideMission[] {
 }
 
 export const TROPHIES: TrophyDef[] = [
-  { id: "first_steps", name: "First Steps", description: "Leave the apartment on Drop Day.", rank: "bronze" },
-  { id: "family", name: "Welcome to the Family", description: "Link with K Blanco at HQ.", rank: "bronze" },
+  {
+    id: "first_steps",
+    name: "First Steps",
+    description: "Leave the apartment on Drop Day.",
+    rank: "bronze",
+  },
+  {
+    id: "family",
+    name: "Welcome to the Family",
+    description: "Link with K Blanco at HQ.",
+    rank: "bronze",
+  },
   { id: "baller", name: "Baller", description: "Score 8 at the 901 Court.", rank: "silver" },
   { id: "drop_day", name: "Drop Day", description: "Finish the main mission.", rank: "gold" },
-  { id: "fresh_fit", name: "Fresh Fit", description: "Buy your first apparel drop.", rank: "bronze" },
-  { id: "deep_pockets", name: "Deep Pockets", description: "Hold $400 $ackdollars.", rank: "silver" },
-  { id: "court_king", name: "Court King", description: "Score 20 in one basketball run.", rank: "gold" },
+  {
+    id: "fresh_fit",
+    name: "Fresh Fit",
+    description: "Buy your first apparel drop.",
+    rank: "bronze",
+  },
+  {
+    id: "deep_pockets",
+    name: "Deep Pockets",
+    description: "Hold $400 $ackdollars.",
+    rank: "silver",
+  },
+  {
+    id: "court_king",
+    name: "Court King",
+    description: "Score 20 in one basketball run.",
+    rank: "gold",
+  },
   { id: "city_legend", name: "901 Legend", description: "Reach 40 Respect.", rank: "gold" },
   { id: "night_owl", name: "Night Owl", description: "Be out after 20:00.", rank: "bronze" },
-  { id: "full_closet", name: "Closet Heavy", description: "Own every piece on the wall.", rank: "platinum" },
+  {
+    id: "full_closet",
+    name: "Closet Heavy",
+    description: "Own every piece on the wall.",
+    rank: "platinum",
+  },
 ];
 
 export const NPCS: NpcDef[] = [
@@ -467,7 +497,10 @@ export const NPCS: NpcDef[] = [
     x: 20 * TILE,
     y: 22 * TILE,
     color: "#c4b8a8",
-    dialogue: ["Man, this city rockin' with the brand heavy.", "Pyramid looks different on Drop Day."],
+    dialogue: [
+      "Man, this city rockin' with the brand heavy.",
+      "Pyramid looks different on Drop Day.",
+    ],
     wander: true,
   },
   {

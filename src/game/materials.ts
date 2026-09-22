@@ -66,20 +66,22 @@ export async function loadAllMaterials(
   let done = 0;
   // Limit concurrent decodes while avoiding a serial network waterfall.
   const pending = [...keys];
-  await Promise.all(Array.from({ length: 4 }, async () => {
-    let k: MatKey | undefined;
-    while ((k = pending.shift())) {
-    try {
-      out[k] = await loadTexture(MAT_URLS[k], 1, 1);
-    } catch {
-      const fb = new THREE.DataTexture(new Uint8Array([150, 150, 150, 255]), 1, 1);
-      fb.needsUpdate = true;
-      out[k] = fb;
-    }
-    done += 1;
-    onProgress?.(done, keys.length);
-    }
-  }));
+  await Promise.all(
+    Array.from({ length: 4 }, async () => {
+      let k: MatKey | undefined;
+      while ((k = pending.shift())) {
+        try {
+          out[k] = await loadTexture(MAT_URLS[k], 1, 1);
+        } catch {
+          const fb = new THREE.DataTexture(new Uint8Array([150, 150, 150, 255]), 1, 1);
+          fb.needsUpdate = true;
+          out[k] = fb;
+        }
+        done += 1;
+        onProgress?.(done, keys.length);
+      }
+    }),
+  );
   return out;
 }
 

@@ -1,6 +1,13 @@
 #!/usr/bin/env node
 import { mkdir, stat } from "node:fs/promises";
-import { captureShot, closeBrowser, createOk, installHardTimeout, launchBrowser, preparePage } from "./smoke-lib.mjs";
+import {
+  captureShot,
+  closeBrowser,
+  createOk,
+  installHardTimeout,
+  launchBrowser,
+  preparePage,
+} from "./smoke-lib.mjs";
 
 const url = process.env.GAME_URL || "http://127.0.0.1:8080/?qa=1";
 const failures = [];
@@ -67,10 +74,13 @@ try {
   await page.waitForTimeout(450);
   await page.evaluate(() => window.__controlsTest.setKeys([]));
   await page.evaluate(() => window.__gameTest.teleport("store"));
-  await page.waitForFunction(() => {
-    const step = window.__gameTest.getState().step;
-    return step === "link_k" || step === "pickup";
-  }, { timeout: 8000 });
+  await page.waitForFunction(
+    () => {
+      const step = window.__gameTest.getState().step;
+      return step === "link_k" || step === "pickup";
+    },
+    { timeout: 8000 },
+  );
   s = await state();
   await shot(page, "02-apartment-exit.png");
   ok(s.step === "link_k" || s.step === "pickup", "Leaving the apartment advances Drop Day", s);
@@ -95,7 +105,11 @@ try {
   await page.waitForTimeout(200);
   s = await state();
   await shot(page, "04-drop-van.png");
-  ok(s.step === "hood" || s.step === "dt" || s.step === "culture" || s.missionComplete, "Drop van pickup advances", s);
+  ok(
+    s.step === "hood" || s.step === "dt" || s.step === "culture" || s.missionComplete,
+    "Drop van pickup advances",
+    s,
+  );
 
   for (const [loc, file] of [
     ["neighborhood", "05-neighborhood-delivery.png"],
@@ -172,7 +186,11 @@ try {
     s = await persist.evaluate(() => window.__gameTest.getState());
     const cont = persist.getByRole("button", { name: /CONTINUE/i });
     if (await cont.count()) await cont.click({ timeout: 5000 }).catch(() => {});
-    else await persist.getByRole("button", { name: /ENTER MEMPHIS/i }).click({ timeout: 5000 }).catch(() => {});
+    else
+      await persist
+        .getByRole("button", { name: /ENTER MEMPHIS/i })
+        .click({ timeout: 5000 })
+        .catch(() => {});
     await persist.waitForTimeout(400);
     s = await persist.evaluate(() => window.__gameTest.getState());
   } catch (err) {

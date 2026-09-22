@@ -116,7 +116,7 @@ export class World3D {
     this.scene.fog = new THREE.Fog(0x3a2a22, 22, 145);
     this.scene.background = makeSkyTex();
 
-    this.hemi = new THREE.HemisphereLight(0xffe6bf,0x354434,1.3);
+    this.hemi = new THREE.HemisphereLight(0xffe6bf, 0x354434, 1.3);
     this.scene.add(this.hemi);
     this.scene.add(new THREE.AmbientLight(0x9aafa0, 0.55));
 
@@ -137,13 +137,20 @@ export class World3D {
     this.buildSky();
 
     this.player = new THREE.Group();
-    this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0xffffff, transparent: true }));
+    this.sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({ color: 0xffffff, transparent: true }),
+    );
     this.sprite.scale.set(1.15, 1.85, 1);
     this.sprite.position.y = 0.95;
     this.player.add(this.sprite);
     const contact = new THREE.Mesh(
       new THREE.CircleGeometry(0.32, 16),
-      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.32, depthWrite: false }),
+      new THREE.MeshBasicMaterial({
+        color: 0x000000,
+        transparent: true,
+        opacity: 0.32,
+        depthWrite: false,
+      }),
     );
     contact.rotation.x = -Math.PI / 2;
     contact.position.y = 0.02;
@@ -158,17 +165,32 @@ export class World3D {
     this.scene.add(this.ball);
     this.ballShadow = new THREE.Mesh(
       new THREE.CircleGeometry(0.14, 16),
-      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }),
+      new THREE.MeshBasicMaterial({
+        color: 0x000000,
+        transparent: true,
+        opacity: 0.35,
+        depthWrite: false,
+      }),
     );
     this.ballShadow.rotation.x = -Math.PI / 2;
     this.scene.add(this.ballShadow);
 
     this.hoopRim = new THREE.Mesh(new THREE.TorusGeometry(0.23, 0.028, 10, 24));
-    this.camera.position.set(10,8,18);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.8,0.045,8,32),new THREE.MeshBasicMaterial({color:0x44ed85,toneMapped:false}));
-    ring.rotation.x=-Math.PI/2;ring.position.y=0.15;this.marker.add(ring);
-    const pin=new THREE.Mesh(new THREE.OctahedronGeometry(0.25),new THREE.MeshBasicMaterial({color:0xd4af37,toneMapped:false}));
-    pin.position.y=2.8;this.marker.add(pin);this.scene.add(this.marker);
+    this.camera.position.set(10, 8, 18);
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.8, 0.045, 8, 32),
+      new THREE.MeshBasicMaterial({ color: 0x44ed85, toneMapped: false }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.15;
+    this.marker.add(ring);
+    const pin = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.25),
+      new THREE.MeshBasicMaterial({ color: 0xd4af37, toneMapped: false }),
+    );
+    pin.position.y = 2.8;
+    this.marker.add(pin);
+    this.scene.add(this.marker);
   }
 
   async loadTextures(onProgress?: (d: number, t: number) => void) {
@@ -182,16 +204,22 @@ export class World3D {
   private buildSky() {
     const sky = new THREE.Mesh(
       new THREE.SphereGeometry(200, 24, 16),
-      new THREE.MeshBasicMaterial({ map: makeSkyTex(), side: THREE.BackSide, fog: false, depthWrite: false }),
+      new THREE.MeshBasicMaterial({
+        map: makeSkyTex(),
+        side: THREE.BackSide,
+        fog: false,
+        depthWrite: false,
+      }),
     );
-    sky.position.set(wx(WORLD_PX_W)/2,0,wz(WORLD_PX_H)/2);this.sky=sky;
+    sky.position.set(wx(WORLD_PX_W) / 2, 0, wz(WORLD_PX_H) / 2);
+    this.sky = sky;
     this.scene.add(sky);
     const sunDisk = new THREE.Mesh(
       new THREE.SphereGeometry(6.5, 16, 12),
       new THREE.MeshBasicMaterial({ color: 0xffcf8a, fog: false, toneMapped: false }),
     );
     sunDisk.position.set(-78, 22, -86);
-    this.sunDisk=sunDisk;
+    this.sunDisk = sunDisk;
     this.scene.add(sunDisk);
     const glow = new THREE.Mesh(
       new THREE.SphereGeometry(16, 16, 12),
@@ -204,7 +232,7 @@ export class World3D {
       }),
     );
     glow.position.copy(sunDisk.position);
-    this.glow=glow;
+    this.glow = glow;
     this.scene.add(glow);
   }
 
@@ -212,7 +240,10 @@ export class World3D {
     return this.mats[key];
   }
 
-  buildCity(walls: { x: number; y: number; w: number; h: number }[], trees: { x: number; y: number }[]) {
+  buildCity(
+    walls: { x: number; y: number; w: number; h: number }[],
+    trees: { x: number; y: number }[],
+  ) {
     this.buildGround();
     const wallMat = std(this.t("brick"), { roughness: 0.88, repeat: [2.4, 1.6] });
     const stuccoMat = std(this.t("stucco"), { roughness: 0.9, repeat: [2, 1.4] });
@@ -232,11 +263,15 @@ export class World3D {
       const bd = Math.max(wz(wall.h), 1.6);
       const stories = 1.8 + hash(wall.x * 3 + wall.y) * 7.5;
       const g = new THREE.Group();
-      const body = new THREE.Mesh(new THREE.BoxGeometry(bw, stories, bd), hash(wall.x) > 0.45 ? stuccoMat : wallMat);
+      const body = new THREE.Mesh(
+        new THREE.BoxGeometry(bw, stories, bd),
+        hash(wall.x) > 0.45 ? stuccoMat : wallMat,
+      );
       body.position.y = stories / 2;
       body.castShadow = true;
       body.receiveShadow = true;
-      g.add(body);this.solidMeshes.push(body);
+      g.add(body);
+      this.solidMeshes.push(body);
       const face = new THREE.Mesh(new THREE.PlaneGeometry(bw * 0.92, stories * 0.78), facadeMat);
       face.position.set(0, stories * 0.52, bd / 2 + 0.03);
       g.add(face);
@@ -279,23 +314,33 @@ export class World3D {
         continue;
       }
       if (poi.id === "dropvan") {
-        this.van=this.makeVan(wx(poi.x+poi.w/2),wz(poi.y+poi.h/2));
+        this.van = this.makeVan(wx(poi.x + poi.w / 2), wz(poi.y + poi.h / 2));
         this.scene.add(this.van);
         continue;
       }
       const h = poi.id === "store" ? 6.6 : poi.id === "beale" ? 5.4 : 4.6 + hash(poi.x) * 3;
       const g = new THREE.Group();
-      const bodyMat = poi.id === "store" || poi.id === "beale" ? hqMat : poi.id === "culture" ? woodMat : cinderMat;
+      const bodyMat =
+        poi.id === "store" || poi.id === "beale"
+          ? hqMat
+          : poi.id === "culture"
+            ? woodMat
+            : cinderMat;
       const body = new THREE.Mesh(new THREE.BoxGeometry(wx(poi.w), h, wz(poi.h)), bodyMat);
       body.position.y = h / 2;
       body.castShadow = true;
       body.receiveShadow = true;
-      g.add(body);this.solidMeshes.push(body);
+      g.add(body);
+      this.solidMeshes.push(body);
       const glass = new THREE.Mesh(new THREE.PlaneGeometry(wx(poi.w) * 0.72, 1.8), storefrontMat);
       glass.position.set(0, 1.4, wz(poi.h) / 2 + 0.05);
       g.add(glass);
-      const sign=this.makeSign(poi.id==="store"?"$ackReligious · KLOTHING":poi.name,Math.min(wx(poi.w)*0.9,13),poi.id==="store");
-      sign.position.set(0,h*0.7,wz(poi.h)/2+0.08);
+      const sign = this.makeSign(
+        poi.id === "store" ? "$ackReligious · KLOTHING" : poi.name,
+        Math.min(wx(poi.w) * 0.9, 13),
+        poi.id === "store",
+      );
+      sign.position.set(0, h * 0.7, wz(poi.h) / 2 + 0.08);
       g.add(sign);
       const awning = new THREE.Mesh(new THREE.BoxGeometry(wx(poi.w) * 0.95, 0.1, 0.72), fabricMat);
       awning.position.set(0, 2.2, wz(poi.h) / 2 + 0.28);
@@ -329,7 +374,11 @@ export class World3D {
         g.add(pole);
         const lamp = new THREE.Mesh(
           new THREE.SphereGeometry(0.16, 10, 8),
-          new THREE.MeshStandardMaterial({ color: 0xf2c66a, emissive: 0xffb347, emissiveIntensity: 1.5 }),
+          new THREE.MeshStandardMaterial({
+            color: 0xf2c66a,
+            emissive: 0xffb347,
+            emissiveIntensity: 1.5,
+          }),
         );
         lamp.position.y = 3.35;
         g.add(lamp);
@@ -338,7 +387,7 @@ export class World3D {
           light.position.y = 3.3;
           g.add(light);
         }
-        g.position.set(wx(i*TILE+12),0,wz(yt*TILE+TILE*1.18));
+        g.position.set(wx(i * TILE + 12), 0, wz(yt * TILE + TILE * 1.18));
         this.scene.add(g);
       }
     }
@@ -346,37 +395,87 @@ export class World3D {
     this.buildCourt();
   }
 
-  private makeSign(text:string,width:number,brand=false) {
-    const c=document.createElement("canvas");c.width=1024;c.height=128;const ctx=c.getContext("2d")!;
-    ctx.fillStyle="#101c17";ctx.fillRect(0,0,1024,128);ctx.strokeStyle=brand?"#1db954":"#d4af37";ctx.lineWidth=5;ctx.strokeRect(3,3,1018,122);
-    ctx.fillStyle="#efe8de";ctx.font="bold 48px sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(text,512,67,960);
-    const texture=new THREE.CanvasTexture(c);texture.colorSpace=THREE.SRGBColorSpace;
-    return new THREE.Mesh(new THREE.PlaneGeometry(width,width/8),new THREE.MeshBasicMaterial({map:texture,toneMapped:false}));
+  private makeSign(text: string, width: number, brand = false) {
+    const c = document.createElement("canvas");
+    c.width = 1024;
+    c.height = 128;
+    const ctx = c.getContext("2d")!;
+    ctx.fillStyle = "#101c17";
+    ctx.fillRect(0, 0, 1024, 128);
+    ctx.strokeStyle = brand ? "#1db954" : "#d4af37";
+    ctx.lineWidth = 5;
+    ctx.strokeRect(3, 3, 1018, 122);
+    ctx.fillStyle = "#efe8de";
+    ctx.font = "bold 48px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, 512, 67, 960);
+    const texture = new THREE.CanvasTexture(c);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return new THREE.Mesh(
+      new THREE.PlaneGeometry(width, width / 8),
+      new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }),
+    );
   }
   private buildGround() {
-    const ground=new THREE.Mesh(new THREE.PlaneGeometry(wx(WORLD_PX_W)+20,wz(WORLD_PX_H)+20),new THREE.MeshStandardMaterial({color:0x474d3b,roughness:1}));
-    ground.rotation.x=-Math.PI/2;ground.position.set(wx(WORLD_PX_W)/2,-0.04,wz(WORLD_PX_H)/2);ground.receiveShadow=true;this.scene.add(ground);
-    const roadMaterial=std(this.t("asphalt"),{roughness:0.94,repeat:[18,2]});
-    const walkMaterial=std(this.t("sidewalk"),{roughness:0.9,repeat:[18,1]});
-    for (const [rects,material,height] of [[roadRects(),roadMaterial,0.02],[sidewalkRects(),walkMaterial,0.08]] as const) {
-      for(const r of rects) {
-        const mesh=new THREE.Mesh(new THREE.BoxGeometry(wx(r.w),height,wz(r.h)),material);
-        mesh.position.set(wx(r.x+r.w/2),height/2,wz(r.y+r.h/2));mesh.receiveShadow=true;this.scene.add(mesh);
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(wx(WORLD_PX_W) + 20, wz(WORLD_PX_H) + 20),
+      new THREE.MeshStandardMaterial({ color: 0x474d3b, roughness: 1 }),
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.set(wx(WORLD_PX_W) / 2, -0.04, wz(WORLD_PX_H) / 2);
+    ground.receiveShadow = true;
+    this.scene.add(ground);
+    const roadMaterial = std(this.t("asphalt"), { roughness: 0.94, repeat: [18, 2] });
+    const walkMaterial = std(this.t("sidewalk"), { roughness: 0.9, repeat: [18, 1] });
+    for (const [rects, material, height] of [
+      [roadRects(), roadMaterial, 0.02],
+      [sidewalkRects(), walkMaterial, 0.08],
+    ] as const) {
+      for (const r of rects) {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(wx(r.w), height, wz(r.h)), material);
+        mesh.position.set(wx(r.x + r.w / 2), height / 2, wz(r.y + r.h / 2));
+        mesh.receiveShadow = true;
+        this.scene.add(mesh);
       }
     }
-    const matrix=new THREE.Matrix4(),dashes:{x:number;z:number;angle:number}[]=[];
-    for(const street of STREETS) {
-      const length=street.axis==="y"?WORLD_PX_W:WORLD_PX_H;
-      for(let p=60;p<length;p+=88) {
-        if(STREETS.some(cross=>cross.axis!==street.axis&&Math.abs(cross.tile*TILE-p)<65))continue;
-        dashes.push({x:wx(street.axis==="y"?p:street.tile*TILE),z:wz(street.axis==="y"?street.tile*TILE:p),angle:street.axis==="y"?0:Math.PI/2});
+    const matrix = new THREE.Matrix4(),
+      dashes: { x: number; z: number; angle: number }[] = [];
+    for (const street of STREETS) {
+      const length = street.axis === "y" ? WORLD_PX_W : WORLD_PX_H;
+      for (let p = 60; p < length; p += 88) {
+        if (
+          STREETS.some(
+            (cross) => cross.axis !== street.axis && Math.abs(cross.tile * TILE - p) < 65,
+          )
+        )
+          continue;
+        dashes.push({
+          x: wx(street.axis === "y" ? p : street.tile * TILE),
+          z: wz(street.axis === "y" ? street.tile * TILE : p),
+          angle: street.axis === "y" ? 0 : Math.PI / 2,
+        });
       }
     }
-    const marks=new THREE.InstancedMesh(new THREE.BoxGeometry(2.3,0.02,0.08),new THREE.MeshStandardMaterial({color:0xc7aa69,roughness:0.9}),dashes.length);
-    dashes.forEach((d,i)=>{matrix.makeRotationY(d.angle);matrix.setPosition(d.x,0.04,d.z);marks.setMatrixAt(i,matrix);});this.scene.add(marks);
-    const river=POIS.find(p=>p.id==="river")!;
-    const water=new THREE.Mesh(new THREE.PlaneGeometry(wx(river.w),wz(river.h)),new THREE.MeshStandardMaterial({color:0x314f57,metalness:0.55,roughness:0.25}));
-    water.rotation.x=-Math.PI/2;water.position.set(wx(river.x+river.w/2),0.01,wz(river.y+river.h/2));this.scene.add(water);
+    const marks = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(2.3, 0.02, 0.08),
+      new THREE.MeshStandardMaterial({ color: 0xc7aa69, roughness: 0.9 }),
+      dashes.length,
+    );
+    dashes.forEach((d, i) => {
+      matrix.makeRotationY(d.angle);
+      matrix.setPosition(d.x, 0.04, d.z);
+      marks.setMatrixAt(i, matrix);
+    });
+    this.scene.add(marks);
+    const river = POIS.find((p) => p.id === "river")!;
+    const water = new THREE.Mesh(
+      new THREE.PlaneGeometry(wx(river.w), wz(river.h)),
+      new THREE.MeshStandardMaterial({ color: 0x314f57, metalness: 0.55, roughness: 0.25 }),
+    );
+    water.rotation.x = -Math.PI / 2;
+    water.position.set(wx(river.x + river.w / 2), 0.01, wz(river.y + river.h / 2));
+    this.scene.add(water);
   }
 
   private makeVan(x: number, z: number) {
@@ -394,14 +493,22 @@ export class World3D {
     g.add(cab);
     const stripe = new THREE.Mesh(
       new THREE.BoxGeometry(3.12, 0.22, 1.72),
-      new THREE.MeshStandardMaterial({ color: 0x1db954, emissive: 0x1db954, emissiveIntensity: 0.35 }),
+      new THREE.MeshStandardMaterial({
+        color: 0x1db954,
+        emissive: 0x1db954,
+        emissiveIntensity: 0.35,
+      }),
     );
     stripe.position.y = 1.35;
     g.add(stripe);
     this.addWheels(g, 1.15, 0.62);
     const hl = new THREE.Mesh(
       new THREE.BoxGeometry(0.08, 0.14, 0.28),
-      new THREE.MeshStandardMaterial({ color: 0xfff1c8, emissive: 0xffe08a, emissiveIntensity: 0.9 }),
+      new THREE.MeshStandardMaterial({
+        color: 0xfff1c8,
+        emissive: 0xffe08a,
+        emissiveIntensity: 0.9,
+      }),
     );
     hl.position.set(1.58, 0.95, 0.48);
     g.add(hl);
@@ -480,7 +587,10 @@ export class World3D {
     );
     board.position.set(cx, 3.15, hoopZ - 0.42);
     this.scene.add(board);
-    const square = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.42, 0.02), new THREE.MeshBasicMaterial({ color: 0xe85d4c }));
+    const square = new THREE.Mesh(
+      new THREE.BoxGeometry(0.55, 0.42, 0.02),
+      new THREE.MeshBasicMaterial({ color: 0xe85d4c }),
+    );
     square.position.set(cx, 2.95, hoopZ - 0.37);
     this.scene.add(square);
     this.hoopRim = new THREE.Mesh(
@@ -498,7 +608,12 @@ export class World3D {
     this.scene.add(this.hoopRim);
     const net = new THREE.Mesh(
       new THREE.CylinderGeometry(0.22, 0.14, 0.42, 10, 3, true),
-      new THREE.MeshBasicMaterial({ color: 0xe8e2d6, transparent: true, opacity: 0.55, wireframe: true }),
+      new THREE.MeshBasicMaterial({
+        color: 0xe8e2d6,
+        transparent: true,
+        opacity: 0.55,
+        wireframe: true,
+      }),
     );
     net.position.set(cx, 2.48, hoopZ);
     this.scene.add(net);
@@ -516,7 +631,7 @@ export class World3D {
   }
 
   private ensureCars(n: number) {
-    if(this.cars.length>=n)return;
+    if (this.cars.length >= n) return;
     const metal = std(this.t("carMetal"), { roughness: 0.36, metalness: 0.58 });
     while (this.cars.length < n) {
       const g = new THREE.Group();
@@ -533,7 +648,11 @@ export class World3D {
       this.addWheels(g, 0.7, 0.42);
       const hl = new THREE.Mesh(
         new THREE.BoxGeometry(0.06, 0.1, 0.16),
-        new THREE.MeshStandardMaterial({ color: 0xfff1c8, emissive: 0xffe08a, emissiveIntensity: 0.8 }),
+        new THREE.MeshStandardMaterial({
+          color: 0xfff1c8,
+          emissive: 0xffe08a,
+          emissiveIntensity: 0.8,
+        }),
       );
       hl.position.set(0.94, 0.42, 0.28);
       g.add(hl);
@@ -542,7 +661,11 @@ export class World3D {
       g.add(hl2);
       const tl = new THREE.Mesh(
         new THREE.BoxGeometry(0.05, 0.08, 0.14),
-        new THREE.MeshStandardMaterial({ color: 0xff3b30, emissive: 0xff2a1a, emissiveIntensity: 0.55 }),
+        new THREE.MeshStandardMaterial({
+          color: 0xff3b30,
+          emissive: 0xff2a1a,
+          emissiveIntensity: 0.55,
+        }),
       );
       tl.position.set(-0.94, 0.42, 0.28);
       g.add(tl);
@@ -551,7 +674,12 @@ export class World3D {
       g.add(tl2);
       const sh = new THREE.Mesh(
         new THREE.CircleGeometry(0.85, 12),
-        new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28, depthWrite: false }),
+        new THREE.MeshBasicMaterial({
+          color: 0x000000,
+          transparent: true,
+          opacity: 0.28,
+          depthWrite: false,
+        }),
       );
       sh.rotation.x = -Math.PI / 2;
       sh.position.y = 0.02;
@@ -583,28 +711,55 @@ export class World3D {
   }
 
   sync(f: WorldFrame) {
-    const dt=Math.min(0.1,Math.max(0,f.clock-this.lastClock));this.lastClock=f.clock;this.clock=f.clock;
-    const daylight=Math.max(0,Math.sin((f.worldHour-6)/24*Math.PI*2));
-    this.hemi.intensity=0.85+daylight*1.1;this.sun.intensity=0.12+daylight*1.7;
-    this.sky.material.color.setRGB(0.2+daylight*0.8,0.26+daylight*0.74,0.44+daylight*0.56);
-    this.sunDisk.visible=this.glow.visible=daylight>0.04;
-    if(this.scene.fog instanceof THREE.Fog)this.scene.fog.color.setRGB(0.08+daylight*0.15,0.09+daylight*0.12,0.14+daylight*0.03);
-    if(this.van){this.van.position.set(wx(f.vehicle.x),0,wz(f.vehicle.y));this.van.rotation.y=f.vehicle.yaw+Math.PI/2;}
-    this.marker.visible=!!f.objective&&f.mode==="world";
-    if(f.objective){this.marker.position.set(wx(f.objective.x),0,wz(f.objective.y));this.marker.children[1]!.position.y=2.8+Math.sin(f.clock*3)*0.18;this.marker.children[1]!.rotation.y=f.clock;}
+    const dt = Math.min(0.1, Math.max(0, f.clock - this.lastClock));
+    this.lastClock = f.clock;
+    this.clock = f.clock;
+    const daylight = Math.max(0, Math.sin(((f.worldHour - 6) / 24) * Math.PI * 2));
+    this.hemi.intensity = 0.85 + daylight * 1.1;
+    this.sun.intensity = 0.12 + daylight * 1.7;
+    this.sky.material.color.setRGB(
+      0.2 + daylight * 0.8,
+      0.26 + daylight * 0.74,
+      0.44 + daylight * 0.56,
+    );
+    this.sunDisk.visible = this.glow.visible = daylight > 0.04;
+    if (this.scene.fog instanceof THREE.Fog)
+      this.scene.fog.color.setRGB(
+        0.08 + daylight * 0.15,
+        0.09 + daylight * 0.12,
+        0.14 + daylight * 0.03,
+      );
+    if (this.van) {
+      this.van.position.set(wx(f.vehicle.x), 0, wz(f.vehicle.y));
+      this.van.rotation.y = f.vehicle.yaw + Math.PI / 2;
+    }
+    this.marker.visible = !!f.objective && f.mode === "world";
+    if (f.objective) {
+      this.marker.position.set(wx(f.objective.x), 0, wz(f.objective.y));
+      this.marker.children[1]!.position.y = 2.8 + Math.sin(f.clock * 3) * 0.18;
+      this.marker.children[1]!.rotation.y = f.clock;
+    }
 
     const x = wx(f.px);
     const z = wz(f.py);
     this.player.position.set(x, 0, z);
 
     // Billboard frames must face the camera-relative movement direction.
-    const direction = { up: [0,-1], down: [0,1], left: [-1,0], right: [1,0] }[f.facing]!;
+    const direction = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[f.facing]!;
     const forward = direction[0]! * -Math.sin(f.yaw) + direction[1]! * -Math.cos(f.yaw);
     const right = direction[0]! * Math.cos(f.yaw) + direction[1]! * -Math.sin(f.yaw);
-    const key = !f.moving ? "back" : Math.abs(forward) >= Math.abs(right) ? (forward > 0 ? "back" : "front") : right > 0 ? "right" : "left";
+    const key = !f.moving
+      ? "back"
+      : Math.abs(forward) >= Math.abs(right)
+        ? forward > 0
+          ? "back"
+          : "front"
+        : right > 0
+          ? "right"
+          : "left";
     const img = f.images[key] ?? f.images.front;
     if (img) this.sprite.material = this.matFor(img, key);
-    this.sprite.visible=f.cameraView==="third"&&!f.vehicle.active;
+    this.sprite.visible = f.cameraView === "third" && !f.vehicle.active;
     this.sprite.position.y = 0.95 + f.bob * 0.02;
 
     const hoopY = 2.72;
@@ -614,7 +769,8 @@ export class World3D {
       this.ball.position.set(wx(f.ball.x), by, wz(f.ball.y));
       this.ballShadow.visible = this.ball.visible;
       this.ballShadow.position.set(wx(f.ball.x), 0.08, wz(f.ball.y));
-      (this.ballShadow.material as THREE.MeshBasicMaterial).opacity = 0.32 * (1 - Math.min(by / 4, 0.8));
+      (this.ballShadow.material as THREE.MeshBasicMaterial).opacity =
+        0.32 * (1 - Math.min(by / 4, 0.8));
     } else {
       this.ball.visible = false;
       this.ballShadow.visible = false;
@@ -630,7 +786,7 @@ export class World3D {
       }
       g.visible = true;
       g.position.set(wx(c.x), 0, wz(c.y));
-      g.rotation.y=Math.atan2(-c.vy,c.vx);
+      g.rotation.y = Math.atan2(-c.vy, c.vx);
       const body = g.children[0] as THREE.Mesh;
       (body.material as THREE.MeshStandardMaterial).color.set(c.color);
     }
@@ -652,7 +808,11 @@ export class World3D {
     for (const n of f.npcs) {
       let s = this.npcSprites.get(n.id);
       if (!s) {
-        const mat = new THREE.SpriteMaterial({color:0xffffff,transparent:true,depthWrite:false});
+        const mat = new THREE.SpriteMaterial({
+          color: 0xffffff,
+          transparent: true,
+          depthWrite: false,
+        });
         if (f.images.k || f.images.front) {
           const tex = new THREE.Texture(n.isK ? f.images.k : f.images.front);
           tex.needsUpdate = true;
@@ -680,27 +840,46 @@ export class World3D {
       this.camera.lookAt(x + fwdX * lh * 8, 1.62 + ly * 8, z + fwdZ * lh * 8);
       this.camera.fov = f.mode === "basketball" ? 74 : 70;
     } else {
-      const distance=f.vehicle.active?7.8:5.6;
-      this.camPos.set(x-fwdX*distance+sx,(f.vehicle.active?3.8:2.8)+Math.sin(f.pitch)*2,z-fwdZ*distance+sy);
-      this.rayStart.set(x,1.35,z);this.rayDirection.copy(this.camPos).sub(this.rayStart);this.ray.far=this.rayDirection.length();this.ray.set(this.rayStart,this.rayDirection.normalize());
-      const hit=this.ray.intersectObjects(this.solidMeshes,false)[0];
-      if(hit)this.camPos.copy(this.rayStart).addScaledVector(this.rayDirection,Math.max(0.55,hit.distance-0.3));
-      if(!this.cameraReady||this.camera.position.distanceTo(this.camPos)>25)this.camera.position.copy(this.camPos);
-      else this.camera.position.lerp(this.camPos,1-Math.exp(-12*dt));
+      const distance = f.vehicle.active ? 7.8 : 5.6;
+      this.camPos.set(
+        x - fwdX * distance + sx,
+        (f.vehicle.active ? 3.8 : 2.8) + Math.sin(f.pitch) * 2,
+        z - fwdZ * distance + sy,
+      );
+      this.rayStart.set(x, 1.35, z);
+      this.rayDirection.copy(this.camPos).sub(this.rayStart);
+      this.ray.far = this.rayDirection.length();
+      this.ray.set(this.rayStart, this.rayDirection.normalize());
+      const hit = this.ray.intersectObjects(this.solidMeshes, false)[0];
+      if (hit)
+        this.camPos
+          .copy(this.rayStart)
+          .addScaledVector(this.rayDirection, Math.max(0.55, hit.distance - 0.3));
+      if (!this.cameraReady || this.camera.position.distanceTo(this.camPos) > 25)
+        this.camera.position.copy(this.camPos);
+      else this.camera.position.lerp(this.camPos, 1 - Math.exp(-12 * dt));
       this.camera.lookAt(x, 1.28, z);
       this.camera.fov = 62;
     }
-    this.cameraReady=true;this.sun.position.set(x-52,34,z-18);
-    this.sun.target.position.set(x,0,z);
+    this.cameraReady = true;
+    this.sun.position.set(x - 52, 34, z - 18);
+    this.sun.target.position.set(x, 0, z);
   }
 
-  setQuality(quality:"low"|"high") {
-    this.quality=quality;this.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,quality==="low"?1:1.75));this.renderer.shadowMap.enabled=quality==="high";
+  setQuality(quality: "low" | "high") {
+    this.quality = quality;
+    this.renderer.setPixelRatio(
+      Math.min(window.devicePixelRatio || 1, quality === "low" ? 1 : 1.75),
+    );
+    this.renderer.shadowMap.enabled = quality === "high";
   }
   render(w: number, h: number) {
     if (w < 2 || h < 2) return;
-    const dpr=Math.min(window.devicePixelRatio||1,this.quality==="low"?1:1.75);
-    if (this.renderer.domElement.width !== Math.floor(w * dpr) || this.renderer.domElement.height !== Math.floor(h * dpr)) {
+    const dpr = Math.min(window.devicePixelRatio || 1, this.quality === "low" ? 1 : 1.75);
+    if (
+      this.renderer.domElement.width !== Math.floor(w * dpr) ||
+      this.renderer.domElement.height !== Math.floor(h * dpr)
+    ) {
       this.renderer.setSize(w, h, false);
     }
     this.camera.aspect = w / h;
@@ -709,13 +888,26 @@ export class World3D {
   }
 
   dispose() {
-    if(this.disposed)return;this.disposed=true;
-    const geometries=new Set<THREE.BufferGeometry>(),materials=new Set<THREE.Material>(),textures=new Set<THREE.Texture>();
-    this.scene.traverse(o=>{if(o instanceof THREE.Mesh||o instanceof THREE.Sprite){if(o instanceof THREE.Mesh)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material])materials.add(m);}});
-    Object.values(this.spriteMats).forEach(m=>{if(m)materials.add(m);});
-    for(const m of materials)for(const v of Object.values(m))if(v instanceof THREE.Texture)textures.add(v);
-    if(this.scene.background instanceof THREE.Texture)textures.add(this.scene.background);
-    geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());
+    if (this.disposed) return;
+    this.disposed = true;
+    const geometries = new Set<THREE.BufferGeometry>(),
+      materials = new Set<THREE.Material>(),
+      textures = new Set<THREE.Texture>();
+    this.scene.traverse((o) => {
+      if (o instanceof THREE.Mesh || o instanceof THREE.Sprite) {
+        if (o instanceof THREE.Mesh) geometries.add(o.geometry);
+        for (const m of Array.isArray(o.material) ? o.material : [o.material]) materials.add(m);
+      }
+    });
+    Object.values(this.spriteMats).forEach((m) => {
+      if (m) materials.add(m);
+    });
+    for (const m of materials)
+      for (const v of Object.values(m)) if (v instanceof THREE.Texture) textures.add(v);
+    if (this.scene.background instanceof THREE.Texture) textures.add(this.scene.background);
+    geometries.forEach((g) => g.dispose());
+    materials.forEach((m) => m.dispose());
+    textures.forEach((t) => t.dispose());
     this.renderer.dispose();
     this.overlay.remove();
   }

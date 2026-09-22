@@ -1,12 +1,6 @@
 export type Dir = "up" | "down" | "left" | "right";
 
-export type GameMode =
-  | "world"
-  | "basketball"
-  | "shop"
-  | "dialogue"
-  | "menu"
-  | "interior";
+export type GameMode = "world" | "basketball" | "shop" | "dialogue" | "menu" | "interior";
 
 export type CameraView = "first" | "third";
 export type InputDevice = "keyboard" | "gamepad" | "touch";
