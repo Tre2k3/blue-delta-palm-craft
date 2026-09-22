@@ -1,4 +1,3 @@
-import { writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
 
 export function safeJson(value) {
@@ -20,7 +19,10 @@ export function createOk(failures) {
   };
 }
 
-export function installHardTimeout(label, ms = Number(process.env.SMOKE_HARD_TIMEOUT_MS || 240000)) {
+export function installHardTimeout(
+  label,
+  ms = Number(process.env.SMOKE_HARD_TIMEOUT_MS || 240000),
+) {
   const killer = setTimeout(() => {
     console.error(`${label} hard timeout`);
     process.exit(1);
@@ -34,11 +36,15 @@ export async function launchBrowser(webgl = true) {
   const args = [
     "--no-sandbox",
     "--disable-dev-shm-usage",
+    "--use-gl=angle",
     "--use-angle=swiftshader",
+    "--enable-unsafe-swiftshader",
     "--disable-background-timer-throttling",
     "--disable-renderer-backgrounding",
     "--disable-backgrounding-occluded-windows",
   ];
+  if (process.env.SMOKE_SINGLE_PROCESS === "1")
+    args.push("--single-process", "--in-process-gpu", "--no-zygote");
   if (webgl) args.push("--enable-webgl");
   return chromium.launch({
     headless: !headed,
@@ -63,34 +69,22 @@ export async function closeBrowser(browser) {
   await Promise.race([browser.close(), new Promise((resolve) => setTimeout(resolve, 4000))]);
 }
 
-const EMPTY_PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=",
-  "base64",
-);
-
-let consecutiveShotFails = 0;
-
 export async function captureShot(page, dest) {
-  if (consecutiveShotFails >= 3) {
-    await writeFile(dest, EMPTY_PNG);
-    console.warn(`shot skipped: ${dest}`);
-    return false;
-  }
+  // Capture one rendered frame without a continuous WebGL loop starving the
+  // compositor on software-rendered CI hosts. Resume the real loop afterwards.
+  const wasRunning = await page.evaluate(() => {
+    const engine = window.__gameTest?.getEngine?.();
+    if (!engine?.running) return false;
+    engine.running = false;
+    cancelAnimationFrame(engine.raf);
+    engine.draw();
+    return true;
+  });
   try {
-    await page.screenshot({
-      path: dest,
-      fullPage: false,
-      timeout: 4000,
-      animations: "disabled",
-    });
-    consecutiveShotFails = 0;
+    await page.screenshot({ path: dest, fullPage: false, timeout: 20000, animations: "disabled" });
     console.log(`shot: ${dest}`);
     return true;
-  } catch (err) {
-    consecutiveShotFails += 1;
-    console.warn(`playwright shot failed ${dest}: ${err?.message || err}`);
+  } finally {
+    if (wasRunning) await page.evaluate(() => window.__gameTest.getEngine().startLoop());
   }
-  await writeFile(dest, EMPTY_PNG);
-  console.warn(`shot placeholder: ${dest}`);
-  return false;
 }

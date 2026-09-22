@@ -29,7 +29,7 @@ const cache = new Map<string, THREE.Texture>();
 let maxAniso = 4;
 
 export function setAnisotropy(n: number) {
-  maxAniso = n;
+  maxAniso = Math.min(n, 4);
 }
 
 function prep(tex: THREE.Texture, repeatX: number, repeatY: number) {
@@ -64,16 +64,24 @@ export async function loadAllMaterials(
   const keys = Object.keys(MAT_URLS) as MatKey[];
   const out = {} as Record<MatKey, THREE.Texture>;
   let done = 0;
-  for (const k of keys) {
-    try {
-      out[k] = await loadTexture(MAT_URLS[k], 1, 1);
-    } catch {
-      const fb = new THREE.Texture();
-      out[k] = fb;
-    }
-    done += 1;
-    onProgress?.(done, keys.length);
-  }
+  // Limit concurrent decodes while avoiding a serial network waterfall.
+  const pending = [...keys];
+  await Promise.all(
+    Array.from({ length: 4 }, async () => {
+      let k: MatKey | undefined;
+      while ((k = pending.shift())) {
+        try {
+          out[k] = await loadTexture(MAT_URLS[k], 1, 1);
+        } catch {
+          const fb = new THREE.DataTexture(new Uint8Array([150, 150, 150, 255]), 1, 1);
+          fb.needsUpdate = true;
+          out[k] = fb;
+        }
+        done += 1;
+        onProgress?.(done, keys.length);
+      }
+    }),
+  );
   return out;
 }
 

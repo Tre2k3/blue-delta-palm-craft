@@ -12,7 +12,7 @@ export type Lane = {
   speed: number;
 };
 
-const ROAD_HALF = TILE * 0.92;
+export const ROAD_HALF = TILE * 0.92;
 const LANE_OFFSET = TILE * 0.34;
 const SIDEWALK = TILE * 0.28;
 
@@ -45,17 +45,49 @@ export function trafficLanes(): Lane[] {
   for (const s of STREETS) {
     const c = s.tile * TILE;
     if (s.axis === "y") {
-      lanes.push({ id: `${s.name}:east`, axis: "x", fixed: c - LANE_OFFSET, min: 0, max: WORLD_PX_W, dir: 1, speed: 86 });
-      lanes.push({ id: `${s.name}:west`, axis: "x", fixed: c + LANE_OFFSET, min: 0, max: WORLD_PX_W, dir: -1, speed: 80 });
+      lanes.push({
+        id: `${s.name}:east`,
+        axis: "x",
+        fixed: c - LANE_OFFSET,
+        min: 0,
+        max: WORLD_PX_W,
+        dir: 1,
+        speed: 86,
+      });
+      lanes.push({
+        id: `${s.name}:west`,
+        axis: "x",
+        fixed: c + LANE_OFFSET,
+        min: 0,
+        max: WORLD_PX_W,
+        dir: -1,
+        speed: 80,
+      });
     } else {
-      lanes.push({ id: `${s.name}:south`, axis: "y", fixed: c - LANE_OFFSET, min: 0, max: WORLD_PX_H, dir: 1, speed: 82 });
-      lanes.push({ id: `${s.name}:north`, axis: "y", fixed: c + LANE_OFFSET, min: 0, max: WORLD_PX_H, dir: -1, speed: 78 });
+      lanes.push({
+        id: `${s.name}:south`,
+        axis: "y",
+        fixed: c - LANE_OFFSET,
+        min: 0,
+        max: WORLD_PX_H,
+        dir: 1,
+        speed: 82,
+      });
+      lanes.push({
+        id: `${s.name}:north`,
+        axis: "y",
+        fixed: c + LANE_OFFSET,
+        min: 0,
+        max: WORLD_PX_H,
+        dir: -1,
+        speed: 78,
+      });
     }
   }
   return lanes;
 }
 
-const NON_SOLID_POIS = new Set(["apartment", "court", "river", "dropvan", "beale"]);
+const NON_SOLID_POIS = new Set(["court", "river", "dropvan"]);
 
 export function poiColliders(): Rect[] {
   return POIS.filter((p) => !NON_SOLID_POIS.has(p.id)).map((p) => ({
@@ -114,4 +146,17 @@ export function aheadDistance(
   if (along <= 0) return Infinity;
   const lateral = Math.abs(dx * -fy + dy * fx);
   return lateral < TILE * 0.72 ? along : Infinity;
+}
+
+export function overlaps(a: Rect, b: Rect, padding = 0) {
+  return (
+    a.x < b.x + b.w + padding &&
+    a.x + a.w > b.x - padding &&
+    a.y < b.y + b.h + padding &&
+    a.y + a.h > b.y - padding
+  );
+}
+export function poiEntrance(id: string) {
+  const p = POIS.find((p) => p.id === id);
+  return p ? { x: p.x + p.w / 2, y: p.y + p.h + 30 } : null;
 }

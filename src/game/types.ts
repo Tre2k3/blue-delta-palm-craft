@@ -1,12 +1,6 @@
 export type Dir = "up" | "down" | "left" | "right";
 
-export type GameMode =
-  | "world"
-  | "basketball"
-  | "shop"
-  | "dialogue"
-  | "menu"
-  | "interior";
+export type GameMode = "world" | "basketball" | "shop" | "dialogue" | "menu" | "interior";
 
 export type CameraView = "first" | "third";
 export type InputDevice = "keyboard" | "gamepad" | "touch";
@@ -126,7 +120,7 @@ export interface CinematicState {
 }
 
 export interface SaveData {
-  version: 2;
+  version: 3;
   sackdollars: number;
   respect: number;
   owned: ApparelId[];
@@ -140,6 +134,10 @@ export interface SaveData {
   sideProgress: Record<string, boolean>;
   worldHour: number;
   settings: GameSettings;
+  position: { x: number; y: number; yaw: number };
+  vehicle: { x: number; y: number; yaw: number };
+  talked: string[];
+  visited: LocationId[];
 }
 
 export interface GameSettings {
@@ -149,6 +147,9 @@ export interface GameSettings {
   shake: boolean;
   rumble: boolean;
   cameraView: CameraView;
+  quality: "low" | "high";
+  sensitivity: number;
+  showTouch: boolean;
 }
 
 export interface Floater {
@@ -186,6 +187,8 @@ export interface HudSnapshot {
     power: number;
     charging: boolean;
     best: number;
+    held: boolean;
+    grade: string;
   } | null;
   paused: boolean;
   started: boolean;
@@ -204,4 +207,13 @@ export interface HudSnapshot {
   hasSave: boolean;
   cameraView: CameraView;
   steps: { id: string; label: string; done: boolean; description: string }[];
+  position: { x: number; y: number; yaw: number };
+  objective: { x: number; y: number; label: string; distance: number } | null;
+  waypoint: LocationId | null;
+  visited: LocationId[];
+  driving: boolean;
+  speed: number;
+  vehicleAvailable: boolean;
+  saveStatus: "saved" | "unavailable" | "new";
+  courtResult: { score: number; shots: number; best: number; payout: number } | null;
 }

@@ -57,6 +57,9 @@ export const DEFAULT_SETTINGS = {
   shake: true,
   rumble: true,
   cameraView: "third" as const,
+  quality: "high" as const,
+  sensitivity: 1,
+  showTouch: false,
 };
 
 export const APPAREL: ApparelItem[] = [
@@ -143,7 +146,7 @@ export const POIS: WorldPoi[] = [
     name: "SackReligious HQ",
     x: 28 * TILE,
     y: 8 * TILE,
-    w: 6 * TILE,
+    w: 4.5 * TILE,
     h: 5 * TILE,
     color: "#2b2724",
     label: "HQ",
@@ -152,9 +155,9 @@ export const POIS: WorldPoi[] = [
   {
     id: "court",
     name: "901 Court",
-    x: 11 * TILE,
-    y: 29 * TILE,
-    w: 8 * TILE,
+    x: 8 * TILE,
+    y: 24 * TILE,
+    w: 6.5 * TILE,
     h: 7 * TILE,
     color: "#7c2d12",
     label: "BALL",
@@ -163,7 +166,7 @@ export const POIS: WorldPoi[] = [
   {
     id: "neighborhood",
     name: "The Neighborhood",
-    x: 46 * TILE,
+    x: 43 * TILE,
     y: 10 * TILE,
     w: 5 * TILE,
     h: 4 * TILE,
@@ -174,8 +177,8 @@ export const POIS: WorldPoi[] = [
   {
     id: "downtown",
     name: "Downtown Memphis",
-    x: 48 * TILE,
-    y: 30 * TILE,
+    x: 53 * TILE,
+    y: 25 * TILE,
     w: 5 * TILE,
     h: 4 * TILE,
     color: "#1f2937",
@@ -208,7 +211,7 @@ export const POIS: WorldPoi[] = [
     id: "beale",
     name: "Beale Street",
     x: 18 * TILE,
-    y: 19 * TILE,
+    y: 16 * TILE,
     w: 8 * TILE,
     h: 3 * TILE,
     color: "#3d3630",
@@ -219,7 +222,7 @@ export const POIS: WorldPoi[] = [
     id: "pyramid",
     name: "The Pyramid",
     x: 54 * TILE,
-    y: 4 * TILE,
+    y: 8 * TILE,
     w: 6 * TILE,
     h: 6 * TILE,
     color: "#1c1917",
@@ -360,7 +363,7 @@ export function createSideMissions(): SideMission[] {
       reward: 70,
       done: false,
       kind: "talk",
-      need: 6,
+      need: 7,
     },
     {
       id: "sunset_river",
@@ -393,24 +396,54 @@ export function createSideMissions(): SideMission[] {
 }
 
 export const TROPHIES: TrophyDef[] = [
-  { id: "first_steps", name: "First Steps", description: "Leave the apartment on Drop Day.", rank: "bronze" },
-  { id: "family", name: "Welcome to the Family", description: "Link with K Blanco at HQ.", rank: "bronze" },
+  {
+    id: "first_steps",
+    name: "First Steps",
+    description: "Leave the apartment on Drop Day.",
+    rank: "bronze",
+  },
+  {
+    id: "family",
+    name: "Welcome to the Family",
+    description: "Link with K Blanco at HQ.",
+    rank: "bronze",
+  },
   { id: "baller", name: "Baller", description: "Score 8 at the 901 Court.", rank: "silver" },
   { id: "drop_day", name: "Drop Day", description: "Finish the main mission.", rank: "gold" },
-  { id: "fresh_fit", name: "Fresh Fit", description: "Buy your first apparel drop.", rank: "bronze" },
-  { id: "deep_pockets", name: "Deep Pockets", description: "Hold $400 $ackdollars.", rank: "silver" },
-  { id: "court_king", name: "Court King", description: "Score 20 in one basketball run.", rank: "gold" },
+  {
+    id: "fresh_fit",
+    name: "Fresh Fit",
+    description: "Buy your first apparel drop.",
+    rank: "bronze",
+  },
+  {
+    id: "deep_pockets",
+    name: "Deep Pockets",
+    description: "Hold $400 $ackdollars.",
+    rank: "silver",
+  },
+  {
+    id: "court_king",
+    name: "Court King",
+    description: "Score 20 in one basketball run.",
+    rank: "gold",
+  },
   { id: "city_legend", name: "901 Legend", description: "Reach 40 Respect.", rank: "gold" },
   { id: "night_owl", name: "Night Owl", description: "Be out after 20:00.", rank: "bronze" },
-  { id: "full_closet", name: "Closet Heavy", description: "Own every piece on the wall.", rank: "platinum" },
+  {
+    id: "full_closet",
+    name: "Closet Heavy",
+    description: "Own every piece on the wall.",
+    rank: "platinum",
+  },
 ];
 
 export const NPCS: NpcDef[] = [
   {
     id: "k_blanco",
     name: "K Blanco",
-    x: 30.5 * TILE,
-    y: 10.5 * TILE,
+    x: 30.25 * TILE,
+    y: 13.75 * TILE,
     color: "#f5d0a9",
     dialogue: [
       "Welcome to the family. Glad you made it.",
@@ -423,8 +456,8 @@ export const NPCS: NpcDef[] = [
   {
     id: "supporter_1",
     name: "Local Supporter",
-    x: 48 * TILE,
-    y: 12 * TILE,
+    x: 45.5 * TILE,
+    y: 14.75 * TILE,
     color: "#a3a3a3",
     dialogue: [
       "You Benji? Heard SackReligious got that new drop.",
@@ -434,24 +467,24 @@ export const NPCS: NpcDef[] = [
   {
     id: "downtown_fan",
     name: "901 Fan",
-    x: 50 * TILE,
-    y: 32 * TILE,
+    x: 55.5 * TILE,
+    y: 29.75 * TILE,
     color: "#e5e5e5",
     dialogue: ["Fresh fits only. Respect the movement.", "You got that energy, Benji."],
   },
   {
     id: "culture_host",
     name: "Culture Host",
-    x: 26 * TILE,
-    y: 38 * TILE,
+    x: 26.5 * TILE,
+    y: 40.75 * TILE,
     color: "#c4b8a8",
     dialogue: ["Culture spot is lit tonight.", "Drop sold through. Brand growing."],
   },
   {
     id: "court_coach",
     name: "Court OG",
-    x: 13 * TILE,
-    y: 31 * TILE,
+    x: 7 * TILE,
+    y: 29 * TILE,
     color: "#fdba74",
     dialogue: [
       "Court's open. Put up points, earn $ackdollars.",
@@ -462,16 +495,19 @@ export const NPCS: NpcDef[] = [
     id: "street_npc",
     name: "Memphis Local",
     x: 20 * TILE,
-    y: 18 * TILE,
+    y: 22 * TILE,
     color: "#c4b8a8",
-    dialogue: ["Man, this city rockin' with the brand heavy.", "Pyramid looks different on Drop Day."],
+    dialogue: [
+      "Man, this city rockin' with the brand heavy.",
+      "Pyramid looks different on Drop Day.",
+    ],
     wander: true,
   },
   {
     id: "beale_dj",
     name: "Beale DJ",
-    x: 22 * TILE,
-    y: 21 * TILE,
+    x: 25 * TILE,
+    y: 22 * TILE,
     color: "#fbbf24",
     dialogue: ["Beale don't sleep. Brand either.", "When the neon hits, the city talks."],
     wander: true,
@@ -485,7 +521,8 @@ export const TIPS = [
   "Press Start or Esc for the map, missions, and wardrobe.",
   "A DualSense or Xbox pad works — left stick to move, South to talk.",
   "Night on Beale hits different. Stay out after 20:00.",
-  "Shop the wall at HQ. Fit changes how the city sees you.",
+  "Press M to pin a city destination. The marker shows the way.",
+  "After pickup, press G near the van to drive. Space brakes.",
 ];
 
 export const SAVE_KEY = "sackreligious-memphis-v2";

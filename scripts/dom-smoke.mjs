@@ -1,8 +1,15 @@
 #!/usr/bin/env node
 import { mkdir } from "node:fs/promises";
-import { captureShot, closeBrowser, createOk, installHardTimeout, launchBrowser, preparePage } from "./smoke-lib.mjs";
+import {
+  captureShot,
+  closeBrowser,
+  createOk,
+  installHardTimeout,
+  launchBrowser,
+  preparePage,
+} from "./smoke-lib.mjs";
 
-const url = process.env.GAME_URL || "http://127.0.0.1:8080/";
+const url = process.env.GAME_URL || "http://127.0.0.1:8080/?qa=1";
 const failures = [];
 const pageErrors = [];
 const ok = createOk(failures);
@@ -34,7 +41,11 @@ try {
     canvas: document.querySelector("canvas")?.getBoundingClientRect() || null,
     text: document.body.innerText.slice(0, 400),
   }));
-  ok(!!play.canvas && play.canvas.width > 100 && play.canvas.height > 100, "play view has a visible canvas", play.canvas);
+  ok(
+    !!play.canvas && play.canvas.width > 100 && play.canvas.height > 100,
+    "play view has a visible canvas",
+    play.canvas,
+  );
   ok(/\$ack|WASD|MEMPHIS|901|RESPECT/i.test(play.text), "play view HUD text is visible", {
     sample: play.text.slice(0, 180),
   });
@@ -48,7 +59,11 @@ try {
     text: document.body.innerText.slice(0, 240),
   }));
   ok(mobile.overflow < 8, "mobile width has no meaningful horizontal overflow", mobile);
-  ok(!!mobile.canvas && mobile.canvas.width > 80, "canvas remains visible on mobile", mobile.canvas);
+  ok(
+    !!mobile.canvas && mobile.canvas.width > 80,
+    "canvas remains visible on mobile",
+    mobile.canvas,
+  );
   await captureShot(page, "artifacts/dom-mobile.png");
 
   ok(pageErrors.length === 0, "no uncaught page errors", pageErrors);
