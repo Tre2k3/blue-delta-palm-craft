@@ -5,8 +5,22 @@ import type { GameSettings } from "./types";
 export type Quality = GameSettings["quality"];
 
 let quality: Quality = "high";
-let slowFrames = 0;
 let autoDropped = false;
+
+/** Judge speed over a window of real frames, not frame-by-frame, so vsync jitter can't hide 20fps. */
+const SLOW_DT = 0.042;
+const WINDOW_S = 2;
+const BOOT_GRACE_S = 4;
+const DROP_GRACE_S = 2.5;
+let windowTime = 0;
+let windowFrames = 0;
+let grace = BOOT_GRACE_S;
+
+function resetFrameWindow(nextGrace: number) {
+  windowTime = 0;
+  windowFrames = 0;
+  grace = nextGrace;
+}
 
 export function isHandheld() {
   if (typeof window === "undefined") return false;
@@ -26,6 +40,7 @@ export function preferQuality(): Quality {
 }
 
 export function setQuality(next: Quality) {
+  if (next !== quality) resetFrameWindow(DROP_GRACE_S);
   quality = next;
 }
 
@@ -60,9 +75,18 @@ export function applyRendererQuality(world: QualityWorld) {
   const dpr = pixelRatio();
   world.renderer.setPixelRatio(dpr);
   const shadows = quality === "high";
+  const shadowsWere = world.renderer.shadowMap.enabled;
   world.renderer.shadowMap.enabled = shadows;
   world.renderer.shadowMap.type = quality === "high" ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
   world.sun.castShadow = shadows;
+  // Shadow on/off is baked into each compiled shader; flip it without a recompile and the ground goes black or stale.
+  if (shadowsWere !== shadows) {
+    world.scene.traverse((obj) => {
+      const mat = (obj as THREE.Mesh).material;
+      if (!mat) return;
+      for (const m of Array.isArray(mat) ? mat : [mat]) m.needsUpdate = true;
+    });
+  }
   if (shadows) world.sun.shadow.mapSize.set(quality === "high" ? 2048 : 512, quality === "high" ? 2048 : 512);
   world.sun.shadow.normalBias = 0.03;
   setAnisotropy(quality === "low" ? 1 : quality === "medium" ? 2 : Math.min(8, world.renderer.capabilities.getMaxAnisotropy()));
@@ -70,13 +94,25 @@ export function applyRendererQuality(world: QualityWorld) {
   world.camera.updateProjectionMatrix();
 }
 
-/** If the phone can't hold 30fps, step graphics down. Returns the new quality or null. */
+/**
+ * Step graphics down when the average frame over ~2s is slower than SLOW_DT (~24fps).
+ * Driven by measured FPS only — the preview UA reads as desktop, so never trust isHandheld() here.
+ * Returns the new quality or null.
+ */
 export function noteFrame(dt: number): Quality | null {
-  if (dt > 0.042) slowFrames += 1;
-  else slowFrames = Math.max(0, slowFrames - 2);
-  if (slowFrames < 24 || quality === "low") return null;
+  if (quality === "low") return null;
+  if (grace > 0) {
+    grace -= dt;
+    return null;
+  }
+  windowTime += dt;
+  windowFrames += 1;
+  if (windowTime < WINDOW_S) return null;
+  const avgDt = windowTime / windowFrames;
+  resetFrameWindow(0);
+  if (avgDt <= SLOW_DT) return null;
   quality = quality === "high" ? "medium" : "low";
-  slowFrames = 0;
+  resetFrameWindow(DROP_GRACE_S);
   autoDropped = true;
   return quality;
 }
