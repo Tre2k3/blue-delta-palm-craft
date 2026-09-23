@@ -63,16 +63,13 @@ export const NPC_SPRITE: Record<string, keyof typeof PEOPLE_URLS> = {
   rcm_chauffeur: "host",
 };
 
-export const PED_SKINS: (keyof typeof PEOPLE_URLS)[] = [
-  "walker0",
-  "walker1",
-  "walker2",
-  "walker3",
-  "walker4",
-  "walker5",
-  "walker6",
-  "walker7",
-];
+/**
+ * Street crowd: full-body, single-figure plates only.
+ * Left out on purpose: walker3 (back-only Benji lookalike, Cam's sprite), walker4 (K Blanco bust),
+ * walker5 (K Blanco belongs inside HQ), walker6 (two-figure sheet), walker0 (baked panel strip),
+ * walker7 (header text + white backdrop between the legs).
+ */
+export const PED_SKINS: (keyof typeof PEOPLE_URLS)[] = ["walker1", "walker2", "fan", "local", "supporter"];
 export const CAR_SKINS: (keyof typeof CAR_URLS)[] = ["sedan", "suv", "chevy", "coupe"];
 export const FOOD_URLS = {
   velis: "/game/food/velis-wings.webp",
