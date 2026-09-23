@@ -128,7 +128,9 @@ import {
   type RunGrade,
 } from "./dropRun";
 import {
+  applyLaunch,
   beginRace,
+  callLaunch,
   idleRace,
   playerWrongWay,
   progressOf,
@@ -137,9 +139,12 @@ import {
   tickAutoDrive,
   tickRaceCues,
   tickRival,
+  tickSlipstream,
   armNextSegment,
   toRaceHud,
+  NITRO_SPEED,
   RACE_CHECKPOINTS,
+  RACE_LAPS,
   type ArrowDir,
   type RaceState,
 } from "./race";
@@ -869,6 +874,8 @@ export class GameEngine {
 				raceLap: this.race.player.lap,
 				racePlace: this.race.place,
 				raceTime: this.race.time,
+				raceCountdown: this.race.countdown,
+				raceLaunch: this.race.launch,
 				rivalX: this.race.rival.x,
 				rivalY: this.race.rival.y,
 				interactHint: this.interactHint,
@@ -3141,6 +3148,12 @@ export class GameEngine {
 	updateRace(dt: number, tap: ArrowDir | null = null) {
 		if (!this.race.active) return;
 		if (this.race.phase === "countdown") {
+			const call = callLaunch(this.race, tap);
+			if (call === "perfect") this.showToast("LOCKED IN · launch on GO", 0.7);
+			else if (call === "early") {
+				this.showToast("TOO EARLY · jumped the light", 0.9);
+				audio.ui();
+			}
 			const prev = Math.ceil(this.race.countdown);
 			this.race.countdown -= dt;
 			const next = Math.ceil(this.race.countdown);
@@ -3151,9 +3164,12 @@ export class GameEngine {
 			if (this.race.countdown <= 0) {
 				this.race.phase = "green";
 				this.race.countdown = 0;
-				this.showToast("GREEN · hit the arrows");
+				const launch = applyLaunch(this.race);
+				this.showToast(launch === "perfect" ? "PERFECT LAUNCH" : launch === "early" ? "JUMPED IT · slow start" : "GREEN · hit the arrows");
 				audio.whoosh();
 				audio.grade("S");
+				this.addPunch(launch === "perfect" ? 1 : 0.45);
+				this.addTrauma(launch === "perfect" ? 0.45 : 0.2);
 			}
 			this.px = this.race.player.x;
 			this.py = this.race.player.y;
@@ -3169,10 +3185,19 @@ export class GameEngine {
 		tickRaceCues(this.race, dt, tap);
 		if (this.race.cue && this.race.cue.status === "hit" && prevCue === "live") {
 			audio.grade("S");
-			this.showToast(this.race.combo > 1 ? `NITRO x${this.race.combo}` : "NITRO · CATCH CAM", 0.85);
+			this.showToast(this.race.combo >= 4 ? `ON FIRE · NITRO x${this.race.combo}` : this.race.combo > 1 ? `NITRO x${this.race.combo}` : "NITRO · CATCH CAM", 0.85);
+			this.addPunch(0.55 + Math.min(0.4, this.race.combo * 0.08));
+			this.addTrauma(0.22);
 		} else if (this.race.cue && this.race.cue.status === "miss" && prevCue === "live") {
 			audio.ui();
 			this.showToast("MISS · SLOWED", 0.85);
+			this.addTrauma(0.32);
+		}
+		if (tickSlipstream(this.race, dt)) {
+			audio.whoosh();
+			this.showToast("SLIPSTREAM · free nitro", 0.9);
+			this.addPunch(0.6);
+			this.addTrauma(0.18);
 		}
 		const passed = tickAutoDrive(this.race.player, dt, this.race.cruise, 8);
 		if (passed) {
@@ -3221,7 +3246,24 @@ export class GameEngine {
 		}
 		const pp = progressOf(this.race.player);
 		const rp = progressOf(this.race.rival);
-		this.race.place = pp >= rp ? 1 : 2;
+		const place = pp >= rp ? 1 : 2;
+		if (place !== this.race.place && this.race.time > 2) {
+			if (place === 1) {
+				this.race.overtakes += 1;
+				this.showToast("PASSED CAM", 0.9);
+				this.addPunch(0.5);
+				audio.grade("S");
+			} else {
+				this.showToast("CAM GOT BY · hit the arrows", 0.9);
+				this.addTrauma(0.2);
+			}
+		}
+		this.race.place = place;
+		if (!this.race.finalLapCalled && this.race.player.lap >= RACE_LAPS - 1) {
+			this.race.finalLapCalled = true;
+			this.showToast("FINAL LAP", 1.2);
+			audio.whoosh();
+		}
 		if (playerWrongWay(this.race.player, this.vx, this.vy)) {
 			this.race.wrongWay += dt;
 			if (this.race.wrongWay > 1.15 && this.race.wrongWay < 1.15 + dt + 0.02) this.showToast("Wrong way");
@@ -3233,10 +3275,13 @@ export class GameEngine {
 		if (!this.race.player.finished && this.race.rival.finished) this.race.player.finishT = this.race.time + 8;
 		settleRace(this.race);
 		const win = this.race.winner === "player";
+		const margin = Math.abs(this.race.player.finishT - this.race.rival.finishT);
 		this.sackdollars += this.race.payout;
 		this.respect += this.race.respect;
 		this.float(win ? "1ST" : "2ND", win ? PAL.gold : "#a8a29e");
-		this.showToast(win ? `YOU BEAT CAM · +$${this.race.payout}` : `Cam took it · +$${this.race.payout}`);
+		const photo = margin < 0.75 ? "PHOTO FINISH · " : "";
+		this.showToast(win ? `${photo}YOU BEAT CAM · +$${this.race.payout}` : `${photo}Cam took it · +$${this.race.payout}`);
+		this.addPunch(win ? 1 : 0.4);
 		if (win) {
 			this.unlockTrophy("strip_king");
 			this.completeSide("strip_kings");
@@ -4037,6 +4082,14 @@ export class GameEngine {
 					}
 					: null,
 				raceClear: this.race.active && this.race.phase !== "idle",
+				raceCam: this.race.active && this.vehicle && this.race.phase !== "idle"
+					? {
+						phase: this.race.phase,
+						countdown: this.race.countdown,
+						boost: this.race.boostT > 0,
+						speed: Math.hypot(this.race.player.vx, this.race.player.vy) / NITRO_SPEED,
+					}
+					: null,
 				raceGates: this.race.active
 					? RACE_CHECKPOINTS.map((c, i) => ({
 						x: c.x,

@@ -250,6 +250,8 @@ export type WorldFrame = {
   } | null;
   raceGates?: { x: number; y: number; next: boolean }[];
   raceClear?: boolean;
+  /** Race framing: countdown sweep, nitro push-in, finish orbit. */
+  raceCam?: { phase: "countdown" | "green" | "finish"; countdown: number; boost: boolean; speed: number } | null;
   foodServe?: { truckId: string; t: number; duration: number; item: string } | null;
   courtVenue?: string;
   bowling?: {
@@ -320,6 +322,7 @@ export class World3D {
   private courtGym = new THREE.Group();
   private courtVenue: CourtVenueId = "901_day";
   private lastLightKey = "";
+  private raceBoost = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = createWebGLRenderer(canvas);
@@ -1791,7 +1794,15 @@ export class World3D {
     const height = (f.indoor ? 1.48 : f.driving ? (f.vehicleKind === "sprinter" ? 6.2 : 5.4) : 2.38) + air * 0.35;
     const k = f.indoor ? 11 : f.driving ? 4.6 : f.loco === "run" ? 5.4 : 7.6;
     const ease = 1 - Math.exp(-k * dt);
-    const targetFov = f.cameraView === "first"
+    const raceCam = f.cameraView === "third" && f.driving ? f.raceCam ?? null : null;
+    this.raceBoost += ((raceCam?.boost ? 1 : 0) - this.raceBoost) * (1 - Math.exp(-5 * dt));
+    const targetFov = raceCam
+      ? raceCam.phase === "countdown"
+        ? 52
+        : raceCam.phase === "finish"
+          ? 48
+          : 66 + Math.min(1, raceCam.speed) * 6 + this.raceBoost * 12
+      : f.cameraView === "first"
       ? (f.driving ? 74 : f.mode === "basketball" ? 74 : 70)
       : f.driving
         ? 68
@@ -1826,6 +1837,36 @@ export class World3D {
       const ly = Math.sin(f.pitch);
       const lh = Math.cos(f.pitch);
       this.camera.lookAt(x + fwdX * lh * 8, 1.62 + ly * 8 + air - listenNod * 1.4, z + fwdZ * lh * 8);
+    } else if (raceCam) {
+      // Countdown: sweep from a low front-quarter shot round to the chase spot. Green: push in and
+      // drop on nitro. Finish: slow orbit for the recap.
+      const behind = Math.atan2(-fwdX, -fwdZ);
+      let angle = behind;
+      let radius = 11.5 - this.raceBoost * 2.8 - Math.min(1, raceCam.speed) * 0.8;
+      let height = 5.2 - this.raceBoost * 1.4;
+      let rk = 4.6;
+      if (raceCam.phase === "countdown") {
+        const t = THREE.MathUtils.clamp(1 - raceCam.countdown / 3.2, 0, 1);
+        const e = t * t * (3 - 2 * t);
+        angle = behind + (1 - e) * Math.PI * 0.85;
+        radius = 4.2 + e * 7.3;
+        height = 1.6 + e * 3.6;
+        rk = 9;
+      } else if (raceCam.phase === "finish") {
+        angle = behind + f.clock * 0.35;
+        radius = 7.5;
+        height = 2.5;
+        rk = 2.4;
+      }
+      const desired = this.tmp.set(x + Math.sin(angle) * radius + sx, height, z + Math.cos(angle) * radius + sy);
+      // Race start teleports the car onto the grid: cut to the shot instead of flying across town.
+      const re = this.camPos.distanceTo(desired) > 25 ? 1 : 1 - Math.exp(-rk * dt);
+      this.camPos.x += (desired.x - this.camPos.x) * re;
+      this.camPos.y += (desired.y - this.camPos.y) * re;
+      this.camPos.z += (desired.z - this.camPos.z) * re;
+      this.camera.position.copy(this.camPos);
+      this.camLook.set(x + fwdX * this.raceBoost * 2.2, 0.8, z + fwdZ * this.raceBoost * 2.2);
+      this.camera.lookAt(this.camLook);
     } else {
       const desired = this.tmp.set(
         x - fwdX * follow + fwdX * lookAhead * 0.55 + sx,

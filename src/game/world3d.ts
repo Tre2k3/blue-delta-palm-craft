@@ -5,6 +5,7 @@ import { S, World3D as World3DCore, wx, wz, type WorldFrame } from "./world3dCor
 import { applyPolygonOffset } from "./polygonOffset";
 import { poiBuildingRect } from "./worldTopology";
 import { APPROACH_Z, LANE_XS, PIN_Z, pinHome } from "./bowling";
+import { CUTOUT_ALPHA } from "./cutout";
 
 export { S, wx, wz };
 export type { WorldFrame };
@@ -343,19 +344,20 @@ export class World3D extends World3DCore {
     const kTex = this.art.people["k-blanco"];
     if (kTex) {
       // Benji's card is 1.78m. K stands further back so we oversize her or she reads as a kid.
-      const kW = 1.28;
       const kH = 2.22;
+      const img = kTex.image as { width?: number; height?: number } | undefined;
+      const kW = kH * ((img?.width ?? 400) / (img?.height ?? 760));
       const riser = 0.06;
-      const kMat = new THREE.MeshStandardMaterial({
+      // Flat true-colour card like Benji and the street NPCs. A lit material under the gold point
+      // lights turned her skin orange.
+      const kMat = new THREE.MeshBasicMaterial({
         map: kTex,
         color: 0xffffff,
-        roughness: 0.7,
-        metalness: 0,
-        alphaTest: 0.08,
+        alphaTest: CUTOUT_ALPHA,
         transparent: false,
         depthWrite: true,
         side: THREE.FrontSide,
-        toneMapped: true,
+        toneMapped: false,
       });
       const kMesh = new THREE.Mesh(new THREE.PlaneGeometry(kW, kH), kMat);
       kMesh.name = "k-blanco-desk";
@@ -671,6 +673,78 @@ export class World3D extends World3DCore {
     this.bowlShot = true;
   }
 
+/**
+   * Race camera sweeps low and pushes in on nitro, so it can land inside a building at a corner.
+   * Lift it over the roofline first; if that is still blocked, pull it in toward the car.
+   */
+  private keepRaceCameraClear(f: WorldFrame) {
+    this.cameraTarget.set(wx(f.px), 0.9, wz(f.py));
+    this.scene.updateMatrixWorld(true);
+    const hit = this.raceBlockerDistance(this.camera.position);
+    if (hit === null) return false;
+    this.cameraDesired.copy(this.camera.position);
+    for (const lift of [1.8, 3.6, 5.4]) {
+      this.cameraCandidate.copy(this.cameraDesired);
+      this.cameraCandidate.y += lift;
+      if (this.raceBlockerDistance(this.cameraCandidate) === null) {
+        this.camera.position.copy(this.cameraCandidate);
+        this.camera.lookAt(this.cameraTarget);
+        return true;
+      }
+    }
+    this.cameraDirection.subVectors(this.cameraDesired, this.cameraTarget).normalize();
+    this.camera.position.copy(this.cameraTarget).addScaledVector(this.cameraDirection, Math.max(2.2, hit - 0.4));
+    this.camera.position.y = Math.max(this.camera.position.y, 3.2);
+    this.camera.lookAt(this.cameraTarget);
+    return true;
+  }
+
+  /**
+   * Every static building-sized mesh, gathered once. cameraBlockers only knows plain box buildings,
+   * which misses landmark shells and most of the race loop.
+   */
+  private raceBlockers: THREE.Object3D[] | null = null;
+
+  private collectRaceBlockers() {
+    const found: THREE.Object3D[] = [];
+    const box = new THREE.Box3();
+    const size = new THREE.Vector3();
+    const skip = new Set<THREE.Object3D>([...this.cars, this.player]);
+    this.scene.updateMatrixWorld(true);
+    const walk = (obj: THREE.Object3D) => {
+      if (skip.has(obj) || obj instanceof THREE.Sprite) return;
+      if (obj instanceof THREE.Mesh && obj.visible) {
+        box.setFromObject(obj).getSize(size);
+        // Walls and facade planes count too: tall, and wide in at least one direction.
+        if (size.y >= 1.7 && Math.max(size.x, size.z) >= 1.2) found.push(obj);
+      }
+      for (const child of obj.children) walk(child);
+    };
+    walk(this.scene);
+    return found;
+  }
+
+  private raceBlockerDistance(position: THREE.Vector3) {
+    this.raceBlockers ??= this.collectRaceBlockers();
+    this.cameraDirection.subVectors(position, this.cameraTarget);
+    const distance = this.cameraDirection.length();
+    if (distance < 0.25) return null;
+    this.cameraDirection.multiplyScalar(1 / distance);
+    this.cameraRay.set(this.cameraTarget, this.cameraDirection);
+    this.cameraRay.near = 0.28;
+    this.cameraRay.far = distance - 0.04;
+    const hit = this.cameraRay
+      .intersectObjects(this.raceBlockers, false)
+      .find((c) => c.distance > 0.3 && c.distance < distance - 0.04 && isActuallyVisible(c.object));
+    if (hit) return hit.distance;
+    // Single-sided facades only answer rays from their front, so look back from the camera too.
+    this.cameraRay.set(position, this.cameraDirection.negate());
+    const back = this.cameraRay
+      .intersectObjects(this.raceBlockers, false)
+      .find((c) => c.distance > 0.04 && c.distance < distance - 0.3 && isActuallyVisible(c.object));
+    return back ? distance - back.distance : null;
+  }
+
   private blockerDistance(position: THREE.Vector3) {
     this.cameraDirection.subVectors(position, this.cameraTarget);
     const distance = this.cameraDirection.length();
@@ -703,6 +777,10 @@ export class World3D extends World3DCore {
     if (clerk) clerk.visible = inLanes;
     const kDesk = this.hqInterior?.getObjectByName("k-blanco-desk");
     if (kDesk) kDesk.visible = inHQ;
+    if (f.raceCam && f.cameraView === "third" && f.driving) {
+      this.lastCameraOccluded = this.keepRaceCameraClear(f);
+      return;
+    }
     if (f.cameraView !== "third" || f.driving || this.bowlShot) {
       this.lastCameraOccluded = false;
       return;

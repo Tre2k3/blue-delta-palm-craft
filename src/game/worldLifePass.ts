@@ -42,6 +42,39 @@ function box(
   return mesh;
 }
 
+function neonSignTexture(word: string, color: string, aspect: number) {
+  const hgt = 128;
+  const wid = Math.round(hgt * aspect);
+  const c = document.createElement("canvas");
+  c.width = wid;
+  c.height = hgt;
+  const g = c.getContext("2d")!;
+  const tube = (draw: () => void, lineWidth: number) => {
+    g.strokeStyle = color;
+    g.fillStyle = color;
+    g.shadowColor = color;
+    for (const [blur, alpha] of [[26, 0.55], [10, 0.9], [0, 1]] as const) {
+      g.shadowBlur = blur;
+      g.globalAlpha = alpha;
+      g.lineWidth = lineWidth;
+      draw();
+    }
+    g.globalAlpha = 1;
+    g.shadowBlur = 0;
+  };
+  tube(() => g.strokeRect(10, 10, wid - 20, hgt - 20), 4);
+  g.font = `900 ${Math.round(hgt * 0.5)}px ui-sans-serif, system-ui, sans-serif`;
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  tube(() => g.fillText(word, wid / 2, hgt / 2 + 3), 1);
+  g.fillStyle = "#ffffff";
+  g.globalAlpha = 0.55;
+  g.fillText(word, wid / 2, hgt / 2 + 3);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 function pseudo(n: number) {
   const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
   return x - Math.floor(x);
@@ -357,17 +390,32 @@ export class WorldLifePass {
   private buildBealeNeon(root: THREE.Group) {
     const beale = POIS.find((p) => p.id === "beale");
     if (!beale) return;
-    const colors = [0x1db954, 0xe85d4c, 0x4f9ddf, 0xd4af37, 0xb14ddf, 0x30c6c2];
+    const colors = ["#1db954", "#ff5a4a", "#4fb2ff", "#ffd24a", "#c65cff", "#30e0d8"];
+    const words = ["BLUES", "LIVE", "BBQ", "JUKE", "SOUL", "901", "OPEN", "RIBS", "JAZZ", "BEALE"];
+    const backing = new THREE.MeshStandardMaterial({ color: 0x121014, roughness: 0.7, metalness: 0.2 });
     for (let i = 0; i < 10; i++) {
-      const material = new THREE.MeshStandardMaterial({
-        color: colors[i % colors.length],
-        emissive: colors[i % colors.length],
-        emissiveIntensity: 1.45,
-        roughness: 0.38,
-      });
+      const w = 1.1 + (i % 3) * 0.25;
+      const h = 0.46;
       const x = wx(beale.x + 22 + i * ((beale.w - 44) / 9));
       const z = wz(beale.y + (i % 2 === 0 ? 18 : beale.h - 18));
-      root.add(box(1.1 + (i % 3) * 0.25, 0.42, 0.08, material, x, 2.8 + (i % 2) * 0.45, z));
+      const y = 2.8 + (i % 2) * 0.45;
+      const sign = new THREE.Group();
+      sign.position.set(x, y, z);
+      sign.add(box(w, h, 0.06, backing, 0, 0, 0));
+      // Glass-tube lettering on a dark board reads as neon; a solid emissive slab just blows out to pastel.
+      const face = new THREE.MeshBasicMaterial({
+        map: neonSignTexture(words[i]!, colors[i % colors.length]!, w / h),
+        transparent: true,
+        toneMapped: false,
+        depthWrite: false,
+      });
+      for (const side of [1, -1]) {
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.98, h * 0.94), face);
+        plane.position.z = side * 0.034;
+        if (side < 0) plane.rotation.y = Math.PI;
+        sign.add(plane);
+      }
+      root.add(sign);
     }
   }
 
