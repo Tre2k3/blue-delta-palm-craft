@@ -777,6 +777,14 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                 <p className="mt-1 tabular text-sm text-fg">{formatMph(hud.race.speed)} mph</p>
                 {hud.race.boosting && <p className="font-display text-lg text-primary">NITRO</p>}
                 {hud.race.slowed && !hud.race.boosting && <p className="font-display text-lg text-red-400">SLOW</p>}
+                {hud.race.phase === "green" && hud.race.slip > 0.04 && (
+                  <div className="mt-1 w-full">
+                    <p className="text-[10px] uppercase tracking-wider text-gold">Slipstream</p>
+                    <div className="mt-0.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
+                      <div className="h-full rounded-full bg-gold" style={{ width: `${Math.round(hud.race.slip * 100)}%` }} />
+                    </div>
+                  </div>
+                )}
                 <p className="text-[10px] text-gold">
                   {hud.race.rivalName} · lap {hud.race.rivalLap}
                 </p>
@@ -817,6 +825,17 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                 {hud.race.countdown > 0.2 ? Math.ceil(hud.race.countdown) : "GO"}
               </p>
               <p className="font-display text-xl text-gold">HIT THE ARROWS · BEAT CAM</p>
+              <p
+                className={`font-display text-lg ${
+                  hud.race.launch === "perfect" ? "text-primary" : hud.race.launch === "early" ? "text-red-400" : "text-fg"
+                }`}
+              >
+                {hud.race.launch === "perfect"
+                  ? "LAUNCH LOCKED IN"
+                  : hud.race.launch === "early"
+                    ? "JUMPED THE LIGHT"
+                    : "TAP ↑ RIGHT BEFORE GO · PERFECT LAUNCH"}
+              </p>
             </div>
           )}
 
