@@ -100,7 +100,8 @@ function benjiCardMaterial(src?: HTMLImageElement | HTMLCanvasElement, path = ""
     polygonOffsetFactor: -8,
     polygonOffsetUnits: -8,
     side: THREE.DoubleSide,
-    toneMapped: true,
+    // Unlit plate: ACES at day exposure pushed his browns to yellow. Show the approved colours, same as street NPC cards.
+    toneMapped: false,
     fog: true,
   });
   mat.userData.path = path;

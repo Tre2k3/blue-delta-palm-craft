@@ -29,6 +29,7 @@ export type MatKey = keyof typeof MAT_URLS;
 const cache = new Map<string, THREE.Texture>();
 let maxAniso = 4;
 
+/** Applies to textures prepared after this call. Re-uploading live ground plates mid-game stalls weak GPUs. */
 export function setAnisotropy(n: number) {
   maxAniso = n;
 }
@@ -81,6 +82,40 @@ export async function loadAllMaterials(
 export function disposeMaterialCache() {
   for (const tex of cache.values()) tex.dispose();
   cache.clear();
+}
+
+/** Repeat-1 clone of a ground texture, for meshes whose UVs are already in world metres (see worldPlanarUv). */
+export function groundTexture(base: THREE.Texture) {
+  const tex = base.clone();
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(1, 1);
+  tex.offset.set(0, 0);
+  tex.anisotropy = maxAniso;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+const planarDone = new WeakSet<THREE.BufferGeometry>();
+
+/**
+ * Rewrite a flat mesh's UVs from world X/Z so one texture tile covers `metres` everywhere.
+ * Fixes smear on long thin strips that share one material but not one shape.
+ */
+export function worldPlanarUv(mesh: THREE.Mesh, metres: number) {
+  if (planarDone.has(mesh.geometry)) mesh.geometry = mesh.geometry.clone();
+  const geo = mesh.geometry;
+  const pos = geo.getAttribute("position");
+  const uv = geo.getAttribute("uv");
+  if (!pos || !uv) return;
+  mesh.updateWorldMatrix(true, false);
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+    uv.setXY(i, v.x / metres, v.z / metres);
+  }
+  uv.needsUpdate = true;
+  planarDone.add(geo);
 }
 
 export function std(

@@ -164,3 +164,8 @@ export function lightLook(hour: number): LightLook {
 export function nightAmount(hour: number) {
   return lightLook(hour).overlay;
 }
+
+/** 0 at day, 1 at full night — for window glow and other night-only emissives. */
+export function nightLevel(hour: number) {
+  return Math.min(1, nightAmount(hour) / NIGHT.overlay);
+}

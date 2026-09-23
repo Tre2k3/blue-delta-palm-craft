@@ -5,8 +5,22 @@ import type { GameSettings } from "./types";
 export type Quality = GameSettings["quality"];
 
 let quality: Quality = "high";
-let slowFrames = 0;
 let autoDropped = false;
+
+/** Judge speed over a window of real frames, not frame-by-frame, so vsync jitter can't hide 20fps. */
+const SLOW_DT = 0.042;
+const WINDOW_S = 1.5;
+const BOOT_GRACE_S = 1.5;
+const DROP_GRACE_S = 1;
+let windowTime = 0;
+let windowFrames = 0;
+let grace = BOOT_GRACE_S;
+
+function resetFrameWindow(nextGrace: number) {
+  windowTime = 0;
+  windowFrames = 0;
+  grace = nextGrace;
+}
 
 export function isHandheld() {
   if (typeof window === "undefined") return false;
@@ -26,6 +40,7 @@ export function preferQuality(): Quality {
 }
 
 export function setQuality(next: Quality) {
+  if (next !== quality) resetFrameWindow(DROP_GRACE_S);
   quality = next;
 }
 
@@ -70,13 +85,25 @@ export function applyRendererQuality(world: QualityWorld) {
   world.camera.updateProjectionMatrix();
 }
 
-/** If the phone can't hold 30fps, step graphics down. Returns the new quality or null. */
+/**
+ * Step graphics down when the average frame over ~1.5s is slower than SLOW_DT (~24fps).
+ * Driven by measured FPS only — the preview UA reads as desktop, so never trust isHandheld() here.
+ * Returns the new quality or null.
+ */
 export function noteFrame(dt: number): Quality | null {
-  if (dt > 0.042) slowFrames += 1;
-  else slowFrames = Math.max(0, slowFrames - 2);
-  if (slowFrames < 24 || quality === "low") return null;
+  if (quality === "low") return null;
+  if (grace > 0) {
+    grace -= dt;
+    return null;
+  }
+  windowTime += dt;
+  windowFrames += 1;
+  if (windowTime < WINDOW_S) return null;
+  const avgDt = windowTime / windowFrames;
+  resetFrameWindow(0);
+  if (avgDt <= SLOW_DT) return null;
   quality = quality === "high" ? "medium" : "low";
-  slowFrames = 0;
+  resetFrameWindow(DROP_GRACE_S);
   autoDropped = true;
   return quality;
 }

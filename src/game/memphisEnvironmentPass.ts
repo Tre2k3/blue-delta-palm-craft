@@ -1,12 +1,168 @@
 import * as THREE from "three";
 import { POIS, STREETS, TILE } from "./data";
 import { WorldLifePass } from "./worldLifePass";
-import { wx, wz } from "./world3dCore";
+import { wx, wz, type WorldFrame } from "./world3dCore";
 import { applyPolygonOffset } from "./polygonOffset";
 import { PIERS, riverHole } from "./worldTopology";
+import { MAT_URLS, groundTexture, loadTexture, worldPlanarUv } from "./materials";
+import { nightLevel } from "./dayCycle";
 
 type PatchedLife = WorldLifePass & { __memphisEnvironmentPatched?: boolean };
 const RIVER = () => riverHole();
+
+/** Metres of street per texture tile. Same density on every strip, whatever its shape. */
+const ASPHALT_TILE_M = 4;
+const WALK_TILE_M = 3;
+/** Flat colours WorldLifePass paints its road and curb strips with. */
+const LIFE_ROAD_HEX = 0x17191a;
+const LIFE_CURB_HEX = 0x76736d;
+const WINDOW_FACADE = /\/game\/(facades\/(hq|beale|apartment)\.|materials\/04_window_facade)/;
+const WINDOW_GLOW_MAX = 1.7;
+
+const live: { water: THREE.Texture | null; windows: THREE.MeshStandardMaterial[]; glow: number } = {
+  water: null,
+  windows: [],
+  glow: -1,
+};
+
+function isFlat(mesh: THREE.Mesh) {
+  const geo = mesh.geometry;
+  if (!geo.boundingBox) geo.computeBoundingBox();
+  const b = geo.boundingBox!;
+  return b.max.y - b.min.y < 0.3 * Math.max(1e-3, Math.abs(mesh.scale.y));
+}
+
+function skinStrips(meshes: THREE.Mesh[], tex: THREE.Texture, color: number, metres: number) {
+  const mats = new Set<THREE.MeshStandardMaterial>();
+  for (const mesh of meshes) {
+    worldPlanarUv(mesh, metres);
+    mesh.userData.groundUv = metres;
+    mats.add(mesh.material as THREE.MeshStandardMaterial);
+  }
+  for (const mat of mats) {
+    mat.map = tex;
+    mat.color.setHex(color);
+    mat.needsUpdate = true;
+  }
+}
+
+/** Put the real asphalt and sidewalk plates on the street strips, at world scale so nothing smears. */
+function finishStreetSurfaces(scene: THREE.Scene) {
+  const roads: THREE.Mesh[] = [];
+  const curbs: THREE.Mesh[] = [];
+  scene.getObjectByName("memphis-world-life")?.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh) || !(obj.material instanceof THREE.MeshStandardMaterial)) return;
+    if (obj.material.map || !isFlat(obj)) return;
+    const hex = obj.material.color.getHex();
+    if (hex === LIFE_ROAD_HEX) roads.push(obj);
+    else if (hex === LIFE_CURB_HEX) curbs.push(obj);
+  });
+
+  void Promise.all([loadTexture(MAT_URLS.asphalt), loadTexture(MAT_URLS.sidewalk)])
+    .then(([asphalt, sidewalk]) => {
+      skinStrips(roads, groundTexture(asphalt), 0xb4b4b4, ASPHALT_TILE_M);
+      skinStrips(curbs, groundTexture(sidewalk), 0xe6e2da, WALK_TILE_M);
+      // The city's wide sidewalks share one repeat across 192m-long and 144m-deep strips; re-map them the same way.
+      const walkMats = new Set<THREE.MeshStandardMaterial>();
+      scene.traverse((obj) => {
+        if (!(obj instanceof THREE.Mesh) || obj.userData.groundUv) return;
+        const mat = obj.material;
+        if (!(mat instanceof THREE.MeshStandardMaterial) || mat.map?.source !== sidewalk.source || !isFlat(obj)) return;
+        worldPlanarUv(obj, WALK_TILE_M);
+        obj.userData.groundUv = WALK_TILE_M;
+        walkMats.add(mat);
+      });
+      for (const mat of walkMats) {
+        mat.map!.repeat.set(1, 1);
+        mat.map!.offset.set(0, 0);
+      }
+    })
+    .catch(() => {
+      /* plates missing: keep the flat strips */
+    });
+}
+
+function rippleTexture(repeatX: number, repeatY: number) {
+  const size = 256;
+  const c = document.createElement("canvas");
+  c.width = size;
+  c.height = size;
+  const g = c.getContext("2d")!;
+  g.fillStyle = "#2b6484";
+  g.fillRect(0, 0, size, size);
+  let seed = 90127;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 150; i++) {
+    const x = rnd() * size;
+    const y = rnd() * size;
+    const w = 12 + rnd() * 44;
+    const bend = (rnd() - 0.5) * 5;
+    const light = rnd() > 0.45;
+    g.strokeStyle = light ? `rgba(196,228,242,${0.08 + rnd() * 0.2})` : `rgba(12,38,58,${0.12 + rnd() * 0.18})`;
+    g.lineWidth = 1 + rnd() * 2.2;
+    for (const dx of [0, -size, size]) {
+      for (const dy of [0, -size, size]) {
+        g.beginPath();
+        g.moveTo(x + dx, y + dy);
+        g.quadraticCurveTo(x + dx + w / 2, y + dy + bend, x + dx + w, y + dy);
+        g.stroke();
+      }
+    }
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(repeatX, repeatY);
+  return tex;
+}
+
+/** Warm, bright pixels of the facade plate glow at night; the brick stays dark. */
+function maskWarmWindows(shader: { fragmentShader: string }) {
+  shader.fragmentShader = shader.fragmentShader.replace(
+    "#include <emissivemap_fragment>",
+    `#ifdef USE_EMISSIVEMAP
+  vec4 emissiveColor = texture2D( emissiveMap, vEmissiveMapUv );
+  float windowLit = smoothstep( 0.12, 0.5, emissiveColor.r ) * step( emissiveColor.b, emissiveColor.r );
+  totalEmissiveRadiance *= emissiveColor.rgb * windowLit;
+#endif`,
+  );
+}
+
+function collectWindowFacades(scene: THREE.Scene) {
+  const found = new Set<THREE.MeshStandardMaterial>();
+  scene.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    for (const mat of Array.isArray(obj.material) ? obj.material : [obj.material]) {
+      if (!(mat instanceof THREE.MeshStandardMaterial) || !mat.map) continue;
+      const src = (mat.map.image as { src?: string } | undefined)?.src ?? "";
+      if (!WINDOW_FACADE.test(src)) continue;
+      found.add(mat);
+      if (mat.userData.windowGlow) continue;
+      mat.userData.windowGlow = true;
+      mat.emissiveMap = mat.map;
+      mat.emissive.setHex(0xffc27a);
+      mat.emissiveIntensity = 0;
+      mat.onBeforeCompile = maskWarmWindows;
+      mat.customProgramCacheKey = () => "sack-window-glow";
+      mat.needsUpdate = true;
+    }
+  });
+  live.windows = [...found];
+  live.glow = -1;
+}
+
+function tickEnvironment(frame: WorldFrame) {
+  const dt = Math.min(frame.dt || 1 / 60, 0.05);
+  if (live.water) {
+    live.water.offset.x = (live.water.offset.x + dt * 0.022) % 1;
+    live.water.offset.y = Math.sin(performance.now() * 0.00021) * 0.035;
+  }
+  const glow = Math.round(nightLevel(frame.worldHour ?? 12) * 24) / 24;
+  if (glow === live.glow) return;
+  live.glow = glow;
+  for (const mat of live.windows) mat.emissiveIntensity = glow * WINDOW_GLOW_MAX;
+}
 
 function box(w: number, h: number, d: number, material: THREE.Material, x: number, y: number, z: number) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
@@ -119,12 +275,16 @@ function buildEnvironment(scene: THREE.Scene) {
   const riverCz = wz(river.y + river.h / 2);
   const riverW = wx(river.w);
   const riverD = wz(river.h);
+  live.water?.dispose();
+  live.water = rippleTexture(riverW / 7, riverD / 7);
+  // No env map in this scene, so metalness only darkens: keep it low and let the ripple plate carry the read.
   const waterMat = new THREE.MeshStandardMaterial({
-    color: 0x173d5c,
-    roughness: 0.22,
-    metalness: 0.28,
-    emissive: 0x071c2d,
-    emissiveIntensity: 0.5,
+    map: live.water,
+    color: 0xc4ccd2,
+    roughness: 0.62,
+    metalness: 0,
+    emissive: 0x0a2638,
+    emissiveIntensity: 0.4,
   });
   const water = new THREE.Mesh(new THREE.PlaneGeometry(riverW, riverD), waterMat);
   water.name = "mississippi-water";
@@ -200,6 +360,8 @@ export function installMemphisEnvironmentPass() {
     originalBuild.call(this);
     const scene = (this as unknown as { scene: THREE.Scene }).scene;
     buildEnvironment(scene);
+    finishStreetSurfaces(scene);
+    collectWindowFacades(scene);
     const w = window as typeof window & { __SACK_ENVIRONMENT__?: Record<string, unknown> };
     w.__SACK_ENVIRONMENT__ = {
       river: true,
@@ -207,6 +369,19 @@ export function installMemphisEnvironmentPass() {
       curbProps: true,
       streetFurniture: true,
       piers: true,
+      streetPlates: true,
+      nightWindows: live.windows.length,
     };
+  };
+
+  const originalPostSync = WorldLifePass.prototype.postSync;
+  WorldLifePass.prototype.postSync = function environmentPostSync(
+    this: WorldLifePass,
+    frame: WorldFrame,
+    carGroups: THREE.Group[],
+    npcSprites: Map<string, THREE.Object3D>,
+  ) {
+    originalPostSync.call(this, frame, carGroups, npcSprites);
+    tickEnvironment(frame);
   };
 }
