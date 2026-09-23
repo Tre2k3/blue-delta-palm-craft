@@ -131,8 +131,8 @@ function extrudeCentered(shape: THREE.Shape, width: number) {
     bevelEnabled: true,
     bevelThickness: BEVEL,
     bevelSize: BEVEL,
-    bevelSegments: 2,
-    curveSegments: 10,
+    bevelSegments: 1,
+    curveSegments: 5,
   });
   return g.translate(0, 0, -(width - BEVEL * 2) / 2);
 }
@@ -337,16 +337,14 @@ function wheelGeometry() {
   if (wheelGeo) return wheelGeo;
   const r = WHEEL_RADIUS;
   const axis = (g: THREE.BufferGeometry) => g.rotateX(Math.PI / 2);
-  const tire = flat([
-    axis(new THREE.CylinderGeometry(r, r, 0.16, 20)),
-    new THREE.TorusGeometry(r - 0.015, 0.03, 6, 20).translate(0, 0, 0.065),
-  ]);
-  const spokes: THREE.BufferGeometry[] = [axis(new THREE.CylinderGeometry(0.17, 0.17, 0.12, 16)).translate(0, 0, 0.03)];
+  // Kept light: 56 cars on screen and a shadow pass. Detail that reads at street distance only.
+  const tire = axis(new THREE.CylinderGeometry(r, r, 0.16, 14));
+  const spokes: THREE.BufferGeometry[] = [axis(new THREE.CylinderGeometry(0.17, 0.17, 0.12, 10, 1, true)).translate(0, 0, 0.03)];
   for (let i = 0; i < 5; i++) {
     const spoke = new THREE.BoxGeometry(0.035, 0.16, 0.02).translate(0, 0.08, 0.095);
     spokes.push(spoke.rotateZ((i * Math.PI * 2) / 5));
   }
-  spokes.push(axis(new THREE.CylinderGeometry(0.045, 0.045, 0.03, 10)).translate(0, 0, 0.1));
+  spokes.push(new THREE.CircleGeometry(0.17, 10).translate(0, 0, 0.088));
   wheelGeo = { tire, rim: flat(spokes) };
   return wheelGeo;
 }

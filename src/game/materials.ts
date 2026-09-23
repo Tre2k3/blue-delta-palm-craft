@@ -27,17 +27,11 @@ export const MAT_URLS = {
 export type MatKey = keyof typeof MAT_URLS;
 
 const cache = new Map<string, THREE.Texture>();
-/** Every repeat texture handed out (cache + per-material clones), so quality changes reach them all. */
-const live = new Set<THREE.Texture>();
 let maxAniso = 4;
 
+/** Applies to textures prepared after this call. Re-uploading live ground plates mid-game stalls weak GPUs. */
 export function setAnisotropy(n: number) {
   maxAniso = n;
-  for (const tex of live) {
-    if (tex.anisotropy === n) continue;
-    tex.anisotropy = n;
-    if (tex.image) tex.needsUpdate = true;
-  }
 }
 
 function prep(tex: THREE.Texture, repeatX: number, repeatY: number) {
@@ -50,7 +44,6 @@ function prep(tex: THREE.Texture, repeatX: number, repeatY: number) {
   tex.magFilter = THREE.LinearFilter;
   tex.repeat.set(repeatX, repeatY);
   tex.needsUpdate = true;
-  live.add(tex);
   return tex;
 }
 
@@ -89,7 +82,6 @@ export async function loadAllMaterials(
 export function disposeMaterialCache() {
   for (const tex of cache.values()) tex.dispose();
   cache.clear();
-  live.clear();
 }
 
 /** Repeat-1 clone of a ground texture, for meshes whose UVs are already in world metres (see worldPlanarUv). */
@@ -101,7 +93,6 @@ export function groundTexture(base: THREE.Texture) {
   tex.offset.set(0, 0);
   tex.anisotropy = maxAniso;
   tex.needsUpdate = true;
-  live.add(tex);
   return tex;
 }
 
@@ -142,7 +133,6 @@ export function std(
   } = {},
 ) {
   const tex = map?.clone();
-  if (tex) live.add(tex);
   if (tex && opts.repeat) {
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;

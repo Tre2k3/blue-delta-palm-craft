@@ -9,9 +9,9 @@ let autoDropped = false;
 
 /** Judge speed over a window of real frames, not frame-by-frame, so vsync jitter can't hide 20fps. */
 const SLOW_DT = 0.042;
-const WINDOW_S = 2;
-const BOOT_GRACE_S = 4;
-const DROP_GRACE_S = 2.5;
+const WINDOW_S = 1.5;
+const BOOT_GRACE_S = 1.5;
+const DROP_GRACE_S = 1;
 let windowTime = 0;
 let windowFrames = 0;
 let grace = BOOT_GRACE_S;
@@ -75,18 +75,9 @@ export function applyRendererQuality(world: QualityWorld) {
   const dpr = pixelRatio();
   world.renderer.setPixelRatio(dpr);
   const shadows = quality === "high";
-  const shadowsWere = world.renderer.shadowMap.enabled;
   world.renderer.shadowMap.enabled = shadows;
   world.renderer.shadowMap.type = quality === "high" ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
   world.sun.castShadow = shadows;
-  // Shadow on/off is baked into each compiled shader; flip it without a recompile and the ground goes black or stale.
-  if (shadowsWere !== shadows) {
-    world.scene.traverse((obj) => {
-      const mat = (obj as THREE.Mesh).material;
-      if (!mat) return;
-      for (const m of Array.isArray(mat) ? mat : [mat]) m.needsUpdate = true;
-    });
-  }
   if (shadows) world.sun.shadow.mapSize.set(quality === "high" ? 2048 : 512, quality === "high" ? 2048 : 512);
   world.sun.shadow.normalBias = 0.03;
   setAnisotropy(quality === "low" ? 1 : quality === "medium" ? 2 : Math.min(8, world.renderer.capabilities.getMaxAnisotropy()));
@@ -95,7 +86,7 @@ export function applyRendererQuality(world: QualityWorld) {
 }
 
 /**
- * Step graphics down when the average frame over ~2s is slower than SLOW_DT (~24fps).
+ * Step graphics down when the average frame over ~1.5s is slower than SLOW_DT (~24fps).
  * Driven by measured FPS only — the preview UA reads as desktop, so never trust isHandheld() here.
  * Returns the new quality or null.
  */
