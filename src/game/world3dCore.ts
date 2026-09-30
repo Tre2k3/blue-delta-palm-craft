@@ -16,7 +16,9 @@ import { ALL_PACKAGES, CYCLE_LABEL, CYCLE_SLOTS } from "./sponsors";
 import { basketballImageKey, basketballPackFor } from "./basketballSprites";
 import type { ApparelId } from "./types";
 import { venueFor, type CourtVenueId } from "./courtPlay";
-import { lightLook } from "./dayCycle";
+import { lightLook, type LightLook } from "./dayCycle";
+import { halloweenOn } from "./season";
+import { HW_ART, sponsorArt } from "./halloween";
 
 export const S = 1 / 16;
 
@@ -265,9 +267,51 @@ export type WorldFrame = {
     gutter: boolean;
   } | null;
   rcmDest?: { x: number; y: number } | null;
+  raceLook?: {
+    live: boolean;
+    mph: number;
+    boosting: boolean;
+    slowed: boolean;
+    phase: string;
+  };
 };
 
 type TexPack = Partial<Record<MatKey, THREE.Texture>>;
+
+function seasonLook(look: LightLook, indoor: boolean): LightLook {
+  if (!halloweenOn()) return look;
+  if (indoor) {
+    return {
+      ...look,
+      fog: 0x2a1830,
+      hemiSky: 0xff8a3c,
+      hemiGround: 0x241028,
+      amb: 0xd2b0ff,
+      ambI: Math.max(0.5, look.ambI),
+      exposure: 1.08,
+      sunI: 0.7,
+    };
+  }
+  return {
+    ...look,
+    sky: ["#241018", "#4a1c12", "#ff7a2a", "#c45a18", "#1a1020"],
+    fog: 0x3a2438,
+    fogNear: 24,
+    fogFar: 155,
+    clear: 0x1a1018,
+    sun: 0xffb15a,
+    sunI: Math.max(1.2, look.sunI * 0.75),
+    hemiSky: 0xff8a3c,
+    hemiGround: 0x2a1438,
+    hemiI: Math.max(0.9, look.hemiI * 0.92),
+    amb: 0xd2b0ff,
+    ambI: Math.max(0.5, look.ambI),
+    exposure: Math.max(1.14, look.exposure * 0.98),
+    disk: 0xf7f1dc,
+    glow: 0xff6a1a,
+    glowOp: 0.22,
+  };
+}
 
 export class World3D {
   renderer: THREE.WebGLRenderer;
@@ -310,6 +354,7 @@ export class World3D {
   private camPos = new THREE.Vector3();
   private camLook = new THREE.Vector3();
   private camFov = 62;
+  private chaseYaw = 0;
   private lastDt = 1 / 60;
   private benjiReady = false;
   private bbOutfit: string | null = null;
@@ -320,6 +365,10 @@ export class World3D {
   private courtGym = new THREE.Group();
   private courtVenue: CourtVenueId = "901_day";
   private lastLightKey = "";
+  seasonFlicker = 0;
+  batSwarm = 0;
+  private bats: THREE.Group | null = null;
+  private shootoutCard: THREE.Mesh | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = createWebGLRenderer(canvas);
@@ -427,30 +476,31 @@ export class World3D {
   }
 
   applyDaylight(hour: number, indoor = false) {
-    const look = lightLook(indoor ? 20.6 : hour);
-    const key = `${indoor ? "in" : "out"}:${Math.round(hour * 8)}`;
+    const look = seasonLook(lightLook(indoor ? 20.6 : hour), indoor);
+    const key = `${indoor ? "in" : "out"}:${Math.round(hour * 8)}:${halloweenOn() ? "hw" : "day"}:${this.seasonFlicker > 0 ? 1 : 0}`;
     this.hemi.color.setHex(look.hemiSky);
     this.hemi.groundColor.setHex(look.hemiGround);
     this.hemi.intensity = indoor ? look.hemiI * 0.45 : look.hemiI;
     this.amb.color.setHex(look.amb);
     this.amb.intensity = indoor ? look.ambI * 0.7 : look.ambI;
     this.sun.color.setHex(look.sun);
-    this.sun.intensity = indoor ? 0.28 : look.sunI;
+    this.sun.intensity = indoor ? 0.42 : look.sunI;
     this.sun.position.set(look.sunX, look.sunY, look.sunZ);
     this.sunDisk.position.set(look.sunX * 1.6, look.sunY * 1.15, look.sunZ * 1.6);
     this.sunGlow.position.copy(this.sunDisk.position);
+    const exposure = this.seasonFlicker > 0 ? look.exposure * 0.58 : look.exposure;
+    this.renderer.toneMappingExposure = exposure;
     if (key === this.lastLightKey) return;
     this.lastLightKey = key;
     this.renderer.setClearColor(look.clear, 1);
-    this.renderer.toneMappingExposure = look.exposure;
     (this.sunDisk.material as THREE.MeshBasicMaterial).color.setHex(look.disk);
     const glowMat = this.sunGlow.material as THREE.MeshBasicMaterial;
     glowMat.color.setHex(look.glow);
     glowMat.opacity = look.glowOp;
     if (this.scene.fog instanceof THREE.Fog) {
       this.scene.fog.color.setHex(look.fog);
-      this.scene.fog.near = indoor ? 8 : look.fogNear;
-      this.scene.fog.far = indoor ? 42 : look.fogFar;
+      this.scene.fog.near = indoor ? 10 : look.fogNear;
+      this.scene.fog.far = indoor ? 48 : look.fogFar;
     }
     const skyMat = this.skyDome.material as THREE.MeshBasicMaterial;
     const old = skyMat.map;
@@ -557,6 +607,10 @@ export class World3D {
         this.buildRcmLot(poi);
         continue;
       }
+      if (poi.id === "haunt") {
+        this.buildHaunt(poi);
+        continue;
+      }
       const br = poiBuildingRect(poi);
       const h = poi.id === "store" ? 6.6 : poi.id === "beale" ? 5.4 : poi.id === "lanes" ? 5.7 : 4.6 + hash(poi.x) * 3;
       const g = new THREE.Group();
@@ -604,7 +658,8 @@ export class World3D {
     }
     this.buildKollabWorld();
     if (this.signMat) void decorateBuildings(buildings);
-    mountCityAds(this.scene, buildings, this.art.ads["sacks-giving"]);
+    mountCityAds(this.scene, buildings);
+    if (halloweenOn()) this.dressHalloween();
 
     const trunkMat = std(this.t("wood"), { roughness: 0.95, color: 0x8a6a48, repeat: [1, 2] });
     const leafMat = std(this.t("canopy"), { roughness: 0.88, color: 0xffffff });
@@ -1293,24 +1348,25 @@ export class World3D {
     );
     board.position.set(cx, 3.15, hoopZ - 0.42);
     this.scene.add(board);
-    const flyer = this.art.ads["901-ballers"] ?? this.art.ads["sacks-giving"];
-    if (flyer) {
-      const ad = new THREE.Mesh(
-        new THREE.PlaneGeometry(1.55, 2.25),
-        new THREE.MeshBasicMaterial({ map: flyer, toneMapped: false, side: THREE.DoubleSide }),
-      );
-      ad.position.set(cx + 2.55, 2.7, hoopZ - 0.18);
-      this.scene.add(ad);
-      const luxury = this.art.ads["901-luxury"];
-      const ad2 = new THREE.Mesh(
-        new THREE.PlaneGeometry(1.55, 2.25),
-        new THREE.MeshBasicMaterial({ map: luxury ?? flyer, toneMapped: false, side: THREE.DoubleSide }),
-      );
-      ad2.position.set(cx - 2.55, 2.7, hoopZ - 0.18);
-      this.scene.add(ad2);
-    }
-    this.scene.add(board);
-    const square = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.42, 0.02), new THREE.MeshBasicMaterial({ color: 0xe85d4c }));
+    const courtArt = halloweenOn() ? HW_ART.court : "/game/ads/901-emblem.webp";
+    const sideArt = halloweenOn() ? HW_ART.streetball : "/game/ads/901-emblem.webp";
+    const ad = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.55, 2.25),
+      new THREE.MeshBasicMaterial({ color: 0xfff4e8, toneMapped: false, side: THREE.DoubleSide }),
+    );
+    ad.name = "sponsor_court_01";
+    ad.position.set(cx + 2.55, 2.7, hoopZ - 0.18);
+    this.scene.add(ad);
+    this.bindPoster(ad, sponsorArt("sponsor_court_01", courtArt));
+    const ad2 = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.55, 2.25),
+      new THREE.MeshBasicMaterial({ color: 0xfff4e8, toneMapped: false, side: THREE.DoubleSide }),
+    );
+    ad2.name = "sponsor_court_02";
+    ad2.position.set(cx - 2.55, 2.7, hoopZ - 0.18);
+    this.scene.add(ad2);
+    this.bindPoster(ad2, sponsorArt("sponsor_court_02", sideArt));
+    const square = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.42, 0.02), new THREE.MeshBasicMaterial({ color: halloweenOn() ? 0xff7a1a : 0xe85d4c }));
     square.position.set(cx, 2.95, hoopZ - 0.37);
     this.scene.add(square);
     this.hoopRim = new THREE.Mesh(
@@ -1319,8 +1375,8 @@ export class World3D {
         color: 0xea580c,
         metalness: 0.55,
         roughness: 0.25,
-        emissive: 0x3a1408,
-        emissiveIntensity: 0.2,
+        emissive: halloweenOn() ? 0x39ff14 : 0x3a1408,
+        emissiveIntensity: halloweenOn() ? 0.55 : 0.2,
       }),
     );
     this.hoopRim.rotation.x = Math.PI / 2;
@@ -1339,6 +1395,119 @@ export class World3D {
     return this.hoopRim;
   }
 
+  setShootoutBackdrop(on: boolean) {
+    if (this.shootoutCard) this.shootoutCard.visible = on && halloweenOn();
+  }
+
+  private bindPoster(mesh: THREE.Mesh, url: string) {
+    const img = new Image();
+    img.onload = () => {
+      const map = new THREE.Texture(img);
+      map.colorSpace = THREE.SRGBColorSpace;
+      map.needsUpdate = true;
+      const mat = mesh.material as THREE.MeshBasicMaterial;
+      mat.map = map;
+      mat.color.set(0xffffff);
+      mat.needsUpdate = true;
+    };
+    img.src = `${url}${url.includes("?") ? "&" : "?"}v=hw`;
+  }
+
+  private buildHaunt(poi: { x: number; y: number; w: number; h: number }) {
+    const bw = wx(poi.w);
+    const bd = wz(poi.h);
+    const h = 6.4;
+    const g = new THREE.Group();
+    g.name = "sponsor_hauntedhouse_01";
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(bw, h, bd),
+      new THREE.MeshStandardMaterial({ color: 0x1a1014, roughness: 0.84, emissive: 0x3a1408, emissiveIntensity: 0.2 }),
+    );
+    body.position.y = h / 2;
+    body.castShadow = true;
+    body.receiveShadow = true;
+    g.add(body);
+    const face = new THREE.Mesh(
+      new THREE.PlaneGeometry(bw * 0.96, h * 0.88),
+      new THREE.MeshBasicMaterial({ color: 0xfff4e8, toneMapped: false }),
+    );
+    face.position.set(0, h * 0.48, bd / 2 + 0.06);
+    g.add(face);
+    this.bindPoster(face, sponsorArt("sponsor_hauntedhouse_01", HW_ART.house));
+    const queue = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.4, 3.2),
+      new THREE.MeshBasicMaterial({ color: 0xfff4e8, toneMapped: false, side: THREE.DoubleSide }),
+    );
+    queue.position.set(bw * 0.2, 1.7, bd / 2 + 1.4);
+    g.add(queue);
+    this.bindPoster(queue, HW_ART.queue);
+    g.position.set(wx(poi.x + poi.w / 2), 0, wz(poi.y + poi.h / 2));
+    this.scene.add(g);
+    const lamp = new THREE.PointLight(0xff7a1a, 2.2, 14, 2);
+    lamp.position.set(wx(poi.x + poi.w / 2), 3.2, wz(poi.y + poi.h + 20));
+    this.scene.add(lamp);
+  }
+
+  private dressHalloween() {
+    const pumpkin = new THREE.MeshStandardMaterial({ color: 0xff6a1a, emissive: 0xff4d00, emissiveIntensity: 0.35, roughness: 0.6 });
+    const spots = [
+      [12 * TILE, 29 * TILE],
+      [20 * TILE, 28 * TILE],
+      [15 * TILE, 22 * TILE],
+      [43 * TILE, 22 * TILE],
+      [8 * TILE, 22 * TILE],
+      [52 * TILE, 15 * TILE],
+    ];
+    for (const [x, y] of spots) {
+      const p = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), pumpkin);
+      p.scale.y = 0.8;
+      p.position.set(wx(x), 0.28, wz(y));
+      this.scene.add(p);
+    }
+    const planes: { id: string; url: string; x: number; y: number; w: number; h: number }[] = [
+      { id: "sponsor_fishing_01", url: HW_ART.street, x: 18 * TILE, y: 40.2 * TILE, w: 3.2, h: 1.8 },
+      { id: "sponsor_bowling_01", url: HW_ART.poster, x: 23.4 * TILE, y: 28.2 * TILE, w: 2.4, h: 1.4 },
+      { id: "sponsor_race_01", url: HW_ART.billboard, x: 34.2 * TILE, y: 18.4 * TILE, w: 2.6, h: 1.5 },
+      { id: "sponsor_foodtruck_01", url: HW_ART.hub, x: 16.6 * TILE, y: 21.6 * TILE, w: 2.2, h: 1.3 },
+    ];
+    for (const plane of planes) {
+      const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(plane.w, plane.h),
+        new THREE.MeshBasicMaterial({ color: 0xfff4e8, toneMapped: false, side: THREE.DoubleSide }),
+      );
+      mesh.name = plane.id;
+      mesh.position.set(wx(plane.x), plane.h * 0.55 + 1.2, wz(plane.y));
+      this.scene.add(mesh);
+      this.bindPoster(mesh, sponsorArt(plane.id, plane.url));
+    }
+    const court = POIS.find((p) => p.id === "court");
+    if (court) {
+      const card = new THREE.Mesh(
+        new THREE.PlaneGeometry(16, 9),
+        new THREE.MeshBasicMaterial({ color: 0xfff4e8, toneMapped: false, side: THREE.DoubleSide }),
+      );
+      card.name = "halloween-cathedral";
+      card.position.set(wx(court.x + court.w / 2), 5.2, wz(court.y + 8));
+      card.visible = false;
+      this.bindPoster(card, HW_ART.boss);
+      this.scene.add(card);
+      this.shootoutCard = card;
+    }
+    this.bats = new THREE.Group();
+    const batMat = new THREE.MeshBasicMaterial({ color: 0x140810 });
+    for (let i = 0; i < 6; i++) {
+      const bat = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.18), batMat);
+      const a = (i / 6) * Math.PI * 2;
+      bat.position.set(Math.cos(a) * 3.2, Math.sin(i) * 0.4, Math.sin(a) * 3.2);
+      this.bats.add(bat);
+    }
+    this.bats.visible = false;
+    this.scene.add(this.bats);
+    const river = new THREE.PointLight(0xff8a3c, 1.6, 18, 2);
+    river.position.set(wx(20 * TILE), 2.4, wz(40.5 * TILE));
+    this.scene.add(river);
+  }
+
   applyCourtVenue(id: string) {
     const venue = venueFor(id);
     this.courtVenue = venue.id;
@@ -1347,8 +1516,12 @@ export class World3D {
     const mat = floor.material as THREE.MeshStandardMaterial;
     if (venue.id === "901_day") {
       mat.map = this.art.facades.court ?? this.t("court") ?? null;
-      mat.color.set(0xffffff);
+      mat.color.set(halloweenOn() ? 0xffc49a : 0xffffff);
       mat.roughness = 0.74;
+      if (halloweenOn()) {
+        mat.emissive.set(0x4a2010);
+        mat.emissiveIntensity = 0.08;
+      }
     } else if (venue.id === "sackrow") {
       mat.map = this.art.facades.courtSackrow ?? this.art.facades.court ?? null;
       mat.color.set(0xffffff);
@@ -1609,6 +1782,13 @@ export class World3D {
     this.clock = f.clock;
     const dt = Math.min(f.dt || this.lastDt, 0.05);
     this.lastDt = dt;
+    if (this.bats) {
+      this.bats.visible = this.batSwarm > 0;
+      if (this.batSwarm > 0) {
+        this.bats.position.set(wx(f.px), 7.2, wz(f.py));
+        this.bats.rotation.y = f.clock * 1.4;
+      }
+    }
     if (f.courtVenue && f.courtVenue !== this.courtVenue) this.applyCourtVenue(f.courtVenue);
     this.applyDaylight(f.worldHour ?? 12, !!f.indoor);
     const x = wx(f.px);
@@ -1750,6 +1930,7 @@ export class World3D {
       if (!seenNpcs.has(id)) sprite.visible = false;
     }
     for (const n of f.npcs) {
+      if (n.id === "k_blanco") continue;
       let s = this.npcSprites.get(n.id);
       if (!s) {
         const key = NPC_SPRITE[n.id] ?? "local";
@@ -1786,16 +1967,33 @@ export class World3D {
     const sy = Math.cos(f.clock * 39) * shake * 0.08;
     const air = f.air ?? 0;
     const step = Math.sin(f.animT) * (f.loco === "run" ? 0.028 : f.loco === "walk" ? 0.014 : 0);
-    const lookAhead = Math.min(f.moveSpeed / 268, 1);
-    const follow = (f.driving ? (f.vehicleKind === "sprinter" ? 13.2 : 11.5) : f.indoor ? 3.45 : f.loco === "run" ? 6.15 : 5.45);
-    const height = (f.indoor ? 1.48 : f.driving ? (f.vehicleKind === "sprinter" ? 6.2 : 5.4) : 2.38) + air * 0.35;
-    const k = f.indoor ? 11 : f.driving ? 4.6 : f.loco === "run" ? 5.4 : 7.6;
+    const race = f.raceLook;
+    const racing = !!f.driving && !!race?.live;
+    const pace = racing ? Math.min(1, (race?.mph ?? 0) / 88) : 0;
+    const boost = racing && race?.boosting ? 1 : 0;
+    const yawStep = Math.atan2(Math.sin(f.yaw - this.chaseYaw), Math.cos(f.yaw - this.chaseYaw));
+    this.chaseYaw = f.yaw;
+    const lookAhead = racing ? 1.35 + pace * 2.6 : Math.min(f.moveSpeed / 268, 1);
+    const follow = racing
+      ? 4.8 + pace * 0.7 + boost * 0.35
+      : (f.driving ? (f.vehicleKind === "sprinter" ? 6.1 : 4.35) : f.indoor ? 3.45 : f.loco === "run" ? 6.15 : 5.45);
+    const height = (racing
+      ? 1.48 + pace * 0.12
+      : f.indoor
+        ? 1.48
+        : f.driving
+          ? (f.vehicleKind === "sprinter" ? 2.15 : 1.62)
+          : 2.38) + air * 0.35;
+    const k = f.indoor ? 11 : racing ? 7.4 : f.driving ? 5.4 : f.loco === "run" ? 5.4 : 7.6;
     const ease = 1 - Math.exp(-k * dt);
+    const drivePace = f.driving ? Math.min(1, f.moveSpeed / 620) : 0;
     const targetFov = f.cameraView === "first"
-      ? (f.driving ? 74 : f.mode === "basketball" ? 74 : 70)
-      : f.driving
-        ? 68
-        : f.loco === "run" ? 66.5 : f.indoor ? 58 : 62;
+      ? (f.driving ? 76 + pace * 8 + boost * 6 : f.mode === "basketball" ? 74 : 70)
+      : racing
+        ? 73 + pace * 11 + boost * 8
+        : f.driving
+          ? 64 + drivePace * 6
+          : f.loco === "run" ? 66.5 : f.indoor ? 58 : 62;
     this.camFov += (targetFov - this.camFov) * (1 - Math.exp(-4.2 * dt));
     this.camFov += (f.punch ?? 0) * 3.4;
 
@@ -1817,6 +2015,7 @@ export class World3D {
     }
 
     if (f.cameraView === "first") {
+      this.camera.up.set(0, 1, 0);
       const beatT = this.veliVideo && !this.veliVideo.paused ? this.veliVideo.currentTime : f.clock;
       const listenNod = f.listening
         ? Math.pow(Math.max(0, Math.sin(beatT * 9.95)), 2.4) * 0.055
@@ -1836,8 +2035,23 @@ export class World3D {
       this.camPos.y += (desired.y - this.camPos.y) * ease;
       this.camPos.z += (desired.z - this.camPos.z) * ease;
       this.camera.position.copy(this.camPos);
-      this.camLook.set(x, 1.22 + step + air * 0.55, z);
+      const aim = racing ? 4.2 + pace * 6.5 : 0;
+      this.camLook.set(x + fwdX * aim, (racing ? 0.72 : 1.22) + step + air * 0.55, z + fwdZ * aim);
+      const roll = racing ? Math.max(-0.14, Math.min(0.14, -yawStep * 2.2)) : 0;
+      this.camera.up.set(Math.sin(roll), Math.cos(roll), 0);
       this.camera.lookAt(this.camLook);
+    }
+    if (f.foodServe) {
+      const truck = this.foodRigs.find((g) => g.userData.truckId === f.foodServe?.truckId);
+      if (truck) {
+        const window = new THREE.Vector3();
+        truck.getWorldPosition(window);
+        window.y = 1.38;
+        this.camera.up.set(0, 1, 0);
+        this.camera.position.set(x, 1.58, z);
+        this.camera.lookAt(window);
+        this.camFov = 54;
+      }
     }
     this.camera.fov = this.camFov;
     this.sun.target.position.set(x, 0, z);

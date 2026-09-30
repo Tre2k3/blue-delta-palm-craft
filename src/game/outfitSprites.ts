@@ -53,6 +53,24 @@ export const OUTFIT_PLATES: Partial<Record<ApparelId, OutfitPlatePack>> = {
     left: "/game/benji/outfits/blue_901_day/left.png",
     right: "/game/benji/outfits/blue_901_day/right.png",
   },
+  hw_doll: {
+    front: "/game/benji/outfits/hw_doll/front.png",
+    back: "/game/benji/outfits/hw_doll/back.png",
+    left: "/game/benji/outfits/hw_doll/left.png",
+    right: "/game/benji/outfits/hw_doll/right.png",
+  },
+  hw_sackrow: {
+    front: "/game/benji/outfits/hw_sackrow/front.png",
+    back: "/game/benji/outfits/hw_sackrow/back.png",
+    left: "/game/benji/outfits/hw_sackrow/left.png",
+    right: "/game/benji/outfits/hw_sackrow/right.png",
+  },
+  hw_claw: {
+    front: "/game/benji/outfits/hw_claw/front.png",
+    back: "/game/benji/outfits/hw_claw/back.png",
+    left: "/game/benji/outfits/hw_claw/left.png",
+    right: "/game/benji/outfits/hw_claw/right.png",
+  },
 };
 
 export function outfitPlatesFor(id: ApparelId | string | null | undefined): OutfitPlatePack | null {

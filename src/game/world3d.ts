@@ -49,6 +49,7 @@ export class World3D extends World3DCore {
   private apartmentInterior: THREE.Group | null = null;
   private hqExterior: THREE.Group | null = null;
   private hqInterior: THREE.Group | null = null;
+  private pendingCatalog: { id: string; name: string; imageUrl?: string; backImage?: string }[] | null = null;
   private lanesExterior: THREE.Group | null = null;
   private lanesInterior: THREE.Group | null = null;
   private bowlCamPos = new THREE.Vector3();
@@ -89,6 +90,7 @@ export class World3D extends World3DCore {
       this.hqInterior = this.buildHQInterior(wx(STORE.x + STORE.w / 2), wz(STORE.y + STORE.h / 2));
       this.hqInterior.visible = false;
       this.scene.add(this.hqInterior);
+      if (this.pendingCatalog) this.setHqCatalog(this.pendingCatalog);
     } catch (err) {
       console.warn("[sack] HQ interior failed", err);
       this.hqInterior = null;
@@ -369,6 +371,51 @@ export class World3D extends World3DCore {
     return root;
   }
 
+  setHqCatalog(products: { id: string; name: string; imageUrl?: string; backImage?: string }[]) {
+    this.pendingCatalog = products;
+    const root = this.hqInterior;
+    if (!root) return;
+    root.getObjectByName("hq-live-displays")?.removeFromParent();
+    const group = new THREE.Group();
+    group.name = "hq-live-displays";
+    const loader = new THREE.TextureLoader();
+    loader.setCrossOrigin("anonymous");
+    const list = products.filter((p) => p.imageUrl || p.backImage).slice(0, 6);
+    const wood = new THREE.MeshStandardMaterial({ color: 0x3a2a1c, roughness: 0.78 });
+    const slots = [
+      { x: -3.55, z: 1.72 },
+      { x: 3.55, z: 1.72 },
+      { x: -3.45, z: -1.55 },
+      { x: 3.45, z: -1.55 },
+      { x: -1.7, z: 2.35 },
+      { x: 1.7, z: 2.35 },
+    ];
+    list.forEach((product, i) => {
+      const slot = slots[i] ?? { x: (i - 2) * 1.5, z: 0.4 };
+      const x = slot.x;
+      group.add(box(0.9, 0.06, 0.7, wood, x, 0.86, slot.z));
+      const hang = (url: string | undefined, z: number, rotY: number) => {
+        const mat = new THREE.MeshBasicMaterial({ color: 0x141210, side: THREE.FrontSide });
+        const card = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 1.28), mat);
+        card.name = `hq-display-${product.id}`;
+        card.position.set(x, 1.58, z);
+        card.rotation.y = rotY;
+        if (url) {
+          loader.load(url, (tex) => {
+            tex.colorSpace = THREE.SRGBColorSpace;
+            mat.map = tex;
+            mat.color.set(0xffffff);
+            mat.needsUpdate = true;
+          });
+        }
+        group.add(card);
+      };
+      hang(product.imageUrl, slot.z + 0.28, 0);
+      if (product.backImage) hang(product.backImage, slot.z - 0.28, Math.PI);
+    });
+    root.add(group);
+  }
+
   private neonMat(color: number, intensity = 1.35) {
     return new THREE.MeshStandardMaterial({
       color,
@@ -642,31 +689,19 @@ export class World3D extends World3DCore {
     }
   }
 
-  private frameBowlShot(f: WorldFrame, root: THREE.Group, ball: THREE.Mesh | undefined, lx: number) {
+  private frameBowlShot(f: WorldFrame, root: THREE.Group, _ball: THREE.Mesh | undefined, lx: number) {
     const data = f.bowling;
     this.bowlShot = false;
-    if (!data || f.cameraView === "first") return;
-    if (data.phase !== "rolling" && data.phase !== "pins" && data.phase !== "mark") return;
+    if (!data?.active) return;
     root.updateMatrixWorld(true);
-    const t = data.phase === "rolling" ? data.progress : 1;
-    if (ball) ball.getWorldPosition(this.bowlBallWorld);
-    else this.bowlBallWorld.set(root.position.x + lx + data.ballX, 0.28, root.position.z + APPROACH_Z + (PIN_Z - APPROACH_Z) * t);
-    this.bowlPinWorld.set(lx + data.ballX * 0.15, 0.48, PIN_Z);
-    this.bowlPinWorld.applyMatrix4(root.matrixWorld);
-    const impact = data.phase === "pins" ? 1 : Math.max(0, (t - 0.38) / 0.62);
-    this.bowlCamLook.copy(this.bowlBallWorld).lerp(this.bowlPinWorld, impact);
-    this.bowlCamLook.y = 0.38 + impact * 0.22;
-    const side = lx >= 0 ? -1.15 : 1.15;
-    const localX = lx + side * (1.85 + impact * 0.55);
-    const localY = 1.22 + impact * 0.42;
-    const localZ = data.phase === "pins"
-      ? PIN_Z + 1.42
-      : APPROACH_Z + (PIN_Z - APPROACH_Z) * Math.max(0.18, t - 0.12) + 1.65 - impact * 0.55;
-    this.bowlCamPos.set(localX, localY, localZ).applyMatrix4(root.matrixWorld);
-    const snap = data.phase === "rolling" && t < 0.16 ? 0.22 : 0.28;
-    this.camera.position.lerp(this.bowlCamPos, snap);
-    this.camera.lookAt(this.bowlCamLook);
-    this.camera.fov = data.phase === "pins" ? 50 : 55;
+    const eye = new THREE.Vector3(lx, 1.58, APPROACH_Z - 0.15);
+    const look = new THREE.Vector3(lx + data.ballX * 0.25, 0.38, PIN_Z);
+    eye.applyMatrix4(root.matrixWorld);
+    look.applyMatrix4(root.matrixWorld);
+    this.camera.up.set(0, 1, 0);
+    this.camera.position.lerp(eye, 0.35);
+    this.camera.lookAt(look);
+    this.camera.fov = data.phase === "pins" ? 62 : 68;
     this.camera.updateProjectionMatrix();
     this.bowlShot = true;
   }
@@ -688,17 +723,26 @@ export class World3D extends World3DCore {
     super.sync(f);
     this.worldLife.postSync(f, this.cars, this.npcSprites);
     const inApartment = inside(f, APARTMENT) && f.mode === "world";
-    const inHQ = inside(f, STORE) && (f.mode === "world" || f.mode === "dialogue" || f.mode === "shop");
+    const inHQ = false;
     const inLanes = inside(f, LANES) && (f.mode === "world" || f.mode === "dialogue" || !!f.bowling?.active);
     if (this.apartmentExterior) this.apartmentExterior.visible = !inApartment;
     if (this.apartmentInterior) this.apartmentInterior.visible = inApartment;
-    if (this.hqExterior) this.hqExterior.visible = !inHQ;
-    if (this.hqInterior) this.hqInterior.visible = inHQ;
+    if (this.hqExterior) this.hqExterior.visible = true;
+    if (this.hqInterior) this.hqInterior.visible = false;
     if (this.lanesExterior) this.lanesExterior.visible = !inLanes;
     if (this.lanesInterior) this.lanesInterior.visible = inLanes;
     if (inLanes) this.syncBowling(f);
     const kSprite = this.npcSprites.get("k_blanco");
-    if (kSprite) kSprite.visible = false;
+    if (kSprite) kSprite.visible = true;
+    const kTex = this.art.people["k-blanco"];
+    if (kTex) {
+      this.scene.traverse((obj) => {
+        const mesh = obj as THREE.Mesh;
+        const mat = mesh.material as THREE.MeshStandardMaterial | THREE.SpriteMaterial | undefined;
+        if (!mat || !("map" in mat) || mat.map !== kTex) return;
+        mesh.visible = mesh.name === "k-blanco-desk" && inHQ;
+      });
+    }
     const clerk = this.npcSprites.get("lane_clerk");
     if (clerk) clerk.visible = inLanes;
     const kDesk = this.hqInterior?.getObjectByName("k-blanco-desk");

@@ -413,10 +413,7 @@ export function poiColliders(): Rect[] {
   if (apartment) out.push(...shellWithSouthDoor(apartment, 6 * TILE, TILE * 1.3));
 
   const store = POIS.find((p) => p.id === "store");
-  if (store) {
-    const center = store.x + store.w / 2;
-    out.push(...shellWithSouthDoor(store, center, TILE * 1.7));
-  }
+  if (store) out.push({ x: store.x, y: store.y, w: store.w, h: store.h });
 
   const lanes = POIS.find((p) => p.id === "lanes");
   if (lanes) {

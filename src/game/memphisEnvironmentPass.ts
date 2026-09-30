@@ -87,6 +87,8 @@ function addBoat(root: THREE.Group, x: number, z: number, rot: number, color: nu
   g.add(cabin);
   g.position.set(x, 0.12, z);
   g.rotation.y = rot;
+  g.userData.boat = 0.4 + x * 0.17;
+  g.userData.baseY = 0.12;
   root.add(g);
 }
 

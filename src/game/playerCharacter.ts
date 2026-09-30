@@ -93,7 +93,7 @@ function benjiCardMaterial(src?: HTMLImageElement | HTMLCanvasElement, path = ""
     transparent: true,
     opacity: 1,
     alphaTest: CUTOUT_ALPHA,
-    alphaToCoverage: true,
+    alphaToCoverage: false,
     depthWrite: true,
     depthTest: true,
     polygonOffset: true,
@@ -548,7 +548,7 @@ export class PlayerCharacter {
       matA.opacity = 1;
       matA.transparent = true;
       matA.alphaTest = CUTOUT_ALPHA;
-      matA.alphaToCoverage = true;
+      matA.alphaToCoverage = false;
       matA.depthWrite = true;
       this.cardA.visible = true;
       this.cardB.visible = false;

@@ -30,9 +30,12 @@ export type LiveProduct = {
   name: string;
   price: number;
   image: string;
+  imageUrl?: string;
+  backImage?: string;
   zone: string;
   sizes: string[];
   url?: string;
+  storeUrl?: string;
   available?: boolean;
   slug?: string;
   virtualOutfitId?: string;
@@ -45,7 +48,7 @@ export type Envelope = {
   payload: Record<string, unknown>;
 };
 
-export type GameMessageType = "GG_READY" | "GG_RUN_COMPLETE" | "GG_ADD_TO_CART" | "GG_UNLOCK" | "GG_REQUEST_CATALOG";
+export type GameMessageType = "GG_READY" | "GG_ENTER_HQ" | "GG_EXIT_HQ" | "GG_RUN_COMPLETE" | "GG_ADD_TO_CART" | "GG_UNLOCK" | "GG_REQUEST_CATALOG";
 export type ParentMessageType = "SR_INIT" | "SR_PLAYER" | "SR_CATALOG" | "SR_ACK" | "SR_PAUSE" | "SR_RESUME" | "SR_REWARD";
 
 const DEFAULT_THEME: ParentTheme = {
@@ -78,6 +81,18 @@ export function originFromReferrer() {
   }
 }
 
+export function discoverParentOrigin() {
+  if (typeof window === "undefined") return null;
+  const ancestors = (window.location as Location & { ancestorOrigins?: ArrayLike<string> }).ancestorOrigins;
+  if (ancestors) {
+    for (let i = 0; i < ancestors.length; i++) {
+      const origin = ancestors[i];
+      if (origin && isAllowedOrigin(origin)) return origin;
+    }
+  }
+  return originFromReferrer();
+}
+
 function isEnvelope(data: unknown): data is Envelope {
   if (!data || typeof data !== "object") return false;
   const msg = data as Envelope;
@@ -105,7 +120,7 @@ export type BridgeHandlers = {
 };
 
 export class StoreBridge {
-  parentOrigin: string | null = originFromReferrer();
+  parentOrigin: string | null = discoverParentOrigin();
   connected = false;
   private unbind: (() => void) | null = null;
 
@@ -115,6 +130,8 @@ export class StoreBridge {
     const onMessage = (event: MessageEvent) => {
       if (!isAllowedOrigin(event.origin)) return;
       if (!isEnvelope(event.data)) return;
+      if (!this.parentOrigin) this.parentOrigin = event.origin;
+      else if (event.origin !== this.parentOrigin) return;
       const { type, payload } = event.data;
       if (type === "SR_INIT") {
         const origin = typeof payload.origin === "string" ? payload.origin : event.origin;
@@ -129,7 +146,7 @@ export class StoreBridge {
         });
         return;
       }
-      if (this.parentOrigin && event.origin !== this.parentOrigin) return;
+      this.connected = true;
       if (type === "SR_PLAYER") {
         handlers.onPlayer({
           signedIn: !!payload.signedIn,
@@ -140,13 +157,14 @@ export class StoreBridge {
         return;
       }
       if (type === "SR_CATALOG") {
-        const raw = Array.isArray(payload.products) ? payload.products : [];
+        const raw = Array.isArray(payload.items) ? payload.items : Array.isArray(payload.products) ? payload.products : [];
         handlers.onCatalog(raw.map(normalizeLiveProduct).filter((p): p is LiveProduct => !!p));
         return;
       }
       if (type === "SR_ACK") {
+        const forType = String(payload.type ?? payload.forType ?? "");
         handlers.onAck({
-          forType: String(payload.forType ?? ""),
+          forType,
           ok: payload.ok !== false,
           error: typeof payload.error === "string" ? payload.error : undefined,
           granted: typeof payload.granted === "number" ? payload.granted : undefined,
@@ -160,10 +178,6 @@ export class StoreBridge {
     };
     window.addEventListener("message", onMessage);
     this.unbind = () => window.removeEventListener("message", onMessage);
-    this.post("GG_READY", {
-      gameId: GAME_ID,
-      capabilities: ["rewards", "cart", "identity"],
-    });
   }
 
   stop() {
@@ -174,15 +188,15 @@ export class StoreBridge {
   post(type: GameMessageType, payload: Record<string, unknown>) {
     if (typeof window === "undefined") return;
     if (window.parent === window) return;
+    const live = discoverParentOrigin();
+    if (live) this.parentOrigin = live;
     const msg = envelope(type, payload);
     const target = this.parentOrigin;
     if (target) {
       window.parent.postMessage(msg, target);
       return;
     }
-    for (const origin of STATIC_ALLOWED_ORIGINS) {
-      window.parent.postMessage(msg, origin);
-    }
+    for (const origin of STATIC_ALLOWED_ORIGINS) window.parent.postMessage(msg, origin);
   }
 
   applyTheme(partial?: Partial<ParentTheme>) {
@@ -222,14 +236,20 @@ function normalizeLiveProduct(raw: unknown): LiveProduct | null {
   const name = typeof p.name === "string" ? p.name : "";
   if (!id || !name) return null;
   const sizes = Array.isArray(p.sizes) ? p.sizes.filter((s): s is string => typeof s === "string" && s.length > 0) : [];
+  const image = typeof p.image === "string" ? p.image : typeof p.imageUrl === "string" ? p.imageUrl : "";
+  const imageUrl = typeof p.imageUrl === "string" ? p.imageUrl : image;
+  const storeUrl = typeof p.storeUrl === "string" ? p.storeUrl : typeof p.url === "string" ? p.url : undefined;
   return {
     id,
     name,
     price: typeof p.price === "number" ? p.price : 0,
-    image: typeof p.image === "string" ? p.image : typeof p.imageUrl === "string" ? p.imageUrl : "",
+    image,
+    imageUrl,
+    backImage: typeof p.backImage === "string" ? p.backImage : undefined,
     zone: typeof p.zone === "string" ? p.zone : "hq",
     sizes: sizes.length ? sizes : ["S", "M", "L", "XL"],
-    url: typeof p.url === "string" ? p.url : typeof p.storeUrl === "string" ? p.storeUrl : undefined,
+    url: storeUrl,
+    storeUrl,
     available: p.available !== false,
     slug: typeof p.slug === "string" ? p.slug : undefined,
     virtualOutfitId: typeof p.virtualOutfitId === "string" ? p.virtualOutfitId : undefined,

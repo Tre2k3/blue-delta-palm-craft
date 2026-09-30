@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, type PointerEvent as ReactPointerEvent } from "react";
 import {
   Map as MapIcon,
   Target,
@@ -19,8 +19,9 @@ import { lookFor } from "./outfitLook";
 import { formatRunClock } from "./dropRun";
 import type { ApparelId, HudSnapshot, PauseTab } from "./types";
 import { commerce, installCommerceTestHook, type CommerceSnapshot, type StoreProduct } from "./commerce";
+import { claimGameInstance } from "./singleInstance";
 import { installAnalyticsTestHook } from "./analytics";
-import { GAME_BUILD_VERSION, GAME_TITLE } from "./config";
+import { GAME_BUILD_VERSION, GAME_TITLE, PUBLIC_STORE_PAGE } from "./config";
 import type { SponsorHud } from "./sponsors";
 import { RCM, RCM_DROPS, RCM_VEHICLES } from "./rcmWorx";
 import { ErrorBoundary } from "./ui/ErrorBoundary";
@@ -28,6 +29,29 @@ import { RotatePrompt } from "./ui/RotatePrompt";
 import { PlaytestKit, PlaytestTicker } from "./ui/PlaytestKit";
 import { loadTickerOn, saveTickerOn } from "./playtest";
 import { arrowGlyph, formatGap, formatMph, formatRaceClock, RACE_CHECKPOINTS } from "./race";
+import { halloweenOn } from "./season";
+import { HauntedHouse } from "./ui/HauntedHouse";
+
+const KIT_PASSWORD = "admin4744";
+const KIT_SESSION = "sack-kit-admin";
+
+function unlockKitFromUrl() {
+  if (typeof window === "undefined") return false;
+  try {
+    if (sessionStorage.getItem(KIT_SESSION) === "1") return true;
+    const q = new URLSearchParams(window.location.search);
+    const pass = q.get("access") || q.get("kit");
+    if (pass !== KIT_PASSWORD) return false;
+    sessionStorage.setItem(KIT_SESSION, "1");
+    q.delete("access");
+    q.delete("kit");
+    const next = `${window.location.pathname}${q.toString() ? `?${q}` : ""}${window.location.hash}`;
+    window.history.replaceState(null, "", next);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const emptyHud: HudSnapshot = {
   mode: "menu",
@@ -140,6 +164,25 @@ function loadCopy(pct: number) {
   return "Loading The Drop...";
 }
 
+function holdPointer(down: () => void, up: () => void) {
+  return {
+    onPointerDown: (e: ReactPointerEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+      down();
+    },
+    onPointerUp: (e: ReactPointerEvent) => {
+      e.preventDefault();
+      up();
+    },
+    onPointerCancel: (e: ReactPointerEvent) => {
+      e.preventDefault();
+      up();
+    },
+  };
+}
+
 function GameShell({ onRetry }: { onRetry: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<GameEngine | null>(null);
@@ -160,13 +203,24 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
   const [touchUI, setTouchUI] = useState(false);
   const [landscape, setLandscape] = useState(false);
   const [fitsOpen, setFitsOpen] = useState(false);
+  const [eventOpen, setEventOpen] = useState(false);
   const [ticker, setTicker] = useState(loadTickerOn);
   const [hideHud, setHideHud] = useState(false);
+  const [kitAdmin, setKitAdmin] = useState(false);
+  const [yielded, setYielded] = useState(false);
+
+  useEffect(() => {
+    setKitAdmin(unlockKitFromUrl());
+  }, []);
 
   useEffect(() => {
     const read = () => {
-      const coarse = window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
-      setTouchUI(coarse);
+      const ua = navigator.userAgent || "";
+      const mobileUa = /Mobi|Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+      const coarse = window.matchMedia("(pointer: coarse)").matches;
+      const fine = window.matchMedia("(pointer: fine)").matches;
+      const short = Math.min(window.innerWidth, window.innerHeight) <= 820;
+      setTouchUI(mobileUa || (coarse && !fine) || (coarse && short));
       setLandscape(window.matchMedia("(orientation: landscape)").matches && window.innerHeight <= 560);
     };
     read();
@@ -180,6 +234,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!kitAdmin) return;
       if (e.code !== "F3" && e.code !== "Backquote") return;
       e.preventDefault();
       const eng = engineRef.current;
@@ -192,7 +247,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [ticker]);
+  }, [ticker, kitAdmin]);
 
   useEffect(() => {
     installAnalyticsTestHook();
@@ -200,30 +255,63 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
     commerce.bind({
       pause: (source) => engineRef.current?.setPauseReason(source, true),
       resume: (source) => engineRef.current?.setPauseReason(source, false),
+      returnedFromStore: () => {
+        const eng = engineRef.current;
+        if (!eng) return;
+        eng.placeOutsideHq();
+        eng.setPauseReason("parent", false);
+        eng.setPauseReason("hidden", false);
+      },
+      beforeStoreLeave: () => engineRef.current?.save(),
       toast: (text) => engineRef.current?.showToast(text),
       grant: (reward) => engineRef.current?.applyVerifiedReward(reward),
+      catalog: (products) => engineRef.current?.world3d?.setHqCatalog(products),
     });
     void commerce.init();
     (window as Window & { __SACK_BUILD__?: unknown }).__SACK_BUILD__ = {
       version: GAME_BUILD_VERSION,
       title: GAME_TITLE,
     };
+    const onShow = (event: PageTransitionEvent) => {
+      if (!event.persisted || !commerce.consumeStoreReturn()) return;
+      const eng = engineRef.current;
+      if (!eng) return;
+      eng.placeOutsideHq();
+      eng.setPauseReason("parent", false);
+      eng.setPauseReason("hidden", false);
+    };
+    window.addEventListener("pageshow", onShow);
     const unsub = commerce.subscribe(setStore);
-    const onVis = () => engineRef.current?.setPauseReason("hidden", document.hidden);
+    const onVis = () => {
+      const eng = engineRef.current;
+      if (!eng) return;
+      eng.setPauseReason("hidden", document.hidden);
+      if (!document.hidden) {
+        eng.releaseHqHandoff();
+        commerce.returnToSameGame();
+      }
+    };
     document.addEventListener("visibilitychange", onVis);
     return () => {
       unsub();
       document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("pageshow", onShow);
     };
   }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || yielded) return;
     let eng: GameEngine;
     let cancelled = false;
     (async () => {
       try {
+        const lead = await claimGameInstance(() => engineRef.current);
+        if (cancelled) return;
+        if (!lead) {
+          setYielded(true);
+          return;
+        }
         eng = new GameEngine(canvas);
         engineRef.current = eng;
         eng.onHud = (h) => setHud({ ...h });
@@ -251,6 +339,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
   const boot = useCallback((fresh: boolean) => {
     engineRef.current?.start(fresh);
     setHud((h) => ({ ...h, started: true }));
+    window.focus();
   }, []);
 
   useEffect(() => {
@@ -281,42 +370,42 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
     engineRef.current?.advanceDialogue();
   }, []);
 
-  const onStickStart = (e: React.TouchEvent) => {
-    const t = e.changedTouches[0];
-    if (!t) return;
+  const applyStick = (clientX: number, clientY: number) => {
+    const eng = engineRef.current;
+    if (!eng) return;
+    const dx = clientX - stickRef.current.ox;
+    const dy = clientY - stickRef.current.oy;
+    const max = 48;
+    const len = Math.hypot(dx, dy) || 1;
+    const s = Math.min(1, len / max);
+    eng.input.touch.mx = (dx / len) * s;
+    eng.input.touch.my = (dy / len) * s;
+    eng.input.device = "touch";
+  };
+  const onStickPointerDown = (e: ReactPointerEvent) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     stickRef.current = {
-      id: t.identifier,
+      id: e.pointerId,
       ox: rect.left + rect.width / 2,
       oy: rect.top + rect.height / 2,
     };
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    applyStick(e.clientX, e.clientY);
     e.preventDefault();
   };
-  const onStickMove = (e: React.TouchEvent) => {
-    const eng = engineRef.current;
-    if (!eng) return;
-    for (const t of Array.from(e.changedTouches)) {
-      if (t.identifier !== stickRef.current.id) continue;
-      const dx = t.clientX - stickRef.current.ox;
-      const dy = t.clientY - stickRef.current.oy;
-      const max = 48;
-      const len = Math.hypot(dx, dy) || 1;
-      const s = Math.min(1, len / max);
-      eng.input.touch.mx = (dx / len) * s;
-      eng.input.touch.my = (dy / len) * s;
-    }
+  const onStickPointerMove = (e: ReactPointerEvent) => {
+    if (e.pointerId !== stickRef.current.id) return;
+    applyStick(e.clientX, e.clientY);
     e.preventDefault();
   };
-  const onStickEnd = (e: React.TouchEvent) => {
+  const onStickPointerEnd = (e: ReactPointerEvent) => {
+    if (e.pointerId !== stickRef.current.id) return;
     const eng = engineRef.current;
-    if (!eng) return;
-    for (const t of Array.from(e.changedTouches)) {
-      if (t.identifier === stickRef.current.id) {
-        eng.input.touch.mx = 0;
-        eng.input.touch.my = 0;
-        stickRef.current.id = null;
-      }
+    if (eng) {
+      eng.input.touch.mx = 0;
+      eng.input.touch.my = 0;
     }
+    stickRef.current.id = null;
   };
 
   const lb = Math.max(0, Math.min(1, hud.letterbox));
@@ -328,10 +417,58 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
         ref={canvasRef}
         className="absolute inset-0 h-full w-full touch-none"
         style={{ imageRendering: "auto" }}
-        onClick={() => {
-          if (hud.started && !hud.paused) canvasRef.current?.requestPointerLock?.();
-        }}
       />
+      {yielded && (
+        <div className="absolute inset-0 z-[80] flex items-center justify-center bg-bg px-6 text-center">
+          <div>
+            <p className="font-display text-4xl text-gold">GAME IS OPEN</p>
+            <p className="mt-3 max-w-sm text-sm text-muted">This was a second copy. The one you were already playing is outside headquarters.</p>
+          </div>
+        </div>
+      )}
+      {hud.halloween?.on && hud.started && !hud.halloween.haunt && (
+        <div className="absolute left-3 top-[7.4rem] z-30 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setEventOpen((v) => !v)}
+            className="pointer-events-auto rounded-full border border-orange-400/70 bg-black/75 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-orange-200"
+          >
+            After Dark · {hud.halloween.letters}/{hud.halloween.lettersMax}
+            {hud.halloween.master ? " · Master" : ""}
+          </button>
+          {hud.halloween.event && (
+            <span className="rounded-full border border-lime-400/50 bg-black/70 px-2 py-1 text-[10px] uppercase text-lime-200">{hud.halloween.event}</span>
+          )}
+        </div>
+      )}
+      {eventOpen && hud.halloween?.on && !hud.halloween.haunt && (
+        <div className="absolute left-3 top-[9.4rem] z-40 w-[min(20rem,calc(100%-1.5rem))] rounded-xl border border-orange-500/40 bg-black/85 p-3 text-white shadow-xl">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-orange-300">Halloween After Dark</p>
+          <ul className="mt-2 space-y-1 text-xs">
+            {hud.halloween.checklist.map((row) => (
+              <li key={row.id} className={row.done ? "text-lime-300" : "text-white/80"}>
+                {row.done ? "✓" : "○"} {row.label}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-[10px] uppercase tracking-[0.16em] text-orange-200">Tonight</p>
+          <ul className="mt-1 space-y-1 text-xs">
+            {hud.halloween.tonight.map((row) => (
+              <li key={row.id} className={row.done ? "text-lime-300" : "text-white/80"}>
+                {row.done ? "✓" : "○"} {row.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {hud.halloween?.haunt && (
+        <HauntedHouse
+          haunt={hud.halloween.haunt}
+          onUse={() => engineRef.current?.hauntUse()}
+          onLeave={() => engineRef.current?.leaveHaunt()}
+          onCandle={(n) => engineRef.current?.hauntCandle(n)}
+        />
+      )}
 
       {/* Letterbox */}
       {bar > 0 && (
@@ -366,14 +503,16 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
             <div>
               <p className="font-display text-primary text-xl tracking-[0.22em]">{BRAND.name}</p>
               <p className="mt-1 text-[11px] uppercase tracking-[0.42em] text-gold">{BRAND.line}</p>
-              <p className="mt-3 text-[11px] uppercase tracking-[0.28em] text-muted">A Memphis Open World</p>
+              <p className="mt-3 text-[11px] uppercase tracking-[0.28em] text-muted">{halloweenOn() ? "Halloween After Dark" : "A Memphis Open World"}</p>
             </div>
 
             <div className="max-w-lg">
               <h1 className="sack-title-hero font-display text-6xl leading-[0.85] text-fg sm:text-8xl">{BRAND.city.toUpperCase()}</h1>
               <p className="mt-2 font-display text-3xl text-primary sm:text-4xl">{BRAND.zip}</p>
               <p className="mt-4 max-w-sm text-sm leading-relaxed text-muted">
-                Play as Benji. Run Drop Day, hoop at Sacks Giving Weekend, and rock the Worldwide Tour tees. 2 sponsor slots and 2 artist slots every 30 days.
+                {halloweenOn()
+                  ? "Memphis after dark. Haunted house, 10 letters, After Dark fits, and the same streets."
+                  : "Play as Benji. Run Drop Day, hoop at Sacks Giving Weekend, and rock the Worldwide Tour tees. 2 sponsor slots and 2 artist slots every 30 days."}
               </p>
 
               {!ready && (
@@ -457,7 +596,8 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
 
       {hud.started && (
         <>
-          {ticker && !hud.cinematic && <PlaytestTicker hud={hud} />}
+          {kitAdmin && ticker && !hud.cinematic && <PlaytestTicker hud={hud} />}
+          {kitAdmin && (
           <PlaytestKit
             hud={hud}
             engine={engineRef.current}
@@ -471,7 +611,8 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
             onTicker={setTicker}
             onHideHud={setHideHud}
           />
-          {hideHud && (
+          )}
+          {kitAdmin && hideHud && (
             <button
               type="button"
               className="pointer-events-auto absolute right-3 top-3 z-[70] rounded-lg border border-gold/40 bg-black/70 px-2 py-1 text-[10px] uppercase tracking-wider text-gold"
@@ -496,7 +637,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                   <Tally value={hud.sackdollars} prefix="$" className="tabular font-display text-2xl leading-none text-gold" />
                 </div>
               </div>
-              {store.connected && (
+              {hud.inHq && (
                 <div className="rounded-xl border border-gold/40 bg-panel px-3 py-2 backdrop-blur-sm">
                   <p className="text-[10px] uppercase tracking-wider text-gold">{store.currency}</p>
                   <p className="tabular font-display text-xl leading-none text-fg">{store.sackBucks ?? "—"}</p>
@@ -529,6 +670,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
             <div className="flex flex-col items-end gap-2">
               {hud.started && !hud.paused && !hud.cinematic && (
                 <div className="pointer-events-auto flex gap-2">
+                  {kitAdmin && (
                   <button
                     type="button"
                     className={`flex min-h-11 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold uppercase tracking-wider shadow-lg backdrop-blur-sm ${
@@ -548,6 +690,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                     <Bug className="h-4 w-4" />
                     Kit
                   </button>
+                  )}
                   <button
                     type="button"
                     className="flex min-h-11 items-center gap-1.5 rounded-xl border border-border bg-panel px-3 py-2 text-xs font-semibold uppercase tracking-wider text-fg shadow-lg backdrop-blur-sm"
@@ -596,7 +739,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
             </div>
           </div>
 
-          {hud.interactHint && hud.mode === "world" && !hud.cinematic && !hud.fishing?.active && !hud.bowling?.active && !hud.rcm?.open && (
+          {hud.interactHint && hud.mode === "world" && !hud.cinematic && !hud.fishing?.active && !hud.bowling?.active && !hud.rcm?.open && !hud.halloween?.haunt && (
             <div className="pointer-events-none absolute left-3 top-[12.6rem] z-20 sm:top-[13.6rem]">
               <div
                 className="flex items-center gap-2 rounded-full border border-primary/35 bg-panel px-3 py-1.5 text-xs font-medium text-fg shadow-lg backdrop-blur-sm sm:text-sm"
@@ -763,38 +906,52 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
           )}
 
           {hud.race?.active && hud.race.phase !== "idle" && (
-            <div className="pointer-events-none absolute right-3 top-28 z-20 flex flex-col items-end gap-2">
-              <div className="rounded-xl border border-gold/40 bg-panel px-4 py-3 backdrop-blur-sm">
-                <p className="font-display text-lg text-gold">901 STRIP · VS CAM</p>
-                <p className="tabular font-display text-4xl leading-none text-fg">{hud.race.place === 1 ? "1ST" : "2ND"}</p>
-                <p className="mt-1 text-xs text-muted">
-                  LAP {hud.race.lap}/{hud.race.laps} · {formatRaceClock(hud.race.time)}
+            <>
+              <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center pt-[max(0.45rem,env(safe-area-inset-top))]">
+                <div className="flex items-end gap-5 rounded-b-2xl border border-white/10 bg-black/60 px-5 py-2 shadow-2xl backdrop-blur-md">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.28em] text-gold">901 Strip</p>
+                    <p className="font-display text-5xl leading-none text-white">{hud.race.place === 1 ? "1ST" : "2ND"}</p>
+                  </div>
+                  <div className="pb-1 text-right">
+                    <p className="font-display text-2xl tabular leading-none text-white">{formatRaceClock(hud.race.time)}</p>
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-white/70">
+                      Lap {hud.race.lap}/{hud.race.laps} · {hud.race.nextName}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="pointer-events-none absolute inset-x-0 bottom-[6.5rem] z-20 flex flex-col items-center sm:bottom-28">
+                <p className={`font-display text-7xl tabular leading-none drop-shadow-[0_4px_18px_rgba(0,0,0,0.65)] ${hud.race.boosting ? "text-gold" : "text-white"}`}>
+                  {formatMph(hud.race.speed)}
                 </p>
-                <p className="mt-0.5 text-[10px] uppercase tracking-wider text-primary">{hud.race.nextName}</p>
-                <p className={`mt-1 text-[11px] font-semibold ${hud.race.gap > 0.08 ? "text-gold" : "text-primary"}`}>
-                  {formatGap(hud.race.gap)}
+                <p className="text-[10px] uppercase tracking-[0.38em] text-white/75">
+                  mph{hud.race.boosting ? " · nitro" : hud.race.slowed ? " · slowed" : ""}
                 </p>
-                <p className="mt-1 tabular text-sm text-fg">{formatMph(hud.race.speed)} mph</p>
-                {hud.race.boosting && <p className="font-display text-lg text-primary">NITRO</p>}
-                {hud.race.slowed && !hud.race.boosting && <p className="font-display text-lg text-red-400">SLOW</p>}
-                <p className="text-[10px] text-gold">
-                  {hud.race.rivalName} · lap {hud.race.rivalLap}
+                <div className="mt-1 h-1.5 w-44 overflow-hidden rounded-full bg-white/15">
+                  <div
+                    className={`h-full ${hud.race.boosting ? "bg-gold" : hud.race.slowed ? "bg-red-500" : "bg-primary"}`}
+                    style={{ width: `${Math.max(6, Math.min(100, formatMph(hud.race.speed)))}%` }}
+                  />
+                </div>
+                <p className={`mt-1 text-xs font-semibold ${hud.race.gap > 0.08 ? "text-gold" : "text-primary"}`}>
+                  {formatGap(hud.race.gap)} · {hud.race.rivalName} · lap {hud.race.rivalLap}
                 </p>
-                {hud.race.combo > 1 && (
-                  <p className="mt-1 font-display text-lg text-primary">COMBO x{hud.race.combo}</p>
-                )}
+                {hud.race.combo > 1 && <p className="font-display text-lg text-primary">COMBO x{hud.race.combo}</p>}
+              </div>
+              <div className="pointer-events-none absolute right-3 top-24 z-20 flex flex-col items-end gap-2">
+                <RaceRadar race={hud.race} />
                 {hud.race.phase !== "finish" && (
                   <button
                     type="button"
-                    className="pointer-events-auto mt-2 w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-muted"
+                    className="pointer-events-auto rounded-lg border border-white/15 bg-black/55 px-2 py-1.5 text-xs text-white/80"
                     onClick={() => engineRef.current?.leaveRace()}
                   >
                     Leave race
                   </button>
                 )}
               </div>
-              <RaceRadar race={hud.race} />
-            </div>
+            </>
           )}
 
           {hud.race?.phase === "countdown" && (
@@ -839,7 +996,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
           {hud.started && !hud.paused && (
             <button
               type="button"
-              className={`absolute left-3 z-20 flex items-center gap-2 rounded-xl border border-border bg-panel px-3 py-2 text-xs text-fg backdrop-blur-sm ${touchUI ? "bottom-36" : "bottom-3"}`}
+              className={`absolute left-3 z-20 flex items-center gap-2 rounded-xl border border-border bg-panel px-3 py-2 text-xs text-fg backdrop-blur-sm ${touchUI ? "bottom-40" : "bottom-6"}`}
               onClick={() => engineRef.current?.toggleView()}
             >
               <SwitchCamera className="h-4 w-4 text-gold" />
@@ -849,10 +1006,13 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
 
           {/* Cinematic card */}
           {hud.cinematic && (
-            <div className="pointer-events-none absolute inset-0 z-30 flex items-end justify-start p-8 sm:p-12">
+            <div className="pointer-events-none absolute inset-0 z-30 flex items-start justify-start p-8 sm:p-12">
               <div>
                 <p className="text-[11px] uppercase tracking-[0.28em] text-primary">{hud.cinematic.subtitle}</p>
                 <h2 className="font-display mt-1 text-5xl text-fg sm:text-6xl">{hud.cinematic.title}</h2>
+                {hud.cinematic.kind === "briefing" && (
+                  <p className="mt-3 text-sm text-muted">{touchUI ? "Drag MOVE. Walk south out the door." : "WASD to walk. Head south out the door."}</p>
+                )}
               </div>
             </div>
           )}
@@ -912,8 +1072,32 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-3">
+                  {store.catalogLive && commerce.catalog.products.length > 0 && (
+                    <div className="mb-3 grid gap-2">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-gold">On the floor</p>
+                      {commerce.catalog.products.map((product) => (
+                        <button
+                          key={product.id}
+                          type="button"
+                          onClick={() => setInspect({ product, size: product.sizes?.[0] ?? "M" })}
+                          className="flex items-center gap-3 rounded-xl border border-gold/30 bg-surface-2 p-2 text-left"
+                        >
+                          {product.imageUrl && (
+                            <img src={product.imageUrl} alt="" className="h-14 w-11 rounded-md object-cover bg-black" />
+                          )}
+                          {product.backImage && (
+                            <img src={product.backImage} alt="" className="h-14 w-11 rounded-md object-cover bg-black" />
+                          )}
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-medium text-fg">{product.name}</span>
+                            <span className="text-xs text-gold">${product.price ?? "—"} · Buy IRL</span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <div className="grid gap-2">
-                    {APPAREL.map((item) => {
+                    {APPAREL.filter((item) => halloweenOn() || !item.id.startsWith("hw_") || hud.owned.includes(item.id)).map((item) => {
                       const owned = hud.owned.includes(item.id);
                       const eq = hud.equipped === item.id;
                       const locked = Boolean(
@@ -1018,7 +1202,10 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
             <div className="absolute inset-0 z-50 flex items-end justify-center bg-bg/80 p-3 backdrop-blur-sm sm:items-center">
               <div className="w-full max-w-md overflow-hidden rounded-2xl border border-gold/40 bg-surface shadow-2xl">
                 {inspect.product.imageUrl && (
-                  <img src={inspect.product.imageUrl} alt="" className="h-44 w-full object-cover" />
+                  <div className="flex h-44">
+                    <img src={inspect.product.imageUrl} alt="" className="h-full w-1/2 object-cover" />
+                    <img src={inspect.product.backImage || inspect.product.imageUrl} alt="" className="h-full w-1/2 object-cover" />
+                  </div>
                 )}
                 <div className="p-4">
                   <p className="text-[10px] uppercase tracking-[0.2em] text-gold">{inspect.product.zone ?? "HQ DROP"}</p>
@@ -1424,15 +1611,15 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
             </div>
           )}
 
-          {touchUI && hud.started && !hud.paused && !hud.cinematic && !hud.shopOpen && !hud.food && !hud.dialogue && !fitsOpen && (
-          <div className={`sack-touch-bar absolute inset-x-0 bottom-0 z-20 flex items-end justify-between p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] ${landscape ? "origin-bottom scale-90 p-2" : ""}`}>
+          {touchUI && hud.started && !hud.paused && !hud.shopOpen && !hud.food && !hud.dialogue && !fitsOpen && (
+          <div className={`sack-touch-bar absolute inset-x-0 bottom-0 z-30 flex items-end justify-between p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] ${landscape ? "origin-bottom scale-90 p-2" : ""}`}>
             <div className="flex flex-col items-start gap-2">
             <div
               className={`relative touch-none rounded-full border border-border bg-panel/80 backdrop-blur-sm ${landscape ? "h-24 w-24" : "h-28 w-28"}`}
-              onTouchStart={onStickStart}
-              onTouchMove={onStickMove}
-              onTouchEnd={onStickEnd}
-              onTouchCancel={onStickEnd}
+              onPointerDown={onStickPointerDown}
+              onPointerMove={onStickPointerMove}
+              onPointerUp={onStickPointerEnd}
+              onPointerCancel={onStickPointerEnd}
             >
               <div className="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/40 bg-primary/20" />
               <span className="absolute bottom-2 left-0 right-0 text-center text-[10px] text-muted">MOVE</span>
@@ -1440,14 +1627,14 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
             <button
               type="button"
               className="flex h-11 min-w-16 items-center justify-center rounded-full border border-border bg-panel px-3 font-display text-sm text-fg"
-              onTouchStart={(e) => {
-                e.preventDefault();
-                if (engineRef.current) engineRef.current.input.touch.run = true;
-              }}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                if (engineRef.current) engineRef.current.input.touch.run = false;
-              }}
+              {...holdPointer(
+                () => {
+                  if (engineRef.current) engineRef.current.input.touch.run = true;
+                },
+                () => {
+                  if (engineRef.current) engineRef.current.input.touch.run = false;
+                },
+              )}
             >
               {hud.race?.active ? "BOOST" : "RUN"}
             </button>
@@ -1462,7 +1649,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                       className={`flex items-center justify-center rounded-full border border-gold/50 bg-panel font-display text-fg shadow-lg active:scale-95 ${
                         d === "up" ? "h-16 w-16 text-3xl text-gold" : "h-14 w-14 text-2xl"
                       }`}
-                      onTouchStart={(e) => {
+                      onPointerDown={(e) => {
                         e.preventDefault();
                         engineRef.current?.input.queueArrow(d);
                       }}
@@ -1476,28 +1663,28 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                 <button
                   type="button"
                   className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-panel font-display text-lg text-fg"
-                  onTouchStart={(e) => {
-                    e.preventDefault();
-                    if (engineRef.current) engineRef.current.input.touch.lookX = -1;
-                  }}
-                  onTouchEnd={(e) => {
-                    e.preventDefault();
-                    if (engineRef.current) engineRef.current.input.touch.lookX = 0;
-                  }}
+                  {...holdPointer(
+                    () => {
+                      if (engineRef.current) engineRef.current.input.touch.lookX = -1;
+                    },
+                    () => {
+                      if (engineRef.current) engineRef.current.input.touch.lookX = 0;
+                    },
+                  )}
                 >
                   ←
                 </button>
                 <button
                   type="button"
                   className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-panel font-display text-lg text-fg"
-                  onTouchStart={(e) => {
-                    e.preventDefault();
-                    if (engineRef.current) engineRef.current.input.touch.lookX = 1;
-                  }}
-                  onTouchEnd={(e) => {
-                    e.preventDefault();
-                    if (engineRef.current) engineRef.current.input.touch.lookX = 0;
-                  }}
+                  {...holdPointer(
+                    () => {
+                      if (engineRef.current) engineRef.current.input.touch.lookX = 1;
+                    },
+                    () => {
+                      if (engineRef.current) engineRef.current.input.touch.lookX = 0;
+                    },
+                  )}
                 >
                   →
                 </button>
@@ -1507,20 +1694,20 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                 <button
                   type="button"
                   className="flex h-16 w-16 items-center justify-center rounded-full bg-[#ff2bd6] font-display text-sm text-bg shadow-lg active:scale-95"
-                  onTouchStart={(e) => {
-                    e.preventDefault();
-                    const eng = engineRef.current;
-                    if (!eng) return;
-                    eng.input.touch.shoot = true;
-                    eng.beginBowlCharge();
-                  }}
-                  onTouchEnd={(e) => {
-                    e.preventDefault();
-                    const eng = engineRef.current;
-                    if (!eng) return;
-                    eng.input.touch.shoot = false;
-                    eng.releaseBowl();
-                  }}
+                  {...holdPointer(
+                    () => {
+                      const eng = engineRef.current;
+                      if (!eng) return;
+                      eng.input.touch.shoot = true;
+                      eng.beginBowlCharge();
+                    },
+                    () => {
+                      const eng = engineRef.current;
+                      if (!eng) return;
+                      eng.input.touch.shoot = false;
+                      eng.releaseBowl();
+                    },
+                  )}
                 >
                   {hud.bowling.phase === "over" ? "AGAIN" : "BOWL"}
                 </button>
@@ -1528,18 +1715,18 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                 <button
                   type="button"
                   className="flex h-16 w-16 items-center justify-center rounded-full bg-[#4f9ddf] font-display text-sm text-bg shadow-lg active:scale-95"
-                  onTouchStart={(e) => {
-                    e.preventDefault();
-                    const eng = engineRef.current;
-                    if (!eng) return;
-                    eng.input.touch.shoot = true;
-                  }}
-                  onTouchEnd={(e) => {
-                    e.preventDefault();
-                    const eng = engineRef.current;
-                    if (!eng) return;
-                    eng.input.touch.shoot = false;
-                  }}
+                  {...holdPointer(
+                    () => {
+                      const eng = engineRef.current;
+                      if (!eng) return;
+                      eng.input.touch.shoot = true;
+                    },
+                    () => {
+                      const eng = engineRef.current;
+                      if (!eng) return;
+                      eng.input.touch.shoot = false;
+                    },
+                  )}
                 >
                   {hud.fishing.phase === "cast" ? "CAST" : hud.fishing.phase === "strike" || hud.fishing.phase === "nibble" ? "HOOK" : hud.fishing.phase === "reel" ? "REEL" : "OK"}
                 </button>
@@ -1548,34 +1735,34 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                 <button
                   type="button"
                   className="flex h-14 w-14 items-center justify-center rounded-full border border-border bg-panel font-display text-sm text-fg shadow-lg active:scale-95"
-                  onTouchStart={(e) => {
-                    e.preventDefault();
-                    engineRef.current?.input.queueJump();
-                  }}
-                  onTouchEnd={(e) => {
-                    e.preventDefault();
-                    if (engineRef.current) engineRef.current.input.touch.jump = false;
-                  }}
+                  {...holdPointer(
+                    () => {
+                      engineRef.current?.input.queueJump();
+                    },
+                    () => {
+                      if (engineRef.current) engineRef.current.input.touch.jump = false;
+                    },
+                  )}
                 >
                   JUMP
                 </button>
                 <button
                   type="button"
                   className="flex h-16 w-16 items-center justify-center rounded-full bg-primary font-display text-lg text-primary-fg shadow-lg active:scale-95"
-                  onTouchStart={(e) => {
-                    e.preventDefault();
-                    const eng = engineRef.current;
-                    if (!eng) return;
-                    eng.input.touch.shoot = true;
-                    eng.beginCharge();
-                  }}
-                  onTouchEnd={(e) => {
-                    e.preventDefault();
-                    const eng = engineRef.current;
-                    if (!eng) return;
-                    eng.input.touch.shoot = false;
-                    eng.releaseShot();
-                  }}
+                  {...holdPointer(
+                    () => {
+                      const eng = engineRef.current;
+                      if (!eng) return;
+                      eng.input.touch.shoot = true;
+                      eng.beginCharge();
+                    },
+                    () => {
+                      const eng = engineRef.current;
+                      if (!eng) return;
+                      eng.input.touch.shoot = false;
+                      eng.releaseShot();
+                    },
+                  )}
                 >
                   SHOOT
                 </button>
@@ -1585,35 +1772,39 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                   <button
                     type="button"
                     className={`flex h-14 w-14 items-center justify-center rounded-full border font-display text-sm shadow-lg active:scale-95 ${hud.jooking ? "border-primary bg-primary text-primary-fg" : "border-border bg-panel text-fg"}`}
-                    onTouchStart={(e) => {
-                      e.preventDefault();
-                      engineRef.current?.input.queueJook();
-                    }}
-                    onTouchEnd={(e) => {
-                      e.preventDefault();
-                      if (engineRef.current) engineRef.current.input.touch.jook = false;
-                    }}
+                    {...holdPointer(
+                      () => {
+                        engineRef.current?.input.queueJook();
+                      },
+                      () => {
+                        if (engineRef.current) engineRef.current.input.touch.jook = false;
+                      },
+                    )}
                   >
                     JOOK
                   </button>
                   <button
                     type="button"
                     className="flex h-14 w-14 items-center justify-center rounded-full border border-border bg-panel font-display text-sm text-fg shadow-lg active:scale-95"
-                    onTouchStart={(e) => {
-                      e.preventDefault();
-                      engineRef.current?.input.queueJump();
-                    }}
-                    onTouchEnd={(e) => {
-                      e.preventDefault();
-                      if (engineRef.current) engineRef.current.input.touch.jump = false;
-                    }}
+                    {...holdPointer(
+                      () => {
+                        engineRef.current?.input.queueJump();
+                      },
+                      () => {
+                        if (engineRef.current) engineRef.current.input.touch.jump = false;
+                      },
+                    )}
                   >
                     JUMP
                   </button>
                   <button
                     type="button"
                     className="flex h-16 w-16 items-center justify-center rounded-full bg-primary font-display text-xl text-primary-fg shadow-lg active:scale-95"
-                    onClick={() => engineRef.current?.tryInteract()}
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      engineRef.current?.tryInteract();
+                    }}
                   >
                     {hud.driving ? (hud.race?.active ? "RACE" : "PARK") : hud.hintWalk ? "↓" : hud.promptButton}
                   </button>
@@ -1654,6 +1845,37 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                   }}
                   onDone={() => setFitsOpen(false)}
                 />
+              </div>
+            </div>
+          )}
+          {store.storeDisclaimer && (
+            <div
+              className="pointer-events-auto absolute inset-0 z-[80] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <div className="w-full max-w-md rounded-2xl border border-gold/50 bg-surface p-5 shadow-2xl">
+                <p className="text-[10px] uppercase tracking-[0.22em] text-gold">Before you go in</p>
+                <h2 className="mt-1 font-display text-3xl text-fg">Real $ackReligious store</h2>
+                <p className="mt-3 text-sm leading-relaxed text-subtle">
+                  Opens the real store in this same tab. Benji waits outside headquarters when you come back. Clothes there are real, and $ackdollars do not pay for them.
+                </p>
+                <div className="mt-5 grid gap-2">
+                  <a
+                    href={PUBLIC_STORE_PAGE}
+                    target="_top"
+                    className="flex min-h-11 items-center justify-center rounded-xl bg-gold font-display text-xl uppercase text-bg"
+                    onClick={() => commerce.confirmEnterStore()}
+                  >
+                    Enter the store
+                  </a>
+                  <button
+                    type="button"
+                    className="min-h-11 rounded-xl border border-border text-sm text-muted"
+                    onClick={() => commerce.dismissStoreDisclaimer()}
+                  >
+                    Stay outside
+                  </button>
+                </div>
               </div>
             </div>
           )}

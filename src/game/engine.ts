@@ -28,6 +28,24 @@ import { CharacterController } from "./characterController";
 import { loseWebGL, replaceCanvas } from "./webgl";
 import { JUICE, emitBurst, stepParticles, type ScreenParticle } from "./juice";
 import { DAY_START_HOUR, HOURS_PER_SECOND, nightAmount } from "./dayCycle";
+import { halloweenOn } from "./season";
+import {
+  HAUNT_ROOMS,
+  HW_LETTERS,
+  WORLD_EVENTS,
+  emptyHw,
+  enterHauntLive,
+  halloweenNpcLine,
+  hauntOrderPress,
+  masterChecklist,
+  masterReady,
+  readHw,
+  tickHaunt,
+  SEASON_FISH,
+  type HauntLive,
+  type HwSave,
+  type WorldEventKind,
+} from "./halloween";
 import { spawnCityPeds, tickCityPed, PED_JOB_CHAT, boostDropLive, type PedActor } from "./cityLife";
 import { dueMilestones, nextMilestone, type VerifiedReward } from "./progression";
 import { sponsorHud } from "./sponsors";
@@ -106,7 +124,9 @@ import {
   foodHud,
   foodTruckById,
   isFoodTruck,
+  isSeasonFood,
   mealName,
+  menuFor,
   type CoolerFish,
   type FoodTruckId,
 } from "./foodTrucks";
@@ -168,9 +188,16 @@ type ImgMap = Record<string, HTMLImageElement>;
 function loadImage(src: string): Promise<HTMLImageElement> {
 	return new Promise((resolve, reject) => {
 		const img = new Image();
+		const timer = window.setTimeout(() => reject(/* @__PURE__ */ new Error(`Timed out ${src}`)), 12000);
 		img.crossOrigin = "anonymous";
-		img.onload = () => resolve(img);
-		img.onerror = () => reject(/* @__PURE__ */ new Error(`Failed to load ${src}`));
+		img.onload = () => {
+			window.clearTimeout(timer);
+			resolve(img);
+		};
+		img.onerror = () => {
+			window.clearTimeout(timer);
+			reject(/* @__PURE__ */ new Error(`Failed to load ${src}`));
+		};
 		img.src = `${src}?v=${ART_REV}`;
 	});
 }
@@ -182,6 +209,12 @@ function dist(ax: number, ay: number, bx: number, by: number) {
 }
 function insidePoi(x: number, y: number, p: WorldPoi, pad = 8) {
 	return x >= p.x - pad && x <= p.x + p.w + pad && y >= p.y - pad && y <= p.y + p.h + pad;
+}
+function onStoreDoor(x: number, y: number, store: WorldPoi) {
+	const doorW = TILE * 1.7;
+	const left = store.x + store.w / 2 - doorW / 2;
+	const top = store.y + store.h - 6;
+	return x >= left && x <= left + doorW && y >= top && y <= top + 56;
 }
 function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
 	if (typeof ctx.roundRect === "function") {
@@ -350,6 +383,8 @@ export class GameEngine {
 	interactHint: string | null = null;
 	hintWalk = false;
 	nearPoi: LocationId | null = null;
+	private hqInside = false;
+	private hqHandoff = false;
 	nearNpc: string | null = null;
 	nearPed = -1;
 	nearCar = -1;
@@ -363,6 +398,7 @@ export class GameEngine {
 	floaters: Floater[] = [];
 	running = false;
 	raf = 0;
+	loopBackup = 0;
 	lastT = 0;
 	onHud: ((h: HudSnapshot) => void) | null = null;
 	onLoad: ((p: number) => void) | null = null;
@@ -392,6 +428,13 @@ export class GameEngine {
 	fish: FishingState = idleFishing();
 	bowl: BowlingState = idleBowl();
 	bowlingHighScore = 0;
+	hw: HwSave = emptyHw();
+	haunt: HauntLive | null = null;
+	halloweenShootout = false;
+	hwEvent: { kind: WorldEventKind; text: string; t: number; x: number; y: number } | null = null;
+	hwEventWait = 18;
+	hwDraftT = 0;
+	tonight = { baskets: 0, fish: 0, race: false, strike: false, haunt: false, paid: new Set<string>() };
 	lastDeliveryAt = 0;
 	jooking = false;
 	jookT = 0;
@@ -475,12 +518,17 @@ export class GameEngine {
 			bootImages[basketballImageKey(id as ApparelId, "shotFront")] = pack.shotFront;
 			bootImages[basketballImageKey(id as ApparelId, "shotBack")] = pack.shotBack;
 		}
-		await Promise.all(Object.entries(bootImages).map(async ([k, src]) => {
+		const bootList = Object.entries(bootImages);
+		let bootDone = 0;
+		await Promise.all(bootList.map(async ([k, src]) => {
 			try {
 				this.images[k] = await loadImage(src);
 			} catch { /* missing optional sprite */ }
+			bootDone++;
+			this.onLoad?.(bootDone / (bootList.length + 6));
 		}));
 		this.loadSave();
+		this.placeOutsideHqIfReturning();
 		if (isHandheld() && this.settings.quality === "high") {
 			this.settings.quality = "low";
 		}
@@ -491,6 +539,7 @@ export class GameEngine {
 		this.wireQa();
 		this.applyQuality();
 		this.grantTourTees();
+		this.grantSeasonFits();
 		this.emitHud();
 	}
 	private async bootWorld3D() {
@@ -933,6 +982,7 @@ export class GameEngine {
 	destroy() {
 		this.running = false;
 		cancelAnimationFrame(this.raf);
+		window.clearTimeout(this.loopBackup);
 		this.input.unbind();
 		this.world3d?.dispose();
 		this.world3d = null;
@@ -949,6 +999,12 @@ export class GameEngine {
 		this.paused = next;
 		if (this.paused) this.pauseTab = "resume";
 		this.emitHud();
+	}
+	/** Iframe is back (← Bak to the Game). Don't fire GG_ENTER_HQ again until he leaves and re-enters. */
+	releaseHqHandoff() {
+		if (!this.hqHandoff) return;
+		this.hqHandoff = false;
+		this.setPauseReason("parent", false);
 	}
 	start(fresh = false) {
 		audio.unlock();
@@ -988,6 +1044,12 @@ export class GameEngine {
 		this.respect = 0;
 		this.owned = ["starter_tee"];
 		this.grantTourTees();
+		this.hw = emptyHw();
+		this.haunt = null;
+		this.halloweenShootout = false;
+		this.hwEvent = null;
+		this.tonight = { baskets: 0, fish: 0, race: false, strike: false, haunt: false, paid: new Set() };
+		this.grantSeasonFits();
 		this.equipped = "starter_tee";
 		this.trophies = [];
 		this.talked.clear();
@@ -1068,6 +1130,33 @@ export class GameEngine {
 	activeQuest() {
 		return this.mission.complete ? this.afterHours : this.mission;
 	}
+	/** Sidewalk south of SackReligious HQ. Not on the door mat, so the store does not open again. */
+	placeOutsideHq() {
+		const store = POIS.find((p) => p.id === "store");
+		if (!store) return;
+		this.mode = "world";
+		this.exitVehicle();
+		this.px = store.x + store.w / 2;
+		this.py = store.y + store.h + 110;
+		this.yaw = 0;
+		this.mover.reset(this.yaw);
+		this.applyYawToFacing();
+		this.hqInside = false;
+		this.leftSpawn = true;
+	}
+	private placeOutsideHqIfReturning() {
+		if (typeof window === "undefined") return;
+		const q = new URLSearchParams(window.location.search);
+		const spawn = q.get("spawn") || q.get("return");
+		const fromQuery = spawn === "hq-door" || spawn === "hq";
+		const fromSession = commerce.consumeStoreReturn();
+		if (!fromQuery && !fromSession) return;
+		this.placeOutsideHq();
+		q.delete("spawn");
+		q.delete("return");
+		const next = `${window.location.pathname}${q.toString() ? `?${q}` : ""}${window.location.hash}`;
+		window.history.replaceState(null, "", next);
+	}
 	loadSave() {
 		try {
 			let raw = localStorage.getItem(SAVE_KEY);
@@ -1080,6 +1169,8 @@ export class GameEngine {
 			this.respect = data.respect ?? 0;
 			this.owned = data.owned?.length ? data.owned : ["starter_tee"];
 			this.grantTourTees();
+			this.hw = readHw(data.halloween2026);
+			this.grantSeasonFits();
 			this.equipped = data.equipped;
 			this.mission.complete = data.missionComplete ?? false;
 			this.missionComplete = this.mission.complete;
@@ -1103,7 +1194,8 @@ export class GameEngine {
 			this.worldHour = DAY_START_HOUR;
 			if (data.settings) this.settings = {
 				...DEFAULT_SETTINGS,
-				...data.settings
+				...data.settings,
+				cameraView: "third",
 			};
 			if (data.sideProgress) for (const s of this.side) s.done = !!data.sideProgress[s.id];
 			if (Array.isArray(data.cooler)) this.cooler = data.cooler.filter((f: CoolerFish) => f && f.name && f.weightLb).slice(0, 8);
@@ -1199,6 +1291,7 @@ export class GameEngine {
 			courtVenue: this.courtVenue,
 			bowlingHighScore: this.bowlingHighScore,
 			rcmRuns: this.rcmRuns,
+			halloween2026: this.hw,
 		};
 		try {
 			localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -1258,6 +1351,7 @@ export class GameEngine {
 			let dt = (t - this.lastT) / 1e3;
 			this.lastT = t;
 			dt = Math.min(dt, .1);
+			try {
 			this.fpsEma = this.fpsEma * 0.86 + (dt > 1e-4 ? 1 / dt : 60) * 0.14;
 			this.update(dt);
 			this.draw();
@@ -1272,9 +1366,22 @@ export class GameEngine {
 				this.hudAcc = 0;
 				this.emitHud();
 			}
-			this.raf = requestAnimationFrame(frame);
+			} catch (err) {
+				console.error("[sack] frame", err);
+			}
 		};
-		this.raf = requestAnimationFrame(frame);
+		const pump = (t: number) => {
+			frame(t);
+			if (this.running) this.raf = requestAnimationFrame(pump);
+		};
+		const backup = () => {
+			if (!this.running) return;
+			const now = performance.now();
+			if (now - this.lastT > 0.2) frame(now);
+			this.loopBackup = window.setTimeout(backup, 32);
+		};
+		this.raf = requestAnimationFrame(pump);
+		this.loopBackup = window.setTimeout(backup, 250);
 	}
 	update(dt: number) {
 		this.lastDt = dt;
@@ -1282,6 +1389,10 @@ export class GameEngine {
 		const act = this.input.poll();
 		audio.tick(dt, this.started && !this.paused, nightAmount(this.worldHour));
 		if (this.started && act.pausePressed && !this.cinematic) {
+			if (commerce.disclaimerOpen) {
+				commerce.dismissStoreDisclaimer();
+				return;
+			}
 			if (this.playtestOpen) this.setPlaytestOpen(false);
 			else if (this.mode === "shop") this.closeShop();
 			else if (this.foodMenu) this.closeFood();
@@ -1343,6 +1454,8 @@ export class GameEngine {
 			}
 		}
 		if (this.cinematic) {
+			const skipBriefing = this.cinematic.kind === "briefing" && (Math.hypot(act.mx, act.my) > 0.2 || act.interactPressed || act.jumpPressed);
+			if (skipBriefing) this.cinematic.t = this.cinematic.duration;
 			this.cinematic.t += dt;
 			if (this.cinematic.t >= this.cinematic.duration) {
 				const kind = this.cinematic.kind;
@@ -1361,16 +1474,23 @@ export class GameEngine {
 				this.emitHud();
 			}
 		}
-		if (!this.started || this.paused) return;
+		if (!this.started || this.paused || commerce.disclaimerOpen) return;
 		if (act.viewPressed) this.toggleView();
 		const lookMul = this.settings.sensitivity || 1;
 		const chauffeurLock = this.rcmJob && this.rcmChauffeur && !!this.vehicle;
-		if (!chauffeurLock) {
+		const scriptedLook = this.fish.active || this.bowl.active || !!this.foodServe;
+		if (!chauffeurLock && !scriptedLook) {
 			if (Math.abs(act.lookX) <= 1.25) this.yaw -= act.lookX * 2.2 * dt * lookMul;
 			else this.yaw -= act.lookX * 0.032 * lookMul;
 		}
-		if (Math.abs(act.lookY) <= 1.25) this.pitch -= act.lookY * 1.7 * dt * lookMul;
-		else this.pitch -= act.lookY * 0.028 * lookMul;
+		if (!scriptedLook) {
+			if (Math.abs(act.lookY) <= 1.25) this.pitch -= act.lookY * 1.7 * dt * lookMul;
+			else this.pitch -= act.lookY * 0.028 * lookMul;
+		}
+		if (this.fish.active) {
+			this.yaw = Math.PI;
+			this.pitch = -0.1;
+		}
 		this.pitch = clamp(this.pitch, -1.15, 1.15);
 		this.worldHour = (this.worldHour + dt * HOURS_PER_SECOND) % 24;
 		if (this.worldHour >= 20 && this.worldHour < 20.1) this.unlockTrophy("night_owl");
@@ -1393,6 +1513,10 @@ export class GameEngine {
 			return;
 		}
 		if (this.mode === "shop" || this.mode === "menu") return;
+		if (this.haunt) {
+			this.updateHaunt(dt, act);
+			return;
+		}
 		if (this.fish.active) {
 			this.updateFishing(dt, act.shoot, act.shootPressed, act.shootReleased);
 			this.updatePlayer(dt, 0, 0, false, false, false);
@@ -1468,6 +1592,7 @@ export class GameEngine {
 			this.ball.active = false;
 		}
 		if (act.interactPressed) this.tryInteract();
+		if (halloweenOn()) this.tickWorldEvent(dt);
 		if (this.vehicle && this.rcmJob) this.tryFinishRcm();
 		if (this.vehicle && act.backPressed) {
 			if (this.race.active && this.race.phase !== "finish") this.leaveRace();
@@ -1663,7 +1788,9 @@ export class GameEngine {
 		this.clampCarsToAsphalt();
 	}
 	clampCarsToAsphalt() {
-		for (const c of this.cars) {
+		for (let i = 0; i < this.cars.length; i++) {
+			const c = this.cars[i]!;
+			if (this.vehicle?.kind === "car" && this.vehicle.carIndex === i) continue;
 			if (c.laneId === "RIVAL" || c.laneId === "RACER") {
 				if (inCourtPx(c.x, c.y) || carBlocked(c.x, c.y, 14)) {
 					const safe = snapToRacePath(c.x, c.y);
@@ -1672,7 +1799,7 @@ export class GameEngine {
 				}
 				continue;
 			}
-			if (inCourtPx(c.x, c.y) || carBlocked(c.x, c.y, 16) || !isRoadPoint(c.x, c.y, 24)) {
+			if (inCourtPx(c.x, c.y) || carBlocked(c.x, c.y, 16) || !isRoadPoint(c.x, c.y, 2)) {
 				const safe = nearestAsphalt(c.x, c.y);
 				c.x = safe.x;
 				c.y = safe.y;
@@ -1727,7 +1854,13 @@ export class GameEngine {
 			}
 		}
 	}
+	presentedView(): "first" | "third" {
+		if (this.fish.active || this.bowl.active || this.foodServe) return "first";
+		if (this.vehicle || (this.race.active && this.race.phase !== "idle")) return "third";
+		return this.settings.cameraView === "first" ? "first" : "third";
+	}
 	toggleView() {
+		if (this.fish.active || this.bowl.active || this.foodServe || this.vehicle) return;
 		this.settings.cameraView = this.settings.cameraView === "first" ? "third" : "first";
 		this.showToast(this.settings.cameraView === "first" ? "First person" : "Third person", 1.4);
 		audio.ui();
@@ -1852,10 +1985,18 @@ export class GameEngine {
 			nx = clamp(nx, 62, WORLD_PX_W - 48 - rad);
 			ny = clamp(ny, 62, WORLD_PX_H - 48 - rad);
 		}
+		if (driving && !this.race.active && !this.playtestNoclip && !this.drivePointOk(nx, this.py)) {
+			nx = this.px;
+			this.vx = 0;
+		}
 		if (!this.collides(nx, this.py, rad)) this.px = nx;
 		else {
 			this.mover.vx = 0;
 			if (driving) this.vx = 0;
+		}
+		if (driving && !this.race.active && !this.playtestNoclip && !this.drivePointOk(this.px, ny)) {
+			ny = this.py;
+			this.vy = 0;
 		}
 		if (!this.collides(this.px, ny, rad)) this.py = ny;
 		else {
@@ -1894,6 +2035,15 @@ export class GameEngine {
 		}
 		return false;
 	}
+	/** Driving stays on asphalt. A lot pull-out can only move toward the nearest street. */
+	private drivePointOk(x: number, y: number) {
+		if (isRoadPoint(x, y, 8)) return true;
+		if (isRoadPoint(this.px, this.py, 8)) return false;
+		const curb = nearestAsphalt(this.px, this.py);
+		const now = Math.hypot(this.px - curb.x, this.py - curb.y);
+		const next = Math.hypot(x - curb.x, y - curb.y);
+		return next < now - 0.4;
+	}
 	npcPos(id: string) {
 		return this.npcLive.find((n) => n.id === id) ?? {
 			x: 0,
@@ -1918,12 +2068,22 @@ export class GameEngine {
 			}
 		}
 		if (onRiverfront(this.px, this.py)) this.nearPoi = "river";
+		const storePoi = POIS.find((p) => p.id === "store");
+		if (storePoi && insidePoi(this.px, this.py, storePoi, 0)) {
+			this.px = storePoi.x + storePoi.w / 2;
+			this.py = storePoi.y + storePoi.h + 86;
+		}
+		if (storePoi && onStoreDoor(this.px, this.py, storePoi) && !this.hqInside) {
+			this.hqInside = true;
+			commerce.offerStoreEntry();
+		} else if (storePoi && !onStoreDoor(this.px, this.py, storePoi) && this.hqInside) {
+			this.hqInside = false;
+			commerce.cancelStoreOffer();
+		}
 		if (this.foodApproach && this.foodApproach !== this.nearPoi) this.foodApproach = null;
 		let best = 92;
-		const store = POIS.find((p) => p.id === "store");
 		const lanes = POIS.find((p) => p.id === "lanes");
 		for (const n of this.npcLive) {
-			if (n.id === "k_blanco" && store && !insidePoi(this.px, this.py, store, 8)) continue;
 			if (n.id === "lane_clerk" && lanes && !insidePoi(this.px, this.py, lanes, 8)) continue;
 			const d = dist(this.px, this.py, n.x, n.y);
 			if (d < best) {
@@ -1976,12 +2136,8 @@ export class GameEngine {
 			const name = NPCS.find((x) => x.id === this.nearNpc)?.name ?? "local";
 			this.interactHint = `Talk to ${name}`;
 		} else if (this.nearPoi === "store") {
-			const store = POIS.find((p) => p.id === "store")!;
-			const inside = insidePoi(this.px, this.py, store, 0);
-			this.interactHint = inside
-				? (tap ? "SHOP the wall" : "Shop apparel")
-				: (tap ? "Walk in · HQ" : "Walk through HQ doors");
-			this.hintWalk = !inside;
+			this.interactHint = tap ? "Doors open the real store" : "Walk into the doors · real store";
+			this.hintWalk = true;
 		} else if (this.nearPoi === "apartment") {
 			const apt = POIS.find((p) => p.id === "apartment")!;
 			const inside = this.px >= apt.x && this.px <= apt.x + apt.w && this.py >= apt.y && this.py <= apt.y + apt.h;
@@ -2002,7 +2158,8 @@ export class GameEngine {
 					this.hintWalk = true;
 				}
 			}
-		} else if (this.nearPoi === "court") this.interactHint = tap ? "TAP · hoop · lanes east" : "E · hoop · 901 Lanes is the pink building east";
+		} else if (this.nearPoi === "court") this.interactHint = tap ? "TAP · hoop · lanes east" : halloweenOn() ? "E · After Dark hoop" : "E · hoop · 901 Lanes is the pink building east";
+		else if (this.nearPoi === "haunt") this.interactHint = tap ? "TAP · haunted house" : "E · 10 Letters After Dark";
 		else if (this.nearPoi === "lanes") {
 			const lanes = POIS.find((p) => p.id === "lanes")!;
 			const inside = insidePoi(this.px, this.py, lanes, 0);
@@ -2181,7 +2338,10 @@ export class GameEngine {
 		if (!dest) return false;
 		const tx = dest.x + dest.w / 2;
 		const ty = dest.id === "river" ? dest.y - 36 : dest.y + dest.h + 28;
-		if (dist(this.px, this.py, tx, ty) > RCM_ARRIVE) return false;
+		const curb = nearestAsphalt(tx, ty);
+		const atRing = dist(this.px, this.py, tx, ty) <= RCM_ARRIVE;
+		const atCurb = dist(this.px, this.py, curb.x, curb.y) < 46 && dist(curb.x, curb.y, tx, ty) < 170;
+		if (!atRing && !atCurb) return false;
 		const v = rcmVehicle(this.rcmPick);
 		const fare = rcmFare(v.id, this.rcmRuns);
 		this.sackdollars += fare;
@@ -2220,6 +2380,7 @@ export class GameEngine {
 	}
 	warpTo(loc: string) {
 		if (this.mode === "basketball") this.exitBasketball();
+		if (this.haunt) this.haunt = null;
 		if (this.bowl.active) this.leaveBowl();
 		if (this.mode === "shop") this.closeShop();
 		if (this.foodMenu) this.closeFood();
@@ -2285,8 +2446,9 @@ export class GameEngine {
 		this.emitHud();
 	}
 	orderFood(itemId: string) {
-		const truck = foodTruckById(this.foodMenu);
-		if (!truck) return;
+		const base = foodTruckById(this.foodMenu);
+		if (!base) return;
+		const truck = menuFor(base);
 		const item = truck.items.find((it) => it.id === itemId);
 		if (!item) return;
 		if (item.fish && !this.cooler.length) {
@@ -2306,6 +2468,7 @@ export class GameEngine {
 		this.fedT = Math.max(this.fedT, fish ? 34 : 22);
 		this.eaten.add(truck.id);
 		if (fish) this.completeSide("catch_grill");
+		if (isSeasonFood(item.id)) this.noteHalloween("food");
 		if (truck.id === "velis") this.completeSide("velis_plate");
 		if (truck.id === "brothers") this.completeSide("brothers_crown");
 		if (this.eaten.size >= 3) this.unlockTrophy("block_eats");
@@ -2322,7 +2485,9 @@ export class GameEngine {
 		if (this.vehicle || this.mode === "basketball" || this.mode === "shop" || this.mode === "dialogue" || this.bowl.active) return;
 		this.jooking = false;
 		this.fish = beginFishing(this.fish, this.px, this.py);
-		this.showToast("Mississippi · hold to cast, set the hook, reel the green");
+		this.yaw = Math.PI;
+		this.pitch = -0.1;
+		this.showToast(halloweenOn() ? "After Dark river · hold to cast" : "Mississippi · hold to cast, set the hook, reel the green");
 		audio.interact();
 		this.emitHud();
 	}
@@ -2349,7 +2514,7 @@ export class GameEngine {
 		this.yaw = 0;
 		this.facing = "up";
 		this.mover.reset(this.yaw);
-		this.showToast("901 Lanes · 10 frames · pocket's right");
+		this.showToast(halloweenOn() ? "901 Lanes · purple light, orange pocket" : "901 Lanes · 10 frames · pocket's right");
 		audio.whoosh();
 		this.emitHud();
 	}
@@ -2416,7 +2581,13 @@ export class GameEngine {
 				this.punch = 1;
 				this.celebrate = 1;
 				this.addTrauma(0.42);
-				this.float(this.bowl.turkey >= 3 ? "TURKEY" : "STRIKE", "#d4af37");
+				const turkey = this.bowl.turkey >= 3;
+				this.float(halloweenOn() ? (turkey ? "TRIPLE TROUBLE" : "MONSTER STRIKE") : turkey ? "TURKEY" : "STRIKE", "#d4af37");
+				if (halloweenOn()) {
+					this.tonight.strike = true;
+					this.payTonight("strike", "Monster strike");
+					this.noteHalloween("bowling");
+				}
 				if (this.bowl.turkey >= 3) {
 					this.unlockTrophy("lane_king");
 					this.completeSide("turkey_night");
@@ -2433,7 +2604,7 @@ export class GameEngine {
 		if (prev !== "over" && this.bowl.phase === "over") {
 			this.bowl.payout = payoutFor(this.bowl);
 			this.float(`${this.bowl.total}`, "#d4af37");
-			this.showToast(`Game ${this.bowl.total} · +$${this.bowl.payout}`);
+			this.showToast(`Game ${this.bowl.total} · +$${this.bowl.payout}${halloweenOn() && this.bowl.total >= 200 ? " · AFTER DARK GAME" : ""}`);
 			if (this.bowl.total > this.bowlingHighScore) this.bowlingHighScore = this.bowl.total;
 			audio.cash();
 			this.save();
@@ -2460,6 +2631,11 @@ export class GameEngine {
 			if (this.cooler.length > 8) this.cooler.length = 8;
 			audio.catchFish();
 			audio.cash();
+			if (next.fish && SEASON_FISH.has(next.fish.id)) {
+				this.noteHalloween("fishing");
+				this.tonight.fish += 1;
+				if (this.tonight.fish >= 2) this.payTonight("fish", "Two season fish");
+			}
 			this.unlockTrophy("river_rat");
 			this.completeSide("river_catch");
 			this.showToast(
@@ -2474,6 +2650,10 @@ export class GameEngine {
 	}
 	tryInteract() {
 		if (!this.started || this.paused || this.cinematic) return;
+		if (this.haunt) {
+			this.hauntUse();
+			return;
+		}
 		if (this.fish.active) {
 			if (this.fish.phase === "catch" || this.fish.phase === "fail") this.fish = { ...this.fish, window: 0 };
 			else this.stopFishing();
@@ -2550,6 +2730,10 @@ export class GameEngine {
 			this.startFishing();
 			return;
 		}
+		if (this.nearPoi === "haunt") {
+			this.enterHaunt();
+			return;
+		}
 		if (this.nearPoi === "court") {
 			this.openCourtMenu();
 			return;
@@ -2564,11 +2748,11 @@ export class GameEngine {
 		}
 		if (this.nearPoi === "store") {
 			const step = this.mission.steps[this.mission.activeStep];
-			if (step && (step.kind === "talk" || step.kind === "return") && !step.done) {
+			if (step && (step.kind === "talk" || step.kind === "return") && !step.done && this.nearNpc === "k_blanco") {
 				this.openDialogue("k_blanco");
 				return;
 			}
-			this.openShop();
+			commerce.enterHeadquarters();
 			return;
 		}
 		if (isFoodTruck(this.nearPoi)) {
@@ -2577,6 +2761,7 @@ export class GameEngine {
 			return;
 		}
 		if (this.nearPoi === "welcome" || this.nearPoi === "listenpost" || this.nearPoi === "billboard") {
+			this.noteHalloween("sponsor");
 			this.openSponsor();
 			if (this.nearPoi === "welcome") this.completeSide("welkome_board");
 			return;
@@ -2627,7 +2812,7 @@ export class GameEngine {
 		else if (n.isKBlanco && step && step.kind === "return" && !step.done && step.id === "afterparty") this.dialogueLines = [...AFTER_HOURS_LINES];
 		else if (n.isKBlanco && this.afterHours.complete) this.dialogueLines = ["Night's yours. Side jobs still print Respect. Don't disappear."];
 		else if (n.isKBlanco && this.dropLive && this.missionComplete) this.dialogueLines = [...DROP_LIVE_LINES];
-		else this.dialogueLines = [...n.dialogue];
+		else this.dialogueLines = halloweenOn() ? [...n.dialogue, halloweenNpcLine(n.id)] : [...n.dialogue];
 		this.dialogue = {
 			speaker: n.name,
 			text: this.dialogueLines[0] ?? "..."
@@ -2726,7 +2911,7 @@ export class GameEngine {
 	checkSideOwn() {
 		const s = this.side.find((x) => x.id === "full_fit");
 		if (s && !s.done && this.owned.length >= (s.need ?? 4)) this.completeSide("full_fit");
-		if (this.owned.filter((id) => !APPAREL.find((a) => a.id === id)?.irlOnly).length >= APPAREL.filter((a) => !a.irlOnly).length) this.unlockTrophy("full_closet");
+		if (this.owned.filter((id) => !id.startsWith("hw_") && !APPAREL.find((a) => a.id === id)?.irlOnly).length >= APPAREL.filter((a) => !a.irlOnly && !a.id.startsWith("hw_")).length) this.unlockTrophy("full_closet");
 	}
 	completeSide(id: string) {
 		const s = this.side.find((x) => x.id === id);
@@ -3051,7 +3236,7 @@ export class GameEngine {
 		this.spawnRivalCar();
 		this.vehicle = { kind: "car", carIndex: this.playerRaceCarIndex };
 		audio.whoosh();
-		this.showToast(skipCountdown ? "GREEN · hit the arrows" : "Grid locked · arrows on the turns");
+		this.showToast(skipCountdown ? "GREEN · pumpkin markers live" : halloweenOn() ? "After Dark grid · arrows, fog, pumpkin boosts" : "Grid locked · arrows on the turns");
 		this.emitHud();
 	}
 	closeRaceMenu() {
@@ -3169,6 +3354,7 @@ export class GameEngine {
 		tickRaceCues(this.race, dt, tap);
 		if (this.race.cue && this.race.cue.status === "hit" && prevCue === "live") {
 			audio.grade("S");
+			this.addTrauma(0.42);
 			this.showToast(this.race.combo > 1 ? `NITRO x${this.race.combo}` : "NITRO · CATCH CAM", 0.85);
 		} else if (this.race.cue && this.race.cue.status === "miss" && prevCue === "live") {
 			audio.ui();
@@ -3178,6 +3364,11 @@ export class GameEngine {
 		if (passed) {
 			armNextSegment(this.race);
 			audio.ui();
+			if (halloweenOn()) {
+				this.sackdollars += 15;
+				this.race.boostT = Math.max(this.race.boostT, 0.85);
+				this.float("PUMPKIN", "#ff7a1a");
+			}
 			if (this.race.player.finished) {
 				this.race.player.finishT = this.race.time;
 				this.px = this.race.player.x;
@@ -3199,6 +3390,8 @@ export class GameEngine {
 		this.vy = this.race.player.vy;
 		this.yaw = this.race.player.yaw;
 		this.moving = true;
+		const mph = Math.hypot(this.vx, this.vy) * 0.14;
+		this.trauma = Math.max(this.trauma, 0.05 + Math.min(0.16, mph / 520) + (this.race.boostT > 0 ? 0.18 : 0));
 		tickRival(this.race.rival, dt, progressOf(this.race.player), this.race.boostT > 0);
 		if (inCourtPx(this.race.player.x, this.race.player.y) || carBlocked(this.race.player.x, this.race.player.y, 14)) {
 			const safe = snapToRacePath(this.race.player.x, this.race.player.y, this.race.player.pathI);
@@ -3222,6 +3415,15 @@ export class GameEngine {
 		const pp = progressOf(this.race.player);
 		const rp = progressOf(this.race.rival);
 		this.race.place = pp >= rp ? 1 : 2;
+		if (halloweenOn()) {
+			this.hwDraftT = Math.max(0, this.hwDraftT - dt);
+			const gap = Math.hypot(this.race.player.x - this.race.rival.x, this.race.player.y - this.race.rival.y);
+			if (this.hwDraftT <= 0 && gap < 90) {
+				this.hwDraftT = 8;
+				this.race.boostT = Math.max(this.race.boostT, 0.7);
+				this.showToast("GHOST DRAFT", 0.8);
+			}
+		}
 		if (playerWrongWay(this.race.player, this.vx, this.vy)) {
 			this.race.wrongWay += dt;
 			if (this.race.wrongWay > 1.15 && this.race.wrongWay < 1.15 + dt + 0.02) this.showToast("Wrong way");
@@ -3236,8 +3438,13 @@ export class GameEngine {
 		this.sackdollars += this.race.payout;
 		this.respect += this.race.respect;
 		this.float(win ? "1ST" : "2ND", win ? PAL.gold : "#a8a29e");
-		this.showToast(win ? `YOU BEAT CAM · +$${this.race.payout}` : `Cam took it · +$${this.race.payout}`);
+		this.showToast(win ? (halloweenOn() ? `AFTER DARK · 1ST · +$${this.race.payout}` : `YOU BEAT CAM · +$${this.race.payout}`) : `Cam took it · +$${this.race.payout}`);
 		if (win) {
+			if (halloweenOn()) {
+				this.tonight.race = true;
+				this.payTonight("race", "Win the loop");
+				this.noteHalloween("race");
+			}
 			this.unlockTrophy("strip_king");
 			this.completeSide("strip_kings");
 			audio.trophy();
@@ -3275,8 +3482,10 @@ export class GameEngine {
 		this.checkSideTalk();
 		this.dialogueNpcId = `ped-${index}`;
 		this.dialogueIndex = 0;
-		const lines = PED_JOB_CHAT[p.job] ?? PED_CHAT;
-		this.dialogueLines = [lines[index % lines.length]!];
+		const lines = halloweenOn()
+			? [halloweenNpcLine(`ped-${index}`)]
+			: [((PED_JOB_CHAT[p.job] ?? PED_CHAT)[index % (PED_JOB_CHAT[p.job] ?? PED_CHAT).length])!];
+		this.dialogueLines = lines;
 		this.dialogue = {
 			speaker: pedSpeaker(p),
 			text: this.dialogueLines[0] ?? "...",
@@ -3289,10 +3498,215 @@ export class GameEngine {
 		this.mode = "dialogue";
 		this.emitHud();
 	}
+	private halloweenHud(): HudSnapshot["halloween"] {
+		if (!halloweenOn()) return null;
+		const room = this.haunt ? HAUNT_ROOMS[this.haunt.room] : null;
+		const got = room?.letter ? this.hw.letters.includes(room.id) : true;
+		const fit = this.equipped?.startsWith("hw_") ? this.equipped : "hw_doll";
+		return {
+			on: true,
+			letters: this.hw.letters.length,
+			lettersMax: HW_LETTERS,
+			master: this.hw.badge,
+			event: this.hwEvent?.text ?? null,
+			checklist: masterChecklist(this.hw),
+			tonight: [
+				{ id: "baskets", label: "Make 3 baskets", done: this.tonight.baskets >= 3 },
+				{ id: "fish", label: "Catch 2 seasonal fish", done: this.tonight.fish >= 2 },
+				{ id: "race", label: "Win one race", done: this.tonight.race },
+				{ id: "strike", label: "Bowl one strike", done: this.tonight.strike },
+				{ id: "haunt", label: "Visit the haunted house", done: this.tonight.haunt },
+			],
+			haunt: this.haunt && room ? {
+				room: this.haunt.room,
+				rooms: HAUNT_ROOMS.length,
+				name: room.name,
+				image: room.image,
+				objective: room.objective,
+				x: this.haunt.x,
+				y: this.haunt.y,
+				letter: room.letter ? { x: room.letter.x, y: room.letter.y, got } : null,
+				action: { x: room.hotspot.x, y: room.hotspot.y, label: room.action, done: this.haunt.acted },
+				doorOpen: this.haunt.room < HAUNT_ROOMS.length - 1 && got && this.haunt.acted,
+				scare: this.haunt.scare,
+				note: this.haunt.note,
+				kind: room.kind,
+				letters: this.hw.letters.length,
+				lettersMax: HW_LETTERS,
+				outfit: `/game/benji/outfits/${fit}/front.png`,
+			} : null,
+		};
+	}
 	grantTourTees() {
 		for (const id of ["tour_black", "tour_white", "tour_red", "jersey_white_224", "jersey_blue_fresh", "jersey_black_fresh", "black_sackrow_11", "blue_901_day"] as const) {
 			if (!this.owned.includes(id)) this.owned.push(id);
 		}
+	}
+	grantSeasonFits() {
+		if (!halloweenOn()) return;
+		for (const id of ["hw_doll", "hw_sackrow", "hw_claw"] as const) {
+			if (!this.owned.includes(id)) this.owned.push(id);
+		}
+	}
+	private noteHalloween(kind: "fishing" | "bowling" | "race" | "food" | "sponsor" | "enter") {
+		if (!halloweenOn()) return;
+		if (kind === "fishing" && !this.hw.fishing) {
+			this.hw.fishing = true;
+			this.sackdollars += 25;
+			this.showToast("Season catch · Ghost water pays");
+		} else if (kind === "bowling" && !this.hw.bowling) {
+			this.hw.bowling = true;
+			this.showToast("Monster strike is on the board");
+		} else if (kind === "race" && !this.hw.race) {
+			this.hw.race = true;
+			this.sackdollars += 40;
+			this.showToast("After Dark loop cleared");
+		} else if (kind === "food" && !this.hw.food) {
+			this.hw.food = true;
+			this.fedT = Math.max(this.fedT, 36);
+			this.showToast("After Dark menu · legs feel lighter");
+		} else if (kind === "sponsor" && !this.hw.sponsor) {
+			this.hw.sponsor = true;
+			this.showToast("Sponsor slot checked");
+		} else if (kind === "enter" && !this.hw.entered) {
+			this.hw.entered = true;
+		}
+		this.finishHalloweenMaster();
+	}
+	private finishHalloweenMaster() {
+		if (!halloweenOn() || this.hw.badge || !masterReady(this.hw)) return;
+		this.hw.badge = true;
+		this.hw.houseComplete = true;
+		this.sackdollars += 250;
+		this.respect += 12;
+		this.unlockTrophy("after_dark");
+		this.showToast("HALLOWEEN MASTER");
+		audio.trophy();
+	}
+	private payTonight(id: string, label: string) {
+		if (this.tonight.paid.has(id)) return;
+		this.tonight.paid.add(id);
+		this.sackdollars += 20;
+		this.float("+20", "#ff7a1a");
+		this.showToast(`${label} · +$20`);
+	}
+	enterHaunt() {
+		if (!halloweenOn()) return;
+		this.haunt = enterHauntLive();
+		this.hw.entered = true;
+		this.tonight.haunt = true;
+		this.payTonight("haunt", "Visit the house");
+		this.noteHalloween("enter");
+		audio.whoosh();
+		this.showToast("10 LETTERS AFTER DARK");
+		this.emitHud();
+	}
+	leaveHaunt() {
+		if (!this.haunt) return;
+		const house = POIS.find((p) => p.id === "haunt");
+		this.haunt = null;
+		if (house) {
+			this.px = house.x + house.w / 2;
+			this.py = house.y + house.h + 36;
+			this.yaw = 0;
+		}
+		this.save();
+		this.emitHud();
+	}
+	hauntUse() {
+		if (!this.haunt) return;
+		const stepped = tickHaunt(this.haunt, 0, 0, 0, true, this.clock, this.hw.letters);
+		this.applyHauntStep(stepped.live, stepped.event);
+	}
+	hauntCandle(n: number) {
+		if (!this.haunt) return;
+		const stepped = hauntOrderPress(this.haunt, n);
+		this.applyHauntStep(stepped.live, stepped.event);
+	}
+	private applyHauntStep(live: HauntLive, event: ReturnType<typeof tickHaunt>["event"]) {
+		this.haunt = live;
+		if (event === "letter") {
+			const room = HAUNT_ROOMS[live.room];
+			if (room && !this.hw.letters.includes(room.id)) {
+				this.hw.letters.push(room.id);
+				this.sackdollars += 15;
+				this.float("LETTER", "#ff7a1a");
+				audio.swish();
+				this.showToast(`Letter ${this.hw.letters.length}/${HW_LETTERS}`);
+			}
+		} else if (event === "acted") {
+			audio.whoosh();
+			this.showToast(live.scare ?? "Something moved.");
+		} else if (event === "scare") {
+			audio.groan();
+		} else if (event === "next") {
+			audio.ui();
+		} else if (event === "shootout") {
+			this.startHalloweenShootout();
+			return;
+		}
+		if (this.hw.letters.length >= HW_LETTERS && this.hw.shootout) this.hw.houseComplete = true;
+		this.finishHalloweenMaster();
+		this.save();
+		this.emitHud();
+	}
+	private updateHaunt(dt: number, act: { mx: number; my: number; interactPressed: boolean; backPressed: boolean }) {
+		if (!this.haunt) return;
+		if (act.backPressed) {
+			this.leaveHaunt();
+			return;
+		}
+		const stepped = tickHaunt(this.haunt, dt, act.mx, act.my, act.interactPressed, this.clock, this.hw.letters);
+		if (act.interactPressed || stepped.event) this.applyHauntStep(stepped.live, stepped.event);
+		else this.haunt = stepped.live;
+	}
+	startHalloweenShootout() {
+		if (!halloweenOn()) return;
+		this.haunt = null;
+		const court = POIS.find((p) => p.id === "court");
+		if (court) {
+			this.px = court.x + court.w / 2;
+			this.py = court.y + court.h - 46;
+		}
+		this.world3d?.setShootoutBackdrop(true);
+		this.startCourt("timed", true);
+	}
+	private settleHalloweenShootout() {
+		if (!this.halloweenShootout) return;
+		const score = this.ball.score;
+		this.hw.shootoutBest = Math.max(this.hw.shootoutBest, score);
+		if (score >= 10) {
+			if (!this.hw.letters.includes("cathedral")) this.hw.letters.push("cathedral");
+			this.hw.shootout = true;
+			this.hw.houseComplete = this.hw.letters.length >= HW_LETTERS;
+			this.sackdollars += 80;
+			this.respect += 6;
+			this.showToast("10 LETTERS SHOOTOUT CLEARED");
+			this.finishHalloweenMaster();
+		} else this.showToast("Shootout short · the house is still open");
+		this.halloweenShootout = false;
+		this.world3d?.setShootoutBackdrop(false);
+	}
+	private tickWorldEvent(dt: number) {
+		if (!halloweenOn() || this.haunt || this.mode !== "world") return;
+		if (this.hwEvent) {
+			this.hwEvent.t -= dt;
+			if (this.hwEvent.kind === "pumpkin" && Math.hypot(this.px - this.hwEvent.x, this.py - this.hwEvent.y) < 70) {
+				this.sackdollars += 12;
+				this.float("+12", "#ff7a1a");
+				this.hwEvent = null;
+				return;
+			}
+			if (this.hwEvent.kind === "midnight") this.sackdollars += dt * 3;
+			if (this.hwEvent.t <= 0) this.hwEvent = null;
+			return;
+		}
+		this.hwEventWait -= dt;
+		if (this.hwEventWait > 0 || this.fish.active || this.bowl.active || this.race.active) return;
+		const pick = WORLD_EVENTS[Math.floor(Math.random() * WORLD_EVENTS.length)]!;
+		this.hwEvent = { kind: pick.kind, text: pick.text, t: 8 + Math.random() * 6, x: this.px + 80, y: this.py + 40 };
+		this.hwEventWait = 42 + Math.random() * 24;
+		this.showToast(pick.text, 2.2);
 	}
 	buyItem(id: ApparelId) {
 		const item = APPAREL.find((a) => a.id === id);
@@ -3377,9 +3791,10 @@ export class GameEngine {
 		this.showToast(`${DIFFICULTY[this.courtDifficulty].label} heat`);
 		this.emitHud();
 	}
-	startCourt(mode: CourtChallenge = "timed") {
+	startCourt(mode: CourtChallenge = "timed", shootout = false) {
 		audio.whoosh();
 		this.courtMenu = false;
+		this.halloweenShootout = !!shootout && halloweenOn();
 		this.courtChallenge = mode;
 		const spec = DIFFICULTY[this.courtDifficulty];
 		analytics.track("basketball_started", { target: spec.target, mode });
@@ -3423,11 +3838,15 @@ export class GameEngine {
 			this.ball.timeLeft = 9999;
 			this.ball.targetScore = 999;
 			this.showToast(`${venueFor(this.courtVenue).name} · pickup · hoop till you leave`);
+		} else if (this.halloweenShootout) {
+			this.ball.timeLeft = 80;
+			this.ball.targetScore = 10;
+			this.showToast("10 LETTERS SHOOTOUT · make 10");
 		} else {
 			this.ball.timeLeft = spec.time;
 			const night = this.activeQuest().steps[this.activeQuest().activeStep]?.id === "nightball";
 			this.ball.targetScore = night ? 10 : this.missionComplete ? spec.target : this.currentTier().courtTarget;
-			this.showToast(night ? `Night court · score ${this.ball.targetScore}` : `${venueFor(this.courtVenue).name} · ${spec.label} · need ${this.ball.targetScore}`);
+			this.showToast(night ? `Night court · score ${this.ball.targetScore}` : halloweenOn() ? `${venueFor(this.courtVenue).name} · After Dark` : `${venueFor(this.courtVenue).name} · ${spec.label} · need ${this.ball.targetScore}`);
 		}
 		this.bark("Don't rush the release. Green window.");
 		this.emitHud();
@@ -3457,6 +3876,7 @@ export class GameEngine {
 		if (this.mission.complete && this.ball.score >= 10) this.completeStep("nightball");
 	}
 	exitBasketball() {
+		this.settleHalloweenShootout();
 		this.tryCreditBasketball();
 		if (this.ball.shots > 0) {
 			this.courtBoard = pushBoard({
@@ -3575,8 +3995,9 @@ export class GameEngine {
 			this.ball.timeLeft -= dt;
 			if (this.ball.timeLeft <= 0) {
 				this.ball.timeLeft = 0;
+				const shoot = this.halloweenShootout;
 				this.exitBasketball();
-				this.showToast("Run over · keep shooting pickup");
+				if (!shoot) this.showToast("Run over · keep shooting pickup");
 				return;
 			}
 		}
@@ -3651,6 +4072,17 @@ export class GameEngine {
 					this.ball.score += pts;
 					this.ball.combo += 1;
 					this.ball.best = Math.max(this.ball.best, this.ball.combo);
+					if (halloweenOn()) {
+						this.tonight.baskets += 1;
+						if (this.tonight.baskets >= 3) this.payTonight("baskets", "3 MADE");
+						const streak = this.ball.combo;
+						const call = streak >= 6 ? "SACKROW HEAT CHECK" : streak >= 4 ? "ON FIRE" : streak === 3 ? "3 MADE" : streak === 2 ? "2 MADE" : null;
+						if (call) this.float(call, streak >= 4 ? "#39ff14" : "#ff7a1a");
+						if (this.halloweenShootout && this.ball.score >= 10) {
+							this.exitBasketball();
+							return;
+						}
+					}
 					this.ball.heat = Math.min(1, this.ball.heat + (0.14 + (this.ball.spotPts >= 3 ? 0.08 : 0)) * DIFFICULTY[this.courtDifficulty].heat);
 					this.ball.flash = 0;
 					this.hoopPulse = perfect ? 0.85 : 0.62;
@@ -3943,12 +4375,14 @@ export class GameEngine {
 		const h = this.canvas.clientHeight;
 		const dpr = pixelRatio();
 		if (this.world3d) {
+			this.world3d.seasonFlicker = this.hwEvent?.kind === "blackout" ? this.hwEvent.t : 0;
+			this.world3d.batSwarm = this.hwEvent?.kind === "bats" ? this.hwEvent.t : 0;
 			this.world3d.sync({
 				px: this.px,
 				py: this.py,
 				yaw: this.yaw,
 				pitch: this.pitch,
-				cameraView: this.settings.cameraView,
+				cameraView: this.presentedView(),
 				mode: this.mode,
 				facing: this.facing,
 				moving: this.moving,
@@ -4037,6 +4471,15 @@ export class GameEngine {
 					}
 					: null,
 				raceClear: this.race.active && this.race.phase !== "idle",
+				raceLook: this.race.active
+					? {
+						live: this.race.phase === "green" || this.race.phase === "countdown",
+						mph: Math.hypot(this.vx, this.vy) * 0.14,
+						boosting: this.race.boostT > 0,
+						slowed: this.race.slowT > 0,
+						phase: this.race.phase,
+					}
+					: undefined,
 				raceGates: this.race.active
 					? RACE_CHECKPOINTS.map((c, i) => ({
 						x: c.x,
@@ -4077,6 +4520,7 @@ export class GameEngine {
 		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 		ctx.clearRect(0, 0, w, h);
 		if (!this.world3d) this.drawFallbackWorld(ctx, w, h);
+		this.drawConsoleGrade(ctx, w, h);
 		for (const p of this.particles) {
 			if (this.mode === "basketball") break;
 			const a = Math.max(0, p.life / p.maxLife);
@@ -4085,7 +4529,7 @@ export class GameEngine {
 			ctx.fillRect(w * 0.5 + p.ox - p.size / 2, h * 0.36 + p.oy - p.size / 2, p.size, p.size);
 		}
 		ctx.globalAlpha = 1;
-		if (this.settings.cameraView === "first") {
+		if (this.presentedView() === "first") {
 			ctx.strokeStyle = "rgba(232,226,214,0.5)";
 			ctx.lineWidth = 1.4;
 			ctx.beginPath();
@@ -4112,6 +4556,37 @@ export class GameEngine {
 		if (this.started && (this.mode === "world" || this.mode === "basketball")) {
 			this.drawCompass(ctx, w, h);
 			this.drawMinimap(ctx, w, h);
+		}
+	}
+	drawConsoleGrade(ctx: CanvasRenderingContext2D, w: number, h: number) {
+		const racing = this.race.active && (this.race.phase === "green" || this.race.phase === "countdown" || this.race.phase === "finish");
+		const vignette = ctx.createRadialGradient(w * 0.5, h * 0.46, Math.min(w, h) * 0.18, w * 0.5, h * 0.5, Math.max(w, h) * 0.72);
+		vignette.addColorStop(0, "rgba(0,0,0,0)");
+		vignette.addColorStop(1, racing ? "rgba(0,0,0,0.5)" : "rgba(6,8,12,0.22)");
+		ctx.fillStyle = vignette;
+		ctx.fillRect(0, 0, w, h);
+		if (!racing) return;
+		const bars = this.race.phase === "countdown" ? 0.11 : 0.045;
+		ctx.fillStyle = "rgba(0,0,0,0.72)";
+		ctx.fillRect(0, 0, w, h * bars);
+		ctx.fillRect(0, h * (1 - bars), w, h * bars);
+		if (this.race.phase !== "green") return;
+		const mph = Math.hypot(this.vx, this.vy) * 0.14;
+		const boost = this.race.boostT > 0;
+		const alpha = Math.min(0.72, 0.12 + mph / 140);
+		ctx.strokeStyle = boost ? `rgba(255, 214, 90, ${alpha})` : `rgba(255,255,255,${alpha * 0.65})`;
+		ctx.lineWidth = boost ? 2.4 : 1.4;
+		const cx = w * 0.5;
+		const cy = h * 0.5;
+		const reach = Math.min(w, h);
+		for (let i = 0; i < 18; i++) {
+			const a = (i / 18) * Math.PI * 2 + this.clock * (boost ? 2.2 : 0.65);
+			const inner = reach * (0.34 + (i % 4) * 0.03);
+			const outer = inner + reach * (0.08 + Math.min(0.16, mph / 420));
+			ctx.beginPath();
+			ctx.moveTo(cx + Math.cos(a) * inner, cy + Math.sin(a) * inner * 0.72);
+			ctx.lineTo(cx + Math.cos(a) * outer, cy + Math.sin(a) * outer * 0.72);
+			ctx.stroke();
 		}
 	}
 	drawFallbackWorld(ctx: CanvasRenderingContext2D, w: number, h: number) {
@@ -4496,7 +4971,7 @@ export class GameEngine {
 			})),
 			highScore: this.highScore,
 			hasSave: this.hasSave,
-			cameraView: this.settings.cameraView,
+			cameraView: this.presentedView(),
 			steps: [
 				...this.mission.steps.map((s) => ({
 					id: s.id,
@@ -4512,6 +4987,7 @@ export class GameEngine {
 			bestRunScore: this.bestRunScore,
 			buildVersion: GAME_BUILD_VERSION,
 			dropLive: this.dropLive,
+			inHq: this.hqInside || this.mode === "shop",
 			driving: !!this.vehicle,
 			jooking: this.jooking,
 			nextUnlock: (() => {
@@ -4523,7 +4999,7 @@ export class GameEngine {
 			raceMenu: this.raceMenu,
 			fishing: this.fish.active ? fishingHud(this.fish, this.input.device === "touch") : null,
 			bowling: this.bowl.active ? bowlHud(this.bowl, this.input.device === "touch") : null,
-			food: this.foodMenu ? foodHud(foodTruckById(this.foodMenu)!, this.cooler, this.sackdollars) : null,
+			food: this.foodMenu ? foodHud(menuFor(foodTruckById(this.foodMenu)!), this.cooler, this.sackdollars) : null,
 			coolerCount: this.cooler.length,
 			fed: this.fedT > 0,
 			sponsor: sponsorHud(),
@@ -4558,6 +5034,7 @@ export class GameEngine {
 				quality: this.settings.quality,
 				noclip: this.playtestNoclip,
 			},
+			halloween: this.halloweenHud(),
 		};
 	}
 };

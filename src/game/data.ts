@@ -1,6 +1,7 @@
 import type { DeliveryId } from "./dropRun";
 import { deliveryTarget } from "./dropRun";
 import type { ApparelItem, Mission, MissionStep, NpcDef, SideMission, TrophyDef, WorldPoi } from "./types";
+import { halloweenOn } from "./season";
 
 /** Warm Memphis dusk — brand green/gold are accents only. */
 export const PAL = {
@@ -33,7 +34,7 @@ export const PAL = {
 } as const;
 
 /** Bump to force the live preview to remount the world bake. */
-export const ART_REV = 91;
+export const ART_REV = 92;
 
 export const BRAND = {
   name: "$ackReligious",
@@ -234,6 +235,30 @@ export const APPAREL: ApparelItem[] = [
     category: "top",
     color: "#1d4ed8",
     description: "Blue 901 Day jersey. Memphis on the back.",
+  },
+  {
+    id: "hw_doll",
+    name: "Horror Doll Overalls",
+    price: 0,
+    category: "set",
+    color: "#1d4ed8",
+    description: "Halloween 2026. Striped sleeves, bloody overalls, same Benji.",
+  },
+  {
+    id: "hw_sackrow",
+    name: "Nightmare on Sackrow",
+    price: 0,
+    category: "top",
+    color: "#111111",
+    description: "Halloween 2026. Graphic tee, Sackrow on the back.",
+  },
+  {
+    id: "hw_claw",
+    name: "Claw Sweater",
+    price: 0,
+    category: "set",
+    color: "#b91c1c",
+    description: "Halloween 2026. Distressed stripes and the metal claw glove.",
   },
 ];
 
@@ -458,6 +483,21 @@ export const POIS: WorldPoi[] = [
     label: "RCM",
     district: "Midtown",
   },
+  ...(halloweenOn()
+    ? [
+        {
+          id: "haunt" as const,
+          name: "Haunted House",
+          x: 52 * TILE,
+          y: 11.6 * TILE,
+          w: 4.2 * TILE,
+          h: 3.4 * TILE,
+          color: "#7c2d12",
+          label: "HAUNT",
+          district: "East Memphis",
+        },
+      ]
+    : []),
 ];
 
 export const STREETS: { name: string; axis: "x" | "y"; tile: number }[] = [
@@ -821,14 +861,15 @@ export const TROPHIES: TrophyDef[] = [
   { id: "block_eats", name: "Block Eats", description: "Eat at every food truck on Beale.", rank: "silver" },
   { id: "lane_king", name: "Lane King", description: "Throw a turkey at 901 Lanes.", rank: "gold" },
   { id: "always_ready", name: "Always Ready", description: "Complete 3 RCM WORX VIP runs. On time, every time.", rank: "gold" },
+  { id: "after_dark", name: "Halloween Master", description: "Clear Halloween After Dark. Letters, house, and the night runs.", rank: "platinum" },
 ];
 
 export const NPCS: NpcDef[] = [
   {
     id: "k_blanco",
     name: "K Blanco",
-    x: 31 * TILE,
-    y: 8.56 * TILE,
+    x: 32.5 * TILE,
+    y: 13.8 * TILE,
     color: "#f5d0a9",
     dialogue: [
       "You made it. I needed somebody who moves like the city, not like a tourist.",
@@ -970,7 +1011,6 @@ export const TIPS = [
   "Sacks Giving Weekend flyers are up on Beale, the court, and HQ.",
   "901 Lanes is east of 901 Court. Pink neon. Walk in and bowl.",
   "RCM WORX sits west of HQ on Union. Black Sprinter and Escalade. Book a VIP drop.",
-  "Playtest Kit is KIT or F3. Warp, pin a bug dump, live coords while you play.",
 ];
 
 export const SAVE_KEY = "sackreligious-memphis-v3";

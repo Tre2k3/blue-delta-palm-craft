@@ -225,6 +225,36 @@ export const OUTFIT_LOOKS: Record<ApparelId, OutfitLook> = {
     hoodie: false,
     thumb: { src: "/game/benji/outfits/blue_901_day/front.png", crop: [0.22, 0.08, 0.56, 0.72] },
   },
+  hw_doll: {
+    id: "hw_doll",
+    shirt: null,
+    shorts: null,
+    cap: null,
+    chain: true,
+    graphic: "none",
+    hoodie: false,
+    thumb: { src: "/game/benji/outfits/hw_doll/front.png", crop: [0.22, 0.08, 0.56, 0.72] },
+  },
+  hw_sackrow: {
+    id: "hw_sackrow",
+    shirt: null,
+    shorts: null,
+    cap: null,
+    chain: true,
+    graphic: "none",
+    hoodie: false,
+    thumb: { src: "/game/benji/outfits/hw_sackrow/front.png", crop: [0.22, 0.08, 0.56, 0.72] },
+  },
+  hw_claw: {
+    id: "hw_claw",
+    shirt: null,
+    shorts: null,
+    cap: null,
+    chain: true,
+    graphic: "none",
+    hoodie: false,
+    thumb: { src: "/game/benji/outfits/hw_claw/front.png", crop: [0.22, 0.08, 0.56, 0.72] },
+  },
 };
 
 export function lookFor(id: ApparelId | string | null | undefined): OutfitLook {

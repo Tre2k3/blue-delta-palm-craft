@@ -35,7 +35,8 @@ export type LocationId =
   | "listenpost"
   | "billboard"
   | "lanes"
-  | "rcmworx";
+  | "rcmworx"
+  | "haunt";
 
 export type ApparelId =
   | "starter_tee"
@@ -56,7 +57,10 @@ export type ApparelId =
   | "jersey_blue_fresh"
   | "jersey_black_fresh"
   | "black_sackrow_11"
-  | "blue_901_day";
+  | "blue_901_day"
+  | "hw_doll"
+  | "hw_sackrow"
+  | "hw_claw";
 
 export type TrophyId =
   | "first_steps"
@@ -77,7 +81,8 @@ export type TrophyId =
   | "river_rat"
   | "block_eats"
   | "lane_king"
-  | "always_ready";
+  | "always_ready"
+  | "after_dark";
 
 export interface ApparelItem {
   id: ApparelId;
@@ -200,6 +205,19 @@ export interface SaveData {
   courtVenue?: string;
   bowlingHighScore?: number;
   rcmRuns?: number;
+  halloween2026?: {
+    letters?: string[];
+    entered?: boolean;
+    houseComplete?: boolean;
+    shootoutBest?: number;
+    shootout?: boolean;
+    fishing?: boolean;
+    bowling?: boolean;
+    race?: boolean;
+    food?: boolean;
+    sponsor?: boolean;
+    badge?: boolean;
+  };
 }
 
 export interface GameSettings {
@@ -330,6 +348,7 @@ export interface HudSnapshot {
   bestRunScore: number;
   buildVersion: string;
   dropLive: boolean;
+  inHq?: boolean;
   driving: boolean;
   jooking?: boolean;
   nextUnlock?: { label: string; at: number } | null;
@@ -346,6 +365,33 @@ export interface HudSnapshot {
   rcm?: import("./rcmWorx").RcmHud | null;
   playtest?: PlaytestHud | null;
   playtestOpen?: boolean;
+  halloween?: {
+    on: boolean;
+    letters: number;
+    lettersMax: number;
+    master: boolean;
+    event: string | null;
+    checklist: { id: string; label: string; done: boolean }[];
+    tonight: { id: string; label: string; done: boolean }[];
+    haunt: {
+      room: number;
+      rooms: number;
+      name: string;
+      image: string;
+      objective: string;
+      x: number;
+      y: number;
+      letter: { x: number; y: number; got: boolean } | null;
+      action: { x: number; y: number; label: string; done: boolean };
+      doorOpen: boolean;
+      scare: string | null;
+      note: string | null;
+      kind: string;
+      letters: number;
+      lettersMax: number;
+      outfit: string;
+    } | null;
+  } | null;
 }
 
 export type GameTestState = {
