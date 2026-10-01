@@ -53,6 +53,21 @@ function closeTo(x: number, y: number, tx: number, ty: number) {
   return dx * dx + dy * dy < 1;
 }
 
+function guideSpot(haunt: HauntPanel, room: (typeof HAUNT_ROOMS)[number] | undefined) {
+  if (!room || haunt.hall) return null;
+  if (room.kind === "order" && !haunt.hotspot.done) {
+    const n = room.seq[haunt.step] ?? room.seq[0];
+    const pad = n ? room.padPoints[n - 1] : undefined;
+    if (pad) return pad;
+  }
+  if (!haunt.hotspot.done && room.gate !== "open" && room.gate !== "letter") {
+    return { x: haunt.hotspot.x, y: haunt.hotspot.y };
+  }
+  if (haunt.letter && !haunt.letter.got) return { x: haunt.letter.x, y: haunt.letter.y };
+  const door = haunt.exits.find((exit) => exit.open && !exit.back) ?? haunt.exits.find((exit) => exit.open);
+  return door ? { x: door.x, y: door.y } : null;
+}
+
 function Flame({ x, y }: { x: number; y: number }) {
   return (
     <span className="pointer-events-none absolute z-[6] flex -translate-x-1/2 flex-col items-center" style={{ left: `${x * 100}%`, top: `${(y - 0.22) * 100}%` }}>
@@ -197,7 +212,7 @@ export function HauntedHouse({
 
   useEffect(() => {
     setIntroOn(true);
-    const t = window.setTimeout(() => setIntroOn(false), 1300);
+    const t = window.setTimeout(() => setIntroOn(false), 700);
     return () => window.clearTimeout(t);
   }, [haunt.room]);
 
@@ -255,6 +270,8 @@ export function HauntedHouse({
   const nearHot = !haunt.hotspot.done && closeTo(haunt.x, haunt.y, haunt.hotspot.x, haunt.hotspot.y);
   const dock = coarse ? "16.75rem" : "4.25rem";
   const flyX = haunt.letter ? Math.min(88, Math.max(12, ((haunt.letter.x - cam) / Math.max(0.2, vis)) * 100)) : 50;
+  const guide = guideSpot(haunt, room);
+  const onGuide = guide ? closeTo(haunt.x, haunt.y, guide.x, guide.y) : false;
 
   return (
     <div className="pointer-events-none absolute inset-0 z-20 bg-black">
@@ -314,6 +331,24 @@ export function HauntedHouse({
             className="absolute z-[4] h-[14%] w-[10%] -translate-x-1/2 -translate-y-1/2 rounded-full border border-orange-200/80 bg-orange-500/15 shadow-[0_0_18px_rgba(255,122,26,0.45)]"
             style={{ left: `${haunt.hotspot.x * 100}%`, top: `${haunt.hotspot.y * 100}%` }}
           />
+        )}
+        {guide && !onGuide && (
+          <>
+            {[0.34, 0.62].map((t) => (
+              <span
+                key={t}
+                className="pointer-events-none absolute z-[6] h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-orange-200/90 shadow-[0_0_10px_#ff7a1a]"
+                style={{
+                  left: `${(haunt.x + (guide.x - haunt.x) * t) * 100}%`,
+                  top: `${(haunt.y + (guide.y - haunt.y) * t) * 100}%`,
+                }}
+              />
+            ))}
+            <span
+              className="pointer-events-none absolute z-[6] h-6 w-6 -translate-x-1/2 -translate-y-1/2 animate-pulse rounded-full border-2 border-orange-100 bg-orange-400/25 shadow-[0_0_16px_#ff7a1a]"
+              style={{ left: `${guide.x * 100}%`, top: `${guide.y * 100}%` }}
+            />
+          </>
         )}
         <RoomReaction
           id={room?.id}
@@ -391,8 +426,8 @@ export function HauntedHouse({
       </div>
       {haunt.hall && <div className="absolute inset-0 z-30 bg-black/80" />}
       {introOn && !haunt.hall && (
-        <div className="absolute left-1/2 top-[42%] z-30 -translate-x-1/2 text-center text-white">
-          <p className="font-display text-3xl tracking-wide text-orange-100">{haunt.name}</p>
+        <div className="absolute left-1/2 top-[12%] z-30 -translate-x-1/2 text-center text-white">
+          <p className="font-display text-2xl tracking-wide text-orange-100">{haunt.name}</p>
         </div>
       )}
     </div>
