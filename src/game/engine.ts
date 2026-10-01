@@ -37,6 +37,7 @@ import {
   enterHauntLive,
   halloweenNpcLine,
   hauntOrderPress,
+  hauntPrompt,
   masterChecklist,
   masterReady,
   readHw,
@@ -3521,19 +3522,35 @@ export class GameEngine {
 				room: this.haunt.room,
 				rooms: HAUNT_ROOMS.length,
 				name: room.name,
-				image: room.image,
-				objective: room.objective,
+				image: room.alt && this.hw.shootout && room.id === "cathedral" ? room.alt : room.image,
+				aspect: room.alt && this.hw.shootout && room.id === "cathedral" ? "16 / 9" : room.aspect,
+				objective: this.haunt.halling ? "..." : room.objective,
 				x: this.haunt.x,
 				y: this.haunt.y,
-				letter: room.letter ? { x: room.letter.x, y: room.letter.y, got } : null,
-				action: { x: room.hotspot.x, y: room.hotspot.y, label: room.action, done: this.haunt.acted },
-				doorOpen: this.haunt.room < HAUNT_ROOMS.length - 1 && got && this.haunt.acted,
-				scare: this.haunt.scare,
-				note: this.haunt.note,
+				letter: this.haunt.halling || !room.letter ? null : { x: room.letter.x, y: room.letter.y, got },
+				action: {
+					x: room.hotspot.x,
+					y: room.hotspot.y,
+					label: room.action,
+					done: this.haunt.halling || this.haunt.acted || room.kind === "tap",
+				},
+				doorOpen: !this.haunt.halling && this.haunt.room < HAUNT_ROOMS.length - 1 && got && this.haunt.acted && this.haunt.popped,
+				scare: this.haunt.lineT > 0 ? null : this.haunt.scare,
+				note: this.haunt.scareT > 0 ? null : this.haunt.note,
 				kind: room.kind,
 				letters: this.hw.letters.length,
 				lettersMax: HW_LETTERS,
+				found: this.hw.letters,
 				outfit: `/game/benji/outfits/${fit}/front.png`,
+				popped: this.haunt.popped,
+				hall: this.haunt.halling,
+				floorY: room.floorY,
+				walkMinX: room.walkMinX,
+				walkMaxX: room.walkMaxX,
+				doorX: room.doorX,
+				prompt: hauntPrompt(room, this.haunt, got),
+				pop: this.haunt.scareT > 0 && this.haunt.scareImg ? { image: this.haunt.scareImg, line: this.haunt.scareLine ?? "", x: room.lurk.x, y: room.lurk.y } : null,
+				lurk: !this.haunt.popped && !this.haunt.halling ? { image: room.scareImg, x: room.lurk.x, y: room.lurk.y } : null,
 			} : null,
 		};
 	}
@@ -3636,9 +3653,18 @@ export class GameEngine {
 			}
 		} else if (event === "acted") {
 			audio.whoosh();
-			this.showToast(live.scare ?? "Something moved.");
+		} else if (event === "pop") {
+			audio.scare();
+			if (this.settings.rumble) this.input.rumble(160, 0.55, 0.85);
 		} else if (event === "scare") {
 			audio.groan();
+		} else if (event === "hall") {
+			audio.whoosh();
+		} else if (event === "loot") {
+			this.sackdollars += 25;
+			this.float("+25", "#ff7a1a");
+			audio.cash();
+			this.showToast("Loose chain · +$25");
 		} else if (event === "next") {
 			audio.ui();
 		} else if (event === "shootout") {
@@ -3656,7 +3682,9 @@ export class GameEngine {
 			this.leaveHaunt();
 			return;
 		}
+		const prevX = this.haunt.x;
 		const stepped = tickHaunt(this.haunt, dt, act.mx, act.my, act.interactPressed, this.clock, this.hw.letters);
+		if (!stepped.live.halling && Math.abs(stepped.live.x - prevX) > 0.001) audio.foot(this.clock);
 		if (act.interactPressed || stepped.event) this.applyHauntStep(stepped.live, stepped.event);
 		else this.haunt = stepped.live;
 	}

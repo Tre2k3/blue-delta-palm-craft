@@ -23,6 +23,58 @@
   --radius-xl: 1.25rem;
 }
 
+.sack-halloween {
+  --color-primary: #ff7a1a;
+  --color-primary-dim: #c2410c;
+  --color-primary-fg: #1a0c08;
+  --color-gold: #ffb15a;
+  --color-border: #6a3040;
+  --color-surface: #140c10;
+  --color-surface-2: #241018;
+  --color-panel: #12080ee8;
+  --color-bg: #0c080c;
+}
+
+@keyframes haunt-flicker {
+  0%, 86%, 100% { filter: brightness(0.9); }
+  88% { filter: brightness(0.15); }
+  89% { filter: brightness(1); }
+  93% { filter: brightness(0.28); }
+  94% { filter: brightness(1.08); }
+}
+.haunt-flicker { animation: haunt-flicker 4.8s infinite; }
+
+@keyframes haunt-ghost {
+  0% { opacity: 0; transform: translate(-50%, -78%) scale(0.94); }
+  16% { opacity: 0.7; transform: translate(-50%, -82%) scale(1); }
+  72% { opacity: 0.55; }
+  100% { opacity: 0; transform: translate(-50%, -86%) scale(1.02); }
+}
+.haunt-ghost { animation: haunt-ghost 2.1s ease-out forwards; }
+
+@keyframes haunt-dim {
+  0%, 100% { filter: brightness(1); }
+  10% { filter: brightness(0.35); }
+  28% { filter: brightness(0.8); }
+}
+.haunt-dim { animation: haunt-dim 0.7s ease-out; }
+
+@keyframes haunt-shake {
+  0%, 100% { transform: translate(0, 0); }
+  12% { transform: translate(-10px, 5px); }
+  28% { transform: translate(9px, -7px); }
+  44% { transform: translate(-6px, -4px); }
+  60% { transform: translate(8px, 4px); }
+  76% { transform: translate(-4px, 6px); }
+}
+.haunt-shake { animation: haunt-shake 0.48s linear; }
+
+@keyframes haunt-lurk {
+  0%, 100% { transform: translate(-50%, -78%) scale(1); }
+  50% { transform: translate(-50%, -84%) scale(1.04); }
+}
+.haunt-lurk { animation: haunt-lurk 2.2s ease-in-out infinite; }
+
 @layer base {
   * {
     box-sizing: border-box;

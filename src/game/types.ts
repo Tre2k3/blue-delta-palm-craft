@@ -389,7 +389,18 @@ export interface HudSnapshot {
       kind: string;
       letters: number;
       lettersMax: number;
+      found: string[];
       outfit: string;
+      popped: boolean;
+      hall: boolean;
+      floorY: number;
+      walkMinX: number;
+      walkMaxX: number;
+      doorX: number;
+      aspect: string;
+      prompt: string | null;
+      pop: { image: string; line: string; x: number; y: number } | null;
+      lurk: { image: string; x: number; y: number } | null;
     } | null;
   } | null;
 }

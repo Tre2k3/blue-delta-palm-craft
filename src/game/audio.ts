@@ -314,6 +314,13 @@ export class GameAudio {
     this.tone(82, 0.22, "triangle", 0.05);
   }
 
+  scare() {
+    this.tone(90, 0.16, "sawtooth", 0.1);
+    this.tone(48, 0.28, "sine", 0.12);
+    this.tone(740, 0.05, "square", 0.05);
+    this.noiseBurst(0.2, 0.1, 180, 6200);
+  }
+
   bounce() {
     this.tone(140, 0.07, "sine", 0.06);
     this.noiseBurst(0.04, 0.02, 300, 1600);

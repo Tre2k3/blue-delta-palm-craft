@@ -412,7 +412,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
   const bar = Math.round(52 * lb);
 
   return (
-    <div key={ART_REV} className="relative h-full w-full overflow-hidden bg-bg text-fg select-none">
+    <div key={ART_REV} className={`relative h-full w-full overflow-hidden bg-bg text-fg select-none${halloweenOn() ? " sack-halloween" : ""}`}>
       <canvas
         ref={canvasRef}
         className="absolute inset-0 h-full w-full touch-none"
