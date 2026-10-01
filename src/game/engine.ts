@@ -36,6 +36,7 @@ import {
   emptyHw,
   enterHauntLive,
   halloweenNpcLine,
+  hauntDoorOpen,
   hauntOrderPress,
   hauntPrompt,
   masterChecklist,
@@ -1363,7 +1364,7 @@ export class GameEngine {
 				this.showToast("Phone mode · lowered graphics so it stays smooth");
 			}
 			this.hudAcc += dt;
-			if (this.hudAcc > .08) {
+			if (this.hudAcc > (this.haunt ? 0.032 : 0.08)) {
 				this.hudAcc = 0;
 				this.emitHud();
 			}
@@ -3524,33 +3525,48 @@ export class GameEngine {
 				name: room.name,
 				image: room.alt && this.hw.shootout && room.id === "cathedral" ? room.alt : room.image,
 				aspect: room.alt && this.hw.shootout && room.id === "cathedral" ? "16 / 9" : room.aspect,
-				objective: this.haunt.halling ? "..." : room.objective,
+				objective: hauntDoorOpen(room, this.haunt.acted, got, this.hw.cleared) && room.gate !== "open" ? "Exit unlocked" : room.objective,
 				x: this.haunt.x,
 				y: this.haunt.y,
+				farY: room.farY,
+				nearY: room.nearY,
+				view: room.view,
+				tint: room.tint,
 				letter: this.haunt.halling || !room.letter ? null : { x: room.letter.x, y: room.letter.y, got },
+				hotspot: { x: room.hotspot.x, y: room.hotspot.y, label: room.verb, done: this.haunt.acted || room.kind === "shootout" },
+				exits: room.exits.map((exit) => ({
+					x: exit.x,
+					y: room.nearY,
+					label: exit.label,
+					back: !!exit.back,
+					open: !!exit.back || hauntDoorOpen(room, this.haunt!.acted, got, this.hw.cleared),
+				})),
+				decoys: room.decoys,
 				action: {
 					x: room.hotspot.x,
 					y: room.hotspot.y,
-					label: room.action,
-					done: this.haunt.halling || this.haunt.acted || room.kind === "tap",
+					label: room.verb,
+					done: this.haunt.halling || this.haunt.acted,
 				},
-				doorOpen: !this.haunt.halling && this.haunt.room < HAUNT_ROOMS.length - 1 && got && this.haunt.acted && this.haunt.popped,
-				scare: this.haunt.lineT > 0 ? null : this.haunt.scare,
-				note: this.haunt.scareT > 0 ? null : this.haunt.note,
+				doorOpen: !this.haunt.halling && hauntDoorOpen(room, this.haunt.acted, got, this.hw.cleared),
+				scare: null,
+				note: this.haunt.note,
 				kind: room.kind,
 				letters: this.hw.letters.length,
 				lettersMax: HW_LETTERS,
 				found: this.hw.letters,
+				visited: this.hw.visited,
 				outfit: `/game/benji/outfits/${fit}/front.png`,
 				popped: this.haunt.popped,
 				hall: this.haunt.halling,
-				floorY: room.floorY,
+				floorY: this.haunt.y,
 				walkMinX: room.walkMinX,
 				walkMaxX: room.walkMaxX,
 				doorX: room.doorX,
-				prompt: hauntPrompt(room, this.haunt, got),
+				prompt: hauntPrompt(room, this.haunt, got, this.hw.cleared),
 				pop: this.haunt.scareT > 0 && this.haunt.scareImg ? { image: this.haunt.scareImg, line: this.haunt.scareLine ?? "", x: room.lurk.x, y: room.lurk.y } : null,
-				lurk: !this.haunt.popped && !this.haunt.halling ? { image: room.scareImg, x: room.lurk.x, y: room.lurk.y } : null,
+				lurk: null,
+				steam: (room.kind === "steam" && !this.haunt.acted && this.clock % 2.4 >= 1.15) || (room.kind === "timing" && !this.haunt.acted && (Math.sin(this.clock * 2.6) + 1) / 2 <= 0.78),
 			} : null,
 		};
 	}
@@ -3609,8 +3625,9 @@ export class GameEngine {
 	}
 	enterHaunt() {
 		if (!halloweenOn()) return;
-		this.haunt = enterHauntLive();
+		this.haunt = enterHauntLive(this.hw.cleared);
 		this.hw.entered = true;
+		if (!this.hw.visited.includes("ticket")) this.hw.visited.push("ticket");
 		this.tonight.haunt = true;
 		this.payTonight("haunt", "Visit the house");
 		this.noteHalloween("enter");
@@ -3632,13 +3649,19 @@ export class GameEngine {
 	}
 	hauntUse() {
 		if (!this.haunt) return;
-		const stepped = tickHaunt(this.haunt, 0, 0, 0, true, this.clock, this.hw.letters);
+		const stepped = tickHaunt(this.haunt, 0, 0, 0, true, this.clock, this.hw.letters, this.hw.cleared);
 		this.applyHauntStep(stepped.live, stepped.event);
 	}
 	hauntCandle(n: number) {
 		if (!this.haunt) return;
 		const stepped = hauntOrderPress(this.haunt, n);
 		this.applyHauntStep(stepped.live, stepped.event);
+	}
+	private markHauntClear(live: HauntLive) {
+		const room = HAUNT_ROOMS[live.room];
+		if (!room || this.hw.cleared.includes(room.id)) return;
+		const got = !room.letter || this.hw.letters.includes(room.id);
+		if (hauntDoorOpen(room, live.acted, got, [])) this.hw.cleared.push(room.id);
 	}
 	private applyHauntStep(live: HauntLive, event: ReturnType<typeof tickHaunt>["event"]) {
 		this.haunt = live;
@@ -3651,8 +3674,10 @@ export class GameEngine {
 				audio.swish();
 				this.showToast(`Letter ${this.hw.letters.length}/${HW_LETTERS}`);
 			}
+			this.markHauntClear(live);
 		} else if (event === "acted") {
 			audio.whoosh();
+			this.markHauntClear(live);
 		} else if (event === "pop") {
 			audio.scare();
 			if (this.settings.rumble) this.input.rumble(160, 0.55, 0.85);
@@ -3667,6 +3692,8 @@ export class GameEngine {
 			this.showToast("Loose chain · +$25");
 		} else if (event === "next") {
 			audio.ui();
+			const arrived = HAUNT_ROOMS[live.room];
+			if (arrived && !this.hw.visited.includes(arrived.id)) this.hw.visited.push(arrived.id);
 		} else if (event === "shootout") {
 			this.startHalloweenShootout();
 			return;
@@ -3683,7 +3710,7 @@ export class GameEngine {
 			return;
 		}
 		const prevX = this.haunt.x;
-		const stepped = tickHaunt(this.haunt, dt, act.mx, act.my, act.interactPressed, this.clock, this.hw.letters);
+		const stepped = tickHaunt(this.haunt, dt, act.mx, act.my, act.interactPressed, this.clock, this.hw.letters, this.hw.cleared);
 		if (!stepped.live.halling && Math.abs(stepped.live.x - prevX) > 0.001) audio.foot(this.clock);
 		if (act.interactPressed || stepped.event) this.applyHauntStep(stepped.live, stepped.event);
 		else this.haunt = stepped.live;

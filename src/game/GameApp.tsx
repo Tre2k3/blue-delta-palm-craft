@@ -727,7 +727,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
             </div>
           </div>
 
-          <div className="pointer-events-none absolute left-3 top-[9.6rem] z-20 sm:top-[10.6rem]">
+          <div className={`pointer-events-none absolute left-3 top-[9.6rem] z-20 sm:top-[10.6rem] ${hud.halloween?.haunt ? "hidden" : ""}`}>
             <div className="rounded-lg border border-border bg-panel px-3 py-1.5 text-xs text-muted backdrop-blur-sm">
               <span className="text-fg">{hud.locationName}</span>
               <span className="mx-1.5 text-subtle">/</span>

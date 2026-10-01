@@ -217,6 +217,8 @@ export interface SaveData {
     food?: boolean;
     sponsor?: boolean;
     badge?: boolean;
+    cleared?: string[];
+    visited?: string[];
   };
 }
 
@@ -381,7 +383,14 @@ export interface HudSnapshot {
       objective: string;
       x: number;
       y: number;
+      farY: number;
+      nearY: number;
+      view: number;
+      tint: "warm" | "hex" | "cool";
       letter: { x: number; y: number; got: boolean } | null;
+      hotspot: { x: number; y: number; label: string; done: boolean };
+      exits: { x: number; y: number; label: string; back: boolean; open: boolean }[];
+      decoys: { x: number; y: number }[];
       action: { x: number; y: number; label: string; done: boolean };
       doorOpen: boolean;
       scare: string | null;
@@ -390,6 +399,7 @@ export interface HudSnapshot {
       letters: number;
       lettersMax: number;
       found: string[];
+      visited: string[];
       outfit: string;
       popped: boolean;
       hall: boolean;
@@ -401,6 +411,7 @@ export interface HudSnapshot {
       prompt: string | null;
       pop: { image: string; line: string; x: number; y: number } | null;
       lurk: { image: string; x: number; y: number } | null;
+      steam: boolean;
     } | null;
   } | null;
 }

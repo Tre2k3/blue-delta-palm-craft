@@ -44,6 +44,15 @@
 }
 .haunt-flicker { animation: haunt-flicker 4.8s infinite; }
 
+.haunt-fog {
+  background: linear-gradient(to top, rgba(180, 190, 200, 0.28), transparent 80%);
+  animation: haunt-drift 7s ease-in-out infinite alternate;
+}
+.haunt-steam { animation: haunt-drift 1.4s ease-in-out infinite alternate; }
+@keyframes haunt-drift {
+  from { transform: translateX(-3%); }
+  to { transform: translateX(3%); }
+}
 @keyframes haunt-ghost {
   0% { opacity: 0; transform: translate(-50%, -78%) scale(0.94); }
   16% { opacity: 0.7; transform: translate(-50%, -82%) scale(1); }
