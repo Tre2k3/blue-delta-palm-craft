@@ -66,7 +66,11 @@
   10% { filter: brightness(0.35); }
   28% { filter: brightness(0.8); }
 }
-.haunt-dim { animation: haunt-dim 0.7s ease-out; }
+@keyframes haunt-letter-fly {
+  from { transform: translate(-50%, 0) scale(1); opacity: 1; }
+  to { transform: translate(calc(-50% - 34vw), -46vh) scale(0.45); opacity: 0; }
+}
+.haunt-letter-fly { animation: haunt-letter-fly 0.9s ease-out forwards; }
 
 @keyframes haunt-shake {
   0%, 100% { transform: translate(0, 0); }

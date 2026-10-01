@@ -322,6 +322,9 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
           return;
         }
         eng.startLoop();
+        if (new URLSearchParams(window.location.search).get("hauntdebug") === "1") {
+          (window as unknown as { __sack?: GameEngine }).__sack = eng;
+        }
         setReady(true);
         setHud(eng.getHud());
         setTip(TIPS[Math.floor(Math.random() * TIPS.length)]!);
@@ -709,6 +712,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                   </button>
                 </div>
               )}
+            {!hud.halloween?.haunt && (
             <div className="max-w-[15rem] rounded-xl border border-border bg-panel px-3 py-2 text-right backdrop-blur-sm sm:max-w-xs">
               <p className="text-[10px] uppercase tracking-[0.18em] text-primary">{hud.missionChapter}</p>
               <p className="font-display text-lg leading-none text-gold">{hud.missionTitle}</p>
@@ -724,6 +728,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                 </p>
               )}
             </div>
+            )}
             </div>
           </div>
 
@@ -754,7 +759,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
           )}
 
           {hud.toast && !hud.cinematic && (
-            <div className="pointer-events-none absolute left-1/2 top-24 z-30 -translate-x-1/2">
+            <div className={`pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 ${hud.halloween?.haunt ? "top-[6.6rem] max-w-[15rem] text-center" : "top-24"}`}>
               <div className="rounded-xl border border-primary/30 bg-surface-2 px-4 py-2 text-sm font-medium text-fg shadow-xl">
                 {hud.toast}
               </div>
@@ -777,14 +782,19 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
 
           {hud.mode === "basketball" && hud.basketball && !hud.race?.active && (
             <div className="pointer-events-none absolute right-3 top-28 z-20 rounded-xl border border-border bg-panel px-4 py-3 backdrop-blur-sm">
-              <p className="text-[10px] uppercase tracking-wider text-gold">{hud.basketball.venue ?? "901 Court"}</p>
-              <p className="tabular text-4xl font-semibold leading-none text-fg">{hud.basketball.score}</p>
+              <p className="text-[10px] uppercase tracking-wider text-gold">
+                {hud.basketball.shootout ? "10 LETTERS SHOOTOUT" : (hud.basketball.venue ?? "901 Court")}
+              </p>
+              <p className="tabular text-4xl font-semibold leading-none text-fg">
+                {hud.basketball.shootout ? `${hud.basketball.score} / 10` : hud.basketball.score}
+              </p>
               {hud.basketball.timeLeft > 0 && hud.basketball.timeLeft < 900 && (
                 <p className="mt-1 text-xs text-muted">{hud.basketball.timeLeft}s</p>
               )}
               <p className="mt-1 text-[10px] uppercase tracking-wider text-muted">
-                {hud.basketball.difficulty} · {hud.basketball.challenge}
+                {hud.basketball.shootout ? "Make 10" : `${hud.basketball.difficulty} · ${hud.basketball.challenge}`}
               </p>
+              {!hud.basketball.shootout && (
               <button
                 type="button"
                 className="pointer-events-auto mt-2 w-full rounded-lg border border-gold/40 bg-gold/10 px-2 py-1.5 text-xs text-gold"
@@ -792,12 +802,13 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
               >
                 Change court
               </button>
+              )}
               <button
                 type="button"
                 className="pointer-events-auto mt-1.5 w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-muted"
                 onClick={() => engineRef.current?.exitBasketball()}
               >
-                Leave court
+                {hud.basketball.shootout ? "Exit haunted house" : "Leave court"}
               </button>
             </div>
           )}
@@ -993,7 +1004,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
             </div>
           )}
 
-          {hud.started && !hud.paused && (
+          {hud.started && !hud.paused && !hud.halloween?.haunt && (
             <button
               type="button"
               className={`absolute left-3 z-20 flex items-center gap-2 rounded-xl border border-border bg-panel px-3 py-2 text-xs text-fg backdrop-blur-sm ${touchUI ? "bottom-40" : "bottom-6"}`}
@@ -1640,7 +1651,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
             </button>
             </div>
             <div className="flex flex-col items-end gap-2">
-              {hud.race?.phase === "green" ? (
+              {hud.halloween?.haunt ? null : hud.race?.phase === "green" ? (
                 <div className="flex gap-2">
                   {(["left", "up", "right"] as const).map((d) => (
                     <button
@@ -1767,6 +1778,18 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                   SHOOT
                 </button>
                 </div>
+              ) : hud.halloween?.haunt ? (
+                <button
+                  type="button"
+                  className="flex h-16 min-w-16 items-center justify-center rounded-full bg-primary px-3 font-display text-sm text-primary-fg shadow-lg active:scale-95"
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    engineRef.current?.tryInteract();
+                  }}
+                >
+                  {hud.halloween.haunt.prompt ?? "USE"}
+                </button>
               ) : (
                 <div className="flex items-end gap-2">
                   <button
@@ -1806,7 +1829,13 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                       engineRef.current?.tryInteract();
                     }}
                   >
-                    {hud.driving ? (hud.race?.active ? "RACE" : "PARK") : hud.hintWalk ? "↓" : hud.promptButton}
+                    {hud.halloween?.haunt?.prompt
+                      ? hud.halloween.haunt.prompt
+                      : hud.driving
+                        ? (hud.race?.active ? "RACE" : "PARK")
+                        : hud.hintWalk
+                          ? "↓"
+                          : hud.promptButton}
                   </button>
                 </div>
               )}

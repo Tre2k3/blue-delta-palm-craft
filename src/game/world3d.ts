@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { halloweenOn } from "./season";
 import { POIS } from "./data";
 import { WorldLifePass } from "./worldLifePass";
 import { S, World3D as World3DCore, wx, wz, type WorldFrame } from "./world3dCore";
@@ -442,16 +443,16 @@ export class World3D extends World3DCore {
     canvas.width = 1024;
     canvas.height = 256;
     const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = "#120814";
+    ctx.fillStyle = halloweenOn() ? "#14080c" : "#120814";
     ctx.fillRect(0, 0, 1024, 256);
-    ctx.fillStyle = "#ff2bd6";
+    ctx.fillStyle = halloweenOn() ? "#ff7a1a" : "#ff2bd6";
     ctx.font = "800 118px ui-sans-serif, system-ui";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("901 LANES", 512, 118);
-    ctx.fillStyle = "#d4af37";
+    ctx.fillText(halloweenOn() ? "MONSTER LANES" : "901 LANES", 512, 118);
+    ctx.fillStyle = halloweenOn() ? "#39ff14" : "#d4af37";
     ctx.font = "700 36px ui-sans-serif, system-ui";
-    ctx.fillText("OPEN · NEXT TO 901 COURT", 512, 200);
+    ctx.fillText(halloweenOn() ? "TRIPLE TROUBLE · AFTER DARK" : "OPEN · NEXT TO 901 COURT", 512, 200);
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     const face = new THREE.Mesh(
@@ -491,13 +492,13 @@ export class World3D extends World3DCore {
     const halfD = depth / 2;
     const wallH = 3.45;
     const wallT = 0.12;
-    const wood = new THREE.MeshStandardMaterial({ color: 0xb8894a, roughness: 0.48, metalness: 0.06 });
+    const wood = new THREE.MeshStandardMaterial({ color: halloweenOn() ? 0x6a3a28 : 0xb8894a, roughness: 0.48, metalness: 0.06 });
     const darkWood = new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.62 });
     const carpet = new THREE.MeshStandardMaterial({ color: 0x2a1233, roughness: 0.92 });
     const wallPaint = new THREE.MeshStandardMaterial({ color: 0x1a1022, roughness: 0.88 });
     const gutterMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.4, metalness: 0.25 });
-    const pinMat = new THREE.MeshStandardMaterial({ color: 0xf7f1e6, roughness: 0.42 });
-    const pinStripe = new THREE.MeshStandardMaterial({ color: 0xc41e3a, roughness: 0.45 });
+    const pinMat = new THREE.MeshStandardMaterial({ color: halloweenOn() ? 0xf4e4c8 : 0xf7f1e6, roughness: 0.42 });
+    const pinStripe = new THREE.MeshStandardMaterial({ color: halloweenOn() ? 0xff7a1a : 0xc41e3a, roughness: 0.45 });
     const black = new THREE.MeshStandardMaterial({ color: 0x141014, roughness: 0.7 });
     const gold = this.neonMat(0xd4af37, 0.85);
     const neon = this.neonMat(0xff2bd6, 1.45);
@@ -514,15 +515,15 @@ export class World3D extends World3DCore {
     boardCanvas.width = 1024;
     boardCanvas.height = 160;
     const bctx = boardCanvas.getContext("2d")!;
-    bctx.fillStyle = "#0d0b0a";
+    bctx.fillStyle = halloweenOn() ? "#14080c" : "#0d0b0a";
     bctx.fillRect(0, 0, 1024, 160);
-    bctx.fillStyle = "#ff2bd6";
+    bctx.fillStyle = halloweenOn() ? "#ff7a1a" : "#ff2bd6";
     bctx.font = "800 72px ui-sans-serif, system-ui";
     bctx.textAlign = "center";
-    bctx.fillText("901 LANES", 512, 70);
-    bctx.fillStyle = "#d4af37";
+    bctx.fillText(halloweenOn() ? "MONSTER LANES" : "901 LANES", 512, 70);
+    bctx.fillStyle = halloweenOn() ? "#39ff14" : "#d4af37";
     bctx.font = "700 28px ui-sans-serif, system-ui";
-    bctx.fillText("TEN DOWN. CITY UP.", 512, 122);
+    bctx.fillText(halloweenOn() ? "TRIPLE TROUBLE. TEN DOWN." : "TEN DOWN. CITY UP.", 512, 122);
     const btex = new THREE.CanvasTexture(boardCanvas);
     btex.colorSpace = THREE.SRGBColorSpace;
     const board = new THREE.Mesh(

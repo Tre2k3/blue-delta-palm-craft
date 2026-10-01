@@ -318,6 +318,7 @@ export interface HudSnapshot {
     call?: string | null;
     board?: { score: number; label: string }[];
     venue?: string;
+    shootout?: boolean;
   } | null;
   courtMenu?: {
     difficulty: string;
@@ -412,6 +413,7 @@ export interface HudSnapshot {
       pop: { image: string; line: string; x: number; y: number } | null;
       lurk: { image: string; x: number; y: number } | null;
       steam: boolean;
+      step: number;
     } | null;
   } | null;
 }

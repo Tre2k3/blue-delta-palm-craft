@@ -38,6 +38,7 @@ export type HauntPanel = {
   pop: { image: string; line: string; x: number; y: number } | null;
   lurk: { image: string; x: number; y: number } | null;
   steam: boolean;
+  step: number;
 };
 
 const TINT = {
@@ -52,11 +53,124 @@ function closeTo(x: number, y: number, tx: number, ty: number) {
   return dx * dx + dy * dy < 1;
 }
 
+function Flame({ x, y }: { x: number; y: number }) {
+  return (
+    <span className="pointer-events-none absolute z-[6] flex -translate-x-1/2 flex-col items-center" style={{ left: `${x * 100}%`, top: `${(y - 0.22) * 100}%` }}>
+      <span className="h-14 w-5 rounded-t-full bg-gradient-to-t from-orange-700 via-amber-300 to-yellow-50 shadow-[0_0_26px_12px_rgba(255,150,20,0.9)]" />
+      <span className="-mt-1 h-7 w-2.5 rounded-b bg-stone-900" />
+    </span>
+  );
+}
+
+function RoomReaction({
+  id,
+  done,
+  step,
+  seq,
+  pads,
+  hot,
+}: {
+  id?: string;
+  done: boolean;
+  step: number;
+  seq: number[];
+  pads: { x: number; y: number }[];
+  hot: { x: number; y: number };
+}) {
+  if (!id) return null;
+  const lit = new Set(done ? seq : seq.slice(0, step));
+  if (id === "seance") {
+    return (
+      <>
+        {pads.map((pad, i) => (lit.has(i + 1) ? <Flame key={i} x={pad.x} y={pad.y} /> : null))}
+      </>
+    );
+  }
+  if (id === "library" && (done || step > 0)) {
+    const colors = ["bg-red-800", "bg-amber-900", "bg-stone-800"];
+    return (
+      <>
+        {pads.map((pad, i) => (
+          <span
+            key={pad.x}
+            className={`pointer-events-none absolute z-[6] w-[2.2%] rounded-sm border border-amber-100/80 shadow-lg ${colors[i % colors.length]}`}
+            style={{
+              left: `${pad.x * 100}%`,
+              top: `${(pad.y - 0.2) * 100}%`,
+              height: lit.has(i + 1) ? "6%" : "14%",
+              transform: lit.has(i + 1) ? "translate(-50%, -10px) rotate(-16deg)" : "translate(-50%, 0)",
+            }}
+          />
+        ))}
+        {done && (
+          <span
+            className="pointer-events-none absolute z-[5] bg-black/75 shadow-[inset_0_0_18px_#000]"
+            style={{ left: `${pads[1] ? pads[1].x * 100 : 46}%`, top: `${((pads[1]?.y ?? 0.86) - 0.2) * 100}%`, width: "4%", height: "14%", transform: "translate(-50%, 0)" }}
+          />
+        )}
+      </>
+    );
+  }
+  if (!done) return null;
+  const at = { left: `${hot.x * 100}%`, top: `${(hot.y - 0.22) * 100}%` };
+  if (id === "portraits") {
+    return (
+      <span
+        className="pointer-events-none absolute z-[6] -translate-x-1/2 border-[3px] border-amber-100 shadow-[0_0_28px_8px_rgba(255,160,40,0.85)]"
+        style={{ ...at, width: "12%", height: "26%" }}
+      />
+    );
+  }
+  if (id === "toys") {
+    return (
+      <span
+        className="pointer-events-none absolute z-[6] origin-bottom -translate-x-1/2 -rotate-[28deg] rounded-t-md border-2 border-amber-100 bg-amber-800/90 shadow-[0_-10px_16px_rgba(0,0,0,0.55)]"
+        style={{ left: `${hot.x * 100}%`, top: `${(hot.y - 0.1) * 100}%`, width: "16%", height: "7%" }}
+      />
+    );
+  }
+  if (id === "banquet") {
+    return (
+      <span className="pointer-events-none absolute z-[6] -translate-x-1/2" style={at}>
+        <span className="block h-4 w-16 rounded-full border-2 border-amber-50 bg-stone-100/95 shadow-lg" />
+        <span className="mx-auto -mt-8 block h-8 w-2.5 rounded-t-full bg-gradient-to-t from-orange-600 to-yellow-100 shadow-[0_0_16px_6px_#ffb020]" />
+      </span>
+    );
+  }
+  if (id === "kitchen") {
+    return (
+      <span
+        className="pointer-events-none absolute z-[6] h-16 w-2 origin-bottom -translate-x-1/2 -rotate-[70deg] rounded-full bg-zinc-100 shadow-[0_0_12px_#fff]"
+        style={{ left: `${hot.x * 100}%`, top: `${(hot.y - 0.16) * 100}%` }}
+      />
+    );
+  }
+  if (id === "boiler") {
+    return (
+      <span
+        className="pointer-events-none absolute z-[6] h-16 w-16 -translate-x-1/2 -translate-y-1/2 rotate-[80deg] rounded-full border-[6px] border-lime-300 shadow-[0_0_18px_#b6ff4a]"
+        style={{ left: `${hot.x * 100}%`, top: `${(hot.y - 0.16) * 100}%` }}
+      >
+        <span className="absolute left-1/2 top-0 h-1/2 w-1.5 -translate-x-1/2 bg-lime-100" />
+      </span>
+    );
+  }
+  if (id === "attic") {
+    return (
+      <span
+        className="pointer-events-none absolute z-[6] origin-bottom -translate-x-1/2 -rotate-[24deg] rounded-t border-2 border-amber-100 bg-amber-200/80"
+        style={{ left: `${hot.x * 100}%`, top: `${(hot.y - 0.08) * 100}%`, width: "18%", height: "6%" }}
+      />
+    );
+  }
+  return null;
+}
+
 export function HauntedHouse({
   haunt,
   onUse,
   onLeave,
-  onCandle,
+  onCandle: _onCandle,
 }: {
   haunt: HauntPanel;
   onUse: () => void;
@@ -73,15 +187,40 @@ export function HauntedHouse({
   const [cam, setCam] = useState(0);
   const [mapOpen, setMapOpen] = useState(false);
   const [introOn, setIntroOn] = useState(true);
+  const [fly, setFly] = useState<string | null>(null);
+  const lettersRef = useRef(haunt.letters);
+  const coarse = typeof window !== "undefined" && (window.matchMedia("(pointer: coarse)").matches || window.innerWidth < 760);
   const debug =
     typeof window !== "undefined" &&
-    (new URLSearchParams(window.location.search).get("hauntdebug") === "1" ||
+    (new URLSearchParams(window.location.search).get("hauntdebug") === "lines" ||
       Boolean((window as unknown as { __HAUNTED_DEBUG__?: boolean }).__HAUNTED_DEBUG__));
 
   useEffect(() => {
     setIntroOn(true);
     const t = window.setTimeout(() => setIntroOn(false), 1300);
     return () => window.clearTimeout(t);
+  }, [haunt.room]);
+
+  useEffect(() => {
+    if (haunt.letters > lettersRef.current) {
+      const glyph = "SACKRELIGS"[(haunt.letters - 1) % 10] ?? "S";
+      setFly(glyph);
+    }
+    lettersRef.current = haunt.letters;
+    const t = window.setTimeout(() => setFly(null), 900);
+    return () => window.clearTimeout(t);
+  }, [haunt.letters]);
+
+  useEffect(() => {
+    const here = HAUNT_ROOMS[haunt.room];
+    if (!here) return;
+    const next = here.exits
+      .map((exit) => HAUNT_ROOMS.find((r) => r.id === exit.dest)?.image)
+      .filter((src): src is string => !!src);
+    for (const src of [here.image, ...next]) {
+      const img = new Image();
+      img.src = src;
+    }
   }, [haunt.room]);
 
   useEffect(() => {
@@ -112,12 +251,14 @@ export function HauntedHouse({
   }, [haunt.x, vis]);
 
   const depth = Math.min(1, Math.max(0, (haunt.y - haunt.farY) / Math.max(0.04, haunt.nearY - haunt.farY)));
-  const scale = 0.84 + 0.16 * depth;
+  const scale = 0.88 + 0.12 * depth;
   const nearHot = !haunt.hotspot.done && closeTo(haunt.x, haunt.y, haunt.hotspot.x, haunt.hotspot.y);
-  const pads = room?.pads;
+  const dock = coarse ? "16.75rem" : "4.25rem";
+  const flyX = haunt.letter ? Math.min(88, Math.max(12, ((haunt.letter.x - cam) / Math.max(0.2, vis)) * 100)) : 50;
 
   return (
-    <div ref={vpRef} className="pointer-events-none absolute inset-0 z-20 overflow-hidden bg-black" style={{ containerType: "size" }}>
+    <div className="pointer-events-none absolute inset-0 z-20 bg-black">
+    <div ref={vpRef} className="absolute inset-x-0 top-0 overflow-hidden" style={{ bottom: dock, containerType: "size" }}>
       <div
         ref={worldRef}
         className="absolute bottom-0 left-0"
@@ -141,21 +282,47 @@ export function HauntedHouse({
             style={{ left: `${haunt.letter.x * 100}%`, top: `${haunt.letter.y * 100}%` }}
           />
         )}
-        {haunt.exits.map((exit) =>
-          exit.open ? (
+        {haunt.exits.map((exit) => (
+          <span
+            key={`${exit.label}-${exit.x}`}
+            className={`absolute z-[4] w-[3.5%] -translate-x-1/2 rounded-full blur-[1px] ${
+              exit.open
+                ? closeTo(haunt.x, haunt.y, exit.x, exit.y)
+                  ? "h-[9%] bg-orange-200/75"
+                  : "h-[5%] bg-orange-400/30"
+                : "h-[4%] bg-white/10"
+            }`}
+            style={{ left: `${exit.x * 100}%`, top: `${(exit.y - 0.12) * 100}%` }}
+          />
+        ))}
+        {room?.padPoints.map((pad, i) => {
+          if (haunt.hotspot.done) return null;
+          const next = room.seq[haunt.step] === i + 1;
+          const near = closeTo(haunt.x, haunt.y, pad.x, pad.y);
+          return (
             <span
-              key={`${exit.label}-${exit.x}`}
-              className={`absolute z-[4] w-[7%] -translate-x-1/2 rounded-full bg-orange-400/70 blur-[2px] ${closeTo(haunt.x, haunt.y, exit.x, exit.y) ? "h-[22%] opacity-80" : "h-[8%] opacity-40"}`}
-              style={{ left: `${exit.x * 100}%`, top: `${(exit.y - 0.12) * 100}%` }}
-            />
-          ) : null,
-        )}
+              key={`pad-${i}`}
+              className={`absolute z-[4] flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full font-display text-[11px] text-black ${next || near ? "h-7 w-7 border-2 border-amber-50 bg-amber-300/90 shadow-[0_0_12px_#ffb020]" : "h-4 w-4 border border-white/40 bg-black/40"}`}
+              style={{ left: `${pad.x * 100}%`, top: `${pad.y * 100}%` }}
+            >
+              {next ? i + 1 : ""}
+            </span>
+          );
+        })}
         {nearHot && (
           <span
             className="absolute z-[4] h-[14%] w-[10%] -translate-x-1/2 -translate-y-1/2 rounded-full border border-orange-200/80 bg-orange-500/15 shadow-[0_0_18px_rgba(255,122,26,0.45)]"
             style={{ left: `${haunt.hotspot.x * 100}%`, top: `${haunt.hotspot.y * 100}%` }}
           />
         )}
+        <RoomReaction
+          id={room?.id}
+          done={haunt.hotspot.done}
+          step={haunt.step}
+          seq={room?.seq ?? []}
+          pads={room?.padPoints ?? []}
+          hot={haunt.hotspot}
+        />
         <div
           className="pointer-events-none absolute z-[2] -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/40 blur-[2px]"
           style={{
@@ -192,8 +359,8 @@ export function HauntedHouse({
           alt=""
           className="pointer-events-none absolute inset-0 z-[5] h-full w-full"
           style={{
-            WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, transparent 78%, #000 90%, #000 100%)",
-            maskImage: "linear-gradient(to bottom, transparent 0%, transparent 78%, #000 90%, #000 100%)",
+            WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, transparent 92%, #000 98%, #000 100%)",
+            maskImage: "linear-gradient(to bottom, transparent 0%, transparent 92%, #000 98%, #000 100%)",
           }}
         />
         {(haunt.prompt || haunt.note) && !haunt.hall && (
@@ -203,7 +370,8 @@ export function HauntedHouse({
             className="pointer-events-auto absolute z-[8] min-h-11 -translate-x-1/2 rounded-full border border-orange-200/80 bg-black/80 px-3 text-sm font-semibold text-orange-50"
             style={{ left: `${haunt.x * 100}%`, top: `calc(${haunt.y * 100}% - ${52 * scale}cqh)` }}
           >
-            {haunt.prompt ? haunt.prompt : haunt.note}
+            {haunt.note && <span className="block text-[10px] uppercase tracking-wide text-orange-200">{haunt.note}</span>}
+            {haunt.prompt ? (coarse ? haunt.prompt : `E  ${haunt.prompt}`) : null}
           </button>
         )}
         {debug && (
@@ -224,37 +392,40 @@ export function HauntedHouse({
       {haunt.hall && <div className="absolute inset-0 z-30 bg-black/80" />}
       {introOn && !haunt.hall && (
         <div className="absolute left-1/2 top-[42%] z-30 -translate-x-1/2 text-center text-white">
-          <p className="font-display text-4xl tracking-wide text-orange-100">{haunt.name}</p>
-          <p className="mt-1 text-sm text-orange-200">
-            {haunt.letters} / {haunt.lettersMax} letters
-          </p>
+          <p className="font-display text-3xl tracking-wide text-orange-100">{haunt.name}</p>
         </div>
       )}
-      <div className="absolute left-1/2 top-[11.4rem] z-40 w-[min(28rem,calc(100%-1.5rem))] -translate-x-1/2">
-        <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-orange-400/35 bg-black/70 px-3 py-1.5 text-white shadow-lg">
+    </div>
+      <div
+        className="pointer-events-none absolute inset-x-0 z-40 flex items-start justify-center px-3"
+        style={{ bottom: coarse ? "12.6rem" : 0, height: coarse ? "3.6rem" : dock }}
+      >
+        <div className="pointer-events-none flex w-[min(22rem,78vw)] items-center gap-2 rounded-full border border-orange-400/35 bg-black/80 px-3 py-1 text-white shadow-lg">
           <div className="min-w-0 flex-1">
             <p className="truncate text-[10px] uppercase tracking-[0.16em] text-orange-300">{haunt.name}</p>
-            <p className="truncate text-xs text-orange-50">{haunt.objective}</p>
+            <p className="truncate text-xs leading-snug text-orange-50">{haunt.objective}</p>
           </div>
-          <p className="shrink-0 text-[11px] font-semibold text-lime-300">
+          <p className="shrink-0 text-right text-[10px] font-semibold leading-tight text-lime-300">
+            LETTERS
+            <br />
             {haunt.letters}/{haunt.lettersMax}
           </p>
-          <button type="button" onClick={() => setMapOpen(true)} className="min-h-11 rounded-full px-2 text-[11px] font-semibold uppercase text-orange-100">
+          <button type="button" onClick={() => setMapOpen(true)} className="pointer-events-auto min-h-11 rounded-full px-2 text-[11px] font-semibold uppercase text-orange-100">
             Map
           </button>
-          <button type="button" onClick={onLeave} className="min-h-11 rounded-full px-2 text-[11px] font-semibold uppercase text-white/80">
+          <button type="button" onClick={onLeave} className="pointer-events-auto min-h-11 rounded-full px-2 text-[11px] font-semibold uppercase text-white/80">
             Leave
           </button>
         </div>
       </div>
-      {pads && !haunt.hotspot.done && nearHot && !haunt.hall && (
-        <div className="absolute inset-x-0 bottom-28 z-40 flex justify-center gap-2">
-          {[1, 2, 3].map((n) => (
-            <button key={n} type="button" onClick={() => onCandle(n)} className="pointer-events-auto min-h-11 min-w-11 rounded-full border border-orange-200 bg-orange-500 px-3 font-display text-lg text-black">
-              {pads === "books" ? ["I", "II", "III"][n - 1] : n}
-            </button>
-          ))}
-        </div>
+      {fly && (
+        <span
+          className="haunt-letter-fly pointer-events-none absolute z-50 font-display text-3xl text-orange-200 drop-shadow-[0_0_12px_#ff7a1a]"
+          style={{ left: `${flyX}%`, top: "58%" }}
+        >
+          {fly}
+          <span className="ml-2 text-sm text-lime-300">+$15</span>
+        </span>
       )}
       {mapOpen && (
         <div className="pointer-events-auto absolute inset-0 z-50 flex items-center justify-center bg-black/80 p-4">

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { halloweenOn } from "./season";
 import { WorldLifePass } from "./worldLifePass";
 import type { WorldFrame } from "./world3dCore";
 
@@ -8,11 +9,19 @@ function riverMaterial(width: number, depth: number) {
   canvas.height = 256;
   const g = canvas.getContext("2d")!;
   const wash = g.createLinearGradient(0, 0, 0, 256);
-  wash.addColorStop(0, "#d5eee6");
-  wash.addColorStop(0.08, "#3e9d98");
-  wash.addColorStop(0.28, "#1c6d86");
-  wash.addColorStop(0.62, "#0d3e5c");
-  wash.addColorStop(1, "#07141f");
+  if (halloweenOn()) {
+    wash.addColorStop(0, "#ffb15a");
+    wash.addColorStop(0.08, "#6a3058");
+    wash.addColorStop(0.3, "#2a1838");
+    wash.addColorStop(0.62, "#140818");
+    wash.addColorStop(1, "#07040a");
+  } else {
+    wash.addColorStop(0, "#d5eee6");
+    wash.addColorStop(0.08, "#3e9d98");
+    wash.addColorStop(0.28, "#1c6d86");
+    wash.addColorStop(0.62, "#0d3e5c");
+    wash.addColorStop(1, "#07141f");
+  }
   g.fillStyle = wash;
   g.fillRect(0, 0, 512, 256);
   g.strokeStyle = "rgba(190, 230, 226, 0.35)";
@@ -37,7 +46,7 @@ function riverMaterial(width: number, depth: number) {
     color: 0xffffff,
     roughness: 0.18,
     metalness: 0.42,
-    emissive: 0x082433,
+    emissive: halloweenOn() ? 0x3a1428 : 0x082433,
     emissiveIntensity: 0.45,
     side: THREE.DoubleSide,
   });
@@ -86,7 +95,7 @@ function upgradeRiver(scene: THREE.Scene) {
     root.add(pole, head);
   }
 
-  const reedMat = new THREE.MeshStandardMaterial({ color: 0x2f5c34, roughness: 0.92 });
+  const reedMat = new THREE.MeshStandardMaterial({ color: halloweenOn() ? 0x6a3a28 : 0x2f5c34, roughness: 0.92 });
   const reedGeo = new THREE.ConeGeometry(0.045, 0.72, 4);
   const count = 48;
   const reeds = new THREE.InstancedMesh(reedGeo, reedMat, count);

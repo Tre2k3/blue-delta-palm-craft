@@ -1,3 +1,5 @@
+import { halloweenOn } from "./season";
+
 export type CourtDifficulty = "rookie" | "901" | "sackrow";
 export type CourtChallenge = "pickup" | "timed" | "threes" | "horse";
 export type CourtVenueId = "901_day" | "sackrow" | "rooftop" | "classic";
@@ -14,32 +16,32 @@ export type CourtVenue = {
 export const COURT_VENUES: CourtVenue[] = [
   {
     id: "901_day",
-    name: "901 Court",
-    tag: "South Memphis · Day",
+    name: halloweenOn() ? "After Dark Court" : "901 Court",
+    tag: halloweenOn() ? "Cracked floor · orange and green" : "South Memphis · Day",
     thumb: "/game/facades/court-901-day.webp",
     hour: 13,
     indoor: false,
   },
   {
     id: "sackrow",
-    name: "Sackrow Arena",
-    tag: "Indoor · Gold chain",
+    name: halloweenOn() ? "Haunted Arena" : "Sackrow Arena",
+    tag: halloweenOn() ? "Indoor · candle gym" : "Indoor · Gold chain",
     thumb: "/game/facades/court-floor.webp",
     hour: 20.2,
     indoor: true,
   },
   {
     id: "rooftop",
-    name: "Rooftop Night",
-    tag: "Downtown · After dark",
+    name: halloweenOn() ? "Moon Roof" : "Rooftop Night",
+    tag: halloweenOn() ? "Downtown · fog and neon" : "Downtown · After dark",
     thumb: "/game/facades/court-rooftop.png",
     hour: 21.6,
     indoor: false,
   },
   {
     id: "classic",
-    name: "The Wood",
-    tag: "Gym floor · Lines",
+    name: halloweenOn() ? "Candle Gym" : "The Wood",
+    tag: halloweenOn() ? "Purple boards · neon lines" : "Gym floor · Lines",
     thumb: "/game/materials/06_court_wood_basecolor.webp",
     hour: 14.5,
     indoor: true,

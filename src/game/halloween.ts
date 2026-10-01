@@ -159,6 +159,7 @@ export type HauntRoom = {
   exits: HauntExit[];
   seq: number[];
   pads: HauntPads;
+  padPoints: { x: number; y: number }[];
   loot: boolean;
   aspect: string;
   alt: string | null;
@@ -179,12 +180,12 @@ export const HAUNT_ROOMS: HauntRoom[] = [
     id: "ticket", name: "Ticket Entry", image: `${HOUSE}/ticket.webp`,
     objective: "Walk to the gate.", scare: "The rope drops.", action: "Inspect the booth", verb: "Inspect",
     kind: "tap", gate: "open", letter: null,
-    hotspot: { x: 0.46, y: 0.8 }, decoys: [], lurk: { x: 0.62, y: 0.78 },
+    hotspot: { x: 0.5, y: 0.42 }, decoys: [], lurk: { x: 0.7, y: 0.42 },
     scareImg: `${SCARE}/foyer.webp`, yell: "TICKETS.",
-    floorY: 0.84, farY: 0.76, nearY: 0.9, spawnX: 0.16, doorX: 0.84,
-    ...walk, tint: "warm",
-    exits: [{ x: 0.86, dest: "foyer", spawn: 0.14, label: "Enter" }],
-    seq: [], pads: null, loot: false, aspect: "3 / 2", alt: null,
+    floorY: 0.94, farY: 0.9, nearY: 0.96, spawnX: 0.4, doorX: 0.84,
+    ...walk, walkMinX: 0.32, tint: "warm",
+    exits: [{ x: 0.86, dest: "foyer", spawn: 0.24, label: "Enter" }],
+    seq: [], pads: null, padPoints: [], loot: false, aspect: "3 / 2", alt: null,
   }),
   room({
     id: "foyer", name: "Entrance Lobby", image: `${HOUSE}/foyer.webp`,
@@ -196,9 +197,9 @@ export const HAUNT_ROOMS: HauntRoom[] = [
     ...walk, tint: "warm",
     exits: [
       { x: 0.12, dest: "ticket", spawn: 0.78, back: true, label: "Back" },
-      { x: 0.88, dest: "stairs", spawn: 0.16, label: "Enter" },
+      { x: 0.88, dest: "stairs", spawn: 0.24, label: "Enter" },
     ],
-    seq: [], pads: null, loot: false, aspect: WIDE, alt: null,
+    seq: [], pads: null, padPoints: [], loot: false, aspect: WIDE, alt: null,
   }),
   room({
     id: "stairs", name: "Grand Staircase", image: `${HOUSE}/stairs.webp`,
@@ -210,9 +211,9 @@ export const HAUNT_ROOMS: HauntRoom[] = [
     ...walk, tint: "warm",
     exits: [
       { x: 0.12, dest: "foyer", spawn: 0.8, back: true, label: "Back" },
-      { x: 0.88, dest: "portraits", spawn: 0.14, label: "Enter" },
+      { x: 0.88, dest: "portraits", spawn: 0.24, label: "Enter" },
     ],
-    seq: [], pads: null, loot: false, aspect: WIDE, alt: null,
+    seq: [], pads: null, padPoints: [], loot: false, aspect: WIDE, alt: null,
   }),
   room({
     id: "portraits", name: "Portrait Corridor", image: `${HOUSE}/portraits.webp`,
@@ -224,10 +225,10 @@ export const HAUNT_ROOMS: HauntRoom[] = [
     ...walk, tint: "warm",
     exits: [
       { x: 0.1, dest: "stairs", spawn: 0.8, back: true, label: "Back" },
-      { x: 0.22, dest: "toys", spawn: 0.16, label: "Toys" },
-      { x: 0.9, dest: "banquet", spawn: 0.16, label: "Dining" },
+      { x: 0.28, dest: "banquet", spawn: 0.24, label: "Dining" },
+      { x: 0.9, dest: "toys", spawn: 0.24, label: "Toys" },
     ],
-    seq: [], pads: null, loot: false, aspect: WIDE, alt: null,
+    seq: [], pads: null, padPoints: [], loot: false, aspect: WIDE, alt: null,
   }),
   room({
     id: "toys", name: "Toy Room", image: `${HOUSE}/toys.webp`,
@@ -239,9 +240,9 @@ export const HAUNT_ROOMS: HauntRoom[] = [
     ...walk, tint: "warm",
     exits: [
       { x: 0.1, dest: "portraits", spawn: 0.28, back: true, label: "Back" },
-      { x: 0.88, dest: "seance", spawn: 0.16, label: "Enter" },
+      { x: 0.88, dest: "seance", spawn: 0.24, label: "Enter" },
     ],
-    seq: [], pads: null, loot: false, aspect: WIDE, alt: null,
+    seq: [], pads: null, padPoints: [], loot: false, aspect: WIDE, alt: null,
   }),
   room({
     id: "banquet", name: "Banquet Hall", image: `${HOUSE}/dining.webp`,
@@ -255,35 +256,39 @@ export const HAUNT_ROOMS: HauntRoom[] = [
       { x: 0.1, dest: "portraits", spawn: 0.82, back: true, label: "Back" },
       { x: 0.88, dest: "seance", spawn: 0.82, label: "Enter" },
     ],
-    seq: [], pads: null, loot: false, aspect: WIDE, alt: null,
+    seq: [], pads: null, padPoints: [], loot: false, aspect: WIDE, alt: null,
   }),
   room({
     id: "seance", name: "Séance Room", image: `${HOUSE}/seance.webp`,
-    objective: "Light the candles. 2, then 1, then 3.", scare: "The circle breaks.", action: "Light the candles", verb: "Light",
-    kind: "order", gate: "both", letter: { x: 0.34, y: 0.86 },
+    objective: "Light the candles.", scare: "The circle breaks.", action: "Light the candles", verb: "Light",
+    kind: "order", gate: "both", letter: { x: 0.22, y: 0.88 },
     hotspot: { x: 0.55, y: 0.84 }, decoys: [], lurk: { x: 0.5, y: 0.82 },
     scareImg: `${SCARE}/seance.webp`, yell: "SHE SAID YOUR NAME.",
     floorY: 0.88, farY: 0.8, nearY: 0.92, spawnX: 0.16, doorX: 0.86,
     ...walk, tint: "hex",
     exits: [
       { x: 0.1, dest: "toys", spawn: 0.8, back: true, label: "Back" },
-      { x: 0.88, dest: "library", spawn: 0.16, label: "Enter" },
+      { x: 0.88, dest: "library", spawn: 0.24, label: "Enter" },
     ],
-    seq: [2, 1, 3], pads: "candles", loot: false, aspect: WIDE, alt: null,
+    seq: [2, 1, 3], pads: "candles",
+    padPoints: [{ x: 0.4, y: 0.88 }, { x: 0.56, y: 0.9 }, { x: 0.72, y: 0.86 }],
+    loot: false, aspect: WIDE, alt: null,
   }),
   room({
     id: "library", name: "Library", image: `${HOUSE}/library.webp`,
-    objective: "Pull the books. I, then III, then II.", scare: "A book hits the floor.", action: "Pull the books", verb: "Pull",
-    kind: "order", gate: "both", letter: { x: 0.68, y: 0.8 },
-    hotspot: { x: 0.46, y: 0.78 }, decoys: [], lurk: { x: 0.4, y: 0.76 },
+    objective: "Pull the books.", scare: "A book hits the floor.", action: "Pull the books", verb: "Pull",
+    kind: "order", gate: "both", letter: { x: 0.78, y: 0.88 },
+    hotspot: { x: 0.46, y: 0.86 }, decoys: [], lurk: { x: 0.4, y: 0.88 },
     scareImg: `${SCARE}/library.webp`, yell: "WRONG BOOK.",
-    floorY: 0.82, farY: 0.74, nearY: 0.88, spawnX: 0.16, doorX: 0.86,
+    floorY: 0.96, farY: 0.82, nearY: 0.94, spawnX: 0.16, doorX: 0.86,
     ...walk, tint: "warm",
     exits: [
       { x: 0.1, dest: "seance", spawn: 0.8, back: true, label: "Back" },
-      { x: 0.88, dest: "passage", spawn: 0.16, label: "Enter" },
+      { x: 0.88, dest: "passage", spawn: 0.24, label: "Enter" },
     ],
-    seq: [1, 3, 2], pads: "books", loot: false, aspect: "392 / 236", alt: null,
+    seq: [1, 3, 2], pads: "books",
+    padPoints: [{ x: 0.3, y: 0.88 }, { x: 0.46, y: 0.9 }, { x: 0.62, y: 0.88 }],
+    loot: false, aspect: "16 / 9", alt: null,
   }),
   room({
     id: "passage", name: "Secret Passage", image: `${HOUSE}/passage.webp`,
@@ -295,14 +300,14 @@ export const HAUNT_ROOMS: HauntRoom[] = [
     ...walk, tint: "hex",
     exits: [
       { x: 0.1, dest: "library", spawn: 0.8, back: true, label: "Back" },
-      { x: 0.28, dest: "kitchen", spawn: 0.16, label: "Kitchen" },
-      { x: 0.9, dest: "boiler", spawn: 0.16, label: "Boiler" },
+      { x: 0.28, dest: "kitchen", spawn: 0.24, label: "Kitchen" },
+      { x: 0.9, dest: "boiler", spawn: 0.24, label: "Boiler" },
     ],
-    seq: [], pads: null, loot: true, aspect: "16 / 9", alt: null,
+    seq: [], pads: null, padPoints: [], loot: true, aspect: "16 / 9", alt: null,
   }),
   room({
     id: "kitchen", name: "Kitchen", image: `${HOUSE}/kitchen.webp`,
-    objective: "Slip the steam, then take the letter.", scare: "The lights drop.", action: "Slip the steam", verb: "Slip",
+    objective: "Slip the steam.", scare: "The lights drop.", action: "Slip the steam", verb: "Slip",
     kind: "timing", gate: "both", letter: { x: 0.7, y: 0.86 },
     hotspot: { x: 0.46, y: 0.84 }, decoys: [], lurk: { x: 0.38, y: 0.82 },
     scareImg: `${SCARE}/kitchen.webp`, yell: "NOT YET.",
@@ -310,13 +315,13 @@ export const HAUNT_ROOMS: HauntRoom[] = [
     ...walk, tint: "warm",
     exits: [
       { x: 0.1, dest: "passage", spawn: 0.34, back: true, label: "Back" },
-      { x: 0.88, dest: "attic", spawn: 0.18, label: "Enter" },
+      { x: 0.88, dest: "attic", spawn: 0.24, label: "Enter" },
     ],
-    seq: [], pads: null, loot: false, aspect: WIDE, alt: null,
+    seq: [], pads: null, padPoints: [], loot: false, aspect: WIDE, alt: null,
   }),
   room({
     id: "boiler", name: "Boiler Room", image: `${HOUSE}/boiler.webp`,
-    objective: "Turn the valve when the steam drops.", scare: "A pipe blows.", action: "Turn the valve", verb: "Turn",
+    objective: "Turn the valve.", scare: "A pipe blows.", action: "Turn the valve", verb: "Turn",
     kind: "steam", gate: "both", letter: { x: 0.68, y: 0.84 },
     hotspot: { x: 0.42, y: 0.82 }, decoys: [], lurk: { x: 0.55, y: 0.8 },
     scareImg: `${SCARE}/boiler.webp`, yell: "TOO HOT.",
@@ -326,7 +331,7 @@ export const HAUNT_ROOMS: HauntRoom[] = [
       { x: 0.1, dest: "passage", spawn: 0.82, back: true, label: "Back" },
       { x: 0.88, dest: "attic", spawn: 0.78, label: "Enter" },
     ],
-    seq: [], pads: null, loot: false, aspect: WIDE, alt: null,
+    seq: [], pads: null, padPoints: [], loot: false, aspect: WIDE, alt: null,
   }),
   room({
     id: "attic", name: "Attic", image: `${HOUSE}/attic.webp`,
@@ -338,20 +343,20 @@ export const HAUNT_ROOMS: HauntRoom[] = [
     ...walk, tint: "cool",
     exits: [
       { x: 0.1, dest: "kitchen", spawn: 0.8, back: true, label: "Back" },
-      { x: 0.88, dest: "cathedral", spawn: 0.16, label: "Enter" },
+      { x: 0.88, dest: "cathedral", spawn: 0.24, label: "Enter" },
     ],
-    seq: [], pads: null, loot: false, aspect: WIDE, alt: null,
+    seq: [], pads: null, padPoints: [], loot: false, aspect: WIDE, alt: null,
   }),
   room({
     id: "cathedral", name: "Basketball Cathedral", image: `${HOUSE}/cathedral.webp`,
-    objective: "Make 10 on the real hoop.", scare: "The rim goes quiet.", action: "Start the shootout", verb: "Play",
+    objective: "Make 10 baskets.", scare: "The rim goes quiet.", action: "Start the shootout", verb: "Play",
     kind: "shootout", gate: "acted", letter: null,
     hotspot: { x: 0.55, y: 0.82 }, decoys: [], lurk: { x: 0.42, y: 0.8 },
     scareImg: `${SCARE}/cathedral.webp`, yell: "TEN SHOTS.",
     floorY: 0.86, farY: 0.78, nearY: 0.9, spawnX: 0.18, doorX: 0.5,
     ...walk, tint: "cool",
     exits: [{ x: 0.1, dest: "attic", spawn: 0.8, back: true, label: "Back" }],
-    seq: [], pads: null, loot: false, aspect: WIDE, alt: `${HOUSE}/cathedral-alt.webp`,
+    seq: [], pads: null, padPoints: [], loot: false, aspect: WIDE, alt: `${HOUSE}/cathedral-alt.webp`,
   }),
 ];
 export const HAUNT_HALL_Y = 0.82;
@@ -395,6 +400,14 @@ function midY(room: HauntRoom) {
   return (room.farY + room.nearY) / 2;
 }
 
+function lootPoint(room: HauntRoom) {
+  let x = room.hotspot.x - 0.2;
+  for (const exit of room.exits) {
+    if (Math.abs(x - exit.x) < 0.16) x = exit.x < 0.5 ? exit.x + 0.18 : exit.x - 0.18;
+  }
+  return { x: Math.min(room.walkMaxX - 0.04, Math.max(room.walkMinX + 0.04, x)), y: room.hotspot.y };
+}
+
 export function enterHauntLive(cleared: string[] = []): HauntLive {
   const room = HAUNT_ROOMS[0]!;
   return {
@@ -407,6 +420,21 @@ export function enterHauntLive(cleared: string[] = []): HauntLive {
 
 const NEAR_X = 0.075;
 const NEAR_Y = 0.09;
+
+export function nearestHauntPoint(points: { x: number; y: number }[], x: number, y: number) {
+  let best = -1;
+  let bestD = 1;
+  points.forEach((p, i) => {
+    const dx = (x - p.x) / NEAR_X;
+    const dy = (y - p.y) / NEAR_Y;
+    const d = dx * dx + dy * dy;
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  });
+  return best;
+}
 
 export function hauntClose(x: number, y: number, tx: number, ty: number) {
   const dx = (x - tx) / NEAR_X;
@@ -424,10 +452,14 @@ export function hauntDoorOpen(room: HauntRoom, acted: boolean, got: boolean, cle
 export function hauntPrompt(room: HauntRoom, live: HauntLive, got: boolean, cleared: string[] = []) {
   if (live.halling || live.scareT > 0.2) return null;
   if (room.letter && !got && hauntClose(live.x, live.y, room.letter.x, room.letter.y)) return "Collect";
-  if (room.loot && !live.looted && hauntClose(live.x, live.y, room.hotspot.x, room.hotspot.y)) return "Take";
+  if (room.loot && !live.looted && hauntClose(live.x, live.y, lootPoint(room).x, lootPoint(room).y)) return "Take";
+  if (room.padPoints.length && !live.acted) {
+    const pad = nearestHauntPoint(room.padPoints, live.x, live.y);
+    if (pad >= 0) return room.verb;
+  }
   if (!live.acted && hauntClose(live.x, live.y, room.hotspot.x, room.hotspot.y)) {
-    if (room.kind === "order") return null;
     if (room.kind === "shootout") return "Play";
+    if (room.kind === "order") return null;
     return room.verb;
   }
   if (room.kind === "shootout" && live.acted && hauntClose(live.x, live.y, room.hotspot.x, room.hotspot.y)) return "Play";
@@ -501,8 +533,7 @@ export function tickHaunt(live: HauntLive, dt: number, mx: number, my: number, u
     const clear = clock % 2.4 < 1.15;
     next.note = clear ? "Valve's clear" : null;
   } else if (room.kind === "order" && !next.acted) {
-    const seq = room.seq.length ? room.seq : [2, 1, 3];
-    next.note = room.pads === "books" ? `Book ${["I", "II", "III"][(seq[next.puzzleStep] ?? 1) - 1]}` : `Candle ${seq[next.puzzleStep] ?? seq[0]}`;
+    next.note = null;
   } else next.note = null;
 
   if (!next.popped && hauntClose(next.x, next.y, room.lurk.x, room.lurk.y)) {
@@ -510,43 +541,74 @@ export function tickHaunt(live: HauntLive, dt: number, mx: number, my: number, u
     return { live: next, event: beginPop(next, room.scareImg, room.yell, 1.2) };
   }
 
+  if (use && room.kind === "order" && !next.acted && room.padPoints.length) {
+    const pad = nearestHauntPoint(room.padPoints, next.x, next.y);
+    if (pad >= 0) return hauntOrderPress(next, pad + 1);
+  }
+
   if (use && room.kind === "shootout" && hauntClose(next.x, next.y, room.hotspot.x, room.hotspot.y)) {
     next.acted = true;
     return { live: next, event: "shootout" };
   }
 
-  if (use && room.letter && !got && hauntClose(next.x, next.y, room.letter.x, room.letter.y)) {
-    event = "letter";
-  } else if (use && room.loot && !next.looted && hauntClose(next.x, next.y, room.hotspot.x, room.hotspot.y)) {
-    next.looted = true;
-    event = "loot";
-  } else if (use && !next.acted && room.kind !== "shootout" && room.kind !== "order" && hauntClose(next.x, next.y, room.hotspot.x, room.hotspot.y)) {
-    if (room.kind === "timing") {
-      const bar = (Math.sin(clock * 2.6) + 1) / 2;
-      if (bar > 0.78) {
-        next.acted = true;
-        event = "acted";
-      } else event = beginPop(next, room.scareImg, "NOT YET.", 0.7);
-    } else if (room.kind === "steam") {
-      const clear = clock % 2.4 < 1.15;
-      if (clear) {
-        next.acted = true;
-        event = "acted";
-      } else event = beginPop(next, room.scareImg, "TOO HOT.", 0.7);
-    } else if (room.kind === "tap") {
-      next.acted = true;
-      event = "acted";
+  if (use) {
+    const spots: { kind: "letter" | "loot" | "hot" | "decoy" | "exit"; x: number; y: number; exit?: HauntExit }[] = [];
+    if (room.letter && !got) spots.push({ kind: "letter", x: room.letter.x, y: room.letter.y });
+    if (room.loot && !next.looted) {
+      const loot = lootPoint(room);
+      spots.push({ kind: "loot", x: loot.x, y: loot.y });
     }
-  } else if (use) {
-    const decoy = room.decoys.find((d) => hauntClose(next.x, next.y, d.x, d.y));
-    if (decoy) event = beginPop(next, room.scareImg, room.yell, 0.8);
-    else {
-      const exit = room.exits.find((e) => hauntClose(next.x, next.y, e.x, room.nearY) && (e.back || open));
-      if (exit) {
-        const dest = HAUNT_ROOMS.findIndex((r) => r.id === exit.dest);
+    if (!next.acted && room.kind !== "shootout" && room.kind !== "order") spots.push({ kind: "hot", x: room.hotspot.x, y: room.hotspot.y });
+    for (const decoy of room.decoys) spots.push({ kind: "decoy", x: decoy.x, y: decoy.y });
+    for (const exit of room.exits) {
+      if (exit.back || open) spots.push({ kind: "exit", x: exit.x, y: room.nearY, exit });
+    }
+    let pick = spots[0];
+    let best = 1;
+    for (const spot of spots) {
+      const dx = (next.x - spot.x) / NEAR_X;
+      const dy = (next.y - spot.y) / NEAR_Y;
+      const d = dx * dx + dy * dy;
+      if (d < best) {
+        best = d;
+        pick = spot;
+      }
+    }
+    if (pick && best < 1) {
+      if (pick.kind === "letter") event = "letter";
+      else if (pick.kind === "loot") {
+        next.looted = true;
+        event = "loot";
+      } else if (pick.kind === "decoy") event = beginPop(next, room.scareImg, room.yell, 0.8);
+      else if (pick.kind === "hot") {
+        if (room.kind === "timing") {
+          const bar = (Math.sin(clock * 2.6) + 1) / 2;
+          if (bar > 0.78) {
+            next.acted = true;
+            event = "acted";
+          } else event = beginPop(next, room.scareImg, "NOT YET.", 0.7);
+        } else if (room.kind === "steam") {
+          const clear = clock % 2.4 < 1.15;
+          if (clear) {
+            next.acted = true;
+            event = "acted";
+          } else event = beginPop(next, room.scareImg, "TOO HOT.", 0.7);
+        } else if (room.kind === "tap") {
+          next.acted = true;
+          event = "acted";
+        }
+      } else if (pick.exit) {
+        const destId = pick.exit.dest;
+        let spawn = pick.exit.spawn;
+        if (pick.exit.back) {
+          const parent = HAUNT_ROOMS.find((r) => r.id === destId);
+          const link = parent?.exits.find((e) => e.dest === room.id && !e.back);
+          if (link) spawn = link.x;
+        }
+        const dest = HAUNT_ROOMS.findIndex((r) => r.id === destId);
         if (dest >= 0) {
           next.pendingDest = dest;
-          next.pendingSpawn = exit.spawn;
+          next.pendingSpawn = spawn;
           next.halling = true;
           next.hall = 0.62;
           next.note = null;
@@ -567,16 +629,15 @@ export function hauntOrderPress(live: HauntLive, n: number): { live: HauntLive; 
     next.puzzleStep += 1;
     if (next.puzzleStep >= seq.length) {
       next.acted = true;
-      next.note = room.pads === "books" ? "The shelf gives." : "The circle holds.";
+      next.note = room.pads === "books" ? "Shelf's open." : "Lit.";
       return { live: next, event: "acted" };
     }
-    const label = room.pads === "books" ? "Books" : "Candles";
-    next.note = `${label}: ${seq[next.puzzleStep]} next`;
+    next.note = null;
     return { live: next, event: null };
   }
   next.puzzleStep = 0;
   next.scare = room.scare;
-  next.note = room.pads === "books" ? "Start over. 1, then 3, then 2." : "Start over. 2, then 1, then 3.";
+  next.note = "Again.";
   beginPop(next, room.scareImg, room.yell, 0.62);
   return { live: next, event: "pop" };
 }

@@ -75,7 +75,6 @@ import {
   applyRendererQuality,
   isHandheld,
   noteFrame,
-  preferQuality,
   pixelRatio,
   setQuality,
 } from "./graphics";
@@ -433,6 +432,7 @@ export class GameEngine {
 	hw: HwSave = emptyHw();
 	haunt: HauntLive | null = null;
 	halloweenShootout = false;
+	shootoutLeaving = false;
 	hwEvent: { kind: WorldEventKind; text: string; t: number; x: number; y: number } | null = null;
 	hwEventWait = 18;
 	hwDraftT = 0;
@@ -556,8 +556,13 @@ export class GameEngine {
 			world.buildCity(this.walls, this.trees);
 			this.world3d = world;
 		};
+		const within = <T>(p: Promise<T>, ms: number) =>
+			Promise.race([
+				p,
+				new Promise<T>((_, reject) => setTimeout(() => reject(new Error("WebGL boot timed out")), ms)),
+			]);
 		try {
-			await attach(this.canvas);
+			await within(attach(this.canvas), 8000);
 			return;
 		} catch (err) {
 			console.warn("[sack] WebGL boot failed, retrying with a fresh canvas", err);
@@ -571,7 +576,12 @@ export class GameEngine {
 		loseWebGL(this.canvas);
 		const fresh = replaceCanvas(this.canvas);
 		this.canvas = fresh;
-		await attach(fresh);
+		try {
+			await within(attach(fresh), 8000);
+		} catch (err) {
+			console.warn("[sack] WebGL unavailable, continuing without the 3D city", err);
+			this.world3d = null;
+		}
 	}
 	buildWorld() {
 		this.walls.push({
@@ -3533,7 +3543,7 @@ export class GameEngine {
 				view: room.view,
 				tint: room.tint,
 				letter: this.haunt.halling || !room.letter ? null : { x: room.letter.x, y: room.letter.y, got },
-				hotspot: { x: room.hotspot.x, y: room.hotspot.y, label: room.verb, done: this.haunt.acted || room.kind === "shootout" },
+				hotspot: { x: room.hotspot.x, y: room.hotspot.y, label: room.verb, done: this.haunt.acted },
 				exits: room.exits.map((exit) => ({
 					x: exit.x,
 					y: room.nearY,
@@ -3567,6 +3577,7 @@ export class GameEngine {
 				pop: this.haunt.scareT > 0 && this.haunt.scareImg ? { image: this.haunt.scareImg, line: this.haunt.scareLine ?? "", x: room.lurk.x, y: room.lurk.y } : null,
 				lurk: null,
 				steam: (room.kind === "steam" && !this.haunt.acted && this.clock % 2.4 >= 1.15) || (room.kind === "timing" && !this.haunt.acted && (Math.sin(this.clock * 2.6) + 1) / 2 <= 0.78),
+				step: this.haunt.puzzleStep,
 			} : null,
 		};
 	}
@@ -3670,9 +3681,10 @@ export class GameEngine {
 			if (room && !this.hw.letters.includes(room.id)) {
 				this.hw.letters.push(room.id);
 				this.sackdollars += 15;
+				this.respect += 1;
 				this.float("LETTER", "#ff7a1a");
 				audio.swish();
-				this.showToast(`Letter ${this.hw.letters.length}/${HW_LETTERS}`);
+				this.showToast(`Letter ${this.hw.letters.length}/${HW_LETTERS} · +$15 · +1`);
 			}
 			this.markHauntClear(live);
 		} else if (event === "acted") {
@@ -3717,6 +3729,7 @@ export class GameEngine {
 	}
 	startHalloweenShootout() {
 		if (!halloweenOn()) return;
+		this.shootoutLeaving = false;
 		this.haunt = null;
 		const court = POIS.find((p) => p.id === "court");
 		if (court) {
@@ -3736,7 +3749,7 @@ export class GameEngine {
 			this.hw.houseComplete = this.hw.letters.length >= HW_LETTERS;
 			this.sackdollars += 80;
 			this.respect += 6;
-			this.showToast("10 LETTERS SHOOTOUT CLEARED");
+			this.showToast("10 LETTERS SHOOTOUT CLEARED · back in Memphis");
 			this.finishHalloweenMaster();
 		} else this.showToast("Shootout short · the house is still open");
 		this.halloweenShootout = false;
@@ -3931,6 +3944,7 @@ export class GameEngine {
 		if (this.mission.complete && this.ball.score >= 10) this.completeStep("nightball");
 	}
 	exitBasketball() {
+		const clearedShootout = this.halloweenShootout && this.ball.score >= 10;
 		this.settleHalloweenShootout();
 		this.tryCreditBasketball();
 		if (this.ball.shots > 0) {
@@ -3947,8 +3961,11 @@ export class GameEngine {
 		if (pay > 0) {
 			this.sackdollars += pay;
 			this.float(`+$${pay}`, "#1db954");
-			this.showToast(`Court payout: +$${pay} $ackdollars`);
+			if (clearedShootout) this.showToast("10 LETTERS SHOOTOUT CLEARED · back in Memphis");
+			else this.showToast(`Court payout: +$${pay} $ackdollars`);
 			audio.cash();
+		} else if (clearedShootout) {
+			this.showToast("10 LETTERS SHOOTOUT CLEARED · back in Memphis");
 		}
 		this.mode = "world";
 		this.ball.charging = false;
@@ -4133,8 +4150,12 @@ export class GameEngine {
 						const streak = this.ball.combo;
 						const call = streak >= 6 ? "SACKROW HEAT CHECK" : streak >= 4 ? "ON FIRE" : streak === 3 ? "3 MADE" : streak === 2 ? "2 MADE" : null;
 						if (call) this.float(call, streak >= 4 ? "#39ff14" : "#ff7a1a");
-						if (this.halloweenShootout && this.ball.score >= 10) {
-							this.exitBasketball();
+						if (this.halloweenShootout && this.ball.score >= 10 && !this.shootoutLeaving) {
+							this.shootoutLeaving = true;
+							this.emitHud();
+							window.setTimeout(() => {
+								if (this.mode === "basketball") this.exitBasketball();
+							}, 1100);
 							return;
 						}
 					}
@@ -4566,7 +4587,7 @@ export class GameEngine {
 					})()
 					: null,
 			});
-			this.world3d.render(w, h);
+			if (!this.haunt) this.world3d.render(w, h);
 		}
 		if (ctx.canvas.width !== Math.floor(w * dpr) || ctx.canvas.height !== Math.floor(h * dpr)) {
 			ctx.canvas.width = Math.floor(w * dpr);
@@ -4996,6 +5017,7 @@ export class GameEngine {
 				call: this.courtChallenge === "horse" ? HORSE_CALLS[this.horseIndex] ?? "DONE" : this.courtChallenge === "threes" ? "THREES ONLY" : null,
 				board: this.courtBoard.slice(0, 5).map((r) => ({ score: r.score, label: `${r.mode} · ${r.difficulty}` })),
 				venue: venueFor(this.courtVenue).name,
+				shootout: this.halloweenShootout,
 			} : null,
 			courtMenu: this.courtMenu ? {
 				difficulty: DIFFICULTY[this.courtDifficulty].label,
