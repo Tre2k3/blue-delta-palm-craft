@@ -3574,8 +3574,8 @@ export class GameEngine {
 				walkMaxX: room.walkMaxX,
 				doorX: room.doorX,
 				prompt: hauntPrompt(room, this.haunt, got, this.hw.cleared),
-				pop: this.haunt.scareT > 0 && this.haunt.scareImg ? { image: this.haunt.scareImg, line: this.haunt.scareLine ?? "", x: room.lurk.x, y: room.lurk.y } : null,
-				lurk: null,
+				pop: this.haunt.scareT > 0 && this.haunt.scareImg ? { image: this.haunt.scareImg, line: this.haunt.scareLine ?? "", x: room.lurk.x, y: Math.max(0.2, room.lurk.y - 0.28) } : null,
+				lurk: this.haunt.popped || this.haunt.halling ? null : { image: room.scareImg, x: room.lurk.x, y: room.lurk.y },
 				steam: (room.kind === "steam" && !this.haunt.acted && this.clock % 2.4 >= 1.15) || (room.kind === "timing" && !this.haunt.acted && (Math.sin(this.clock * 2.6) + 1) / 2 <= 0.78),
 				step: this.haunt.puzzleStep,
 			} : null,
@@ -3644,6 +3644,7 @@ export class GameEngine {
 		this.noteHalloween("enter");
 		audio.whoosh();
 		this.showToast("10 LETTERS AFTER DARK");
+		audio.groan();
 		this.emitHud();
 	}
 	leaveHaunt() {
@@ -3703,7 +3704,7 @@ export class GameEngine {
 			audio.cash();
 			this.showToast("Loose chain · +$25");
 		} else if (event === "next") {
-			audio.ui();
+			audio.groan();
 			const arrived = HAUNT_ROOMS[live.room];
 			if (arrived && !this.hw.visited.includes(arrived.id)) this.hw.visited.push(arrived.id);
 		} else if (event === "shootout") {

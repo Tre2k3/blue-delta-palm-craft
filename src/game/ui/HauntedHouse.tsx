@@ -263,7 +263,7 @@ export function HauntedHouse({
 
   return (
     <div className="pointer-events-none absolute inset-0 z-20 bg-black">
-    <div ref={vpRef} className="absolute inset-x-0 top-0 overflow-hidden" style={{ bottom: dock, containerType: "size" }}>
+    <div ref={vpRef} className={`absolute inset-x-0 top-0 overflow-hidden ${haunt.pop ? "haunt-shake" : ""}`} style={{ bottom: dock, containerType: "size" }}>
       <div
         ref={worldRef}
         className="absolute bottom-0 left-0"
@@ -273,8 +273,9 @@ export function HauntedHouse({
           transform: `translateX(${-cam * 100}%)`,
         }}
       >
-        <img src={haunt.image} alt="" className={`absolute inset-0 h-full w-full ${haunt.pop ? "haunt-dim" : ""}`} />
-        <div className="haunt-fog pointer-events-none absolute inset-x-[-8%] bottom-0 z-[1] h-[28%]" />
+        <img src={haunt.image} alt="" className={`absolute inset-0 h-full w-full ${haunt.pop ? "haunt-dim" : "haunt-candle"}`} />
+        <div className="haunt-shade pointer-events-none absolute inset-y-0 left-0 z-[1] w-[46%]" />
+        <div className="haunt-fog pointer-events-none absolute inset-x-[-8%] bottom-0 z-[1] h-[42%]" />
         {haunt.steam && (
           <div
             className="haunt-steam pointer-events-none absolute z-[2] h-[18%] w-[16%] -translate-x-1/2 rounded-full bg-white/25 blur-md"
@@ -396,19 +397,21 @@ export function HauntedHouse({
             }}
           />
         </div>
-        {haunt.pop && (
+        {haunt.lurk && !haunt.pop && (
           <img
-            key={haunt.pop.image + haunt.pop.line}
-            src={haunt.pop.image}
+            src={haunt.lurk.image}
             alt=""
-            className="haunt-ghost pointer-events-none absolute z-[4] w-[18%] max-w-[220px] object-cover"
-            style={{ left: `${haunt.pop.x * 100}%`, top: `${haunt.pop.y * 100}%` }}
+            className="haunt-lurk pointer-events-none absolute z-[3] w-[24%] max-w-[300px] object-cover"
+            style={{
+              left: `${haunt.lurk.x * 100}%`,
+              top: `${Math.max(0.1, haunt.lurk.y - 0.52) * 100}%`,
+            }}
           />
         )}
         <img
           src={haunt.image}
           alt=""
-          className="pointer-events-none absolute inset-0 z-[5] h-full w-full"
+          className={`pointer-events-none absolute inset-0 z-[5] h-full w-full ${haunt.pop ? "haunt-dim" : "haunt-candle"}`}
           style={{
             WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, transparent 92%, #000 98%, #000 100%)",
             maskImage: "linear-gradient(to bottom, transparent 0%, transparent 92%, #000 98%, #000 100%)",
@@ -441,12 +444,46 @@ export function HauntedHouse({
         )}
       </div>
       <div
+        className="pointer-events-none absolute inset-0 z-[6]"
+        style={{
+          background:
+            "linear-gradient(to bottom, rgba(2,4,14,0.78) 0%, rgba(28,2,8,0.5) 26%, rgba(36,10,4,0.16) 58%, rgba(0,0,0,0.02) 76%, rgba(0,0,0,0.45) 100%)",
+          mixBlendMode: "multiply",
+        }}
+      />
+      <div
+        className="pointer-events-none absolute inset-0 z-[6]"
+        style={{
+          background: "radial-gradient(ellipse at 50% 78%, rgba(255,120,40,0.16), transparent 42%)",
+          mixBlendMode: "screen",
+        }}
+      />
+      <div
         className="pointer-events-none absolute inset-0 z-[7]"
         style={{
           background:
-            "radial-gradient(ellipse at 50% 40%, transparent 42%, rgba(0,0,0,0.22) 74%, rgba(0,0,0,0.58) 100%)",
+            "radial-gradient(ellipse at 50% 38%, transparent 6%, rgba(18,0,0,0.42) 50%, rgba(0,0,0,0.9) 100%)",
         }}
       />
+      <div className="haunt-grain pointer-events-none absolute inset-0 z-[7]" />
+      {haunt.pop && (
+        <>
+          <div
+            className="pointer-events-none absolute inset-0 z-[8]"
+            style={{
+              background:
+                "linear-gradient(to bottom, rgba(0,0,0,0.94) 0%, rgba(0,0,0,0.82) 36%, rgba(0,0,0,0.34) 68%, transparent 88%)",
+            }}
+          />
+          <div className="haunt-flash pointer-events-none absolute inset-0 z-[8]" />
+          <div
+            key={haunt.pop.image}
+            className="haunt-ghost pointer-events-none absolute left-1/2 top-0 z-[9] w-[min(38vw,380px)]"
+          >
+            <img src={haunt.pop.image} alt="" className="w-full object-cover" />
+          </div>
+        </>
+      )}
       {haunt.hall && <div className="absolute inset-0 z-30 bg-black/80" />}
       {introOn && !haunt.hall && (
         <div className="absolute left-1/2 top-[12%] z-30 -translate-x-1/2 text-center text-white">

@@ -181,7 +181,7 @@ export const HAUNT_ROOMS: HauntRoom[] = [
     objective: "Walk to the gate.", scare: "The rope drops.", action: "Inspect the booth", verb: "Inspect",
     kind: "tap", gate: "open", letter: null,
     hotspot: { x: 0.5, y: 0.42 }, decoys: [], lurk: { x: 0.7, y: 0.42 },
-    scareImg: `${SCARE}/foyer.webp`, yell: "TICKETS.",
+    scareImg: `${SCARE}/foyer.webp?v=3`, yell: "TICKETS.",
     floorY: 0.94, farY: 0.9, nearY: 0.96, spawnX: 0.4, doorX: 0.84,
     ...walk, walkMinX: 0.32, tint: "warm",
     exits: [{ x: 0.86, dest: "foyer", spawn: 0.24, label: "Enter" }],
@@ -192,7 +192,7 @@ export const HAUNT_ROOMS: HauntRoom[] = [
     objective: "Pick up the letter.", scare: "The chandelier flickers.", action: "Inspect the portrait", verb: "Inspect",
     kind: "tap", gate: "letter", letter: { x: 0.4, y: 0.84 },
     hotspot: { x: 0.62, y: 0.8 }, decoys: [], lurk: { x: 0.55, y: 0.78 },
-    scareImg: `${SCARE}/foyer.webp`, yell: "WELCOME IN.",
+    scareImg: `${SCARE}/foyer.webp?v=3`, yell: "WELCOME IN.",
     floorY: 0.86, farY: 0.78, nearY: 0.9, spawnX: 0.16, doorX: 0.86,
     ...walk, tint: "warm",
     exits: [
@@ -206,7 +206,7 @@ export const HAUNT_ROOMS: HauntRoom[] = [
     objective: "Check the landing.", scare: "A shadow crosses the landing.", action: "Check the landing", verb: "Follow",
     kind: "tap", gate: "acted", letter: null,
     hotspot: { x: 0.58, y: 0.84 }, decoys: [], lurk: { x: 0.48, y: 0.8 },
-    scareImg: `${SCARE}/stairs.webp`, yell: "YOU'RE LATE.",
+    scareImg: `${SCARE}/stairs.webp?v=3`, yell: "YOU'RE LATE.",
     floorY: 0.88, farY: 0.8, nearY: 0.92, spawnX: 0.16, doorX: 0.86,
     ...walk, tint: "warm",
     exits: [
@@ -220,7 +220,7 @@ export const HAUNT_ROOMS: HauntRoom[] = [
     objective: "Inspect the portrait that changed.", scare: "The eyes follow you.", action: "Inspect the frame", verb: "Inspect",
     kind: "tap", gate: "both", letter: { x: 0.62, y: 0.84 },
     hotspot: { x: 0.48, y: 0.8 }, decoys: [{ x: 0.3, y: 0.8 }, { x: 0.72, y: 0.8 }], lurk: { x: 0.5, y: 0.78 },
-    scareImg: `${SCARE}/portraits.webp`, yell: "WRONG FRAME.",
+    scareImg: `${SCARE}/portraits.webp?v=3`, yell: "WRONG FRAME.",
     floorY: 0.86, farY: 0.78, nearY: 0.9, spawnX: 0.16, doorX: 0.86,
     ...walk, tint: "warm",
     exits: [
@@ -235,7 +235,7 @@ export const HAUNT_ROOMS: HauntRoom[] = [
     objective: "Open the chest.", scare: "A doll turns its head.", action: "Open the chest", verb: "Open",
     kind: "tap", gate: "both", letter: { x: 0.34, y: 0.86 },
     hotspot: { x: 0.58, y: 0.84 }, decoys: [{ x: 0.28, y: 0.84 }], lurk: { x: 0.5, y: 0.82 },
-    scareImg: `${SCARE}/toys.webp`, yell: "NOT THAT ONE.",
+    scareImg: `${SCARE}/toys.webp?v=3`, yell: "NOT THAT ONE.",
     floorY: 0.88, farY: 0.8, nearY: 0.92, spawnX: 0.16, doorX: 0.86,
     ...walk, tint: "warm",
     exits: [
@@ -249,7 +249,7 @@ export const HAUNT_ROOMS: HauntRoom[] = [
     objective: "Search the table.", scare: "A chair scrapes back.", action: "Search the table", verb: "Search",
     kind: "tap", gate: "both", letter: { x: 0.66, y: 0.88 },
     hotspot: { x: 0.48, y: 0.86 }, decoys: [], lurk: { x: 0.55, y: 0.84 },
-    scareImg: `${SCARE}/banquet.webp`, yell: "SIT DOWN.",
+    scareImg: `${SCARE}/banquet.webp?v=3`, yell: "SIT DOWN.",
     floorY: 0.9, farY: 0.82, nearY: 0.94, spawnX: 0.16, doorX: 0.86,
     ...walk, tint: "warm",
     exits: [
@@ -263,7 +263,7 @@ export const HAUNT_ROOMS: HauntRoom[] = [
     objective: "Light the candles.", scare: "The circle breaks.", action: "Light the candles", verb: "Light",
     kind: "order", gate: "both", letter: { x: 0.22, y: 0.88 },
     hotspot: { x: 0.55, y: 0.84 }, decoys: [], lurk: { x: 0.5, y: 0.82 },
-    scareImg: `${SCARE}/seance.webp`, yell: "SHE SAID YOUR NAME.",
+    scareImg: `${SCARE}/seance.webp?v=3`, yell: "SHE SAID YOUR NAME.",
     floorY: 0.88, farY: 0.8, nearY: 0.92, spawnX: 0.16, doorX: 0.86,
     ...walk, tint: "hex",
     exits: [
@@ -279,7 +279,7 @@ export const HAUNT_ROOMS: HauntRoom[] = [
     objective: "Pull the books.", scare: "A book hits the floor.", action: "Pull the books", verb: "Pull",
     kind: "order", gate: "both", letter: { x: 0.78, y: 0.88 },
     hotspot: { x: 0.46, y: 0.86 }, decoys: [], lurk: { x: 0.4, y: 0.88 },
-    scareImg: `${SCARE}/library.webp`, yell: "WRONG BOOK.",
+    scareImg: `${SCARE}/library.webp?v=3`, yell: "WRONG BOOK.",
     floorY: 0.96, farY: 0.82, nearY: 0.94, spawnX: 0.16, doorX: 0.86,
     ...walk, tint: "warm",
     exits: [
@@ -295,7 +295,7 @@ export const HAUNT_ROOMS: HauntRoom[] = [
     objective: "Reach the far latch.", scare: "Someone is at the far end.", action: "Throw the latch", verb: "Use",
     kind: "tap", gate: "acted", letter: null,
     hotspot: { x: 0.62, y: 0.82 }, decoys: [], lurk: { x: 0.48, y: 0.8 },
-    scareImg: `${SCARE}/boiler.webp`, yell: "KEEP MOVING.",
+    scareImg: `${SCARE}/boiler.webp?v=3`, yell: "KEEP MOVING.",
     floorY: 0.84, farY: 0.76, nearY: 0.9, spawnX: 0.16, doorX: 0.86,
     ...walk, tint: "hex",
     exits: [
@@ -310,7 +310,7 @@ export const HAUNT_ROOMS: HauntRoom[] = [
     objective: "Slip the steam.", scare: "The lights drop.", action: "Slip the steam", verb: "Slip",
     kind: "timing", gate: "both", letter: { x: 0.7, y: 0.86 },
     hotspot: { x: 0.46, y: 0.84 }, decoys: [], lurk: { x: 0.38, y: 0.82 },
-    scareImg: `${SCARE}/kitchen.webp`, yell: "NOT YET.",
+    scareImg: `${SCARE}/kitchen.webp?v=3`, yell: "NOT YET.",
     floorY: 0.88, farY: 0.8, nearY: 0.92, spawnX: 0.16, doorX: 0.86,
     ...walk, tint: "warm",
     exits: [
@@ -324,7 +324,7 @@ export const HAUNT_ROOMS: HauntRoom[] = [
     objective: "Turn the valve.", scare: "A pipe blows.", action: "Turn the valve", verb: "Turn",
     kind: "steam", gate: "both", letter: { x: 0.68, y: 0.84 },
     hotspot: { x: 0.42, y: 0.82 }, decoys: [], lurk: { x: 0.55, y: 0.8 },
-    scareImg: `${SCARE}/boiler.webp`, yell: "TOO HOT.",
+    scareImg: `${SCARE}/boiler.webp?v=3`, yell: "TOO HOT.",
     floorY: 0.86, farY: 0.78, nearY: 0.9, spawnX: 0.16, doorX: 0.86,
     ...walk, tint: "hex",
     exits: [
@@ -338,7 +338,7 @@ export const HAUNT_ROOMS: HauntRoom[] = [
     objective: "Search the trunk.", scare: "A shadow crosses the moon.", action: "Search the trunk", verb: "Search",
     kind: "tap", gate: "both", letter: { x: 0.36, y: 0.84 },
     hotspot: { x: 0.58, y: 0.82 }, decoys: [{ x: 0.24, y: 0.82 }], lurk: { x: 0.5, y: 0.8 },
-    scareImg: `${SCARE}/attic.webp`, yell: "EMPTY.",
+    scareImg: `${SCARE}/attic.webp?v=3`, yell: "EMPTY.",
     floorY: 0.86, farY: 0.78, nearY: 0.9, spawnX: 0.18, doorX: 0.86,
     ...walk, tint: "cool",
     exits: [
@@ -352,7 +352,7 @@ export const HAUNT_ROOMS: HauntRoom[] = [
     objective: "Make 10 baskets.", scare: "The rim goes quiet.", action: "Start the shootout", verb: "Play",
     kind: "shootout", gate: "acted", letter: null,
     hotspot: { x: 0.55, y: 0.82 }, decoys: [], lurk: { x: 0.42, y: 0.8 },
-    scareImg: `${SCARE}/cathedral.webp`, yell: "TEN SHOTS.",
+    scareImg: `${SCARE}/cathedral.webp?v=3`, yell: "TEN SHOTS.",
     floorY: 0.86, farY: 0.78, nearY: 0.9, spawnX: 0.18, doorX: 0.5,
     ...walk, tint: "cool",
     exits: [{ x: 0.1, dest: "attic", spawn: 0.8, back: true, label: "Back" }],
