@@ -45,7 +45,7 @@
 .haunt-flicker { animation: haunt-flicker 4.8s infinite; }
 
 .haunt-fog {
-  background: linear-gradient(to top, rgba(180, 190, 200, 0.28), transparent 80%);
+  background: linear-gradient(to top, rgba(72, 28, 8, 0.42), rgba(255, 140, 40, 0.06) 42%, transparent 78%);
   animation: haunt-drift 7s ease-in-out infinite alternate;
 }
 .haunt-steam { animation: haunt-drift 1.4s ease-in-out infinite alternate; }

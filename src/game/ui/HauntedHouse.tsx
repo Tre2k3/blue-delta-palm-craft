@@ -42,30 +42,20 @@ export type HauntPanel = {
 };
 
 const TINT = {
-  warm: "saturate(1.12) sepia(0.15)",
-  hex: "saturate(1.08) hue-rotate(14deg) brightness(0.96)",
-  cool: "saturate(0.88) hue-rotate(16deg) brightness(1.05)",
+  warm: "sepia(0.22) saturate(0.9) contrast(1.05)",
+  hex: "sepia(0.16) saturate(0.8) hue-rotate(4deg) contrast(1.04)",
+  cool: "sepia(0.08) saturate(0.82) hue-rotate(8deg) contrast(1.04)",
+};
+const GRADE = {
+  warm: "#c45a22",
+  hex: "#8a3a55",
+  cool: "#3a5878",
 };
 
 function closeTo(x: number, y: number, tx: number, ty: number) {
   const dx = (x - tx) / 0.075;
   const dy = (y - ty) / 0.09;
   return dx * dx + dy * dy < 1;
-}
-
-function guideSpot(haunt: HauntPanel, room: (typeof HAUNT_ROOMS)[number] | undefined) {
-  if (!room || haunt.hall) return null;
-  if (room.kind === "order" && !haunt.hotspot.done) {
-    const n = room.seq[haunt.step] ?? room.seq[0];
-    const pad = n ? room.padPoints[n - 1] : undefined;
-    if (pad) return pad;
-  }
-  if (!haunt.hotspot.done && room.gate !== "open" && room.gate !== "letter") {
-    return { x: haunt.hotspot.x, y: haunt.hotspot.y };
-  }
-  if (haunt.letter && !haunt.letter.got) return { x: haunt.letter.x, y: haunt.letter.y };
-  const door = haunt.exits.find((exit) => exit.open && !exit.back) ?? haunt.exits.find((exit) => exit.open);
-  return door ? { x: door.x, y: door.y } : null;
 }
 
 function Flame({ x, y }: { x: number; y: number }) {
@@ -270,8 +260,6 @@ export function HauntedHouse({
   const nearHot = !haunt.hotspot.done && closeTo(haunt.x, haunt.y, haunt.hotspot.x, haunt.hotspot.y);
   const dock = coarse ? "16.75rem" : "4.25rem";
   const flyX = haunt.letter ? Math.min(88, Math.max(12, ((haunt.letter.x - cam) / Math.max(0.2, vis)) * 100)) : 50;
-  const guide = guideSpot(haunt, room);
-  const onGuide = guide ? closeTo(haunt.x, haunt.y, guide.x, guide.y) : false;
 
   return (
     <div className="pointer-events-none absolute inset-0 z-20 bg-black">
@@ -295,23 +283,27 @@ export function HauntedHouse({
         )}
         {haunt.letter && !haunt.letter.got && (
           <span
-            className="absolute z-[6] h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-orange-100 bg-orange-500 shadow-[0_0_16px_#ff7a1a]"
+            className="absolute z-[2] h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-100/70 blur-[0.5px] shadow-[0_0_14px_5px_rgba(255,150,50,0.55)]"
             style={{ left: `${haunt.letter.x * 100}%`, top: `${haunt.letter.y * 100}%` }}
           />
         )}
-        {haunt.exits.map((exit) => (
-          <span
-            key={`${exit.label}-${exit.x}`}
-            className={`absolute z-[4] w-[3.5%] -translate-x-1/2 rounded-full blur-[1px] ${
-              exit.open
-                ? closeTo(haunt.x, haunt.y, exit.x, exit.y)
-                  ? "h-[9%] bg-orange-200/75"
-                  : "h-[5%] bg-orange-400/30"
-                : "h-[4%] bg-white/10"
-            }`}
-            style={{ left: `${exit.x * 100}%`, top: `${(exit.y - 0.12) * 100}%` }}
-          />
-        ))}
+        {haunt.exits.map((exit) => {
+          const near = closeTo(haunt.x, haunt.y, exit.x, exit.y);
+          if (!exit.open || !near) return null;
+          return (
+            <span
+              key={`${exit.label}-${exit.x}`}
+              className="absolute z-[2] -translate-x-1/2 rounded-full blur-md"
+              style={{
+                left: `${exit.x * 100}%`,
+                top: `${(exit.y - 0.08) * 100}%`,
+                width: "6%",
+                height: "12%",
+                background: "radial-gradient(ellipse, rgba(255,190,110,0.28), transparent 70%)",
+              }}
+            />
+          );
+        })}
         {room?.padPoints.map((pad, i) => {
           if (haunt.hotspot.done) return null;
           const next = room.seq[haunt.step] === i + 1;
@@ -328,27 +320,15 @@ export function HauntedHouse({
         })}
         {nearHot && (
           <span
-            className="absolute z-[4] h-[14%] w-[10%] -translate-x-1/2 -translate-y-1/2 rounded-full border border-orange-200/80 bg-orange-500/15 shadow-[0_0_18px_rgba(255,122,26,0.45)]"
-            style={{ left: `${haunt.hotspot.x * 100}%`, top: `${haunt.hotspot.y * 100}%` }}
+            className="absolute z-[2] -translate-x-1/2 -translate-y-1/2 blur-md"
+            style={{
+              left: `${haunt.hotspot.x * 100}%`,
+              top: `${haunt.hotspot.y * 100}%`,
+              width: "14%",
+              height: "5%",
+              background: "radial-gradient(ellipse, rgba(255,160,60,0.18), transparent 72%)",
+            }}
           />
-        )}
-        {guide && !onGuide && (
-          <>
-            {[0.34, 0.62].map((t) => (
-              <span
-                key={t}
-                className="pointer-events-none absolute z-[6] h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-orange-200/90 shadow-[0_0_10px_#ff7a1a]"
-                style={{
-                  left: `${(haunt.x + (guide.x - haunt.x) * t) * 100}%`,
-                  top: `${(haunt.y + (guide.y - haunt.y) * t) * 100}%`,
-                }}
-              />
-            ))}
-            <span
-              className="pointer-events-none absolute z-[6] h-6 w-6 -translate-x-1/2 -translate-y-1/2 animate-pulse rounded-full border-2 border-orange-100 bg-orange-400/25 shadow-[0_0_16px_#ff7a1a]"
-              style={{ left: `${guide.x * 100}%`, top: `${guide.y * 100}%` }}
-            />
-          </>
         )}
         <RoomReaction
           id={room?.id}
@@ -359,27 +339,63 @@ export function HauntedHouse({
           hot={haunt.hotspot}
         />
         <div
-          className="pointer-events-none absolute z-[2] -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/40 blur-[2px]"
+          className="pointer-events-none absolute z-[2]"
           style={{
             left: `${haunt.x * 100}%`,
             top: `${haunt.y * 100}%`,
-            width: `${9 * scale}%`,
-            height: `${2.2 * scale}%`,
-            opacity: 0.22 + depth * 0.12,
+            width: `${18 * scale}%`,
+            height: `${4.6 * scale}%`,
+            transform: "translate(-50%, -30%)",
+            background: "radial-gradient(ellipse at center, rgba(8,4,2,0.82) 0%, rgba(36,14,4,0.38) 46%, transparent 74%)",
+            filter: "blur(1.5px)",
           }}
         />
         <img
           src={haunt.outfit}
           alt=""
+          aria-hidden
           className="pointer-events-none absolute z-[3] w-auto max-w-none"
           style={{
             left: `${haunt.x * 100}%`,
             top: `${haunt.y * 100}%`,
             height: `${46 * scale}cqh`,
             transform: `translate(-50%, ${-stand.foot * 100}%)`,
-            filter: `${TINT[haunt.tint]} drop-shadow(0 8px 6px rgba(0,0,0,0.45))`,
+            filter: "blur(10px) sepia(1) saturate(4) brightness(0.9)",
+            opacity: 0.22,
+            mixBlendMode: "screen",
           }}
         />
+        <div
+          className="pointer-events-none absolute z-[4]"
+          style={{
+            left: `${haunt.x * 100}%`,
+            top: `${haunt.y * 100}%`,
+            height: `${46 * scale}cqh`,
+            transform: `translate(-50%, ${-stand.foot * 100}%)`,
+            filter: "drop-shadow(0 16px 8px rgba(8,3,0,0.75))",
+          }}
+        >
+          <img
+            src={haunt.outfit}
+            alt=""
+            className="block h-full w-auto max-w-none"
+            style={{ filter: TINT[haunt.tint] }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background: GRADE[haunt.tint],
+              mixBlendMode: "multiply",
+              opacity: 0.48,
+              WebkitMaskImage: `url(${haunt.outfit})`,
+              maskImage: `url(${haunt.outfit})`,
+              WebkitMaskSize: "100% 100%",
+              maskSize: "100% 100%",
+              WebkitMaskRepeat: "no-repeat",
+              maskRepeat: "no-repeat",
+            }}
+          />
+        </div>
         {haunt.pop && (
           <img
             key={haunt.pop.image + haunt.pop.line}
@@ -424,6 +440,13 @@ export function HauntedHouse({
           </>
         )}
       </div>
+      <div
+        className="pointer-events-none absolute inset-0 z-[7]"
+        style={{
+          background:
+            "radial-gradient(ellipse at 50% 40%, transparent 42%, rgba(0,0,0,0.22) 74%, rgba(0,0,0,0.58) 100%)",
+        }}
+      />
       {haunt.hall && <div className="absolute inset-0 z-30 bg-black/80" />}
       {introOn && !haunt.hall && (
         <div className="absolute left-1/2 top-[12%] z-30 -translate-x-1/2 text-center text-white">
