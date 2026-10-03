@@ -37,7 +37,7 @@ export type HauntPanel = {
   prompt: string | null;
   pop: { image: string; line: string; x: number; y: number } | null;
   lurk: { image: string; x: number; y: number } | null;
-  face: { fx: number; fy: number; x: number; y: number; w: number } | null;
+  face: { fx: number; fy: number; x: number; y: number; w: number; rx?: number; ry?: number } | null;
   fore: string | null;
   benjiH: number;
   steam: boolean;
@@ -63,7 +63,7 @@ const FORE = "linear-gradient(to bottom, transparent 0%, transparent 92%, #000 9
  */
 function FaceScare({ image, face, pop }: { image: string; face: NonNullable<HauntPanel["face"]>; pop: boolean }) {
   const at = `${face.fx * 100}% ${face.fy * 100}%`;
-  const mask = `radial-gradient(ellipse 10% 9% at ${at}, #000 28%, rgba(0,0,0,0.5) 62%, transparent 100%)`;
+  const mask = `radial-gradient(ellipse ${face.rx ?? 10}% ${face.ry ?? 9}% at ${at}, #000 28%, rgba(0,0,0,0.5) 62%, transparent 100%)`;
   return (
     <div
       className="pointer-events-none absolute z-[3]"
@@ -97,12 +97,77 @@ function closeTo(x: number, y: number, tx: number, ty: number) {
   return dx * dx + dy * dy < 1;
 }
 
-function Flame({ x, y }: { x: number; y: number }) {
+/**
+ * A pillar candle standing on the séance rug. Dark: wax in the room's light, no flame. Next: a small flame
+ * so the player can see which one. Lit: full flame and a pool of warm light on the floor.
+ */
+function FloorCandle({ x, y, state }: { x: number; y: number; state: "dark" | "next" | "lit" }) {
+  const flame = state !== "dark";
   return (
-    <span className="pointer-events-none absolute z-[6] flex -translate-x-1/2 flex-col items-center" style={{ left: `${x * 100}%`, top: `${(y - 0.22) * 100}%` }}>
-      <span className="h-14 w-5 rounded-t-full bg-gradient-to-t from-orange-700 via-amber-300 to-yellow-50 shadow-[0_0_26px_12px_rgba(255,150,20,0.9)]" />
-      <span className="-mt-1 h-7 w-2.5 rounded-b bg-stone-900" />
-    </span>
+    <>
+      {state === "lit" && (
+        <span
+          className="pointer-events-none absolute z-[2] -translate-x-1/2 -translate-y-1/2"
+          style={{
+            left: `${x * 100}%`,
+            top: `${(y - 0.03) * 100}%`,
+            width: "16%",
+            height: "16%",
+            background: "radial-gradient(ellipse at center, rgba(255,170,80,0.42), rgba(255,120,40,0.14) 45%, transparent 70%)",
+            mixBlendMode: "screen",
+          }}
+        />
+      )}
+      <span
+        className="pointer-events-none absolute z-[3] -translate-x-1/2 -translate-y-1/2"
+        style={{
+          left: `${x * 100}%`,
+          top: `${y * 100}%`,
+          width: "3.2%",
+          height: "1.4%",
+          background: "radial-gradient(ellipse at center, rgba(4,2,1,0.85), transparent 70%)",
+        }}
+      />
+      <span
+        className="pointer-events-none absolute z-[3]"
+        style={{ left: `${x * 100}%`, top: `${y * 100}%`, width: "1.25%", height: "5.6%", transform: "translate(-50%, -100%)" }}
+      >
+        <span className={`absolute inset-0 ${flame ? "" : "haunt-body"}`}>
+          <span
+            className="absolute inset-x-0 bottom-0 top-[6%] rounded-b-[3px]"
+            style={{
+              background: flame
+                ? "linear-gradient(90deg, #5a4430, #e9c99a 30%, #fff1d2 50%, #d8b07a 75%, #4a3624)"
+                : "linear-gradient(90deg, #2a2420, #8c8070 35%, #a69886 50%, #6e6456 78%, #241e1a)",
+            }}
+          />
+          <span
+            className="absolute inset-x-0 top-0 h-[12%] rounded-[50%]"
+            style={{ background: flame ? "radial-gradient(ellipse at 50% 40%, #fff6dc, #e2bc86 70%)" : "radial-gradient(ellipse at 50% 40%, #b4a690, #6c6052 70%)" }}
+          />
+          <span className="absolute left-1/2 top-[-6%] h-[10%] w-[10%] -translate-x-1/2 rounded-full bg-black" />
+        </span>
+        {flame && (
+          <span
+            className="haunt-flame absolute bottom-[96%] left-1/2"
+            style={{
+              width: state === "lit" ? "95%" : "60%",
+              height: state === "lit" ? "60%" : "36%",
+              borderRadius: "50% 50% 50% 50% / 62% 62% 38% 38%",
+              background: "radial-gradient(ellipse at 50% 72%, #fffbe8, #ffd982 32%, #ff9a2e 58%, rgba(255,90,10,0) 74%)",
+              mixBlendMode: "screen",
+              filter: "blur(0.4px)",
+            }}
+          />
+        )}
+        {state === "lit" && (
+          <span
+            className="absolute bottom-[110%] left-1/2 -translate-x-1/2 translate-y-1/2"
+            style={{ width: "700%", height: "90%", background: "radial-gradient(ellipse at center, rgba(255,190,100,0.38), transparent 66%)", mixBlendMode: "screen" }}
+          />
+        )}
+      </span>
+    </>
   );
 }
 
@@ -126,9 +191,13 @@ function RoomReaction({
   if (!id) return null;
   const lit = new Set(done ? seq : seq.slice(0, step));
   if (id === "seance") {
+    // The candles stand on the rug just in front of the table, where the player walks up to them.
+    const next = done ? -1 : seq[step];
     return (
       <>
-        {pads.map((pad, i) => (lit.has(i + 1) ? <Flame key={i} x={pad.x} y={pad.y} /> : null))}
+        {pads.map((pad, i) => (
+          <FloorCandle key={i} x={pad.x} y={0.885} state={lit.has(i + 1) ? "lit" : next === i + 1 ? "next" : "dark"} />
+        ))}
       </>
     );
   }
@@ -354,7 +423,8 @@ export function HauntedHouse({
           );
         })}
         {room?.padPoints.map((pad, i) => {
-          if (haunt.hotspot.done) return null;
+          // Séance candles are drawn in the room (FloorCandle); no UI badges there.
+          if (haunt.hotspot.done || room.pads === "candles") return null;
           const next = room.seq[haunt.step] === i + 1;
           const near = closeTo(haunt.x, haunt.y, pad.x, pad.y);
           return (
@@ -452,6 +522,8 @@ export function HauntedHouse({
           style={{
             WebkitMaskImage: haunt.fore ?? FORE,
             maskImage: haunt.fore ?? FORE,
+            WebkitMaskComposite: "source-in",
+            maskComposite: "intersect",
           }}
         />
         {(haunt.prompt || haunt.note) && !haunt.hall && (

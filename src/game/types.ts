@@ -412,7 +412,7 @@ export interface HudSnapshot {
       prompt: string | null;
       pop: { image: string; line: string; x: number; y: number } | null;
       lurk: { image: string; x: number; y: number } | null;
-      face: { fx: number; fy: number; x: number; y: number; w: number } | null;
+      face: { fx: number; fy: number; x: number; y: number; w: number; rx?: number; ry?: number } | null;
       fore: string | null;
       benjiH: number;
       steam: boolean;

@@ -168,8 +168,8 @@ export type HauntRoom = {
    * (x, y) and how wide the scare image is in room widths (w). Only the face shows: radial mask,
    * screen blend, no rectangle.
    */
-  face?: { fx: number; fy: number; x: number; y: number; w: number };
-  /** Foreground mask over Benji (CSS mask-image). Default: the bottom strip of the plate. */
+  face?: { fx: number; fy: number; x: number; y: number; w: number; rx?: number; ry?: number };
+  /** Foreground mask over Benji (CSS mask-image layers, intersected). Default: the bottom strip of the plate. */
   fore?: string;
   /** Benji's height in viewport-height units at the near edge of the walk band. Default 46. */
   benjiH?: number;
@@ -281,10 +281,18 @@ export const HAUNT_ROOMS: HauntRoom[] = [
     id: "seance", name: "Séance Room", image: `${HOUSE}/seance.webp`,
     objective: "Light the candles.", scare: "The circle breaks.", action: "Light the candles", verb: "Light",
     kind: "order", gate: "both", letter: { x: 0.22, y: 0.88 },
-    hotspot: { x: 0.55, y: 0.84 }, decoys: [], lurk: { x: 0.5, y: 0.82 },
+    hotspot: { x: 0.55, y: 0.84 }, decoys: [], lurk: { x: 0.5, y: 0.93 },
     scareImg: `${SCARE}/seance.webp?v=3`, yell: "SHE SAID YOUR NAME.",
-    floorY: 0.88, farY: 0.8, nearY: 0.92, spawnX: 0.16, doorX: 0.86,
-    ...walk, tint: "hex",
+    // Benji walks the rug in front of the table; the table, the circle and the chairs stay behind him.
+    floorY: 0.93, farY: 0.9, nearY: 0.96, spawnX: 0.16, doorX: 0.86,
+    // Near native size: the circle, the table and the dark corners read.
+    ...walk, view: 0.9, tint: "hex",
+    // She watches from the dark behind the right-hand chair (low enough for a sideways phone).
+    face: { fx: 0.49, fy: 0.245, x: 0.69, y: 0.62, w: 0.3, rx: 13, ry: 11 },
+    // The leopard ottoman in the bottom-right corner passes in front of his feet.
+    fore: "linear-gradient(to right, transparent 73%, #000 77%), linear-gradient(to bottom, transparent 83%, #000 87%)",
+    // The round table stands mid-room; at 46 he was shorter than it.
+    benjiH: 64,
     exits: [
       { x: 0.1, dest: "toys", spawn: 0.8, back: true, label: "Back" },
       { x: 0.88, dest: "library", spawn: 0.24, label: "Enter" },

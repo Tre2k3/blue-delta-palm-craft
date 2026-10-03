@@ -124,6 +124,13 @@
   100% { opacity: 0.9; }
 }
 .haunt-relight { animation: haunt-relight 1.1s ease-out forwards; }
+@keyframes haunt-flame {
+  0%, 100% { transform: translateX(-50%) scale(1, 1) skewX(0deg); }
+  27% { transform: translateX(-50%) scale(0.9, 1.1) skewX(4deg); }
+  55% { transform: translateX(-50%) scale(1.06, 0.93) skewX(-3deg); }
+  78% { transform: translateX(-50%) scale(0.96, 1.04) skewX(2deg); }
+}
+.haunt-flame { animation: haunt-flame 0.95s ease-in-out infinite; transform-origin: 50% 100%; }
 @keyframes haunt-shade {
   from { transform: translateX(-30%) scaleX(1); opacity: 0.35; }
   to { transform: translateX(46%) scaleX(1.15); opacity: 0.7; }
