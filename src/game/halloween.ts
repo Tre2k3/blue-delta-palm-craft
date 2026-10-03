@@ -163,6 +163,16 @@ export type HauntRoom = {
   loot: boolean;
   aspect: string;
   alt: string | null;
+  /**
+   * Face-only scare: where the face sits inside the scare image (fx, fy), where it lurks in the room
+   * (x, y) and how wide the scare image is in room widths (w). Only the face shows: radial mask,
+   * screen blend, no rectangle.
+   */
+  face?: { fx: number; fy: number; x: number; y: number; w: number };
+  /** Foreground mask over Benji (CSS mask-image). Default: the bottom strip of the plate. */
+  fore?: string;
+  /** Benji's height in viewport-height units at the near edge of the walk band. Default 46. */
+  benjiH?: number;
 };
 
 const SCARE = `${ART}/scares`;
@@ -247,11 +257,20 @@ export const HAUNT_ROOMS: HauntRoom[] = [
   room({
     id: "banquet", name: "Banquet Hall", image: `${HOUSE}/dining.webp`,
     objective: "Search the table.", scare: "A chair scrapes back.", action: "Search the table", verb: "Search",
-    kind: "tap", gate: "both", letter: { x: 0.66, y: 0.88 },
-    hotspot: { x: 0.48, y: 0.86 }, decoys: [], lurk: { x: 0.55, y: 0.84 },
+    kind: "tap", gate: "both", letter: { x: 0.66, y: 0.9 },
+    hotspot: { x: 0.48, y: 0.88 }, decoys: [], lurk: { x: 0.55, y: 0.9 },
     scareImg: `${SCARE}/banquet.webp?v=3`, yell: "SIT DOWN.",
-    floorY: 0.9, farY: 0.82, nearY: 0.94, spawnX: 0.16, doorX: 0.86,
-    ...walk, tint: "warm",
+    // Benji walks the near side of the table: feet at the frame's bottom edge, the table behind him.
+    floorY: 0.94, farY: 0.9, nearY: 0.97, spawnX: 0.16, doorX: 0.86,
+    // The plate is 1448px wide; show it near native size so the candles and lanterns read.
+    ...walk, view: 0.9, tint: "warm",
+    // She rises out of the dark under the table's edge, beside the first chair (low enough to stay in frame
+    // on a sideways phone, which only shows the bottom half of the plate).
+    face: { fx: 0.58, fy: 0.27, x: 0.59, y: 0.665, w: 0.32 },
+    // At native plate size the table front is ~280px tall; at 46 he stood shorter than the table.
+    benjiH: 60,
+    // Only the big near chair at the far left passes in front of him (at the back door).
+    fore: "linear-gradient(to right, #000 0%, #000 11%, transparent 13%)",
     exits: [
       { x: 0.1, dest: "portraits", spawn: 0.82, back: true, label: "Back" },
       { x: 0.88, dest: "seance", spawn: 0.82, label: "Enter" },

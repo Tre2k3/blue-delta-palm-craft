@@ -37,6 +37,9 @@ export type HauntPanel = {
   prompt: string | null;
   pop: { image: string; line: string; x: number; y: number } | null;
   lurk: { image: string; x: number; y: number } | null;
+  face: { fx: number; fy: number; x: number; y: number; w: number } | null;
+  fore: string | null;
+  benjiH: number;
   steam: boolean;
   step: number;
 };
@@ -51,6 +54,42 @@ const GRADE = {
   hex: "#8a3a55",
   cool: "#3a5878",
 };
+
+const FORE = "linear-gradient(to bottom, transparent 0%, transparent 92%, #000 98%, #000 100%)";
+
+/**
+ * A scare that lives in the room: only the face of the scare image shows (soft radial mask), screened onto
+ * the dark so black drops out and only the pale face and eye sockets remain. No box, no cover.
+ */
+function FaceScare({ image, face, pop }: { image: string; face: NonNullable<HauntPanel["face"]>; pop: boolean }) {
+  const at = `${face.fx * 100}% ${face.fy * 100}%`;
+  const mask = `radial-gradient(ellipse 10% 9% at ${at}, #000 28%, rgba(0,0,0,0.5) 62%, transparent 100%)`;
+  return (
+    <div
+      className="pointer-events-none absolute z-[3]"
+      style={{
+        left: `${face.x * 100}%`,
+        top: `${face.y * 100}%`,
+        width: `${face.w * 100}%`,
+        transform: `translate(${-face.fx * 100}%, ${-face.fy * 100}%)`,
+        mixBlendMode: "screen",
+      }}
+    >
+      <img
+        key={pop ? "pop" : "lurk"}
+        src={image}
+        alt=""
+        className={`block w-full ${pop ? "haunt-face-pop" : "haunt-face"}`}
+        style={{
+          transformOrigin: at,
+          WebkitMaskImage: mask,
+          maskImage: mask,
+          filter: "grayscale(0.8) sepia(0.2) contrast(1.45) brightness(1.15)",
+        }}
+      />
+    </div>
+  );
+}
 
 function closeTo(x: number, y: number, tx: number, ty: number) {
   const dx = (x - tx) / 0.075;
@@ -74,6 +113,7 @@ function RoomReaction({
   seq,
   pads,
   hot,
+  image,
 }: {
   id?: string;
   done: boolean;
@@ -81,6 +121,7 @@ function RoomReaction({
   seq: number[];
   pads: { x: number; y: number }[];
   hot: { x: number; y: number };
+  image: string;
 }) {
   if (!id) return null;
   const lit = new Set(done ? seq : seq.slice(0, step));
@@ -135,11 +176,15 @@ function RoomReaction({
     );
   }
   if (id === "banquet") {
+    // The search relights the centrepiece: the table's candles and lantern come up and stop flickering.
+    const glow = "radial-gradient(ellipse 22% 17% at 40% 57%, #000 25%, rgba(0,0,0,0.55) 60%, transparent 100%)";
     return (
-      <span className="pointer-events-none absolute z-[6] -translate-x-1/2" style={at}>
-        <span className="block h-4 w-16 rounded-full border-2 border-amber-50 bg-stone-100/95 shadow-lg" />
-        <span className="mx-auto -mt-8 block h-8 w-2.5 rounded-t-full bg-gradient-to-t from-orange-600 to-yellow-100 shadow-[0_0_16px_6px_#ffb020]" />
-      </span>
+      <img
+        src={image}
+        alt=""
+        className="haunt-relight pointer-events-none absolute inset-0 z-[2] h-full w-full"
+        style={{ WebkitMaskImage: glow, maskImage: glow, filter: "brightness(1.12) saturate(1.08)" }}
+      />
     );
   }
   if (id === "kitchen") {
@@ -258,7 +303,10 @@ export function HauntedHouse({
   const depth = Math.min(1, Math.max(0, (haunt.y - haunt.farY) / Math.max(0.04, haunt.nearY - haunt.farY)));
   const scale = 0.88 + 0.12 * depth;
   const nearHot = !haunt.hotspot.done && closeTo(haunt.x, haunt.y, haunt.hotspot.x, haunt.hotspot.y);
-  const dock = coarse ? "16.75rem" : "4.25rem";
+  // Portrait phones keep the room above the stacked touch controls; sideways the room fills the screen and the
+  // stick and USE sit over its corners (reserving 16.75rem there left a 122px strip of room).
+  const tall = typeof window !== "undefined" && window.innerHeight > window.innerWidth;
+  const dock = coarse ? (tall ? "16.75rem" : "3.5rem") : "4.25rem";
   const flyX = haunt.letter ? Math.min(88, Math.max(12, ((haunt.letter.x - cam) / Math.max(0.2, vis)) * 100)) : 50;
 
   return (
@@ -338,32 +386,18 @@ export function HauntedHouse({
           seq={room?.seq ?? []}
           pads={room?.padPoints ?? []}
           hot={haunt.hotspot}
+          image={haunt.image}
         />
         <div
           className="pointer-events-none absolute z-[2]"
           style={{
             left: `${haunt.x * 100}%`,
             top: `${haunt.y * 100}%`,
-            width: `${18 * scale}%`,
-            height: `${4.6 * scale}%`,
-            transform: "translate(-50%, -30%)",
-            background: "radial-gradient(ellipse at center, rgba(8,4,2,0.82) 0%, rgba(36,14,4,0.38) 46%, transparent 74%)",
+            width: `${0.65 * haunt.benjiH * scale}cqh`,
+            height: `${0.13 * haunt.benjiH * scale}cqh`,
+            transform: "translate(-50%, -42%)",
+            background: "radial-gradient(ellipse at center, rgba(6,3,1,0.9) 0%, rgba(30,12,4,0.45) 42%, transparent 72%)",
             filter: "blur(1.5px)",
-          }}
-        />
-        <img
-          src={haunt.outfit}
-          alt=""
-          aria-hidden
-          className="pointer-events-none absolute z-[3] w-auto max-w-none"
-          style={{
-            left: `${haunt.x * 100}%`,
-            top: `${haunt.y * 100}%`,
-            height: `${46 * scale}cqh`,
-            transform: `translate(-50%, ${-stand.foot * 100}%)`,
-            filter: "blur(10px) sepia(1) saturate(4) brightness(0.9)",
-            opacity: 0.22,
-            mixBlendMode: "screen",
           }}
         />
         <div
@@ -371,33 +405,36 @@ export function HauntedHouse({
           style={{
             left: `${haunt.x * 100}%`,
             top: `${haunt.y * 100}%`,
-            height: `${46 * scale}cqh`,
+            height: `${haunt.benjiH * scale}cqh`,
             transform: `translate(-50%, ${-stand.foot * 100}%)`,
-            filter: "drop-shadow(0 16px 8px rgba(8,3,0,0.75))",
           }}
         >
-          <img
-            src={haunt.outfit}
-            alt=""
-            className="block h-full w-auto max-w-none"
-            style={{ filter: TINT[haunt.tint] }}
-          />
-          <div
-            className="absolute inset-0"
-            style={{
-              background: GRADE[haunt.tint],
-              mixBlendMode: "multiply",
-              opacity: 0.48,
-              WebkitMaskImage: `url(${haunt.outfit})`,
-              maskImage: `url(${haunt.outfit})`,
-              WebkitMaskSize: "100% 100%",
-              maskSize: "100% 100%",
-              WebkitMaskRepeat: "no-repeat",
-              maskRepeat: "no-repeat",
-            }}
-          />
+          <div className={`relative h-full ${haunt.face ? (haunt.pop ? "haunt-body-dim" : "haunt-body") : ""}`}>
+            <img
+              src={haunt.outfit}
+              alt=""
+              className="block h-full w-auto max-w-none"
+              style={{ filter: TINT[haunt.tint] }}
+            />
+            <div
+              className="absolute inset-0"
+              style={{
+                background: GRADE[haunt.tint],
+                mixBlendMode: "multiply",
+                opacity: 0.48,
+                WebkitMaskImage: `url(${haunt.outfit})`,
+                maskImage: `url(${haunt.outfit})`,
+                WebkitMaskSize: "100% 100%",
+                maskSize: "100% 100%",
+                WebkitMaskRepeat: "no-repeat",
+                maskRepeat: "no-repeat",
+              }}
+            />
+          </div>
         </div>
-        {haunt.lurk && !haunt.pop && (
+        {haunt.face && haunt.lurk && !haunt.pop && <FaceScare image={haunt.lurk.image} face={haunt.face} pop={false} />}
+        {haunt.face && haunt.pop && <FaceScare image={haunt.pop.image} face={haunt.face} pop />}
+        {!haunt.face && haunt.lurk && !haunt.pop && (
           <img
             src={haunt.lurk.image}
             alt=""
@@ -413,8 +450,8 @@ export function HauntedHouse({
           alt=""
           className={`pointer-events-none absolute inset-0 z-[5] h-full w-full ${haunt.pop ? "haunt-dim" : "haunt-candle"}`}
           style={{
-            WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, transparent 92%, #000 98%, #000 100%)",
-            maskImage: "linear-gradient(to bottom, transparent 0%, transparent 92%, #000 98%, #000 100%)",
+            WebkitMaskImage: haunt.fore ?? FORE,
+            maskImage: haunt.fore ?? FORE,
           }}
         />
         {(haunt.prompt || haunt.note) && !haunt.hall && (
@@ -422,7 +459,7 @@ export function HauntedHouse({
             type="button"
             onClick={haunt.prompt ? onUse : undefined}
             className="pointer-events-auto absolute z-[8] min-h-11 -translate-x-1/2 rounded-full border border-orange-200/80 bg-black/80 px-3 text-sm font-semibold text-orange-50"
-            style={{ left: `${haunt.x * 100}%`, top: `calc(${haunt.y * 100}% - ${52 * scale}cqh)` }}
+            style={{ left: `${haunt.x * 100}%`, top: `calc(${haunt.y * 100}% - ${(haunt.benjiH + 6) * scale}cqh)` }}
           >
             {haunt.note && <span className="block text-[10px] uppercase tracking-wide text-orange-200">{haunt.note}</span>}
             {haunt.prompt ? (coarse ? haunt.prompt : `E  ${haunt.prompt}`) : null}
@@ -466,7 +503,7 @@ export function HauntedHouse({
         }}
       />
       <div className="haunt-grain pointer-events-none absolute inset-0 z-[7]" />
-      {haunt.pop && (
+      {haunt.pop && !haunt.face && (
         <>
           <div
             className="pointer-events-none absolute inset-0 z-[8]"
@@ -493,7 +530,7 @@ export function HauntedHouse({
     </div>
       <div
         className="pointer-events-none absolute inset-x-0 z-40 flex items-start justify-center px-3"
-        style={{ bottom: coarse ? "12.6rem" : 0, height: coarse ? "3.6rem" : dock }}
+        style={{ bottom: coarse && tall ? "12.6rem" : 0, height: coarse && tall ? "3.6rem" : dock }}
       >
         <div className="pointer-events-none flex w-[min(22rem,78vw)] items-center gap-2 rounded-full border border-orange-400/35 bg-black/80 px-3 py-1 text-white shadow-lg">
           <div className="min-w-0 flex-1">

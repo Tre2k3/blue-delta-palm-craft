@@ -80,6 +80,50 @@
   83% { filter: brightness(0.64) saturate(0.78); }
 }
 .haunt-candle { animation: haunt-candle 5.2s ease-in-out infinite; }
+/* Benji under the same candles: same clock as haunt-candle, a softer swing (he stands nearer the flames). */
+@keyframes haunt-body {
+  0%, 100% { filter: brightness(0.8); }
+  16% { filter: brightness(0.96); }
+  38% { filter: brightness(0.49); }
+  42% { filter: brightness(0.9); }
+  61% { filter: brightness(0.67); }
+  79% { filter: brightness(0.3); }
+  83% { filter: brightness(0.86); }
+}
+.haunt-body { animation: haunt-body 5.2s ease-in-out infinite; }
+@keyframes haunt-body-dim {
+  0% { filter: brightness(0.8); }
+  6% { filter: brightness(0.18); }
+  28% { filter: brightness(0.42); }
+  100% { filter: brightness(0.36); }
+}
+.haunt-body-dim { animation: haunt-body-dim 0.85s ease-out forwards; }
+/* A face in the dark: it surfaces, sinks back, surfaces again. */
+@keyframes haunt-face {
+  0%, 100% { opacity: 0; transform: scale(0.97); }
+  30% { opacity: 0.62; }
+  44% { opacity: 0.12; }
+  60% { opacity: 0.78; transform: scale(1); }
+  82% { opacity: 0.2; }
+}
+.haunt-face { animation: haunt-face 6.4s ease-in-out infinite; }
+/* The scare: the same face flares and leans out of the dark, then it is gone. */
+@keyframes haunt-face-pop {
+  0% { opacity: 0; transform: scale(0.92); }
+  9% { opacity: 1; transform: scale(1.55); }
+  20% { opacity: 0.9; transform: scale(1.42); }
+  72% { opacity: 0.75; transform: scale(1.5); }
+  100% { opacity: 0; transform: scale(1.62); }
+}
+.haunt-face-pop { animation: haunt-face-pop 1.2s ease-out forwards; }
+/* A searched room relights: the area comes up and holds. */
+@keyframes haunt-relight {
+  0% { opacity: 0; }
+  14% { opacity: 1; }
+  24% { opacity: 0.6; }
+  100% { opacity: 0.9; }
+}
+.haunt-relight { animation: haunt-relight 1.1s ease-out forwards; }
 @keyframes haunt-shade {
   from { transform: translateX(-30%) scaleX(1); opacity: 0.35; }
   to { transform: translateX(46%) scaleX(1.15); opacity: 0.7; }
