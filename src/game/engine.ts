@@ -69,8 +69,8 @@ import {
 } from "./courtPlay";
 import { dressBenji } from "./outfitCompositor";
 import { lookFor, stampFor, overlayKey } from "./outfitLook";
-import { BASKETBALL_SPRITES, basketballImageKey } from "./basketballSprites";
-import { OUTFIT_PLATES, outfitImageKey } from "./outfitSprites";
+import { outfitImageKey } from "./outfitSprites";
+import { bootAssetCatalog, type AssetLoadStatus } from "./assetRegistry";
 import {
   applyRendererQuality,
   isHandheld,
@@ -183,6 +183,7 @@ import type {
 import { analytics } from "./analytics";
 import { commerce } from "./commerce";
 import { GAME_BUILD_VERSION } from "./config";
+import { attachProductionDebug } from "./productionDebug";
 
 type ImgMap = Record<string, HTMLImageElement>;
 
@@ -443,6 +444,7 @@ export class GameEngine {
 	playtestOpen = false;
 	playtestNoclip = false;
 	fpsEma = 60;
+	readonly assetLoads = new Map<string, AssetLoadStatus>();
 	constructor(canvas: HTMLCanvasElement) {
 		this.canvas = canvas;
 		const overlay = document.createElement("canvas");
@@ -454,78 +456,16 @@ export class GameEngine {
 	}
 	async init() {
 		await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-		const bootImages: Record<string, string> = {
-			front: "/game/benji-front-norm.webp",
-			back: "/game/benji-back-norm.webp",
-			left: "/game/benji-left-norm.webp",
-			right: "/game/benji-right-norm.webp",
-			frontHi: "/game/benji-front.webp",
-			backHi: "/game/benji-back.webp",
-			leftHi: "/game/benji-left.webp",
-			rightHi: "/game/benji-right.webp",
-			threeQ: "/game/benji-three-quarter.webp",
-			icon: "/game/sack-icon.png",
-			k: "/game/k-blanco-portrait.webp",
-			featured: "/game/featured-products.webp",
-			"walk-front-1": "/game/benji/walk-front-1.webp",
-			"walk-front-2": "/game/benji/walk-front-2.webp",
-			"walk-front-3": "/game/benji/walk-front-3.webp",
-			"walk-front-4": "/game/benji/walk-front-4.webp",
-			"walk-back-1": "/game/benji/walk-back-1.webp",
-			"walk-back-2": "/game/benji/walk-back-2.webp",
-			"walk-back-3": "/game/benji/walk-back-3.webp",
-			"walk-back-4": "/game/benji/walk-back-4.webp",
-			"walk-left-1": "/game/benji/walk-left-1.webp",
-			"walk-left-2": "/game/benji/walk-left-2.webp",
-			"walk-left-3": "/game/benji/walk-left-3.webp",
-			"walk-left-4": "/game/benji/walk-left-4.webp",
-			"walk-right-1": "/game/benji/walk-right-1.webp",
-			"walk-right-2": "/game/benji/walk-right-2.webp",
-			"walk-right-3": "/game/benji/walk-right-3.webp",
-			"walk-right-4": "/game/benji/walk-right-4.webp",
-			"jump-1": "/game/benji/jump-1.webp",
-			"jump-2": "/game/benji/jump-2.webp",
-			"jump-3": "/game/benji/jump-3.webp",
-			"jump-4": "/game/benji/jump-4.webp",
-			"dribble-1": "/game/benji/dribble-1.webp",
-			"dribble-2": "/game/benji/dribble-2.webp",
-			"dribble-3": "/game/benji/dribble-3.webp",
-			"dribble-4": "/game/benji/dribble-4.webp",
-			"gather-1": "/game/benji/gather-1.webp",
-			"gather-2": "/game/benji/gather-2.webp",
-			"release-1": "/game/benji/release-1.webp",
-			"release-2": "/game/benji/release-2.webp",
-			"rebound-1": "/game/benji/rebound-1.webp",
-			"rebound-2": "/game/benji/rebound-2.webp",
-			"celebrate-1": "/game/benji/celebrate-1.webp",
-			"celebrate-2": "/game/benji/celebrate-2.webp",
-			"talk-1": "/game/benji/talk-1.webp",
-			"interact-1": "/game/benji/interact-1.webp",
-			"phone-1": "/game/benji/phone-1.webp",
-			"tour-black-front": "/game/apparel/stamps/tour-black-print.webp",
-			"tour-black-back": "/game/apparel/stamps/tour-black-tour.webp",
-			"tour-white-front": "/game/apparel/stamps/tour-white-print.png",
-			"tour-white-back": "/game/apparel/stamps/tour-white-tour.webp",
-			"tour-red-front": "/game/apparel/stamps/tour-red-print.webp",
-			"tour-red-back": "/game/apparel/stamps/tour-red-tour.webp",
-		};
-		for (const [id, pack] of Object.entries(OUTFIT_PLATES)) {
-			for (const view of ["front", "back", "left", "right"] as const) {
-				bootImages[outfitImageKey(id as ApparelId, view)] = pack[view];
-			}
-		}
-		for (const [id, pack] of Object.entries(BASKETBALL_SPRITES)) {
-			bootImages[basketballImageKey(id as ApparelId, "ready")] = pack.ready;
-			bootImages[basketballImageKey(id as ApparelId, "drive")] = pack.drive;
-			bootImages[basketballImageKey(id as ApparelId, "shotFront")] = pack.shotFront;
-			bootImages[basketballImageKey(id as ApparelId, "shotBack")] = pack.shotBack;
-		}
-		const bootList = Object.entries(bootImages);
+		const bootList = bootAssetCatalog();
+		this.assetLoads.clear();
 		let bootDone = 0;
-		await Promise.all(bootList.map(async ([k, src]) => {
+		await Promise.all(bootList.map(async (asset) => {
 			try {
-				this.images[k] = await loadImage(src);
-			} catch { /* missing optional sprite */ }
+				this.images[asset.runtimeKey] = await loadImage(asset.path);
+				this.assetLoads.set(asset.id, "loaded");
+			} catch {
+				this.assetLoads.set(asset.id, "missing");
+			}
 			bootDone++;
 			this.onLoad?.(bootDone / (bootList.length + 6));
 		}));
@@ -876,6 +816,7 @@ export class GameEngine {
 	}
 	wireQa() {
 		if (typeof window === "undefined") return;
+		attachProductionDebug(this);
 		window.__controlsTest = {
 			getYaw: () => this.yaw,
 			getSpeed: () => this.mover.speed,
@@ -4094,7 +4035,14 @@ export class GameEngine {
 			}
 			return;
 		}
-		if (this.ball.charging && this.ball.held) this.ball.power = Math.min(1, this.ball.power + dt * 0.88);
+		if (this.ball.charging && this.ball.held) {
+			this.ball.power = Math.min(1, this.ball.power + dt * 0.88);
+			if (this.ball.power >= 1) {
+				this.releaseShot();
+				// The normal release delay/flight path owns the separate ball.
+				return;
+			}
+		}
 		if (this.ball.held) {
 			const f = this.fwd();
 			const r = this.right();

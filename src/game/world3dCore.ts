@@ -21,7 +21,9 @@ import { halloweenOn } from "./season";
 import { HW_ART, sponsorArt } from "./halloween";
 import { paintPumpkinFace } from "./halloweenCourt";
 
-export const S = 1 / 16;
+import { WORLD_UNITS_PER_PIXEL } from "./worldScale";
+
+export const S = WORLD_UNITS_PER_PIXEL;
 
 export function wx(x: number) {
   return x * S;

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { POIS, STREETS, TILE, WORLD_PX_H, WORLD_PX_W } from "./data";
-import { inCourtPx, inRiverPx, punchRoads, trafficLanes, type Lane, type Rect, signalState, type SignalState } from "./worldTopology";
+import { inCourtPx, inRiverPx, punchRoads, clippedTrafficLanes, type Lane, type Rect, signalState, type SignalState } from "./worldTopology";
 import { wx, wz, type WorldFrame } from "./world3dCore";
 import { makeStreetCar, CAR_RIDE } from "./carRig";
 
@@ -76,7 +76,7 @@ function lerpAngle(a: number, b: number, t: number) {
 export class WorldLifePass {
   private scene: THREE.Scene;
   private root: THREE.Group | null = null;
-  private lanes = trafficLanes();
+  private lanes = clippedTrafficLanes();
   private laneMap = new Map(this.lanes.map((lane) => [lane.id, lane]));
   private trafficMemory = new WeakMap<object, TrafficMemory>();
   private pedMemory = new WeakMap<object, PedMemory>();

@@ -29,7 +29,7 @@ import { RotatePrompt } from "./ui/RotatePrompt";
 import { PlaytestKit, PlaytestTicker } from "./ui/PlaytestKit";
 import { loadTickerOn, saveTickerOn } from "./playtest";
 import { arrowGlyph, formatGap, formatMph, formatRaceClock, RACE_CHECKPOINTS } from "./race";
-import { halloweenOn } from "./season";
+import { halloweenOn, SEASONAL_EVENT } from "./season";
 import { HauntedHouse } from "./ui/HauntedHouse";
 
 const KIT_PASSWORD = "admin4744";
@@ -180,10 +180,14 @@ function holdPointer(down: () => void, up: () => void) {
       e.preventDefault();
       up();
     },
+    onLostPointerCapture: () => up(),
   };
 }
 
 function GameShell({ onRetry }: { onRetry: () => void }) {
+  // SSR and the first client render agree; the URL override applies on mount.
+  const [halloween, setHalloween] = useState(SEASONAL_EVENT === "halloween_2026");
+  useEffect(() => { setHalloween(halloweenOn()); }, []);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<GameEngine | null>(null);
   const [hud, setHud] = useState<HudSnapshot>(emptyHud);
@@ -415,7 +419,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
   const bar = Math.round(52 * lb);
 
   return (
-    <div key={ART_REV} className={`relative h-full w-full overflow-hidden bg-bg text-fg select-none${halloweenOn() ? " sack-halloween" : ""}`}>
+    <div key={ART_REV} className={`relative h-full w-full overflow-hidden bg-bg text-fg select-none${halloween ? " sack-halloween" : ""}`}>
       <canvas
         ref={canvasRef}
         className="absolute inset-0 h-full w-full touch-none"
@@ -506,14 +510,14 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
             <div>
               <p className="font-display text-primary text-xl tracking-[0.22em]">{BRAND.name}</p>
               <p className="mt-1 text-[11px] uppercase tracking-[0.42em] text-gold">{BRAND.line}</p>
-              <p className="mt-3 text-[11px] uppercase tracking-[0.28em] text-muted">{halloweenOn() ? "Halloween After Dark" : "A Memphis Open World"}</p>
+              <p className="mt-3 text-[11px] uppercase tracking-[0.28em] text-muted">{halloween ? "Halloween After Dark" : "A Memphis Open World"}</p>
             </div>
 
             <div className="max-w-lg">
               <h1 className="sack-title-hero font-display text-6xl leading-[0.85] text-fg sm:text-8xl">{BRAND.city.toUpperCase()}</h1>
               <p className="mt-2 font-display text-3xl text-primary sm:text-4xl">{BRAND.zip}</p>
               <p className="mt-4 max-w-sm text-sm leading-relaxed text-muted">
-                {halloweenOn()
+                {halloween
                   ? "Memphis after dark. Haunted house, 10 letters, After Dark fits, and the same streets."
                   : "Play as Benji. Run Drop Day, hoop at Sacks Giving Weekend, and rock the Worldwide Tour tees. 2 sponsor slots and 2 artist slots every 30 days."}
               </p>
@@ -1108,7 +1112,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                     </div>
                   )}
                   <div className="grid gap-2">
-                    {APPAREL.filter((item) => halloweenOn() || !item.id.startsWith("hw_") || hud.owned.includes(item.id)).map((item) => {
+                    {APPAREL.filter((item) => halloween || !item.id.startsWith("hw_") || hud.owned.includes(item.id)).map((item) => {
                       const owned = hud.owned.includes(item.id);
                       const eq = hud.equipped === item.id;
                       const locked = Boolean(

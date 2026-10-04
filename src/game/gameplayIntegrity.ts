@@ -1,10 +1,11 @@
-import { POIS, SAVE_KEY, TILE, WORLD_PX_H, WORLD_PX_W } from "./data";
+import { POIS, SAVE_KEY, TILE } from "./data";
 import { GameEngine } from "./engine";
+import { readPosition, safePosition, type SavedPosition } from "./savePosition";
+import { inDeepWater } from "./worldTopology";
 
 const APARTMENT = POIS.find((p) => p.id === "apartment")!;
 const STORE = POIS.find((p) => p.id === "store")!;
 type PatchedEngine = GameEngine & { __physicalHqPatched?: boolean };
-type SavedPosition = { x: number; y: number; yaw: number };
 type AutoSaveState = { elapsed: number; x: number; y: number };
 
 const loadedPositions = new WeakMap<GameEngine, SavedPosition>();
@@ -21,15 +22,24 @@ function insideApartmentDoorZone(engine: GameEngine, pad = 8) {
     engine.py <= APARTMENT.y + APARTMENT.h + pad;
 }
 
-function safeWorldPosition(value: unknown): SavedPosition | null {
-  if (!value || typeof value !== "object") return null;
-  const p = value as Partial<SavedPosition>;
-  if (!Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.yaw)) return null;
-  const x = Number(p.x);
-  const y = Number(p.y);
-  const yaw = Number(p.yaw);
-  if (x < 62 || y < 62 || x > WORLD_PX_W - 62 || y > WORLD_PX_H - 62) return null;
-  return { x, y, yaw };
+function recoverPosition(engine: GameEngine, value: unknown) {
+  // Collision wrappers are already installed when the lifecycle runs. Validate
+  // the grounded walker even when saving a jump, driving or QA noclip session.
+  const { air } = engine.mover;
+  const vehicle = engine.vehicle;
+  const noclip = engine.playtestNoclip;
+  try {
+    engine.mover.air = 0;
+    engine.vehicle = null;
+    engine.playtestNoclip = false;
+    return safePosition(value, (x, y, radius) => inDeepWater(x, y, radius) || engine.collides(x, y, radius), {
+      x: 6 * TILE, y: APARTMENT.y + APARTMENT.h - 72, yaw: 0,
+    });
+  } finally {
+    engine.mover.air = air;
+    engine.vehicle = vehicle;
+    engine.playtestNoclip = noclip;
+  }
 }
 
 function placePosition(engine: GameEngine, p: SavedPosition) {
@@ -38,7 +48,8 @@ function placePosition(engine: GameEngine, p: SavedPosition) {
   engine.yaw = p.yaw;
   engine.vx = 0;
   engine.vy = 0;
-  engine.mover.reset(engine.mover.heading);
+  engine.mover.reset(p.yaw);
+  engine.applyYawToFacing();
   engine.updateProximity();
 }
 
@@ -81,7 +92,7 @@ export function installGameplayIntegrity() {
     try {
       const raw = localStorage.getItem(SAVE_KEY);
       const parsed = raw ? JSON.parse(raw) : null;
-      const position = safeWorldPosition(parsed?.position);
+      const position = readPosition(parsed?.position);
       if (position) loadedPositions.set(this, position);
     } catch {
       // A malformed optional position must never invalidate the normal save.
@@ -95,13 +106,16 @@ export function installGameplayIntegrity() {
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw);
-      parsed.position = {
+      const position = recoverPosition(this, {
         x: Math.round(this.px * 100) / 100,
         y: Math.round(this.py * 100) / 100,
         yaw: Math.round(this.yaw * 10000) / 10000,
-      };
+      });
+      if (position) parsed.position = position;
+      else delete parsed.position;
       localStorage.setItem(SAVE_KEY, JSON.stringify(parsed));
-      loadedPositions.set(this, parsed.position);
+      if (position) loadedPositions.set(this, position);
+      else loadedPositions.delete(this);
     } catch {
       // Position persistence is additive; core mission/economy save already ran.
     }
@@ -123,7 +137,8 @@ export function installGameplayIntegrity() {
   const originalStart = GameEngine.prototype.start;
   GameEngine.prototype.start = function physicalApartmentStart(this: GameEngine, fresh = false) {
     originalStart.call(this, fresh);
-    const resumed = !fresh ? loadedPositions.get(this) : null;
+    const saved = !fresh ? loadedPositions.get(this) : null;
+    const resumed = saved ? recoverPosition(this, saved) : null;
     if (resumed) {
       placePosition(this, resumed);
       this.leftSpawn = true;
