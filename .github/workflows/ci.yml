@@ -68,6 +68,12 @@ jobs:
           cat artifacts/preview.log || true
           exit 1
 
+      - name: Foundation safety
+        run: npm run test:foundation
+
+      - name: Connected HQ route
+        run: npm run test:slice
+
       - name: Game smoke
         run: xvfb-run -a node scripts/game-smoke.mjs
 

@@ -20,6 +20,7 @@
     "test:commerce": "node scripts/commerce-smoke.mjs",
     "test:save": "node scripts/save-smoke.mjs",
     "test:foundation": "node scripts/foundation-smoke.mjs",
+    "test:slice": "node scripts/connected-slice-smoke.mjs",
     "preflight": "node scripts/preflight.mjs"
   },
   "dependencies": {

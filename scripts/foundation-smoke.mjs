@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { createServer } from "vite";
 import { chromium } from "playwright";
+import { captureGameFrame } from "./browser-frame.mjs";
 
 // One process owns both preview and browser, including restricted QA runtimes.
 const server = process.env.GAME_URL ? null : await createServer({ server: { host: "127.0.0.1", port: 8088, strictPort: true } });
@@ -33,8 +34,8 @@ try {
     // A live WebGL loop is necessary: the default drawing buffer is discarded
     // after a frame, so a stopped-loop page screenshot can show only the HUD.
     await page.evaluate(() => window.__sack.startLoop());
-    await page.waitForTimeout(1800);
-    await page.screenshot({ path: `${shots}/${name}.png`, timeout: 20000 });
+    await page.waitForTimeout(400);
+    await captureGameFrame(page, `${shots}/${name}.png`);
     await page.evaluate(() => { const e = window.__sack; e.running = false; cancelAnimationFrame(e.raf); clearTimeout(e.loopBackup); });
   };
   await boot("none");
@@ -119,7 +120,7 @@ try {
   await page.evaluate(() => { window.__gameTest.enterHQ(); });
   const hqBefore = await page.evaluate(() => window.__SACK_DEBUG__.snapshot().player);
   await capture("hq-approach");
-  console.log("HQ placement observation (connected-slice acceptance remains pending)", { before: hqBefore, after: await page.evaluate(() => window.__SACK_DEBUG__.snapshot().player) });
+  console.log("HQ location probe (connected route tested separately)", { before: hqBefore, after: await page.evaluate(() => window.__SACK_DEBUG__.snapshot().player) });
   for (const [width, height] of [[390, 844], [844, 390]]) {
     await page.setViewportSize({ width, height });
     const size = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
@@ -132,5 +133,5 @@ try {
   const missing = await page.evaluate(() => window.__SACK_DEBUG__.snapshot().assets.filter((a) => a.status === "missing"));
   check(missing.length === 1 && missing[0].runtimeKey === "phone-1", "a missing optional sprite is diagnosed without blocking startup", missing);
   check(errors.length === 0, "both seasonal variants have no uncaught/hydration errors", errors);
-  console.log("Foundation smoke passed. Target-device performance and the full connected slice remain separate gates.");
+  console.log("Foundation smoke passed. Connected-route QA is provided by test:slice; target-device performance remains a separate gate.");
 } finally { await browser.close(); await server?.close(); }
