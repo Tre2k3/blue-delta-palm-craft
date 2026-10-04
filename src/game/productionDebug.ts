@@ -3,6 +3,7 @@ import { bootAssetCatalog } from "./assetRegistry";
 import { POIS } from "./data";
 import { clippedTrafficLanes, driveBlockers, inDeepWater } from "./worldTopology";
 import { PLAYER_GROUND_RADIUS_PX } from "./worldScale";
+import { HQ_ANCHORS, HQ_FRONT_DOOR, insideHQ, atHqShowroom } from "./hqLocation";
 
 export function attachProductionDebug(engine: GameEngine) {
   if (!import.meta.env.DEV && new URLSearchParams(window.location.search).get("qa") !== "1") return;
@@ -28,7 +29,7 @@ export function attachProductionDebug(engine: GameEngine) {
     }),
   };
   window.__SACK_LOCATION_DEBUG__ = {
-    snapshot: () => ({ current: engine.nearPoi, locations: POIS.map(({ id, x, y, w, h }) => ({ id, x, y, w, h })) }),
+    snapshot: () => ({ current: engine.nearPoi, locations: POIS.map(({ id, x, y, w, h }) => ({ id, x, y, w, h })), hq: { anchors: HQ_ANCHORS, frontDoor: HQ_FRONT_DOOR, inside: insideHQ(engine.px, engine.py), atShowroom: atHqShowroom(engine.px, engine.py) } }),
   };
 }
 

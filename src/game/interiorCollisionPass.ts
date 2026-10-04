@@ -1,5 +1,6 @@
 import { POIS } from "./data";
 import { GAME_PIXELS_PER_UNIT } from "./worldScale";
+import { HQ_FURNITURE } from "./hqLocation";
 import { GameEngine } from "./engine";
 import { circleHitsRect, type Rect } from "./worldTopology";
 
@@ -18,8 +19,6 @@ function gameRect(cx: number, cy: number, w: number, h: number): Rect {
 
 const apartmentCx = APARTMENT.x + APARTMENT.w / 2;
 const apartmentCy = APARTMENT.y + APARTMENT.h / 2;
-const hqCx = STORE.x + STORE.w / 2;
-const hqCy = STORE.y + STORE.h / 2;
 const lanesCx = LANES.x + LANES.w / 2;
 const lanesCy = LANES.y + LANES.h / 2;
 
@@ -33,19 +32,6 @@ const APARTMENT_FURNITURE: Rect[] = [
   gameRect(apartmentCx + 2.05 * GAME_PIXELS_PER_UNIT, apartmentCy - 0.15 * GAME_PIXELS_PER_UNIT, 3.05 * GAME_PIXELS_PER_UNIT, 1.18 * GAME_PIXELS_PER_UNIT), // couch
   gameRect(apartmentCx + 1.30 * GAME_PIXELS_PER_UNIT, apartmentCy + 1.35 * GAME_PIXELS_PER_UNIT, 1.80 * GAME_PIXELS_PER_UNIT, 1.02 * GAME_PIXELS_PER_UNIT), // coffee table
   gameRect(apartmentCx + 4.35 * GAME_PIXELS_PER_UNIT, apartmentCy + 2.45 * GAME_PIXELS_PER_UNIT, 1.95 * GAME_PIXELS_PER_UNIT, 0.72 * GAME_PIXELS_PER_UNIT), // dresser
-];
-
-const HQ_FURNITURE: Rect[] = [
-  loc(0, -5.25, 4.7, 1.15), // checkout counter at the back
-  loc(-8.15, 2.4, 0.75, 2.0), // west rack south
-  loc(-8.15, -1.6, 0.75, 2.0), // west rack north
-  loc(8.15, 2.4, 0.75, 2.0), // east rack south
-  loc(8.15, -1.6, 0.75, 2.0), // east rack north
-  loc(-3.55, 1.55, 1.75, 1.15), // left front table
-  loc(3.55, 1.55, 1.75, 1.15), // right front table
-  loc(-3.45, -1.85, 1.75, 1.15), // left rear table
-  loc(3.45, -1.85, 1.75, 1.15), // right rear table
-  loc(-7.5, 5.8, 1.25, 0.85), // entry vitrine
 ];
 
 function locL(lx: number, lz: number, w: number, d: number): Rect {
@@ -64,10 +50,6 @@ const LANES_FURNITURE: Rect[] = [
   locL(0, 1.4, 0.55, 1.1),
   locL(4.14, 1.4, 0.55, 1.1),
 ];
-
-function loc(lx: number, lz: number, w: number, d: number): Rect {
-  return gameRect(hqCx + lx * GAME_PIXELS_PER_UNIT, hqCy + lz * GAME_PIXELS_PER_UNIT, w * GAME_PIXELS_PER_UNIT, d * GAME_PIXELS_PER_UNIT);
-}
 
 function inside(p: { x: number; y: number; w: number; h: number }, x: number, y: number, pad = 12) {
   return x >= p.x - pad && x <= p.x + p.w + pad && y >= p.y - pad && y <= p.y + p.h + pad;

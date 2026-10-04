@@ -6,6 +6,7 @@ import { S, World3D as World3DCore, wx, wz, type WorldFrame } from "./world3dCor
 import { applyPolygonOffset } from "./polygonOffset";
 import { poiBuildingRect } from "./worldTopology";
 import { APPROACH_Z, LANE_XS, PIN_Z, pinHome } from "./bowling";
+import { HQ_ROOM, HQ_FRONT_DOOR, HQ_COUNTER, HQ_K_BLANCO, HQ_TABLES, HQ_RACKS, HQ_VITRINE, HQ_SHOWROOM } from "./hqLocation";
 
 export { S, wx, wz };
 export type { WorldFrame };
@@ -234,23 +235,23 @@ export class World3D extends World3DCore {
     const wallPaint = new THREE.MeshStandardMaterial({ color: 0x2c261e, roughness: 0.88 });
     const wood = new THREE.MeshStandardMaterial({ color: 0x3a2a1c, roughness: 0.78 });
     const glass = new THREE.MeshStandardMaterial({ color: 0x8aa4b8, roughness: 0.12, metalness: 0.55, transparent: true, opacity: 0.35 });
-    const width = wx(STORE.w) - 0.2;
-    const depth = wz(STORE.h) - 0.2;
+    const width = HQ_ROOM.width;
+    const depth = HQ_ROOM.depth;
     const halfW = width / 2;
     const halfD = depth / 2;
-    const wallH = 3.35;
+    const wallH = HQ_ROOM.wallHeight;
     const wallT = 0.12;
 
     const floorMat = new THREE.MeshStandardMaterial({ color: 0x3c2f24, roughness: 0.48, metalness: 0.16 });
-    root.add(box(width, 0.12, depth, floorMat, 0, 0.06, 0));
-    root.add(box(2.35, 0.04, depth * 0.78, gold, 0, 0.14, 0.35));
-    root.add(box(2.05, 0.03, depth * 0.76, new THREE.MeshStandardMaterial({ color: 0x1a1610, roughness: 0.55 }), 0, 0.165, 0.35));
+    root.add(box(width, 0.12, depth, floorMat, 0, HQ_ROOM.floorHeight - 0.06, 0));
+    root.add(box(2.35, 0.012, depth * 0.78, gold, 0, HQ_ROOM.floorHeight + 0.006, 0.35));
+    root.add(box(2.05, 0.006, depth * 0.76, new THREE.MeshStandardMaterial({ color: 0x1a1610, roughness: 0.55 }), 0, HQ_ROOM.floorHeight + 0.015, 0.35));
 
     root.add(box(width, 0.08, depth, black, 0, wallH + 0.04, 0));
     root.add(box(width, wallH, wallT, wallPaint, 0, wallH / 2, -halfD));
     root.add(box(wallT, wallH, depth, wallPaint, -halfW, wallH / 2, 0));
     root.add(box(wallT, wallH, depth, wallPaint, halfW, wallH / 2, 0));
-    this.addSouthDoor(root, width, halfD, wallH, wallT, wallPaint, green, 0, wx(48 * 1.7));
+    this.addSouthDoor(root, width, halfD, wallH, wallT, wallPaint, green, 0, wx(HQ_FRONT_DOOR.width));
 
     const left = this.photoWall(depth - 0.5, wallH - 0.2, store.merch, 0x111111);
     left.rotation.y = Math.PI / 2;
@@ -273,7 +274,7 @@ export class World3D extends World3DCore {
     root.add(box(3.2, 0.08, 0.08, green, 0, 2.72, -halfD + 0.1));
 
     // Hollow checkout — thin front + top so K can stand close, adult-scale.
-    const counterZ = -halfD + 3.15;
+    const counterZ = HQ_COUNTER.z;
     const deskH = 0.72;
     const deskD = 0.52;
     const matte = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.82, metalness: 0.08 });
@@ -298,10 +299,8 @@ export class World3D extends World3DCore {
       root.add(box(1.55, 0.05, 0.95, gold, x, 0.78, z));
       root.add(box(1.4, 0.03, 0.82, this.photoMat(tex, 0x1a1612), x, 0.82, z));
     };
-    addTable(-3.55, 1.55, store.featured);
-    addTable(3.55, 1.55, store.merch);
-    addTable(-3.45, -1.85, store.counter);
-    addTable(3.45, -1.85, store.featured);
+    const tableArt = [store.featured, store.merch, store.counter, store.featured];
+    HQ_TABLES.forEach((p, i) => addTable(p.x, p.z, tableArt[i]));
 
     const addRack = (x: number, z: number, rotY: number) => {
       const g = new THREE.Group();
@@ -316,16 +315,35 @@ export class World3D extends World3DCore {
       g.add(art);
       root.add(g);
     };
-    addRack(-halfW + 0.7, 2.4, Math.PI / 2);
-    addRack(-halfW + 0.7, -1.6, Math.PI / 2);
-    addRack(halfW - 0.7, 2.4, -Math.PI / 2);
-    addRack(halfW - 0.7, -1.6, -Math.PI / 2);
+    HQ_RACKS.forEach((p) => addRack(p.x, p.z, p.x < 0 ? Math.PI / 2 : -Math.PI / 2));
 
-    root.add(box(1.15, 0.95, 0.7, black, -halfW + 1.4, 0.5, halfD - 1.6));
-    root.add(box(0.9, 0.08, 0.55, gold, -halfW + 1.4, 1.02, halfD - 1.6));
+    root.add(box(HQ_VITRINE.width, 0.95, HQ_VITRINE.depth, black, HQ_VITRINE.x, 0.5, HQ_VITRINE.z));
+    root.add(box(0.9, 0.08, 0.55, gold, HQ_VITRINE.x, 1.02, HQ_VITRINE.z));
     const vitrine = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.7, 0.62), glass);
-    vitrine.position.set(-halfW + 1.4, 1.42, halfD - 1.6);
+    vitrine.position.set(HQ_VITRINE.x, 1.42, HQ_VITRINE.z);
     root.add(vitrine);
+
+    const showroomLabel = document.createElement("canvas");
+    showroomLabel.width = 512;
+    showroomLabel.height = 128;
+    const labelCtx = showroomLabel.getContext("2d")!;
+    labelCtx.fillStyle = "#10100f";
+    labelCtx.fillRect(0, 0, 512, 128);
+    labelCtx.fillStyle = "#d6aa2d";
+    labelCtx.font = "bold 54px sans-serif";
+    labelCtx.textAlign = "center";
+    labelCtx.textBaseline = "middle";
+    labelCtx.fillText("SHOWROOM", 256, 64);
+    const labelTex = new THREE.CanvasTexture(showroomLabel);
+    labelTex.colorSpace = THREE.SRGBColorSpace;
+    const label = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 0.8), new THREE.MeshBasicMaterial({ map: labelTex, side: THREE.DoubleSide }));
+    label.name = "hq-showroom-label";
+    label.position.set(HQ_SHOWROOM.x, 2.25, HQ_SHOWROOM.z + 1.1);
+    root.add(label);
+    const browseRing = new THREE.Mesh(new THREE.RingGeometry(0.65, 0.8, 32), new THREE.MeshBasicMaterial({ color: 0xd6aa2d, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide }));
+    browseRing.rotation.x = -Math.PI / 2;
+    browseRing.position.set(HQ_SHOWROOM.x, HQ_ROOM.floorHeight + 0.025, HQ_SHOWROOM.z);
+    root.add(browseRing);
 
     const key = new THREE.PointLight(0xffe8c4, 10.5, 24, 1.05);
     key.position.set(0, 2.95, 0.4);
@@ -346,8 +364,9 @@ export class World3D extends World3DCore {
     const kTex = this.art.people["k-blanco"];
     if (kTex) {
       // Benji's card is 1.78m. K stands further back so we oversize her or she reads as a kid.
-      const kW = 1.28;
       const kH = 2.22;
+      const kImage = kTex.image as { width: number; height: number };
+      const kW = kH * (kImage.width / kImage.height);
       const riser = 0.06;
       const kMat = new THREE.MeshStandardMaterial({
         map: kTex,
@@ -362,11 +381,11 @@ export class World3D extends World3DCore {
       });
       const kMesh = new THREE.Mesh(new THREE.PlaneGeometry(kW, kH), kMat);
       kMesh.name = "k-blanco-desk";
-      kMesh.position.set(0, riser + kH / 2, counterZ + 0.06);
+      kMesh.position.set(HQ_K_BLANCO.x, riser + kH / 2, HQ_K_BLANCO.z);
       kMesh.renderOrder = 2;
       root.add(kMesh);
       const faceLight = new THREE.PointLight(0xffe4c4, 1.45, 2.8, 1.55);
-      faceLight.position.set(0.04, deskH + 0.7, counterZ + deskD / 2 + 0.18);
+      faceLight.position.set(HQ_K_BLANCO.x + 0.04, deskH + 0.7, counterZ + deskD / 2 + 0.18);
       root.add(faceLight);
     }
     return root;
@@ -724,17 +743,17 @@ export class World3D extends World3DCore {
     super.sync(f);
     this.worldLife.postSync(f, this.cars, this.npcSprites);
     const inApartment = inside(f, APARTMENT) && f.mode === "world";
-    const inHQ = false;
+    const inHQ = inside(f, STORE) && (f.mode === "world" || f.mode === "dialogue" || f.mode === "shop");
     const inLanes = inside(f, LANES) && (f.mode === "world" || f.mode === "dialogue" || !!f.bowling?.active);
     if (this.apartmentExterior) this.apartmentExterior.visible = !inApartment;
     if (this.apartmentInterior) this.apartmentInterior.visible = inApartment;
-    if (this.hqExterior) this.hqExterior.visible = true;
-    if (this.hqInterior) this.hqInterior.visible = false;
+    if (this.hqExterior) this.hqExterior.visible = !inHQ;
+    if (this.hqInterior) this.hqInterior.visible = inHQ;
     if (this.lanesExterior) this.lanesExterior.visible = !inLanes;
     if (this.lanesInterior) this.lanesInterior.visible = inLanes;
     if (inLanes) this.syncBowling(f);
     const kSprite = this.npcSprites.get("k_blanco");
-    if (kSprite) kSprite.visible = true;
+    if (kSprite) kSprite.visible = false;
     const kTex = this.art.people["k-blanco"];
     if (kTex) {
       this.scene.traverse((obj) => {

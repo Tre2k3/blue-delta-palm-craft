@@ -184,6 +184,7 @@ import { analytics } from "./analytics";
 import { commerce } from "./commerce";
 import { GAME_BUILD_VERSION } from "./config";
 import { attachProductionDebug } from "./productionDebug";
+import { HQ_ANCHORS, atHqShowroom, insideHQ } from "./hqLocation";
 
 type ImgMap = Record<string, HTMLImageElement>;
 
@@ -211,12 +212,6 @@ function dist(ax: number, ay: number, bx: number, by: number) {
 }
 function insidePoi(x: number, y: number, p: WorldPoi, pad = 8) {
 	return x >= p.x - pad && x <= p.x + p.w + pad && y >= p.y - pad && y <= p.y + p.h + pad;
-}
-function onStoreDoor(x: number, y: number, store: WorldPoi) {
-	const doorW = TILE * 1.7;
-	const left = store.x + store.w / 2 - doorW / 2;
-	const top = store.y + store.h - 6;
-	return x >= left && x <= left + doorW && y >= top && y <= top + 56;
 }
 function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
 	if (typeof ctx.roundRect === "function") {
@@ -555,6 +550,7 @@ export class GameEngine {
 				x += 70;
 				y += 54;
 			}
+			if (POIS.some((p) => (p.id === "store" || p.id === "apartment" || p.id === "lanes") && insidePoi(x, y, p, 36))) continue;
 			if (y < riverY - 36 && x > 48 && x < WORLD_PX_W - 48) this.trees.push({ x, y });
 		}
 		this.poiBoxes = poiColliders();
@@ -620,10 +616,10 @@ export class GameEngine {
 		this.peds = spawnCityPeds(strips.length ? strips : this.walks);
 		this.npcLive = NPCS.map((n) => ({
 			id: n.id,
-			x: n.x,
-			y: n.y,
-			ox: n.x,
-			oy: n.y,
+			x: n.id === "k_blanco" ? HQ_ANCHORS.kBlanco.x : n.x,
+			y: n.id === "k_blanco" ? HQ_ANCHORS.kBlanco.y : n.y,
+			ox: n.id === "k_blanco" ? HQ_ANCHORS.kBlanco.x : n.x,
+			oy: n.id === "k_blanco" ? HQ_ANCHORS.kBlanco.y : n.y,
 			t: Math.random() * 10
 		}));
 	}
@@ -2020,31 +2016,24 @@ export class GameEngine {
 				this.nearPoi = p.id;
 			}
 		}
-		if (onRiverfront(this.px, this.py)) this.nearPoi = "river";
-		const storePoi = POIS.find((p) => p.id === "store");
-		if (storePoi && insidePoi(this.px, this.py, storePoi, 0)) {
-			this.px = storePoi.x + storePoi.w / 2;
-			this.py = storePoi.y + storePoi.h + 86;
-		}
-		if (storePoi && onStoreDoor(this.px, this.py, storePoi) && !this.hqInside) {
-			this.hqInside = true;
-			commerce.offerStoreEntry();
-		} else if (storePoi && !onStoreDoor(this.px, this.py, storePoi) && this.hqInside) {
-			this.hqInside = false;
-			commerce.cancelStoreOffer();
-		}
+		if (onRiverfront(this.px, this.py) && !this.nearPoi) this.nearPoi = "river";
+		const wasInHQ = this.hqInside;
+		this.hqInside = insideHQ(this.px, this.py);
+		if (wasInHQ && !this.hqInside) commerce.cancelStoreOffer();
 		if (this.foodApproach && this.foodApproach !== this.nearPoi) this.foodApproach = null;
 		let best = 92;
 		const lanes = POIS.find((p) => p.id === "lanes");
 		for (const n of this.npcLive) {
+			// HQ's actor and outside locals cannot be interacted with through walls.
+			if (n.id === "k_blanco" ? !this.hqInside : this.hqInside) continue;
 			if (n.id === "lane_clerk" && lanes && !insidePoi(this.px, this.py, lanes, 8)) continue;
 			const d = dist(this.px, this.py, n.x, n.y);
-			if (d < best) {
+			if (d < best && (n.id !== "k_blanco" || d < 56)) {
 				best = d;
 				this.nearNpc = n.id;
 			}
 		}
-		if (!this.nearNpc) {
+		if (!this.nearNpc && !this.hqInside) {
 			let bestPed = 56;
 			for (let i = 0; i < this.peds.length; i++) {
 				const p = this.peds[i]!;
@@ -2089,8 +2078,8 @@ export class GameEngine {
 			const name = NPCS.find((x) => x.id === this.nearNpc)?.name ?? "local";
 			this.interactHint = `Talk to ${name}`;
 		} else if (this.nearPoi === "store") {
-			this.interactHint = tap ? "Doors open the real store" : "Walk into the doors · real store";
-			this.hintWalk = true;
+			this.interactHint = atHqShowroom(this.px, this.py) ? "Browse HQ fits" : this.hqInside ? "Find K Blanco · showroom on the right" : "Walk through the HQ doors";
+			this.hintWalk = !atHqShowroom(this.px, this.py);
 		} else if (this.nearPoi === "apartment") {
 			const apt = POIS.find((p) => p.id === "apartment")!;
 			const inside = this.px >= apt.x && this.px <= apt.x + apt.w && this.py >= apt.y && this.py <= apt.y + apt.h;
@@ -2679,7 +2668,7 @@ export class GameEngine {
 			this.emitHud();
 			return;
 		}
-		if (this.nearPoi === "river" || onRiverfront(this.px, this.py)) {
+		if (this.nearPoi === "river" || (!this.nearPoi && onRiverfront(this.px, this.py))) {
 			this.startFishing();
 			return;
 		}
@@ -2705,7 +2694,8 @@ export class GameEngine {
 				this.openDialogue("k_blanco");
 				return;
 			}
-			commerce.enterHeadquarters();
+			if (atHqShowroom(this.px, this.py)) this.openShop();
+			else this.showToast(this.hqInside ? "Browse fits at the showroom on the right." : "Walk through the HQ doors.");
 			return;
 		}
 		if (isFoodTruck(this.nearPoi)) {
@@ -4886,8 +4876,8 @@ export class GameEngine {
 		}
 	}
 	getLocationName() {
-		if (onRiverfront(this.px, this.py) || this.nearPoi === "river") return "Mississippi River";
 		if (this.nearPoi) return POIS.find((p) => p.id === this.nearPoi)?.name ?? "Memphis";
+		if (onRiverfront(this.px, this.py)) return "Mississippi River";
 		if (this.py > riverHole().y - 80) return "Riverfront";
 		if (this.px > 3072 * .7) return "East Memphis";
 		if (this.px < 3072 * .28) return "West Side";

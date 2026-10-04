@@ -192,11 +192,6 @@ export function installGameplayIntegrity() {
         this.showToast("Walk through the $ackReligious HQ doors.", 2.1);
         return;
       }
-      const step = this.mission.steps[this.mission.activeStep];
-      if (step && !step.done && step.target === "store" && (step.kind === "talk" || step.kind === "return")) {
-        this.showToast("Find K Blanco inside HQ.", 1.9);
-        return;
-      }
     }
     originalInteract.call(this);
   };

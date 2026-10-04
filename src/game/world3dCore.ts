@@ -22,6 +22,7 @@ import { HW_ART, sponsorArt } from "./halloween";
 import { paintPumpkinFace } from "./halloweenCourt";
 
 import { WORLD_UNITS_PER_PIXEL } from "./worldScale";
+import { HQ_ROOM, insideHQ } from "./hqLocation";
 
 export const S = WORLD_UNITS_PER_PIXEL;
 
@@ -1961,7 +1962,7 @@ export class World3D {
     this.applyDaylight(f.worldHour ?? 12, !!f.indoor);
     const x = wx(f.px);
     const z = wz(f.py);
-    this.player.position.set(x, inCourtPx(f.px, f.py) ? 0.12 : 0, z);
+    this.player.position.set(x, insideHQ(f.px, f.py) ? HQ_ROOM.floorHeight : inCourtPx(f.px, f.py) ? 0.12 : 0, z);
     if (!this.benjiReady && (f.images.frontHi || f.images.front)) {
       this.benji.applyApprovedTextures(f.images);
       this.benjiReady = true;

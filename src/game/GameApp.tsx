@@ -1203,10 +1203,19 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                 <div className="border-t border-border p-3">
                   <button
                     type="button"
+                    data-testid="hq-real-store"
+                    onClick={() => commerce.enterHeadquarters()}
+                    className="mb-2 min-h-11 w-full rounded-xl border border-gold/40 bg-gold/10 font-medium text-gold"
+                  >
+                    Open real store
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="hq-shop-close"
                     onClick={closeShop}
                     className="min-h-11 w-full rounded-xl border border-border bg-surface-2 font-medium text-fg"
                   >
-                    Back to streets
+                    Back to HQ
                   </button>
                 </div>
               </div>
@@ -1906,7 +1915,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                     className="min-h-11 rounded-xl border border-border text-sm text-muted"
                     onClick={() => commerce.dismissStoreDisclaimer()}
                   >
-                    Stay outside
+                    Stay in the game
                   </button>
                 </div>
               </div>
