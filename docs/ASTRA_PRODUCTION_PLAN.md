@@ -53,3 +53,9 @@ Capture real PNGs for baseline and changed scenes. Performance measured in softw
 After foundation safety, improve **one** physical connection and corridor at a time. First use home exit, an authored safe sidewalk route, HQ entrance/K Blanco, the delivery pickup/drop interactions, and court entry/shot/rebound. Compare its street and HQ materials with the supplied boards. Apply accepted contracts to other locations only after this route works and looks coherent.
 
 Every checkpoint reports the base/head commit, files changed, tests/evidence, known gaps and next measurable milestone. The target remains commercial polish; no checkpoint equates this foundation pass with completion of the full game.
+
+## Connected HQ checkpoint
+
+The physical HQ ejection and doorway storefront handoff are removed. HQ now shares door, furniture and NPC anchors across rendering, collision and interactions; K Blanco's canonical cutout is repaired; virtual wardrobe and real-store confirmation have explicit showroom actions. The Culture Spot's interaction takes priority over the overlapping riverfront trigger.
+
+Functional route verification covers home → HQ → K Blanco → van pickup → three deliveries → court shot/recovery, HQ save/reload and Halloween touch interaction. See [connected HQ QA](ASTRA_CONNECTED_SLICE_QA.md) for current results and limits. The full visual/traffic gate for milestone 2 remains open: live traffic can block an on-foot road route, and street, camera and reference-layout production is still ahead. Milestone 3 should first make one safe street corridor dependable under moving traffic.

@@ -45,11 +45,11 @@ The focused suite drives real browser input and the real engine update path with
 
 These are desktop-browser viewport tests. Physical touch controls, device rotation, safe-area hardware, controller disconnect/reconnect and target-device performance remain separate acceptance gates. The screenshots retain the baseline's oversized poster, striped ground and simplified buildings; they do not match the production reference quality yet.
 
-## Newly reproduced blocker
+## Historical blocker — repaired in the connected HQ checkpoint
 
 `GameEngine.updateProximity()` forcibly moves a player inside HQ to the south exterior and requests the storefront handoff at the doorway. The physical-HQ installer/test helper therefore cannot establish a persistent walkable interior. Live-render QA exposed this after a paused-loop placement initially appeared to be inside HQ. **Do not mark HQ entry, K Blanco interaction or the connected slice as passing.**
 
-Next milestone: reconcile physical HQ entry and K Blanco placement with an intentional commerce action, then verify home → street corridor → HQ → K Blanco → delivery → 901 Court without QA warps. Turn tangents/static collision, full mission/reward reload, activity location production, all canonical mentors and the remaining screenshot scenarios still need work.
+The warning above records the original foundation run. The physical entry and explicit commerce repair, plus the subsequent route verification, are documented in [ASTRA_CONNECTED_SLICE_QA.md](ASTRA_CONNECTED_SLICE_QA.md). Turn tangents/static collision, full mission/reward reload, activity location production, all canonical mentors and the remaining screenshot scenarios still need work.
 
 ## Reproduce
 

@@ -1,6 +1,6 @@
 # $ACKRELIGIOUS: MEMPHIS — production audit
 
-Audit date: 2026-10-04. This is a production entry audit, not a release certification.
+Audit date: 2026-10-04. This records the baseline before implementation, not a release certification. Later repairs and verification are recorded in [foundation QA](ASTRA_FOUNDATION_QA.md) and [connected HQ QA](ASTRA_CONNECTED_SLICE_QA.md).
 
 ## Repository and preservation decision
 
@@ -65,7 +65,7 @@ Protected integration surfaces: auth, database, multiplayer, migrations and depl
 | Input | `InputManager` emits shared movement/action state across keyboard, gamepad and touch | Blur clears only keys; touch/gamepad/queued actions can survive interruption; no visibility reset; gamepad prompt advertises Y sprint but pad sprint is never assigned; radial stick values can exceed unit range |
 | Mobile | Touch stick/action buttons, pointer capture/cancel, safe-area padding, reduced rendering quality and responsive menus | Add lost-capture release; verify 390×844 and landscape input, actual touch targets and menu fit; no hardware FPS claim from software-rendered browser |
 | UI | Black/gold/green HUD, mission tracker, minimap, map/pause tabs, wardrobe, shop, dialogue, activity overlays | Production pack is reference, not artwork to paste over game; UI art contains an incorrect male K Blanco that Character Bible explicitly overrides |
-| Buildings/interiors | Physical apartment, HQ and bowling volumes; interior/exterior visibility; haunted-house rooms have normalized walk bounds and authored doorway graph | **HQ is not currently playable:** live-loop QA reproduced `updateProximity()` ejecting Benji from its rectangle, while its doorway requests a storefront handoff. The physical-HQ QA installer conflicts with this engine behavior. Repair that transition before floor-plan production; rear loading entrance and door return contract also remain missing |
+| Buildings/interiors | Physical apartment, HQ and bowling volumes; interior/exterior visibility; haunted-house rooms have normalized walk bounds and authored doorway graph | **At the audited baseline, HQ was not playable:** live-loop QA reproduced `updateProximity()` ejecting Benji from its rectangle, while its doorway requests a storefront handoff. The physical-HQ QA installer conflicts with this engine behavior. Repair that transition before floor-plan production; rear loading entrance and door return contract also remain missing |
 | Seasonal | Query override/default Halloween layer, shared lighting and activity variants, room puzzles and completion save | Query-dependent `halloweenOn()` in SSR JSX causes hydration mismatch; preserve room navigation and reversible base geometry |
 | Asset loading | Central maps for city art/materials/outfit packs, boot sprite map inside engine, graceful optional-load catches, cutout cleaning | IDs/paths split across modules, missing loads silently swallowed; introduce catalog and load status before replacing visuals |
 | Performance | Quality/DPR limits, auto quality downgrade, texture reuse and basic distance considerations | Many geometry/material objects and large eager sprite boot; measure real device CPU/GPU, draw calls, textures, memory and frame-time before claiming console/mobile quality |
@@ -112,7 +112,7 @@ The first runtime traffic snapshot reported 27 cars, 16 signals and 11 off-lane 
 4. Reference assets are concepts/crops, not production models or animation-ready rigs.
 5. The current app remains a web game. Console-style input does not imply console certification, packaging or distribution.
 6. All manual movement/NPC/activity/traffic/building/mobile/save checks in the supplied brief remain release gates. Passing build alone does not satisfy them.
-7. HQ's active ejection/storefront handoff conflicts with its physical-room installer. Preserve commerce capability while repairing physical entry and moving storefront activation to an intentional shop action. This is the first blocker for the connected slice.
+7. The audited HQ ejection/storefront conflict is repaired in the connected HQ checkpoint. Full reference floor-plan production, rear loading entrance and camera zones remain separate gates.
 
 ## Run and review
 
