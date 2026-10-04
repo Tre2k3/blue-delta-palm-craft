@@ -65,7 +65,7 @@ Protected integration surfaces: auth, database, multiplayer, migrations and depl
 | Input | `InputManager` emits shared movement/action state across keyboard, gamepad and touch | Blur clears only keys; touch/gamepad/queued actions can survive interruption; no visibility reset; gamepad prompt advertises Y sprint but pad sprint is never assigned; radial stick values can exceed unit range |
 | Mobile | Touch stick/action buttons, pointer capture/cancel, safe-area padding, reduced rendering quality and responsive menus | Add lost-capture release; verify 390×844 and landscape input, actual touch targets and menu fit; no hardware FPS claim from software-rendered browser |
 | UI | Black/gold/green HUD, mission tracker, minimap, map/pause tabs, wardrobe, shop, dialogue, activity overlays | Production pack is reference, not artwork to paste over game; UI art contains an incorrect male K Blanco that Character Bible explicitly overrides |
-| Buildings/interiors | Physical apartment, HQ and bowling volumes; interior/exterior visibility; haunted-house rooms have normalized walk bounds and authored doorway graph | HQ needs production room topology, rear loading entrance and door return contract; boutique currently shares the HQ concept and is not a separately productionized full location |
+| Buildings/interiors | Physical apartment, HQ and bowling volumes; interior/exterior visibility; haunted-house rooms have normalized walk bounds and authored doorway graph | **HQ is not currently playable:** live-loop QA reproduced `updateProximity()` ejecting Benji from its rectangle, while its doorway requests a storefront handoff. The physical-HQ QA installer conflicts with this engine behavior. Repair that transition before floor-plan production; rear loading entrance and door return contract also remain missing |
 | Seasonal | Query override/default Halloween layer, shared lighting and activity variants, room puzzles and completion save | Query-dependent `halloweenOn()` in SSR JSX causes hydration mismatch; preserve room navigation and reversible base geometry |
 | Asset loading | Central maps for city art/materials/outfit packs, boot sprite map inside engine, graceful optional-load catches, cutout cleaning | IDs/paths split across modules, missing loads silently swallowed; introduce catalog and load status before replacing visuals |
 | Performance | Quality/DPR limits, auto quality downgrade, texture reuse and basic distance considerations | Many geometry/material objects and large eager sprite boot; measure real device CPU/GPU, draw calls, textures, memory and frame-time before claiming console/mobile quality |
@@ -100,7 +100,9 @@ Damaged source image: `SackReligious_HQ_Production_Reference_Pack_v1/03_Interior
 
 Production foundation safety: centralized scale/boot asset catalog, load diagnostics, interruption-safe shared input, maximum-charge shot release, collision-aware saved spawn recovery, and deterministic seasonal first render. Add dev/QA-only read-only diagnostics directly at the engine lifecycle. No new patch layer, engine rewrite, character redraw or location mass-rebuild.
 
-First files: `worldScale.ts`, `assetRegistry.ts`, `input.ts`, `engine.ts`, `playerCharacter.ts`, `world3dCore.ts`, `gameplayIntegrity.ts`, `GameApp.tsx`, `types.ts`, and a focused foundation regression script. Preserve the current route installers.
+First files: `worldScale.ts`, `assetRegistry.ts`, `input.ts`, `engine.ts`, `playerCharacter.ts`, `world3dCore.ts`, `gameplayIntegrity.ts`, `savePosition.ts`, `productionDebug.ts`, `GameApp.tsx`, `interiorCollisionPass.ts`, `worldLifePass.ts`, and a focused foundation regression script. Preserve the current route installers.
+
+The first runtime traffic snapshot reported 27 cars, 16 signals and 11 off-lane cars. Source comparison found a diagnostic mismatch: world-life looked up uncut lane IDs while the engine used clipped lane IDs. The foundation aligns that lookup; this does **not** certify turn paths, vehicle bounds or static collision.
 
 ## Risks and remaining acceptance
 
@@ -110,9 +112,10 @@ First files: `worldScale.ts`, `assetRegistry.ts`, `input.ts`, `engine.ts`, `play
 4. Reference assets are concepts/crops, not production models or animation-ready rigs.
 5. The current app remains a web game. Console-style input does not imply console certification, packaging or distribution.
 6. All manual movement/NPC/activity/traffic/building/mobile/save checks in the supplied brief remain release gates. Passing build alone does not satisfy them.
+7. HQ's active ejection/storefront handoff conflicts with its physical-room installer. Preserve commerce capability while repairing physical entry and moving storefront activation to an intentional shop action. This is the first blocker for the connected slice.
 
 ## Run and review
 
-The checked-in scripts remain `npm ci`, `npm run dev`, `npm run build`, `npm run typecheck`, `npm run lint`. In an ordinary supported development environment, existing smoke suites target `GAME_URL` or the default development server. Use `?season=none` for everyday Memphis and `?season=halloween_2026` for Halloween. Preserve both variants through every milestone.
+Use `npm ci`, `npm run dev`, `npm run build`, `npm run typecheck`, `npm run lint`, and `npm run test:foundation`. The new foundation suite starts its own loopback preview unless `GAME_URL` is supplied. Install a Playwright Chromium browser (`npx playwright install chromium`) or supply `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`. Use `?season=none` for everyday Memphis and `?season=halloween_2026` for Halloween. Use `npm run preview` after building for the production server. Preserve both variants through every milestone.
 
 Review this branch against **its Halloween base** for a small foundation diff; comparing directly to main also shows all existing unmerged content.

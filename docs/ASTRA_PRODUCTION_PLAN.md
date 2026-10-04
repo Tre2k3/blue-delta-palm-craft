@@ -21,7 +21,7 @@ Gradually separate: player movement/visuals; world topology/collision; traffic r
 | --- | --- | --- |
 | 0 — audit | Repository/branch comparison, all reference ZIPs, source/runtime/build baseline | Audit and plan exist; observed vs source-only findings distinguished |
 | 1 — foundation safety | Scale/catalog, shared input reset, shot timeout, safe persisted position, seasonal SSR, gated diagnostics | Build/type/lint; real key events, interruption/release, max hold, invalid save recovery, both seasons, mobile viewport |
-| 2 — primary connected slice | Home → streets/traffic → HQ → K Blanco → delivery → court | Continuous traversal, blocked solids, correct face directions, visible NPCs, interact/payout/save and valid physical entrances |
+| 2 — primary connected slice | Home → streets/traffic → HQ → K Blanco → delivery → court; first reconcile engine HQ ejection/storefront handoff with physical-room behavior | Continuous traversal, blocked solids, correct face directions, visible NPCs, interact/payout/save and valid physical entrances; storefront launch remains an intentional commerce action |
 | 3 — street/traffic production | One street corridor with lane graph/tangent turns/stop lines/static blockers/parking | Multiple cars/curves/intersections, headings agree with actual velocity, no penetration, debug bounds and transitions |
 | 4 — HQ production | Reference floor plan, front/rear doors, sales/cashwrap/fitting/office/storage, delivery anchor | Walkable reference layout, door-specific return, camera zones, collisions matching furniture, shop/outfit persistence |
 | 5 — city life | Named canonical mentors, ambient routes and anchor density | Pedestrian/K Blanco/Court OG approach, visible character cutouts, no blank cards, no blocked paths |
