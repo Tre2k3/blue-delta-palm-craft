@@ -91,6 +91,37 @@ function FaceScare({ image, face, pop }: { image: string; face: NonNullable<Haun
   );
 }
 
+function ShelfBook({ x, y, state }: { x: number; y: number; state: "dark" | "next" | "pulled" }) {
+  const pulled = state === "pulled";
+  const next = state === "next";
+  return (
+    <span
+      className="pointer-events-none absolute z-[4]"
+      style={{ left: `${x * 100}%`, top: `${y * 100}%`, width: "2.6%", height: "8.5%", transform: "translate(-50%, -92%)" }}
+    >
+      <span className="absolute inset-x-[18%] bottom-[8%] top-[10%] rounded-sm bg-black/85 shadow-[inset_0_0_8px_#000]" />
+      <span
+        className="absolute inset-0"
+        style={{
+          transform: pulled ? "translate(18%, 28%) rotate(-72deg)" : next ? "translateY(10%)" : undefined,
+          transformOrigin: "50% 100%",
+        }}
+      >
+        <span
+          className="absolute inset-0 rounded-[2px]"
+          style={{
+            background: next
+              ? "linear-gradient(90deg, #4a100c, #9a2c22 28%, #d46545 50%, #7a1e16 78%, #2a0c08)"
+              : "linear-gradient(90deg, #140a08, #3a2218 38%, #2c1610 68%, #100806)",
+            boxShadow: next ? "0 0 14px rgba(255,150,50,0.7)" : "0 6px 8px rgba(0,0,0,0.45)",
+          }}
+        />
+        <span className="absolute bottom-[6%] right-0 top-[6%] w-[16%]" style={{ background: next ? "#f4e2c0" : "#5c4c3c" }} />
+      </span>
+    </span>
+  );
+}
+
 function closeTo(x: number, y: number, tx: number, ty: number) {
   const dx = (x - tx) / 0.075;
   const dy = (y - ty) / 0.09;
@@ -201,28 +232,13 @@ function RoomReaction({
       </>
     );
   }
-  if (id === "library" && (done || step > 0)) {
-    const colors = ["bg-red-800", "bg-amber-900", "bg-stone-800"];
+  if (id === "library") {
+    const next = done ? -1 : seq[step];
     return (
       <>
         {pads.map((pad, i) => (
-          <span
-            key={pad.x}
-            className={`pointer-events-none absolute z-[6] w-[2.2%] rounded-sm border border-amber-100/80 shadow-lg ${colors[i % colors.length]}`}
-            style={{
-              left: `${pad.x * 100}%`,
-              top: `${(pad.y - 0.2) * 100}%`,
-              height: lit.has(i + 1) ? "6%" : "14%",
-              transform: lit.has(i + 1) ? "translate(-50%, -10px) rotate(-16deg)" : "translate(-50%, 0)",
-            }}
-          />
+          <ShelfBook key={i} x={pad.x} y={0.8} state={lit.has(i + 1) ? "pulled" : next === i + 1 ? "next" : "dark"} />
         ))}
-        {done && (
-          <span
-            className="pointer-events-none absolute z-[5] bg-black/75 shadow-[inset_0_0_18px_#000]"
-            style={{ left: `${pads[1] ? pads[1].x * 100 : 46}%`, top: `${((pads[1]?.y ?? 0.86) - 0.2) * 100}%`, width: "4%", height: "14%", transform: "translate(-50%, 0)" }}
-          />
-        )}
       </>
     );
   }
@@ -424,7 +440,7 @@ export function HauntedHouse({
         })}
         {room?.padPoints.map((pad, i) => {
           // Séance candles are drawn in the room (FloorCandle); no UI badges there.
-          if (haunt.hotspot.done || room.pads === "candles") return null;
+          if (haunt.hotspot.done || room.pads === "candles" || room.pads === "books") return null;
           const next = room.seq[haunt.step] === i + 1;
           const near = closeTo(haunt.x, haunt.y, pad.x, pad.y);
           return (
