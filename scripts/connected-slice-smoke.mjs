@@ -45,7 +45,10 @@ try {
     await page.waitForFunction(() => !!window.__sack, null, { timeout: 90000 });
     const portraitHint = page.getByRole("button", { name: /^LANDSCAPE/ });
     if (await portraitHint.count()) await portraitHint.click({ force: true });
-    await page.getByRole("button", { name: fresh ? /^NEW GAME$/ : /^CONTINUE$/ }).click({ force: true });
+    // Engine publication precedes React's enabled title buttons. Wait for the
+    // real UI action instead of force-clicking a still-disabled New Game.
+    await page.getByRole("button", { name: fresh ? /^NEW GAME$/ : /^CONTINUE$/ }).click({ timeout: 90000 });
+    await page.waitForFunction(() => window.__sack.started, null, { timeout: 20000 });
     await stopLoop(); await tick(100);
   };
   // Navigation uses actual collision and authored sidewalks. It drives shared

@@ -83,7 +83,7 @@ export async function enterGame(page, url, fresh = true) {
   await page.waitForFunction(() => !!window.__sack, null, { timeout: 90000 });
   const rotate = page.getByRole("button", { name: /^LANDSCAPE/ });
   if (await rotate.count()) await rotate.click({ force: true });
-  await page.getByRole("button", { name: fresh ? /^NEW GAME$/ : /^CONTINUE$/ }).click({ force: true });
+  await page.getByRole("button", { name: fresh ? /^NEW GAME$/ : /^CONTINUE$/ }).click({ timeout: 90000 });
   await page.waitForFunction(() => window.__sack.started, null, { timeout: 20000 });
   await page.keyboard.press("e"); // normal briefing skip
   await page.waitForFunction(() => !window.__sack.cinematic, null, { timeout: 30000 });
