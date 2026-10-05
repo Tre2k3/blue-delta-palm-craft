@@ -22,7 +22,7 @@ It retains the preceding physical HQ/shared-anchor implementation and the Charac
 
 ## Validation
 
-Implementation commit: [`83f17c24`](https://github.com/Tre2k3/blue-delta-palm-craft/commit/83f17c24be627d56767681df8f4767f5bbd0ec68). Final source and browser harness: [`7bc87e73`](https://github.com/Tre2k3/blue-delta-palm-craft/commit/7bc87e73bc9a77df14c5b35f422621763111dcea). The following documentation commit changes only reports.
+Implementation commit: [`83f17c24`](https://github.com/Tre2k3/blue-delta-palm-craft/commit/83f17c24be627d56767681df8f4767f5bbd0ec68). Initial full route harness: [`7bc87e73`](https://github.com/Tre2k3/blue-delta-palm-craft/commit/7bc87e73bc9a77df14c5b35f422621763111dcea). Final source and startup-safe harness: [`62e07efe`](https://github.com/Tre2k3/blue-delta-palm-craft/commit/62e07efe4449f1f4c5895e4fde32a4b8c9699da8). The following documentation commit changes only this report.
 
 Local validation used the locked `npm ci` dependencies, the production build/preview and Chromium 153 with software WebGL. Hosted workflow status and downloadable CI evidence are linked in [draft PR #10](https://github.com/Tre2k3/blue-delta-palm-craft/pull/10).
 
@@ -40,8 +40,11 @@ Local validation used the locked `npm ci` dependencies, the production build/pre
 | DOM visual smoke | Passed at desktop and portrait widths |
 | Screenshot pixel checks | Passed for all 20 top-level captures, including the twelve required mission scenes |
 | Connected runtime/assets | Zero uncaught/hydration errors and zero HTTP asset failures |
+| Startup readiness regression | Three fresh Halloween mobile contexts reached the physical home exit after the harness readiness fix |
 
-The final combined production run returned `traffic=0 slice=0 game=0 dom=0 frames=0`. Foundation safety also passed separately. The CI workflow repeats every suite against the pushed source.
+The combined local production run on the initial full-route harness returned `traffic=0 slice=0 game=0 dom=0 frames=0`. Foundation safety also passed separately. The subsequent startup-only correction passed three fresh Halloween mobile starts. The CI workflow repeats every suite against the final pushed source.
+
+The [first hosted continuation run](https://github.com/Tre2k3/blue-delta-palm-craft/actions/runs/37250238339) passed build/type/lint/foundation and the complete everyday mission through purchase/reload, then failed at Halloween startup. Its diagnostic showed `started=false` at the untouched home spawn. The harness had force-clicked New Game between engine publication and React enabling that button. The final harness uses a normal actionability-waiting click and verifies `started` before advancing frames. Latest hosted status and artifact links are recorded in PR #10; the failed attempt remains historical evidence.
 
 The connected route drives shared movement through normal engine updates and collision, with controlled simulation frames and actual keyboard/DOM interactions. It does not assign position, score, mission progress or rewards; it does not use warp or noclip. The repeated court-leave call is a deliberate idempotence regression check. Foundation safety and legacy location smoke use their existing QA probes separately.
 
