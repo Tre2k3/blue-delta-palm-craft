@@ -1067,7 +1067,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
           {/* Shop */}
           {hud.shopOpen && (
             <div className="absolute inset-0 z-40 flex items-end justify-center bg-bg/70 p-3 backdrop-blur-sm sm:items-center">
-              <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl">
+              <div className="flex min-w-0 max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl">
                 <div className="relative h-28 shrink-0 overflow-hidden sm:h-36">
                   <img
                     src="/game/featured-products.webp"
@@ -1086,9 +1086,9 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                     <p className="tabular font-display text-2xl text-gold">${hud.sackdollars}</p>
                   </div>
                 </div>
-                <div className="flex-1 overflow-y-auto p-3">
+                <div data-testid="hq-shop-scroll" className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-3">
                   {store.catalogLive && commerce.catalog.products.length > 0 && (
-                    <div className="mb-3 grid gap-2">
+                    <div className="mb-3 grid min-w-0 grid-cols-1 gap-2">
                       <p className="text-[10px] uppercase tracking-[0.18em] text-gold">On the floor</p>
                       {commerce.catalog.products.map((product) => (
                         <button
@@ -1111,7 +1111,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                       ))}
                     </div>
                   )}
-                  <div className="grid gap-2">
+                  <div className="grid min-w-0 grid-cols-1 gap-2">
                     {APPAREL.filter((item) => halloween || !item.id.startsWith("hw_") || hud.owned.includes(item.id)).map((item) => {
                       const owned = hud.owned.includes(item.id);
                       const eq = hud.equipped === item.id;
@@ -1125,7 +1125,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                       return (
                         <div
                           key={item.id}
-                          className="flex flex-col gap-2 rounded-xl border border-border bg-surface-2 p-3"
+                          className="flex min-w-0 flex-col gap-2 rounded-xl border border-border bg-surface-2 p-3"
                         >
                           <div className="flex items-center gap-3">
                           {real?.imageUrl || thumb ? (
@@ -1151,7 +1151,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                               {locked ? `Respect ${item.respectRequired} to unlock` : item.description}
                             </p>
                             {real?.sizes && (
-                              <p className="mt-0.5 text-[10px] uppercase tracking-wider text-subtle">
+                              <p className="mt-0.5 break-words text-[10px] uppercase tracking-wider text-subtle">
                                 IRL {real.sizes.join(" · ")}
                                 {real.price != null ? ` · $${real.price}` : ""}
                               </p>

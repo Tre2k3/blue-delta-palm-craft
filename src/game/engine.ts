@@ -338,6 +338,7 @@ export class GameEngine {
 	courtBoard: BoardRow[] = [];
 	walls: { x: number; y: number; w: number; h: number }[] = [];
 	trees: { x: number; y: number }[] = [];
+	trafficTurns = 0;
 	cars: {
 		x: number;
 		y: number;
@@ -1590,6 +1591,7 @@ export class GameEngine {
 					if (Math.hypot(c.vx, c.vy) > 10) c.yaw = Math.atan2(-c.vy, c.vx);
 					c.braking = false;
 					if (c.turnT >= 1) {
+						this.trafficTurns++;
 						c.laneId = dest.id;
 						if (dest.axis === "x") c.y = dest.fixed;
 						else c.x = dest.fixed;
@@ -2016,6 +2018,13 @@ export class GameEngine {
 				this.nearPoi = p.id;
 			}
 		}
+		// Physical mission handoffs outrank nearby ads and activity fallbacks.
+		// Keep the same authored interaction reach; arrival still requires E/TAP.
+		const objective = this.activeQuest().steps[this.activeQuest().activeStep];
+		const handoff = objective && !objective.done && (objective.kind === "deliver" || objective.kind === "pickup")
+			? POIS.find((p) => p.id === objective.target) : null;
+		const atHandoff = !!handoff && dist(this.px, this.py, handoff.x + handoff.w / 2, handoff.y + handoff.h / 2) < Math.max(handoff.w, handoff.h) * .55 + 44;
+		if (atHandoff) this.nearPoi = handoff.id;
 		if (onRiverfront(this.px, this.py) && !this.nearPoi) this.nearPoi = "river";
 		const wasInHQ = this.hqInside;
 		this.hqInside = insideHQ(this.px, this.py);
@@ -2057,6 +2066,10 @@ export class GameEngine {
 			}
 		}
 		const tap = this.input.device === "touch";
+		if (atHandoff && objective) {
+			this.interactHint = `${tap ? "TAP" : "E"} · ${objective.kind === "deliver" ? "Deliver the drop" : "Secure the drop"}`;
+			return;
+		}
 		if (this.vehicle) {
 			if (this.race.active && this.race.phase === "green") {
 				const next = RACE_CHECKPOINTS[this.race.player.next]!;
@@ -3879,6 +3892,7 @@ export class GameEngine {
 		if (this.mission.complete && this.ball.score >= 10) this.completeStep("nightball");
 	}
 	exitBasketball() {
+		if (this.mode !== "basketball") return;
 		const clearedShootout = this.halloweenShootout && this.ball.score >= 10;
 		this.settleHalloweenShootout();
 		this.tryCreditBasketball();
@@ -4415,6 +4429,7 @@ export class GameEngine {
 					inFlight: this.ball.inFlight,
 					active: this.ball.active || this.canShoot() || this.ball.inFlight,
 				},
+				trafficTurns: this.trafficTurns,
 				cars: this.cars,
 				peds: this.peds,
 				npcs: this.npcLive

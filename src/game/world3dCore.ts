@@ -209,6 +209,7 @@ export type WorldFrame = {
   trauma: number;
   clock: number;
   ball: { x: number; y: number; z: number; held: boolean; inFlight: boolean; active?: boolean };
+  trafficTurns?: number;
   cars: { x: number; y: number; vx: number; vy: number; w: number; color: string; skin?: number; laneId?: string; yaw?: number; braking?: boolean; parked?: boolean; turnTo?: string | null }[];
   peds: { x: number; y: number; color: string; t: number; skin?: number; vx?: number; vy?: number; facing?: number; waving?: number; talking?: number; inside?: boolean }[];
   npcs: { id: string; x: number; y: number; isK: boolean }[];
