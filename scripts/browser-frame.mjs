@@ -1,15 +1,15 @@
-/** Capture the actual renderer frame and real HUD before WebGL discards it. */
+/** Freeze the real WebGL frame while the page compositor captures its HUD. */
 export async function captureGameFrame(page, path) {
-  await page.evaluate(async () => {
+  const wasRunning = await page.evaluate(async () => {
     const e = window.__sack;
+    if (!e?.world3d?.renderer) return null;
+    const running = e.running;
     e.running = false; cancelAnimationFrame(e.raf); clearTimeout(e.loopBackup);
-    // Controlled movement can travel far between GPU frames. Advance the normal
-    // update/draw path so camera smoothing reaches the destination as well.
-    // Only intermediate GPU submissions are skipped; the final frame is real.
     const renderer = e.world3d.renderer;
     const render = renderer.render;
+    // Settle the normal camera path without advancing missions, shots or input.
     renderer.render = () => {};
-    try { for (let i = 0; i < 60; i++) { e.update(1 / 60); e.draw(); } }
+    try { for (let i = 0; i < 60; i++) e.draw(); }
     finally { renderer.render = render; }
     e.draw();
     const canvas = renderer.domElement;
@@ -22,12 +22,14 @@ export async function captureGameFrame(page, path) {
     await frame.decode();
     canvas.insertAdjacentElement("afterend", frame);
     canvas.style.visibility = "hidden";
+    return running;
   });
-  try { await page.screenshot({ path, timeout: 60000 }); }
+  try { await page.screenshot({ path, timeout: 60000, animations: "disabled" }); }
   finally {
-    await page.evaluate(() => {
-      if (window.__sack) window.__sack.world3d.renderer.domElement.style.visibility = "";
+    await page.evaluate((running) => {
+      if (window.__sack?.world3d) window.__sack.world3d.renderer.domElement.style.visibility = "";
       document.getElementById("qa-rendered-frame")?.remove();
-    });
+      if (running) window.__sack.startLoop();
+    }, wasRunning);
   }
 }

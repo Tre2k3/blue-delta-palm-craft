@@ -71,7 +71,7 @@ jobs:
       - name: Foundation safety
         run: npm run test:foundation
 
-      - name: Connected HQ route
+      - name: Connected Drop Day mission
         run: npm run test:slice
 
       - name: Game smoke
@@ -79,9 +79,6 @@ jobs:
 
       - name: Traffic and street-life smoke
         run: xvfb-run -a node scripts/traffic-smoke.mjs
-
-      - name: Mission smoke
-        run: xvfb-run -a node scripts/mission-smoke.mjs
 
       - name: DOM visual smoke
         run: xvfb-run -a node scripts/dom-smoke.mjs
