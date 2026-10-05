@@ -21,7 +21,10 @@ import { halloweenOn } from "./season";
 import { HW_ART, sponsorArt } from "./halloween";
 import { paintPumpkinFace } from "./halloweenCourt";
 
-export const S = 1 / 16;
+import { WORLD_UNITS_PER_PIXEL } from "./worldScale";
+import { HQ_ROOM, insideHQ } from "./hqLocation";
+
+export const S = WORLD_UNITS_PER_PIXEL;
 
 export function wx(x: number) {
   return x * S;
@@ -206,6 +209,7 @@ export type WorldFrame = {
   trauma: number;
   clock: number;
   ball: { x: number; y: number; z: number; held: boolean; inFlight: boolean; active?: boolean };
+  trafficTurns?: number;
   cars: { x: number; y: number; vx: number; vy: number; w: number; color: string; skin?: number; laneId?: string; yaw?: number; braking?: boolean; parked?: boolean; turnTo?: string | null }[];
   peds: { x: number; y: number; color: string; t: number; skin?: number; vx?: number; vy?: number; facing?: number; waving?: number; talking?: number; inside?: boolean }[];
   npcs: { id: string; x: number; y: number; isK: boolean }[];
@@ -1959,7 +1963,7 @@ export class World3D {
     this.applyDaylight(f.worldHour ?? 12, !!f.indoor);
     const x = wx(f.px);
     const z = wz(f.py);
-    this.player.position.set(x, inCourtPx(f.px, f.py) ? 0.12 : 0, z);
+    this.player.position.set(x, insideHQ(f.px, f.py) ? HQ_ROOM.floorHeight : inCourtPx(f.px, f.py) ? 0.12 : 0, z);
     if (!this.benjiReady && (f.images.frontHi || f.images.front)) {
       this.benji.applyApprovedTextures(f.images);
       this.benjiReady = true;

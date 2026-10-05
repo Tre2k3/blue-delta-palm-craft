@@ -29,7 +29,7 @@ import { RotatePrompt } from "./ui/RotatePrompt";
 import { PlaytestKit, PlaytestTicker } from "./ui/PlaytestKit";
 import { loadTickerOn, saveTickerOn } from "./playtest";
 import { arrowGlyph, formatGap, formatMph, formatRaceClock, RACE_CHECKPOINTS } from "./race";
-import { halloweenOn } from "./season";
+import { halloweenOn, SEASONAL_EVENT } from "./season";
 import { HauntedHouse } from "./ui/HauntedHouse";
 
 const KIT_PASSWORD = "admin4744";
@@ -180,10 +180,14 @@ function holdPointer(down: () => void, up: () => void) {
       e.preventDefault();
       up();
     },
+    onLostPointerCapture: () => up(),
   };
 }
 
 function GameShell({ onRetry }: { onRetry: () => void }) {
+  // SSR and the first client render agree; the URL override applies on mount.
+  const [halloween, setHalloween] = useState(SEASONAL_EVENT === "halloween_2026");
+  useEffect(() => { setHalloween(halloweenOn()); }, []);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<GameEngine | null>(null);
   const [hud, setHud] = useState<HudSnapshot>(emptyHud);
@@ -415,7 +419,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
   const bar = Math.round(52 * lb);
 
   return (
-    <div key={ART_REV} className={`relative h-full w-full overflow-hidden bg-bg text-fg select-none${halloweenOn() ? " sack-halloween" : ""}`}>
+    <div key={ART_REV} className={`relative h-full w-full overflow-hidden bg-bg text-fg select-none${halloween ? " sack-halloween" : ""}`}>
       <canvas
         ref={canvasRef}
         className="absolute inset-0 h-full w-full touch-none"
@@ -506,14 +510,14 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
             <div>
               <p className="font-display text-primary text-xl tracking-[0.22em]">{BRAND.name}</p>
               <p className="mt-1 text-[11px] uppercase tracking-[0.42em] text-gold">{BRAND.line}</p>
-              <p className="mt-3 text-[11px] uppercase tracking-[0.28em] text-muted">{halloweenOn() ? "Halloween After Dark" : "A Memphis Open World"}</p>
+              <p className="mt-3 text-[11px] uppercase tracking-[0.28em] text-muted">{halloween ? "Halloween After Dark" : "A Memphis Open World"}</p>
             </div>
 
             <div className="max-w-lg">
               <h1 className="sack-title-hero font-display text-6xl leading-[0.85] text-fg sm:text-8xl">{BRAND.city.toUpperCase()}</h1>
               <p className="mt-2 font-display text-3xl text-primary sm:text-4xl">{BRAND.zip}</p>
               <p className="mt-4 max-w-sm text-sm leading-relaxed text-muted">
-                {halloweenOn()
+                {halloween
                   ? "Memphis after dark. Haunted house, 10 letters, After Dark fits, and the same streets."
                   : "Play as Benji. Run Drop Day, hoop at Sacks Giving Weekend, and rock the Worldwide Tour tees. 2 sponsor slots and 2 artist slots every 30 days."}
               </p>
@@ -1063,7 +1067,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
           {/* Shop */}
           {hud.shopOpen && (
             <div className="absolute inset-0 z-40 flex items-end justify-center bg-bg/70 p-3 backdrop-blur-sm sm:items-center">
-              <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl">
+              <div className="flex min-w-0 max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl">
                 <div className="relative h-28 shrink-0 overflow-hidden sm:h-36">
                   <img
                     src="/game/featured-products.webp"
@@ -1082,9 +1086,9 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                     <p className="tabular font-display text-2xl text-gold">${hud.sackdollars}</p>
                   </div>
                 </div>
-                <div className="flex-1 overflow-y-auto p-3">
+                <div data-testid="hq-shop-scroll" className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-3">
                   {store.catalogLive && commerce.catalog.products.length > 0 && (
-                    <div className="mb-3 grid gap-2">
+                    <div className="mb-3 grid min-w-0 grid-cols-1 gap-2">
                       <p className="text-[10px] uppercase tracking-[0.18em] text-gold">On the floor</p>
                       {commerce.catalog.products.map((product) => (
                         <button
@@ -1107,8 +1111,8 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                       ))}
                     </div>
                   )}
-                  <div className="grid gap-2">
-                    {APPAREL.filter((item) => halloweenOn() || !item.id.startsWith("hw_") || hud.owned.includes(item.id)).map((item) => {
+                  <div className="grid min-w-0 grid-cols-1 gap-2">
+                    {APPAREL.filter((item) => halloween || !item.id.startsWith("hw_") || hud.owned.includes(item.id)).map((item) => {
                       const owned = hud.owned.includes(item.id);
                       const eq = hud.equipped === item.id;
                       const locked = Boolean(
@@ -1121,7 +1125,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                       return (
                         <div
                           key={item.id}
-                          className="flex flex-col gap-2 rounded-xl border border-border bg-surface-2 p-3"
+                          className="flex min-w-0 flex-col gap-2 rounded-xl border border-border bg-surface-2 p-3"
                         >
                           <div className="flex items-center gap-3">
                           {real?.imageUrl || thumb ? (
@@ -1147,7 +1151,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                               {locked ? `Respect ${item.respectRequired} to unlock` : item.description}
                             </p>
                             {real?.sizes && (
-                              <p className="mt-0.5 text-[10px] uppercase tracking-wider text-subtle">
+                              <p className="mt-0.5 break-words text-[10px] uppercase tracking-wider text-subtle">
                                 IRL {real.sizes.join(" · ")}
                                 {real.price != null ? ` · $${real.price}` : ""}
                               </p>
@@ -1199,10 +1203,19 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                 <div className="border-t border-border p-3">
                   <button
                     type="button"
+                    data-testid="hq-real-store"
+                    onClick={() => commerce.enterHeadquarters()}
+                    className="mb-2 min-h-11 w-full rounded-xl border border-gold/40 bg-gold/10 font-medium text-gold"
+                  >
+                    Open real store
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="hq-shop-close"
                     onClick={closeShop}
                     className="min-h-11 w-full rounded-xl border border-border bg-surface-2 font-medium text-fg"
                   >
-                    Back to streets
+                    Back to HQ
                   </button>
                 </div>
               </div>
@@ -1902,7 +1915,7 @@ function GameShell({ onRetry }: { onRetry: () => void }) {
                     className="min-h-11 rounded-xl border border-border text-sm text-muted"
                     onClick={() => commerce.dismissStoreDisclaimer()}
                   >
-                    Stay outside
+                    Stay in the game
                   </button>
                 </div>
               </div>

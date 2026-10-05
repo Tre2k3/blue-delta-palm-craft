@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { POIS, TILE } from "./data";
-import { laneVelocity, nearestAsphalt, trafficLanes } from "./worldTopology";
+import { clippedTrafficLanes, laneVelocity, nearestAsphalt } from "./worldTopology";
 import { WorldLifePass } from "./worldLifePass";
 import { wx, wz, type WorldFrame } from "./world3dCore";
 
@@ -11,9 +11,10 @@ const COURT_BLOCKED_LANES = new Set([
   "3RD ST:south",
   "3RD ST:north",
 ]);
-const SAFE_LANES = trafficLanes().filter((lane) => !COURT_BLOCKED_LANES.has(lane.id));
+const LEGAL_LANES = clippedTrafficLanes();
+const SAFE_LANES = LEGAL_LANES.filter((lane) => !COURT_BLOCKED_LANES.has(lane.id.split("~")[0]!));
 
-type LiveCar = WorldFrame["cars"][number] & { laneId?: string };
+type LiveCar = WorldFrame["cars"][number] & { laneId?: string; turnTo?: string | null; turnT?: number };
 type PatchedLife = WorldLifePass & { __courtIntegrityPatched?: boolean };
 
 function insideCourt(x: number, y: number, pad = 0) {
@@ -74,14 +75,21 @@ function hideCourtStreetFurniture(scene: THREE.Scene) {
 
 function rerouteCourtCar(car: LiveCar, index: number) {
   if (!car.laneId || !COURT_BLOCKED_LANES.has(car.laneId)) return false;
-  const source = trafficLanes().find((lane) => lane.id === car.laneId);
+  const source = LEGAL_LANES.find((lane) => lane.id === car.laneId);
   if (!source) return false;
   const candidates = SAFE_LANES.filter((lane) => lane.axis === source.axis && lane.dir === source.dir);
   const target = candidates[index % Math.max(1, candidates.length)];
   if (!target) return false;
   car.laneId = target.id;
-  if (target.axis === "x") car.y = target.fixed;
-  else car.x = target.fixed;
+  if (target.axis === "x") {
+    car.y = target.fixed;
+    car.x = Math.max(target.min + 12, Math.min(target.max - 12, car.x));
+  } else {
+    car.x = target.fixed;
+    car.y = Math.max(target.min + 12, Math.min(target.max - 12, car.y));
+  }
+  car.turnTo = null;
+  car.turnT = 0;
   const velocity = laneVelocity(target, 0.82);
   car.vx = velocity.vx;
   car.vy = velocity.vy;

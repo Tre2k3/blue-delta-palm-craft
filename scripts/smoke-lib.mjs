@@ -1,4 +1,4 @@
-import { writeFile } from "node:fs/promises";
+import { captureGameFrame } from "./browser-frame.mjs";
 import { chromium } from "playwright";
 
 export function safeJson(value) {
@@ -35,6 +35,7 @@ export async function launchBrowser(webgl = true) {
     "--no-sandbox",
     "--disable-dev-shm-usage",
     "--use-angle=swiftshader",
+    "--enable-unsafe-swiftshader",
     "--disable-background-timer-throttling",
     "--disable-renderer-backgrounding",
     "--disable-backgrounding-occluded-windows",
@@ -48,6 +49,9 @@ export async function launchBrowser(webgl = true) {
 }
 
 export async function preparePage(page) {
+  await page.addInitScript(() => {
+    if (!localStorage.getItem("sackreligious-memphis-v3")) localStorage.setItem("sackreligious-memphis-v3", JSON.stringify({ version: 3, owned: ["starter_tee"], settings: { quality: "low" } }));
+  });
   await page.bringToFront();
   try {
     const session = await page.context().newCDPSession(page);
@@ -63,34 +67,24 @@ export async function closeBrowser(browser) {
   await Promise.race([browser.close(), new Promise((resolve) => setTimeout(resolve, 4000))]);
 }
 
-const EMPTY_PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=",
-  "base64",
-);
-
-let consecutiveShotFails = 0;
-
 export async function captureShot(page, dest) {
-  if (consecutiveShotFails >= 3) {
-    await writeFile(dest, EMPTY_PNG);
-    console.warn(`shot skipped: ${dest}`);
-    return false;
-  }
-  try {
-    await page.screenshot({
-      path: dest,
-      fullPage: false,
-      timeout: 4000,
-      animations: "disabled",
-    });
-    consecutiveShotFails = 0;
-    console.log(`shot: ${dest}`);
-    return true;
-  } catch (err) {
-    consecutiveShotFails += 1;
-    console.warn(`playwright shot failed ${dest}: ${err?.message || err}`);
-  }
-  await writeFile(dest, EMPTY_PNG);
-  console.warn(`shot placeholder: ${dest}`);
-  return false;
+  await captureGameFrame(page, dest);
+  console.log(`shot: ${dest}`);
+  return true;
+}
+
+/** Shared boot flow: wait for the engine, then select the real New Game UI. */
+export async function enterGame(page, url, fresh = true) {
+  const target = new URL(url);
+  target.searchParams.set("qa", "1");
+  target.searchParams.set("hauntdebug", "1");
+  if (!target.searchParams.has("season")) target.searchParams.set("season", "none");
+  await page.goto(target.href, { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForFunction(() => !!window.__sack, null, { timeout: 90000 });
+  const rotate = page.getByRole("button", { name: /^LANDSCAPE/ });
+  if (await rotate.count()) await rotate.click({ force: true });
+  await page.getByRole("button", { name: fresh ? /^NEW GAME$/ : /^CONTINUE$/ }).click({ timeout: 90000 });
+  await page.waitForFunction(() => window.__sack.started, null, { timeout: 20000 });
+  await page.keyboard.press("e"); // normal briefing skip
+  await page.waitForFunction(() => !window.__sack.cinematic, null, { timeout: 30000 });
 }
