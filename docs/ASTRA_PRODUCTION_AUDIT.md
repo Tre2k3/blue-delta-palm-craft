@@ -119,3 +119,17 @@ The first runtime traffic snapshot reported 27 cars, 16 signals and 11 off-lane 
 Use `npm ci`, `npm run dev`, `npm run build`, `npm run typecheck`, `npm run lint`, and `npm run test:foundation`. The new foundation suite starts its own loopback preview unless `GAME_URL` is supplied. Install a Playwright Chromium browser (`npx playwright install chromium`) or supply `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`. Use `?season=none` for everyday Memphis and `?season=halloween_2026` for Halloween. Use `npm run preview` after building for the production server. Preserve both variants through every milestone.
 
 Review this branch against **its Halloween base** for a small foundation diff; comparing directly to main also shows all existing unmerged content.
+
+## Drive pack verification — 2026-10-04
+
+The Google Drive production folder was opened directly. All eight complete ZIPs were downloaded, `unzip -t` passed, and each pack was extracted into its own folder under `production-reference/` (gitignored, not shipped). Split `.part###` files and `github_parts_test*` files were ignored and not concatenated. Duplicate full ZIPs were skipped; the newest complete copy of each exact filename was kept.
+
+Full file list, conflicts, keep/repair map, and the vertical-slice plan: [GROK_REFERENCE_PACK_INDEX.md](GROK_REFERENCE_PACK_INDEX.md).
+
+Decisions from that inspection:
+
+- Character Bible still wins for K Blanco. The live HQ cutout is the correct woman, but the pendant reads as X instead of K. Repair the letter only.
+- The vehicle pack locks Benji's car as a dark-green classic coupe with gold wheels. The delivery van stays the mission vehicle. Civilian traffic paint now follows silver sedans, black SUVs, and rare coupes (`carRig.ts`).
+- Reference boards stay out of the client bundle.
+
+No merge to main.

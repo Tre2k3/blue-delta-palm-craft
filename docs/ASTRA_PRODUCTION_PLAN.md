@@ -7,7 +7,7 @@ Working branch: `feat/astra-production-rebuild`. Do not merge.
 
 Canonical Benji and female K Blanco, directional art, separate equipment, wardrobe ownership, mission/economy rewards, current shot grading, haunted-room doorway graph and seasonal saves. Keep existing integrity installers until their exact responsibilities have been migrated and regression-tested. Do not add prototype patches, `@ts-nocheck`, boot side effects or V-number runtime layers.
 
-The production references control identity and layout. Their master boards are design inputs; author geometry, navigation, lighting, collision and interactables to reproduce them. They are not full-screen gameplay substitutes. Character Bible overrides conflicting UI/concept characters.
+The production references control identity and layout. Their master boards are design inputs; author geometry, navigation, lighting, collision and interactables to reproduce them. They are not full-screen gameplay substitutes. Character Bible overrides conflicting UI/concept characters. The verified Drive copies are indexed in [GROK_REFERENCE_PACK_INDEX.md](GROK_REFERENCE_PACK_INDEX.md).
 
 ## Architecture approach
 
