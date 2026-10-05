@@ -1,4 +1,6 @@
-# Astra connected HQ — verification checkpoint
+# Astra connected HQ — historical verification checkpoint
+
+This report records the 2026-10-04 checkpoint. See [Drop Day continuation](ASTRA_DROP_DAY_QA.md) for the newer full mission, harness and workflow results.
 
 Date: 2026-10-04. Repository: `Tre2k3/blue-delta-palm-craft`.
 Branch: `feat/astra-production-rebuild`; target: `feat/halloween-after-dark`. Draft PR only; no merge.
