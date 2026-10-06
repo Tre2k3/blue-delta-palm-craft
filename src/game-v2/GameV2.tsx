@@ -10,12 +10,20 @@ const EMPTY: HudState = {
   prompt: "",
   charge: 0,
   night: false,
+  golden: false,
   made: 0,
   taken: 0,
   dialogue: "",
   carrying: false,
   x: -30.2,
   z: 5.55,
+  fit: "default",
+  bait: 0,
+  boost: false,
+  log: false,
+  marks: { fish: false, bowl: false, food: false, race: false },
+  bestBowl: 0,
+  bestRace: 0,
 };
 
 export function GameV2() {
@@ -37,7 +45,7 @@ export function GameV2() {
       dead = true;
       stop();
     };
-  }, []);
+  }, [5]);
 
   return (
     <div className="fixed inset-0 bg-[#071018]">
