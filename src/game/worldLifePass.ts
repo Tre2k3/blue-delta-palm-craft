@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { POIS, STREETS, TILE, WORLD_PX_H, WORLD_PX_W } from "./data";
-import { inCourtPx, inRiverPx, punchRoads, trafficLanes, type Lane, type Rect, signalState, type SignalState } from "./worldTopology";
+import { inCourtPx, inRiverPx, isRoadPoint, carBlocked, punchRoads, clippedTrafficLanes, type Lane, type Rect, signalState, type SignalState } from "./worldTopology";
 import { wx, wz, type WorldFrame } from "./world3dCore";
 import { makeStreetCar, CAR_RIDE } from "./carRig";
 
@@ -76,7 +76,7 @@ function lerpAngle(a: number, b: number, t: number) {
 export class WorldLifePass {
   private scene: THREE.Scene;
   private root: THREE.Group | null = null;
-  private lanes = trafficLanes();
+  private lanes = clippedTrafficLanes();
   private laneMap = new Map(this.lanes.map((lane) => [lane.id, lane]));
   private trafficMemory = new WeakMap<object, TrafficMemory>();
   private pedMemory = new WeakMap<object, PedMemory>();
@@ -557,7 +557,14 @@ export class WorldLifePass {
     const sampleLanes: string[] = [];
     for (const raw of f.cars) {
       const car = raw as LiveCar;
-      if (!car.laneId) continue;
+      if (!car.laneId || car.laneId === "RIVAL" || car.laneId === "RACER") continue;
+      // Race actors have their own route. Civilian turns occupy the authored
+      // intersection between lanes; validate the roadway rather than measuring
+      // lateral distance from the lane they are leaving.
+      if (car.turnTo) {
+        if (!this.laneMap.has(car.turnTo) || !isRoadPoint(car.x, car.y, 2) || carBlocked(car.x, car.y, 16)) offLaneCars++;
+        continue;
+      }
       const lane = this.laneMap.get(car.laneId);
       if (!lane) {
         offLaneCars++;
@@ -593,7 +600,7 @@ export class WorldLifePass {
       parkedCars: this.parkedCars,
       courtCrowd: this.courtCrowd?.children.length ?? 0,
       turningEnabled: true,
-      totalTurns: this.totalTurns,
+      totalTurns: f.trafficTurns ?? 0,
       stoppedAtRed: this.lastStoppedAtRed,
       pedestrianPauses: this.pedestrianPauses,
       movingPeds: this.lastMovingPeds,

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { mkdir } from "node:fs/promises";
-import { captureShot, closeBrowser, createOk, installHardTimeout, launchBrowser, preparePage } from "./smoke-lib.mjs";
+import { captureShot, enterGame, closeBrowser, createOk, installHardTimeout, launchBrowser, preparePage } from "./smoke-lib.mjs";
 
 const url = process.env.GAME_URL || "http://127.0.0.1:8080/";
 const failures = [];
@@ -26,9 +26,7 @@ try {
   });
   await captureShot(page, "artifacts/dom-title.png");
 
-  await page.getByRole("button", { name: /ENTER MEMPHIS/i }).click();
-  await page.waitForFunction(() => window.__gameTest, { timeout: 20000 });
-  await page.waitForTimeout(4200);
+  await enterGame(page, url);
 
   const play = await page.evaluate(() => ({
     canvas: document.querySelector("canvas")?.getBoundingClientRect() || null,

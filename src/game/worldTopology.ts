@@ -1,4 +1,5 @@
 import { POIS, STREETS, TILE, WORLD_PX_H, WORLD_PX_W, WORLD_W } from "./data";
+import { HQ_FRONT_DOOR } from "./hqLocation";
 
 export type Rect = { x: number; y: number; w: number; h: number };
 export type LaneAxis = "x" | "y";
@@ -413,7 +414,7 @@ export function poiColliders(): Rect[] {
   if (apartment) out.push(...shellWithSouthDoor(apartment, 6 * TILE, TILE * 1.3));
 
   const store = POIS.find((p) => p.id === "store");
-  if (store) out.push({ x: store.x, y: store.y, w: store.w, h: store.h });
+  if (store) out.push(...shellWithSouthDoor(store, HQ_FRONT_DOOR.x, HQ_FRONT_DOOR.width));
 
   const lanes = POIS.find((p) => p.id === "lanes");
   if (lanes) {

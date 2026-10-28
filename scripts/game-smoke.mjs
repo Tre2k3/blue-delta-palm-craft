@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { mkdir } from "node:fs/promises";
-import { captureShot, closeBrowser, createOk, installHardTimeout, launchBrowser, preparePage } from "./smoke-lib.mjs";
+import { captureShot, enterGame, closeBrowser, createOk, installHardTimeout, launchBrowser, preparePage } from "./smoke-lib.mjs";
 
 const url = process.env.GAME_URL || "http://127.0.0.1:8080/";
 const failures = [];
@@ -17,7 +17,7 @@ page.on("pageerror", (err) => pageErrors.push(String(err?.message || err)));
 await preparePage(page);
 
 try {
-  const resp = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
+  const resp = await page.goto(url + "?season=none&qa=1", { waitUntil: "domcontentloaded", timeout: 60000 });
   ok((resp?.status() ?? 0) < 400, "production preview returns OK", { status: resp?.status() });
 
   const atlas = await page.evaluate(async () => {
@@ -37,13 +37,7 @@ try {
   ok(atlas.width >= 400 && atlas.height >= 1000, "Chapter 1 cast atlas decodes at production size", atlas);
   ok(atlas.opaque > 20000, "Chapter 1 cast atlas contains real opaque character pixels", atlas);
 
-  await page.waitForSelector("button:has-text('ENTER MEMPHIS')", { timeout: 30000 });
-  await page.getByRole("button", { name: /ENTER MEMPHIS/i }).click();
-  await page.waitForFunction(
-    () => window.__gameTest && window.__controlsTest && window.__gameTest.furnitureCollisionProbe && window.__gameTest.environmentCollisionProbe && window.__SACK_ENVIRONMENT__ && window.__SACK_APARTMENT_LAYOUT__,
-    { timeout: 20000 },
-  );
-  await page.waitForTimeout(4200);
+  await enterGame(page, url);
 
   const boot = await page.evaluate(() => {
     const s = window.__gameTest.getState();
@@ -130,6 +124,8 @@ try {
   await page.waitForTimeout(200);
   await page.evaluate(() => window.__gameTest.interact());
   await page.waitForTimeout(300);
+  await page.getByRole("button", { name: /^PLAY / }).click({ force: true });
+  await page.waitForFunction(() => window.__sack.mode === "basketball");
   const court = await page.evaluate(() => window.__gameTest.getState());
   ok(court.mode === "basketball", "court interact enters basketball", court);
   const leave = page.getByRole("button", { name: /Leave court/i });

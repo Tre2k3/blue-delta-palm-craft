@@ -69,8 +69,8 @@ import {
 } from "./courtPlay";
 import { dressBenji } from "./outfitCompositor";
 import { lookFor, stampFor, overlayKey } from "./outfitLook";
-import { BASKETBALL_SPRITES, basketballImageKey } from "./basketballSprites";
-import { OUTFIT_PLATES, outfitImageKey } from "./outfitSprites";
+import { outfitImageKey } from "./outfitSprites";
+import { bootAssetCatalog, type AssetLoadStatus } from "./assetRegistry";
 import {
   applyRendererQuality,
   isHandheld,
@@ -183,6 +183,8 @@ import type {
 import { analytics } from "./analytics";
 import { commerce } from "./commerce";
 import { GAME_BUILD_VERSION } from "./config";
+import { attachProductionDebug } from "./productionDebug";
+import { HQ_ANCHORS, atHqShowroom, insideHQ } from "./hqLocation";
 
 type ImgMap = Record<string, HTMLImageElement>;
 
@@ -210,12 +212,6 @@ function dist(ax: number, ay: number, bx: number, by: number) {
 }
 function insidePoi(x: number, y: number, p: WorldPoi, pad = 8) {
 	return x >= p.x - pad && x <= p.x + p.w + pad && y >= p.y - pad && y <= p.y + p.h + pad;
-}
-function onStoreDoor(x: number, y: number, store: WorldPoi) {
-	const doorW = TILE * 1.7;
-	const left = store.x + store.w / 2 - doorW / 2;
-	const top = store.y + store.h - 6;
-	return x >= left && x <= left + doorW && y >= top && y <= top + 56;
 }
 function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
 	if (typeof ctx.roundRect === "function") {
@@ -342,6 +338,7 @@ export class GameEngine {
 	courtBoard: BoardRow[] = [];
 	walls: { x: number; y: number; w: number; h: number }[] = [];
 	trees: { x: number; y: number }[] = [];
+	trafficTurns = 0;
 	cars: {
 		x: number;
 		y: number;
@@ -443,6 +440,7 @@ export class GameEngine {
 	playtestOpen = false;
 	playtestNoclip = false;
 	fpsEma = 60;
+	readonly assetLoads = new Map<string, AssetLoadStatus>();
 	constructor(canvas: HTMLCanvasElement) {
 		this.canvas = canvas;
 		const overlay = document.createElement("canvas");
@@ -454,78 +452,16 @@ export class GameEngine {
 	}
 	async init() {
 		await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-		const bootImages: Record<string, string> = {
-			front: "/game/benji-front-norm.webp",
-			back: "/game/benji-back-norm.webp",
-			left: "/game/benji-left-norm.webp",
-			right: "/game/benji-right-norm.webp",
-			frontHi: "/game/benji-front.webp",
-			backHi: "/game/benji-back.webp",
-			leftHi: "/game/benji-left.webp",
-			rightHi: "/game/benji-right.webp",
-			threeQ: "/game/benji-three-quarter.webp",
-			icon: "/game/sack-icon.png",
-			k: "/game/k-blanco-portrait.webp",
-			featured: "/game/featured-products.webp",
-			"walk-front-1": "/game/benji/walk-front-1.webp",
-			"walk-front-2": "/game/benji/walk-front-2.webp",
-			"walk-front-3": "/game/benji/walk-front-3.webp",
-			"walk-front-4": "/game/benji/walk-front-4.webp",
-			"walk-back-1": "/game/benji/walk-back-1.webp",
-			"walk-back-2": "/game/benji/walk-back-2.webp",
-			"walk-back-3": "/game/benji/walk-back-3.webp",
-			"walk-back-4": "/game/benji/walk-back-4.webp",
-			"walk-left-1": "/game/benji/walk-left-1.webp",
-			"walk-left-2": "/game/benji/walk-left-2.webp",
-			"walk-left-3": "/game/benji/walk-left-3.webp",
-			"walk-left-4": "/game/benji/walk-left-4.webp",
-			"walk-right-1": "/game/benji/walk-right-1.webp",
-			"walk-right-2": "/game/benji/walk-right-2.webp",
-			"walk-right-3": "/game/benji/walk-right-3.webp",
-			"walk-right-4": "/game/benji/walk-right-4.webp",
-			"jump-1": "/game/benji/jump-1.webp",
-			"jump-2": "/game/benji/jump-2.webp",
-			"jump-3": "/game/benji/jump-3.webp",
-			"jump-4": "/game/benji/jump-4.webp",
-			"dribble-1": "/game/benji/dribble-1.webp",
-			"dribble-2": "/game/benji/dribble-2.webp",
-			"dribble-3": "/game/benji/dribble-3.webp",
-			"dribble-4": "/game/benji/dribble-4.webp",
-			"gather-1": "/game/benji/gather-1.webp",
-			"gather-2": "/game/benji/gather-2.webp",
-			"release-1": "/game/benji/release-1.webp",
-			"release-2": "/game/benji/release-2.webp",
-			"rebound-1": "/game/benji/rebound-1.webp",
-			"rebound-2": "/game/benji/rebound-2.webp",
-			"celebrate-1": "/game/benji/celebrate-1.webp",
-			"celebrate-2": "/game/benji/celebrate-2.webp",
-			"talk-1": "/game/benji/talk-1.webp",
-			"interact-1": "/game/benji/interact-1.webp",
-			"phone-1": "/game/benji/phone-1.webp",
-			"tour-black-front": "/game/apparel/stamps/tour-black-print.webp",
-			"tour-black-back": "/game/apparel/stamps/tour-black-tour.webp",
-			"tour-white-front": "/game/apparel/stamps/tour-white-print.png",
-			"tour-white-back": "/game/apparel/stamps/tour-white-tour.webp",
-			"tour-red-front": "/game/apparel/stamps/tour-red-print.webp",
-			"tour-red-back": "/game/apparel/stamps/tour-red-tour.webp",
-		};
-		for (const [id, pack] of Object.entries(OUTFIT_PLATES)) {
-			for (const view of ["front", "back", "left", "right"] as const) {
-				bootImages[outfitImageKey(id as ApparelId, view)] = pack[view];
-			}
-		}
-		for (const [id, pack] of Object.entries(BASKETBALL_SPRITES)) {
-			bootImages[basketballImageKey(id as ApparelId, "ready")] = pack.ready;
-			bootImages[basketballImageKey(id as ApparelId, "drive")] = pack.drive;
-			bootImages[basketballImageKey(id as ApparelId, "shotFront")] = pack.shotFront;
-			bootImages[basketballImageKey(id as ApparelId, "shotBack")] = pack.shotBack;
-		}
-		const bootList = Object.entries(bootImages);
+		const bootList = bootAssetCatalog();
+		this.assetLoads.clear();
 		let bootDone = 0;
-		await Promise.all(bootList.map(async ([k, src]) => {
+		await Promise.all(bootList.map(async (asset) => {
 			try {
-				this.images[k] = await loadImage(src);
-			} catch { /* missing optional sprite */ }
+				this.images[asset.runtimeKey] = await loadImage(asset.path);
+				this.assetLoads.set(asset.id, "loaded");
+			} catch {
+				this.assetLoads.set(asset.id, "missing");
+			}
 			bootDone++;
 			this.onLoad?.(bootDone / (bootList.length + 6));
 		}));
@@ -615,6 +551,7 @@ export class GameEngine {
 				x += 70;
 				y += 54;
 			}
+			if (POIS.some((p) => (p.id === "store" || p.id === "apartment" || p.id === "lanes") && insidePoi(x, y, p, 36))) continue;
 			if (y < riverY - 36 && x > 48 && x < WORLD_PX_W - 48) this.trees.push({ x, y });
 		}
 		this.poiBoxes = poiColliders();
@@ -680,10 +617,10 @@ export class GameEngine {
 		this.peds = spawnCityPeds(strips.length ? strips : this.walks);
 		this.npcLive = NPCS.map((n) => ({
 			id: n.id,
-			x: n.x,
-			y: n.y,
-			ox: n.x,
-			oy: n.y,
+			x: n.id === "k_blanco" ? HQ_ANCHORS.kBlanco.x : n.x,
+			y: n.id === "k_blanco" ? HQ_ANCHORS.kBlanco.y : n.y,
+			ox: n.id === "k_blanco" ? HQ_ANCHORS.kBlanco.x : n.x,
+			oy: n.id === "k_blanco" ? HQ_ANCHORS.kBlanco.y : n.y,
 			t: Math.random() * 10
 		}));
 	}
@@ -876,6 +813,7 @@ export class GameEngine {
 	}
 	wireQa() {
 		if (typeof window === "undefined") return;
+		attachProductionDebug(this);
 		window.__controlsTest = {
 			getYaw: () => this.yaw,
 			getSpeed: () => this.mover.speed,
@@ -1653,6 +1591,7 @@ export class GameEngine {
 					if (Math.hypot(c.vx, c.vy) > 10) c.yaw = Math.atan2(-c.vy, c.vx);
 					c.braking = false;
 					if (c.turnT >= 1) {
+						this.trafficTurns++;
 						c.laneId = dest.id;
 						if (dest.axis === "x") c.y = dest.fixed;
 						else c.x = dest.fixed;
@@ -2079,31 +2018,31 @@ export class GameEngine {
 				this.nearPoi = p.id;
 			}
 		}
-		if (onRiverfront(this.px, this.py)) this.nearPoi = "river";
-		const storePoi = POIS.find((p) => p.id === "store");
-		if (storePoi && insidePoi(this.px, this.py, storePoi, 0)) {
-			this.px = storePoi.x + storePoi.w / 2;
-			this.py = storePoi.y + storePoi.h + 86;
-		}
-		if (storePoi && onStoreDoor(this.px, this.py, storePoi) && !this.hqInside) {
-			this.hqInside = true;
-			commerce.offerStoreEntry();
-		} else if (storePoi && !onStoreDoor(this.px, this.py, storePoi) && this.hqInside) {
-			this.hqInside = false;
-			commerce.cancelStoreOffer();
-		}
+		// Physical mission handoffs outrank nearby ads and activity fallbacks.
+		// Keep the same authored interaction reach; arrival still requires E/TAP.
+		const objective = this.activeQuest().steps[this.activeQuest().activeStep];
+		const handoff = objective && !objective.done && (objective.kind === "deliver" || objective.kind === "pickup")
+			? POIS.find((p) => p.id === objective.target) : null;
+		const atHandoff = !!handoff && dist(this.px, this.py, handoff.x + handoff.w / 2, handoff.y + handoff.h / 2) < Math.max(handoff.w, handoff.h) * .55 + 44;
+		if (atHandoff) this.nearPoi = handoff.id;
+		if (onRiverfront(this.px, this.py) && !this.nearPoi) this.nearPoi = "river";
+		const wasInHQ = this.hqInside;
+		this.hqInside = insideHQ(this.px, this.py);
+		if (wasInHQ && !this.hqInside) commerce.cancelStoreOffer();
 		if (this.foodApproach && this.foodApproach !== this.nearPoi) this.foodApproach = null;
 		let best = 92;
 		const lanes = POIS.find((p) => p.id === "lanes");
 		for (const n of this.npcLive) {
+			// HQ's actor and outside locals cannot be interacted with through walls.
+			if (n.id === "k_blanco" ? !this.hqInside : this.hqInside) continue;
 			if (n.id === "lane_clerk" && lanes && !insidePoi(this.px, this.py, lanes, 8)) continue;
 			const d = dist(this.px, this.py, n.x, n.y);
-			if (d < best) {
+			if (d < best && (n.id !== "k_blanco" || d < 56)) {
 				best = d;
 				this.nearNpc = n.id;
 			}
 		}
-		if (!this.nearNpc) {
+		if (!this.nearNpc && !this.hqInside) {
 			let bestPed = 56;
 			for (let i = 0; i < this.peds.length; i++) {
 				const p = this.peds[i]!;
@@ -2127,6 +2066,10 @@ export class GameEngine {
 			}
 		}
 		const tap = this.input.device === "touch";
+		if (atHandoff && objective) {
+			this.interactHint = `${tap ? "TAP" : "E"} · ${objective.kind === "deliver" ? "Deliver the drop" : "Secure the drop"}`;
+			return;
+		}
 		if (this.vehicle) {
 			if (this.race.active && this.race.phase === "green") {
 				const next = RACE_CHECKPOINTS[this.race.player.next]!;
@@ -2148,8 +2091,8 @@ export class GameEngine {
 			const name = NPCS.find((x) => x.id === this.nearNpc)?.name ?? "local";
 			this.interactHint = `Talk to ${name}`;
 		} else if (this.nearPoi === "store") {
-			this.interactHint = tap ? "Doors open the real store" : "Walk into the doors · real store";
-			this.hintWalk = true;
+			this.interactHint = atHqShowroom(this.px, this.py) ? "Browse HQ fits" : this.hqInside ? "Find K Blanco · showroom on the right" : "Walk through the HQ doors";
+			this.hintWalk = !atHqShowroom(this.px, this.py);
 		} else if (this.nearPoi === "apartment") {
 			const apt = POIS.find((p) => p.id === "apartment")!;
 			const inside = this.px >= apt.x && this.px <= apt.x + apt.w && this.py >= apt.y && this.py <= apt.y + apt.h;
@@ -2738,7 +2681,7 @@ export class GameEngine {
 			this.emitHud();
 			return;
 		}
-		if (this.nearPoi === "river" || onRiverfront(this.px, this.py)) {
+		if (this.nearPoi === "river" || (!this.nearPoi && onRiverfront(this.px, this.py))) {
 			this.startFishing();
 			return;
 		}
@@ -2764,7 +2707,8 @@ export class GameEngine {
 				this.openDialogue("k_blanco");
 				return;
 			}
-			commerce.enterHeadquarters();
+			if (atHqShowroom(this.px, this.py)) this.openShop();
+			else this.showToast(this.hqInside ? "Browse fits at the showroom on the right." : "Walk through the HQ doors.");
 			return;
 		}
 		if (isFoodTruck(this.nearPoi)) {
@@ -3948,6 +3892,7 @@ export class GameEngine {
 		if (this.mission.complete && this.ball.score >= 10) this.completeStep("nightball");
 	}
 	exitBasketball() {
+		if (this.mode !== "basketball") return;
 		const clearedShootout = this.halloweenShootout && this.ball.score >= 10;
 		this.settleHalloweenShootout();
 		this.tryCreditBasketball();
@@ -4094,7 +4039,14 @@ export class GameEngine {
 			}
 			return;
 		}
-		if (this.ball.charging && this.ball.held) this.ball.power = Math.min(1, this.ball.power + dt * 0.88);
+		if (this.ball.charging && this.ball.held) {
+			this.ball.power = Math.min(1, this.ball.power + dt * 0.88);
+			if (this.ball.power >= 1) {
+				this.releaseShot();
+				// The normal release delay/flight path owns the separate ball.
+				return;
+			}
+		}
 		if (this.ball.held) {
 			const f = this.fwd();
 			const r = this.right();
@@ -4477,6 +4429,7 @@ export class GameEngine {
 					inFlight: this.ball.inFlight,
 					active: this.ball.active || this.canShoot() || this.ball.inFlight,
 				},
+				trafficTurns: this.trafficTurns,
 				cars: this.cars,
 				peds: this.peds,
 				npcs: this.npcLive
@@ -4938,8 +4891,8 @@ export class GameEngine {
 		}
 	}
 	getLocationName() {
-		if (onRiverfront(this.px, this.py) || this.nearPoi === "river") return "Mississippi River";
 		if (this.nearPoi) return POIS.find((p) => p.id === this.nearPoi)?.name ?? "Memphis";
+		if (onRiverfront(this.px, this.py)) return "Mississippi River";
 		if (this.py > riverHole().y - 80) return "Riverfront";
 		if (this.px > 3072 * .7) return "East Memphis";
 		if (this.px < 3072 * .28) return "West Side";

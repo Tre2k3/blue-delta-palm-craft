@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 import { mkdir } from "node:fs/promises";
-import { captureShot, closeBrowser, createOk, installHardTimeout, launchBrowser, preparePage } from "./smoke-lib.mjs";
+import { captureShot, enterGame, closeBrowser, createOk, installHardTimeout, launchBrowser, preparePage } from "./smoke-lib.mjs";
 
 const url = process.env.GAME_URL || "http://127.0.0.1:8080/";
 const failures = [];
 const pageErrors = [];
 const ok = createOk(failures);
-const clearHardTimeout = installHardTimeout("Traffic smoke", 60000);
+const clearHardTimeout = installHardTimeout("Traffic smoke");
 
 const browser = await launchBrowser(true);
 await mkdir("artifacts", { recursive: true });
@@ -20,9 +20,7 @@ try {
   const resp = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
   ok((resp?.status() ?? 0) < 400, "production preview returns OK", { status: resp?.status() });
 
-  await page.waitForSelector("button:has-text('ENTER MEMPHIS')", { timeout: 30000 });
-  await page.getByRole("button", { name: /ENTER MEMPHIS/i }).click();
-  await page.waitForFunction(() => window.__gameTest && window.__SACK_TRAFFIC__, { timeout: 25000 });
+  await enterGame(page, url);
   await page.waitForTimeout(2500);
 
   const initial = await page.evaluate(() => window.__SACK_TRAFFIC__);
@@ -49,8 +47,8 @@ try {
   let worstOffLane = initial?.offLaneCars ?? 0;
   let worstCarsOnCourt = initial?.carsOnCourt ?? 0;
   let worstBlockedLane = initial?.carsOnBlockedLane ?? 0;
-  for (let i = 0; i < 28; i++) {
-    await page.waitForTimeout(500);
+  for (let i = 0; i < 60; i++) {
+    await page.evaluate(() => { const e = window.__sack; e.running = false; cancelAnimationFrame(e.raf); clearTimeout(e.loopBackup); for (let n = 0; n < 60; n++) e.update(1 / 60); e.draw(); });
     const state = await page.evaluate(() => window.__SACK_TRAFFIC__);
     maxTurns = Math.max(maxTurns, state?.totalTurns ?? 0);
     maxStopped = Math.max(maxStopped, state?.stoppedAtRed ?? 0);
