@@ -8,7 +8,7 @@ import { Sound } from "./core/audio";
 import { Input, type Nav } from "./core/input";
 import type { Dialogue, HudState, Live, Mode, Overlay, Place, Results, Save, Solid } from "./core/types";
 import { clamp, damp, dampAngle, wrapAngle } from "./core/util";
-import { makeStage, pickQuality, type Quality, type Stage } from "./gfx/render";
+import { makeStage, pickQuality, qualityIsChosen, type Quality, type Stage } from "./gfx/render";
 import { PHASES, Sky, type Phase } from "./gfx/sky";
 import { Bowling } from "./play/bowling";
 import { CATALOG, COLLECTION_BONUS, productById } from "./play/catalog";
@@ -48,7 +48,40 @@ export interface Activity {
   tap?(nx: number, ny: number): void;
 }
 
-type Npc = { id: CastId; card: Card; place: Place; x: number; z: number; home: number };
+type Npc = { id: CastId; card: Card; place: Place; x: number; z: number; home: number; rise: number };
+
+/** Longest stretch of game time played in one go. */
+const STEP = 1 / 30;
+
+/** Graphics from richest to lightest. The frame rate walks down this list, resolution before effects. */
+const RUNGS: { quality: Quality; scale: number }[] = [
+  { quality: "high", scale: 1 },
+  { quality: "medium", scale: 1 },
+  { quality: "medium", scale: 0.8 },
+  { quality: "low", scale: 1 },
+  { quality: "low", scale: 0.78 },
+  { quality: "low", scale: 0.62 },
+  { quality: "low", scale: 0.5 },
+];
+const RUNG_KEY = "sack-v2-auto";
+
+function loadRung() {
+  try {
+    const v = JSON.parse(localStorage.getItem(RUNG_KEY) ?? "null") as { rung?: number; tooSlow?: number } | null;
+    if (v && Number.isInteger(v.rung) && v.rung! >= 0 && v.rung! < RUNGS.length) return { rung: v.rung!, tooSlow: Number.isInteger(v.tooSlow) ? v.tooSlow! : -1 };
+  } catch {
+    /* private mode */
+  }
+  return { rung: 1, tooSlow: -1 };
+}
+
+function saveRung(rung: number, tooSlow: number) {
+  try {
+    localStorage.setItem(RUNG_KEY, JSON.stringify({ rung, tooSlow }));
+  } catch {
+    /* private mode */
+  }
+}
 
 const START = { x: -13.4, z: -160.5, heading: 0 };
 const CAR_START = { x: 8, z: -151.6, heading: Math.PI / 2 };
@@ -162,6 +195,23 @@ export class Game {
   private titleSpin = 0;
   private skip = 0;
   private padWas = false;
+  /** Graphics follow the frame rate unless the player picked a level. */
+  private auto = true;
+  private rung = 1;
+  /** Deepest rung that proved too slow here: never climb back to it. */
+  private tooSlow = -1;
+  private gClock = 0;
+  private gFrames = 0;
+  private gHold = 3;
+  private gSlow = 0;
+  private gFast = 0;
+  private gBefore = 0;
+  private gStuck = 0;
+  private gLocked = false;
+  /** Frame rate before the last climb, and how many seconds are left to match it. */
+  private gProbe = 0;
+  private gProbeLeft = 0;
+  private gRate = 60;
   private hoops: Hoops;
   private bowling: Bowling;
   private fishing: Fishing;
@@ -182,9 +232,18 @@ export class Game {
     this.save = saved ?? freshSave();
     this.city = buildCity();
     this.scene = this.city.scene;
+    this.auto = !qualityIsChosen();
     this.stage = makeStage(canvas, this.scene, pickQuality());
     this.camera = this.stage.camera;
     this.sky = new Sky(this.scene, this.stage.renderer);
+    if (this.auto) {
+      const r = loadRung();
+      this.rung = r.rung;
+      this.tooSlow = r.tooSlow;
+      this.stage.setQuality(RUNGS[this.rung]!.quality);
+      this.stage.setScale(RUNGS[this.rung]!.scale);
+    }
+    this.fitQuality();
     this.rooms = { hq: buildHqRoom(), home: buildHomeRoom(), bowl: buildBowlRoom(), fun: buildFunRoom(), laser: buildLaserRoom() };
     for (const r of Object.values(this.rooms)) this.scene.add(r.group);
 
@@ -234,15 +293,15 @@ export class Game {
 
   private cast() {
     const a = this.city.anchors;
-    const put = (id: CastId, place: Place, x: number, z: number, heading: number) => {
+    const put = (id: CastId, place: Place, x: number, z: number, heading: number, rise = 0) => {
       const c = CAST[id];
       const card = new Card(c.art, c.height);
       card.place(x, z);
       card.heading = heading;
       (place === "street" ? this.city.exterior : this.rooms[place].group).add(card.group);
-      this.npcs.push({ id, card, place, x, z, home: heading });
+      this.npcs.push({ id, card, place, x, z, home: heading, rise });
     };
-    put("kBlanco", "hq", this.rooms.hq.kSpot.x, this.rooms.hq.kSpot.z, this.rooms.hq.kSpot.heading);
+    put("kBlanco", "hq", this.rooms.hq.kSpot.x, this.rooms.hq.kSpot.z, this.rooms.hq.kSpot.heading, this.rooms.hq.kSpot.lift);
     put("courtOg", "street", a.ogSpot.x, a.ogSpot.z, 0);
     put("uncJ", "street", a.baitCounter.x + 2.4, a.baitCounter.z + 1.2, -Math.PI / 2);
     put("mamaDee", "street", a.truckCounter.x + 2.2, a.truckCounter.z - 0.4, Math.PI);
@@ -787,14 +846,128 @@ export class Game {
     });
   }
 
-  setQuality(q: Quality) {
-    this.stage.setQuality(q);
+  /** The pause menu's graphics switch. "auto" hands the choice back to the frame rate. */
+  setQuality(q: Quality | "auto") {
+    this.auto = q === "auto";
     try {
-      localStorage.setItem("sack-v2-quality", q);
+      if (q === "auto") localStorage.removeItem("sack-v2-quality");
+      else localStorage.setItem("sack-v2-quality", q);
     } catch {
       /* private mode */
     }
+    if (q === "auto") {
+      this.gLocked = false;
+      this.gSlow = this.gFast = this.gStuck = 0;
+      this.gHold = 2;
+      this.setRung(this.rung);
+    } else {
+      this.stage.setScale(1);
+      this.stage.setQuality(q);
+      this.fitQuality();
+    }
     this.push();
+  }
+
+  /** Everything outside the renderer that depends on the graphics level. */
+  private fitQuality() {
+    const q = this.stage.quality;
+    this.sky.reflect = q !== "low";
+    const size = q === "high" ? 2048 : 1024;
+    const shadow = this.sky.sun.shadow;
+    if (shadow.mapSize.x !== size) {
+      shadow.mapSize.set(size, size);
+      shadow.map?.dispose();
+      shadow.map = null;
+    }
+    // Shadows and reflections are compiled into every surface: have them rebuilt.
+    this.scene.traverse((o) => {
+      const m = (o as THREE.Mesh).material;
+      if (!m) return;
+      for (const one of Array.isArray(m) ? m : [m]) one.needsUpdate = true;
+    });
+  }
+
+  private setRung(i: number) {
+    this.rung = clamp(i, 0, RUNGS.length - 1);
+    const r = RUNGS[this.rung]!;
+    const changed = r.quality !== this.stage.quality;
+    this.stage.setQuality(r.quality);
+    this.stage.setScale(r.scale);
+    if (changed) this.fitQuality();
+    saveRung(this.rung, this.tooSlow);
+    this.push();
+  }
+
+  /**
+   * Watches the frame rate a second at a time. Two slow seconds in a row drop one rung
+   * (resolution first, then effects); a long smooth run tries one rung up, once. If dropping
+   * does not make it any faster the screen is what sets the pace, so it climbs back and stops.
+   */
+  private govern(real: number) {
+    if (!this.auto || this.gLocked) return;
+    // A tab coming back, a level loading, a menu or a fade tell nothing about the device.
+    const steady = real < 1.5 && this.live.fade < 0.05 && this.overlay === null;
+    if (!steady) {
+      this.gClock = this.gFrames = 0;
+      this.gHold = Math.max(this.gHold, 1);
+      return;
+    }
+    if (this.gHold > 0) {
+      this.gHold -= real;
+      return;
+    }
+    this.gClock += real;
+    this.gFrames++;
+    if (this.gClock < 1) return;
+    const fps = this.gFrames / this.gClock;
+    this.gClock = this.gFrames = 0;
+
+    if (this.gBefore > 0) {
+      // First full second after a drop: did it buy anything?
+      this.gStuck = fps > 24 && fps < this.gBefore * 1.12 ? this.gStuck + 1 : 0;
+      this.gBefore = 0;
+      if (this.gStuck >= 2) {
+        this.gLocked = true;
+        this.tooSlow = -1;
+        this.setRung(this.rung - 2);
+        return;
+      }
+    }
+    if (this.gProbeLeft > 0) {
+      // Just climbed a rung: it has to hold the pace it had before, or it goes straight back.
+      this.gProbeLeft--;
+      if (fps < this.gProbe * 0.9) {
+        this.gProbeLeft = 0;
+        this.tooSlow = Math.max(this.tooSlow, this.rung);
+        this.gHold = 1.2;
+        this.gSlow = this.gFast = 0;
+        this.setRung(this.rung + 1);
+        return;
+      }
+    }
+    this.gRate += (fps - this.gRate) * 0.3;
+    if (fps < 42) {
+      this.gSlow++;
+      this.gFast = 0;
+    } else if (fps > 56) {
+      this.gFast++;
+      this.gSlow = 0;
+    } else this.gSlow = this.gFast = 0;
+
+    if (this.gSlow >= 2 && this.rung < RUNGS.length - 1) {
+      this.tooSlow = Math.max(this.tooSlow, this.rung);
+      this.gBefore = fps;
+      this.gSlow = 0;
+      this.gHold = 1.2;
+      // Far off the pace: take two steps at once.
+      this.setRung(this.rung + (fps < 22 ? 2 : 1));
+    } else if (this.gFast >= 10 && this.rung - 1 > this.tooSlow) {
+      this.gFast = 0;
+      this.gHold = 2;
+      this.gProbe = this.gRate;
+      this.gProbeLeft = 4;
+      this.setRung(this.rung - 1);
+    }
   }
 
   setPhase(p: Phase | "auto") {
@@ -965,7 +1138,7 @@ export class Game {
     const m = this.input.move();
     const talking = this.fadeTo > 0;
     const run = this.input.down("run");
-    const top = (run ? 6.6 : 3.7) * (this.wearing("blue_901") ? 1.15 : 1);
+    const top = (run ? 8.4 : 4.8) * (this.wearing("blue_901") ? 1.15 : 1);
     const look = this.input.takeLook();
     if (look !== 0) {
       this.camYaw = wrapAngle(this.camYaw - look);
@@ -1057,10 +1230,11 @@ export class Game {
     // Squeezed against a wall: go up and look down instead of sitting in his hair.
     const near = 1 - this.boom / want;
     const y0 = (room ? room.floorY : this.benji.group.position.y) + 1.25;
-    _v.set(tx - fx * this.boom, y0 + (room ? 0.95 : 1.25) + near * 1.7, tz - fz * this.boom);
+    _v.set(tx - fx * this.boom, y0 + (room ? 0.95 : 1.25) + near * (room ? 1.3 : 1.7), tz - fz * this.boom);
     if (snap) this.camera.position.copy(_v);
     else this.camera.position.lerp(_v, damp(14, dt));
-    _look.set(tx + fx * 1.5, y0 + 0.25, tz + fz * 1.5);
+    // Indoors the lens looks more level, so the walls are in the picture and not just the floor.
+    _look.set(tx + fx * 1.5, y0 + (room ? 0.5 : 0.25), tz + fz * 1.5);
     this.camera.lookAt(_look);
     const fov = room ? 52 : 46;
     if (Math.abs(this.camera.fov - fov) > 0.05) {
@@ -1082,12 +1256,17 @@ export class Game {
   private loop = (now: number) => {
     if (this.dead) return;
     this.raf = requestAnimationFrame(this.loop);
-    const dt = Math.min(0.05, Math.max(0.001, (now - this.last) / 1000));
+    const real = Math.max(0.001, (now - this.last) / 1000);
     this.last = now;
-    this.tick(dt);
+    this.govern(real);
+    // The game always runs at its true speed. A slow frame is played as several short steps
+    // and only the last is drawn, so a weak machine gets a choppier picture, never slow motion.
+    const span = Math.min(0.5, real);
+    const steps = Math.ceil(span / STEP);
+    for (let i = 1; i <= steps; i++) this.tick(span / steps, i === steps);
   };
 
-  private tick(dt: number) {
+  private tick(dt: number, draw = true) {
     const input = this.input;
     input.driving = this.mode === "drive" || this.mode === "race" || this.mode === "kart";
     input.actionOnA = !!this.activity && !input.driving;
@@ -1154,7 +1333,7 @@ export class Game {
       const d = Math.hypot(this.pos.x - n.x, this.pos.z - n.z);
       const want = d < 7 ? Math.atan2(this.pos.x - n.x, this.pos.z - n.z) : n.home;
       n.card.heading = dampAngle(n.card.heading, want, damp(5, dt));
-      n.card.update(dt, cam, this.tint, n.place === "street" ? null : this.rooms[n.place].floorY + 0.03);
+      n.card.update(dt, cam, this.tint, n.place === "street" ? null : this.rooms[n.place].floorY + 0.03 + n.rise);
     }
 
     // The city.
@@ -1166,7 +1345,7 @@ export class Game {
       if (!paused) {
         const blockers = this.mode === "walk" ? [{ x: this.pos.x, z: this.pos.z, radius: 0.5, speed: 0 }] : [];
         blockers.push({ x: this.driver.x, z: this.driver.z, radius: 1.4, speed: this.driver.speed });
-        this.traffic.update(dt, this.city.signals, blockers);
+        this.traffic.update(dt, this.city.signals, blockers, cam);
         this.traffic.setLights(look.lights > 0.4 ? 3 : 0.2);
         this.people.update(dt, cam, this.tint, this.pos);
       }
@@ -1217,8 +1396,8 @@ export class Game {
     this.live.heading = this.heading;
     this.live.camYaw = this.camYaw;
     // A cabinet game covers the screen: draw the room behind it only now and then.
-    this.skip = this.overlay === "arcade" ? (this.skip + 1) % 12 : 0;
-    if (this.skip === 0) this.stage.render();
+    if (draw) this.skip = this.overlay === "arcade" ? (this.skip + 1) % 12 : 0;
+    if (this.skip === 0 && draw) this.stage.render();
 
     this.hudClock -= dt;
     if (this.hudClock <= 0) this.push();
@@ -1342,7 +1521,7 @@ export class Game {
       shopFocus: this.shopFocus,
       cabinet: this.cabinet,
       foodAt: this.foodAt,
-      settings: { quality: this.stage.quality, music: this.sound.musicOn, sfx: this.sound.sfxOn, clock: this.sky.auto },
+      settings: { quality: this.stage.quality, auto: this.auto, music: this.sound.musicOn, sfx: this.sound.sfxOn, clock: this.sky.auto },
       hasSave: this.hasSave && s.step > 0,
       storyDone: !step,
       touch: this.input.touch,

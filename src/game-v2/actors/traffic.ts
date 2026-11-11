@@ -122,7 +122,8 @@ export class Traffic {
     return total - car.s;
   }
 
-  update(dt: number, signals: SignalState, blockers: TrafficCar[]) {
+  /** `focus` is where the player is: cars a long way from it keep driving but are not drawn. */
+  update(dt: number, signals: SignalState, blockers: TrafficCar[], focus?: { x: number; z: number }) {
     this.group.visible = !this.hidden;
     if (this.hidden) return;
     for (const car of this.cars) {
@@ -176,6 +177,9 @@ export class Traffic {
       const before = car.heading;
       this.poseOnLeg(car);
       const steer = Math.max(-0.5, Math.min(0.5, (before - car.heading) * 6));
+      const seen = !focus || Math.abs(car.x - focus.x) + Math.abs(car.z - focus.z) < 190;
+      car.model.group.visible = seen;
+      if (!seen) continue;
       car.model.place(car.x, 0, car.z, car.heading);
       car.model.roll(travel, steer);
     }

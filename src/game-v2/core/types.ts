@@ -120,7 +120,7 @@ export type HudState = {
   shopFocus: string | null;
   cabinet: string | null;
   foodAt: "trucks" | "pizza";
-  settings: { quality: "low" | "medium" | "high"; music: boolean; sfx: boolean; clock: boolean };
+  settings: { quality: "low" | "medium" | "high"; auto: boolean; music: boolean; sfx: boolean; clock: boolean };
   hasSave: boolean;
   storyDone: boolean;
   touch: boolean;

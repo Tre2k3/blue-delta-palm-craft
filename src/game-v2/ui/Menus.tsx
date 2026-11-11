@@ -106,8 +106,9 @@ export function Pause({ game, hud }: { game: Game; hud: HudState }) {
       </button>
       <Row label="Graphics">
         <Seg
-          value={s.quality}
+          value={s.auto ? "auto" : s.quality}
           options={[
+            ["auto", "Auto"],
             ["low", "Fast"],
             ["medium", "Balanced"],
             ["high", "Best"],

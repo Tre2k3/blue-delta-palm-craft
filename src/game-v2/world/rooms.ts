@@ -59,13 +59,62 @@ export function finish(ctx: BuildCtx, group: THREE.Group) {
   group.visible = false;
 }
 
+const STEP_UP = 0.24;
+
 export type HqRoom = Room & {
   counter: { x: number; z: number };
-  kSpot: { x: number; z: number; heading: number };
+  /** Where K Blanco stands, and how far the step behind the counter lifts her. */
+  kSpot: { x: number; z: number; heading: number; lift: number };
   fitting: { x: number; z: number };
   /** Product on show at each stand. */
   stands: { x: number; z: number; productId: string }[];
 };
+
+/** A poster of Benji in three pieces from the line, for the shop's hanging banners. */
+function lookbook(title: string, fits: string[]) {
+  const c = document.createElement("canvas");
+  c.width = c.height = 768;
+  const g = c.getContext("2d")!;
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  const pics: (HTMLImageElement | null)[] = fits.map(() => null);
+  const draw = () => {
+    const bg = g.createLinearGradient(0, 0, 0, 768);
+    bg.addColorStop(0, "#123a22");
+    bg.addColorStop(1, "#07130c");
+    g.fillStyle = bg;
+    g.fillRect(0, 0, 768, 768);
+    g.fillStyle = "#39ff14";
+    g.fillRect(0, 122, 768, 5);
+    g.fillRect(0, 716, 768, 5);
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.fillStyle = "#f5f0e1";
+    g.font = `900 68px Impact, "Arial Narrow Bold", "Arial Black", sans-serif`;
+    g.fillText(title, 384, 66, 720);
+    g.fillStyle = "#e0b33a";
+    g.font = `800 26px ui-sans-serif, system-ui, sans-serif`;
+    g.fillText("WEAR IT IN MEMPHIS  ·  BUY IT FOR REAL", 384, 745, 720);
+    pics.forEach((img, i) => {
+      if (!img) return;
+      const h = 560;
+      const w = (img.naturalWidth / img.naturalHeight) * h;
+      g.drawImage(img, 128 + i * 256 - w / 2, 140, w, h);
+    });
+    t.needsUpdate = true;
+  };
+  draw();
+  fits.forEach((fit, i) => {
+    const img = new Image();
+    img.onload = () => {
+      pics[i] = img;
+      draw();
+    };
+    img.src = `/game/apparel/previews/${fit}.png`;
+  });
+  return new THREE.MeshBasicMaterial({ map: t, toneMapped: false, color: 0xe9e6e0 });
+}
 
 /**
  * The showroom: brick and black, green tube light, the cashwrap under the script sign,
@@ -79,7 +128,7 @@ export function buildHqRoom(): HqRoom {
   const D = 16;
   const H = 5.4;
   const brick = MAT.brick("#3a2620", 11);
-  const floor = new THREE.MeshStandardMaterial({ map: (MAT.plaza(ctx.glow) as THREE.MeshStandardMaterial).map, roughness: 0.22, metalness: 0.15, color: 0x9a938a });
+  const floor = new THREE.MeshStandardMaterial({ map: (MAT.plaza(ctx.glow) as THREE.MeshStandardMaterial).map, roughness: 0.42, metalness: 0.1, color: 0x9a938a });
   shell(ctx, C.x, C.z, W, D, H, floor, brick, std(0x0c0c0e, 0.9), 5);
   const lights: THREE.PointLight[] = [];
   const f = new Frame(ctx, C.x, C.z, YAW.south);
@@ -99,16 +148,19 @@ export function buildHqRoom(): HqRoom {
   f.box(0.5, 0.36, 0.34, -2.4, 1.36, counterZ, std(0x1a1a1c, 0.4, 0.5));
   f.box(0.42, 0.26, 0.02, -2.4, 1.44, counterZ + 0.18, emissiveMat(ctx, 0x9fd0ff, 0.8, 1.6));
   f.solid(-3.7, 3.7, counterZ - 0.6, counterZ + 0.6);
+  // The till stands on a step, so whoever works it looks down at the customer.
+  f.box(7.4, STEP_UP, 1.5, 0, STEP_UP / 2, counterZ - 1.35, std(0x141416, 0.6));
   light(group, lights, C.x, 3.6, C.z + counterZ + 1.6, 0xffd9a0, 40, 14);
 
   // Product stands: a lit frame on the wall with the piece in it.
   const stands: HqRoom["stands"] = [];
+  const black = std(0x0a0a0b, 0.5);
   const stand = (lx: number, lz: number, yaw: number, productId: string, w = 2.1, h = 2.7) => {
     const product = CATALOG.find((x) => x.id === productId);
     if (!product) return;
     const sf = new Frame(ctx, C.x + lx, C.z + lz, yaw);
     const art = new THREE.MeshBasicMaterial({ map: image(product.image), toneMapped: false });
-    sf.box(w + 0.24, h + 0.24, 0.1, 0, 2.3, 0.05, std(0x0a0a0b, 0.5));
+    sf.box(w + 0.24, h + 0.24, 0.1, 0, 2.3, 0.05, black);
     sf.wall(w, h, 0, 2.3, 0.11, art, ctx.flat);
     sf.box(w + 0.3, 0.05, 0.05, 0, 2.3 + h / 2 + 0.16, 0.12, green, ctx.flat);
     sf.box(w + 0.3, 0.05, 0.05, 0, 2.3 - h / 2 - 0.16, 0.12, green, ctx.flat);
@@ -116,11 +168,77 @@ export function buildHqRoom(): HqRoom {
     stands.push({ x: sf.wx(0, 1.7), z: sf.wz(0, 1.7), productId });
   };
   const ids = CATALOG.map((x) => x.id);
-  // West wall, east wall, then either side of the back panel.
-  [-4.6, -1.5, 1.6, 4.7].forEach((lz, i) => stand(-W / 2 + 0.02, lz, YAW.east, ids[1 + i]!));
-  [-4.6, -1.5, 1.6, 4.7].forEach((lz, i) => stand(W / 2 - 0.02, lz, YAW.west, ids[5 + i]!));
+
+  // The real pieces, photographed: one material per shot, shared by every display that shows it.
+  const TEES = ["black", "white", "red"] as const;
+  type Tee = (typeof TEES)[number];
+  const shots = new Map<string, THREE.MeshBasicMaterial>();
+  const shot = (tee: Tee, view: "front" | "back" | "print" | "tour") => {
+    const key = `${tee}-${view}`;
+    let m = shots.get(key);
+    if (!m) {
+      // The photos run off into the next shirt at the right and bottom edge: trim that away.
+      const whole = view === "front" || view === "back";
+      const map = whole ? cropTex(`/game/apparel/tour-${tee}-${view}.webp`, 0, 0, 0.945, 0.93, 512, 512) : cropTex(`/game/apparel/tour-${tee}-${view}.webp`, 0.03, 0.03, 0.97, view === "tour" ? 0.8 : 0.97, 256, 256);
+      m = new THREE.MeshBasicMaterial({ map, toneMapped: false, color: 0xe9e6e0 });
+      shots.set(key, m);
+    }
+    return m;
+  };
+
+  // West wall: the Worldwide Tour bay. Each tee front and back on a black board, life size and up.
+  const wf = new Frame(ctx, C.x - W / 2 + 0.02, C.z, YAW.east);
+  wf.box(D - 0.9, 4.3, 0.08, 0, 2.5, 0.04, black);
+  wf.wall(7.2, 0.72, 0, 4.36, 0.1, sign("WORLDWIDE TOUR", "#e8b84a", "#0a0a0b", { sub: "EST. 2020  ·  KLOTHING KOMPANY", w: 1024, h: 128 }), ctx.flat);
+  wf.box(7.4, 0.045, 0.05, 0, 3.94, 0.11, gold, ctx.flat);
+  TEES.forEach((tee, i) => {
+    const product = CATALOG.find((x) => x.id === `sr-tour-${tee}`);
+    // Local +X on this wall runs toward the back of the shop.
+    const cx = (1 - i) * 4.85;
+    const size = 2.2;
+    for (const [dx, view] of [
+      [-1.15, "front"],
+      [1.15, "back"],
+    ] as const) {
+      wf.wall(size, size, cx + dx, 2.62, 0.1, shot(tee, view), ctx.flat);
+      wf.box(size + 0.1, 0.045, 0.05, cx + dx, 2.62 + size / 2 + 0.07, 0.11, green, ctx.flat);
+    }
+    wf.box(2 * size + 0.2, 0.045, 0.05, cx, 2.62 - size / 2 - 0.07, 0.11, green, ctx.flat);
+    if (product) {
+      wf.wall(4.3, 0.42, cx, 1.14, 0.1, sign(product.name.toUpperCase(), "#f5f0e1", "#101012", { sub: `$${product.usd} IN STORE  ·  FRONT + BACK`, w: 1024, h: 100 }), ctx.flat);
+      stands.push({ x: wf.wx(cx, 1.7), z: wf.wz(cx, 1.7), productId: product.id });
+    }
+  });
+
+  // East wall: the rest of the line, under a frieze of the prints.
+  [-5.8, -2.9, 0, 2.9, 5.8].forEach((lz, i) => stand(W / 2 - 0.02, lz, YAW.west, ids[4 + i]!));
+  const frieze = (fr: Frame, from: number, to: number, y: number, tile = 0.96) => {
+    const n = Math.max(1, Math.floor((to - from) / (tile + 0.1)));
+    const step = (to - from) / n;
+    for (let i = 0; i < n; i++) {
+      const tee = TEES[i % 3]!;
+      fr.box(tile + 0.06, tile + 0.06, 0.04, from + step * (i + 0.5), y, 0.03, black);
+      fr.wall(tile, tile, from + step * (i + 0.5), y, 0.06, shot(tee, i % 2 ? "tour" : "print"), ctx.flat);
+    }
+  };
+  frieze(new Frame(ctx, C.x + W / 2 - 0.02, C.z, YAW.west), -D / 2 + 0.6, D / 2 - 0.6, 4.5);
+
+  // Back wall: cap and chain either side of the sign, the tour list between.
   stand(-8.6, -D / 2 + 0.02, YAW.south, ids[9]!);
   stand(8.6, -D / 2 + 0.02, YAW.south, ids[10]!);
+  const bf = new Frame(ctx, C.x, C.z - D / 2 + 0.02, YAW.south);
+  ([
+    [-6.5, "black"],
+    [6.5, "red"],
+  ] as const).forEach(([lx, tee]) => {
+    bf.box(1.56, 1.96, 0.06, lx, 2.5, 0.03, black);
+    bf.wall(1.44, 1.8, lx, 2.5, 0.07, new THREE.MeshBasicMaterial({ map: cropTex(`/game/apparel/tour-${tee}-tour.webp`, 0, 0, 1, 1, 256, 320), toneMapped: false, color: 0xe9e6e0 }), ctx.flat);
+    bf.box(1.6, 0.045, 0.05, lx, 3.54, 0.08, gold, ctx.flat);
+  });
+  frieze(bf, -11.4, -5.9, 4.5);
+  frieze(bf, 5.9, 11.4, 4.5);
+
+  // Door wall.
   stand(-8.2, D / 2 - 0.02, YAW.north, ids[11]!);
   stand(8.2, D / 2 - 0.02, YAW.north, ids[12]!);
   for (const lx of [-W / 2 + 1.4, W / 2 - 1.4]) {
@@ -128,8 +246,27 @@ export function buildHqRoom(): HqRoom {
     light(group, lights, C.x + lx, 3.9, C.z + 3.2, 0xfff0d8, 26, 12);
   }
 
-  // Floor tables with folded stock and a hanging rail.
-  const fold = [0x1f6a3c, 0x111113, 0xece8de, 0xa3261c, 0xd8a93a];
+  // Banners hung over the floor either side of the aisle: a tee each, front one way, back the other.
+  const wire = std(0x2a2a2e, 0.4, 0.6);
+  const hang = (lx: number, lz: number, turn: number, front: THREE.Material, back: THREE.Material, size = 1.9) => {
+    const y = 3.2;
+    f.box(size + 0.1, size + 0.1, 0.05, lx, y, lz, black, ctx.solid, turn);
+    const ox = Math.sin(turn) * 0.035;
+    const oz = Math.cos(turn) * 0.035;
+    f.wall(size, size, lx + ox, y, lz + oz, front, ctx.flat, turn);
+    f.wall(size, size, lx - ox, y, lz - oz, back, ctx.flat, turn + Math.PI);
+    for (const s of [-1, 1]) f.box(0.02, H - y - size / 2, 0.02, lx + s * Math.cos(turn) * size * 0.42, (H + y + size / 2) / 2, lz - s * Math.sin(turn) * size * 0.42, wire);
+    f.box(size + 0.16, 0.04, 0.07, lx, y - size / 2 - 0.07, lz, green, ctx.flat, turn);
+  };
+  hang(-3.5, 3.9, 0.3, shot("black", "front"), shot("black", "back"));
+  hang(3.5, 3.9, -0.3, shot("red", "front"), shot("red", "back"));
+  hang(-3.5, -1.9, 0.3, shot("white", "front"), shot("white", "back"));
+  hang(3.5, -1.9, -0.3, lookbook("THE TOUR TEES", ["tour_black", "tour_white", "tour_red"]), lookbook("SACKROW JERSEYS", ["jersey_black_fresh", "jersey_blue_fresh", "jersey_white_224"]));
+
+  // Floor tables: folded stock with the print showing on top of every stack.
+  const cloth: Record<Tee | "green", THREE.Material> = { black: std(0x111113, 0.9), white: std(0xece8de, 0.9), red: std(0xa3261c, 0.9), green: std(0x1f6a3c, 0.9) };
+  const script = sign("$ackReligious", "#f5f0e1", "#1f6a3c", { w: 256, h: 128 });
+  const order = ["black", "red", "white", "green"] as const;
   for (const [tx, tz] of [
     [-4.6, 1.2],
     [4.6, 1.2],
@@ -137,16 +274,27 @@ export function buildHqRoom(): HqRoom {
     f.box(3.2, 0.1, 1.5, tx, 0.92, tz, MAT.darkWood());
     for (const lx of [-1.4, 1.4]) for (const lz of [-0.6, 0.6]) f.box(0.1, 0.9, 0.1, tx + lx, 0.45, tz + lz, MAT.black());
     for (let i = 0; i < 8; i++) {
-      const col = fold[(i + (tx > 0 ? 2 : 0)) % fold.length]!;
-      for (let k = 0; k < 2 + (i % 3); k++) f.box(0.6, 0.07, 0.48, tx - 1.2 + (i % 4) * 0.8, 1.01 + k * 0.075, tz + (i < 4 ? -0.36 : 0.36), std(col, 0.9));
+      const kind = order[(i + (tx > 0 ? 1 : 0) + (i < 4 ? 0 : 2)) % order.length]!;
+      const sx = tx - 1.2 + (i % 4) * 0.8;
+      const sz = tz + (i < 4 ? -0.36 : 0.36);
+      const tall = 2 + (i % 3);
+      for (let k = 0; k < tall; k++) f.box(0.6, 0.07, 0.48, sx, 1.01 + k * 0.075, sz, cloth[kind]);
+      f.flat(0.4, 0.4, sx, 1.01 + (tall - 1) * 0.075 + 0.04, sz, kind === "green" ? script : shot(kind, "print"), ctx.flat);
     }
     f.solid(tx - 1.6, tx + 1.6, tz - 0.75, tz + 0.75);
   }
+  // Rails by the door: the shirt at each end shows its print.
   for (const rx of [-7.6, 7.6]) {
     f.box(0.06, 1.7, 0.06, rx, 0.85, 4.2, MAT.chrome());
     f.box(0.06, 1.7, 0.06, rx, 0.85, 6.2, MAT.chrome());
     f.box(0.06, 0.06, 2.1, rx, 1.7, 5.2, MAT.chrome());
-    for (let i = 0; i < 7; i++) f.box(0.5, 0.78, 0.05, rx, 1.24, 4.4 + i * 0.27, std(fold[(i + (rx > 0 ? 1 : 3)) % fold.length]!, 0.9), ctx.solid, 0.12);
+    for (let i = 0; i < 7; i++) {
+      const kind = order[(i + (rx > 0 ? 1 : 3)) % order.length]!;
+      f.box(0.62, 0.8, 0.05, rx, 1.24, 4.4 + i * 0.27, cloth[kind], ctx.solid, 0.12);
+      const face = kind === "green" ? script : shot(kind, "print");
+      if (i === 6) f.wall(0.46, 0.46, rx + 0.004, 1.3, 4.4 + i * 0.27 + 0.03, face, ctx.flat, 0.12);
+      if (i === 0) f.wall(0.46, 0.46, rx - 0.004, 1.3, 4.4 - 0.03, kind === "green" ? script : shot(kind, "tour"), ctx.flat, 0.12 + Math.PI);
+    }
     f.solid(rx - 0.4, rx + 0.4, 4.1, 6.3);
   }
   // Ceiling: black, track heads, a green line round the room.
@@ -167,7 +315,7 @@ export function buildHqRoom(): HqRoom {
   const wallArt = new THREE.MeshBasicMaterial({ map: image("/game/logo-wall.webp"), toneMapped: false, color: 0xd8d2c6 });
   f.wall(5.4, 3.2, 4.6, 2.5, D / 2 - 0.04, wallArt, ctx.flat, Math.PI);
   f.box(2.6, 3.6, 0.14, -4.6, 1.8, D / 2 - 0.5, std(0x17110e, 0.8));
-  f.wall(2.2, 3.2, -4.6, 1.8, D / 2 - 0.58, new THREE.MeshStandardMaterial({ color: 0x9fb4c0, roughness: 0.04, metalness: 0.95 }), ctx.solid, Math.PI);
+  f.wall(2.2, 3.2, -4.6, 1.8, D / 2 - 0.58, new THREE.MeshStandardMaterial({ color: 0x9fb4c0, roughness: 0.16, metalness: 0.95 }), ctx.solid, Math.PI);
   f.wall(2.4, 0.4, -4.6, 3.9, D / 2 - 0.58, sign("FITTING ROOM", "#d8a93a", "#101012", { w: 384, h: 64 }), ctx.flat, Math.PI);
   light(group, lights, C.x, 3.8, C.z + 4, 0x7dff6a, 14, 12);
   // Plants in the corners.
@@ -185,13 +333,14 @@ export function buildHqRoom(): HqRoom {
     bounds: { minX: C.x - W / 2, maxX: C.x + W / 2, minZ: C.z - D / 2, maxZ: C.z + D / 2 },
     solids: ctx.solids,
     floorY: 0,
-    spawn: { x: C.x, z: C.z + D / 2 - 1.6, heading: Math.PI },
+    // A few steps in from the door, so the first look is the whole shop and not the floor.
+    spawn: { x: C.x, z: C.z + D / 2 - 3.6, heading: Math.PI },
     exit: { x: C.x, z: C.z + D / 2 - 0.9 },
     lights,
     ambient: { sky: 0xffe2c0, ground: 0x2a1e16, power: 0.55 },
     boom: 4.4,
     counter: { x: C.x, z: C.z + counterZ + 1.5 },
-    kSpot: { x: C.x + 1.3, z: C.z + counterZ - 1.1, heading: 0 },
+    kSpot: { x: C.x + 1.3, z: C.z + counterZ - 0.98, heading: 0, lift: STEP_UP },
     fitting: { x: C.x - 4.6, z: C.z + D / 2 - 1.9 },
     stands,
   };

@@ -26,12 +26,25 @@ export type Stage = {
   camera: THREE.PerspectiveCamera;
   quality: Quality;
   setQuality(q: Quality): void;
+  /** Extra factor on the drawing resolution, 0.5..1. The frame-rate governor turns this down first. */
+  scale: number;
+  setScale(k: number): void;
   setBloom(strength: number): void;
   setPunch(v: number): void;
   render(): void;
   resize(): void;
   dispose(): void;
 };
+
+/** True when the level was asked for in the address bar or picked in the pause menu. */
+export function qualityIsChosen() {
+  if (new URLSearchParams(window.location.search).get("q")) return true;
+  try {
+    return !!localStorage.getItem("sack-v2-quality");
+  } catch {
+    return false;
+  }
+}
 
 export function pickQuality(): Quality {
   const params = new URLSearchParams(window.location.search);
@@ -43,8 +56,8 @@ export function pickQuality(): Quality {
   } catch {
     /* private mode */
   }
-  const phone = window.matchMedia("(pointer: coarse)").matches || window.innerWidth < 760;
-  return phone ? "medium" : "high";
+  // Start in the middle. The game steps up or down from here by itself once it sees the frame rate.
+  return "medium";
 }
 
 export function makeStage(canvas: HTMLCanvasElement, scene: THREE.Scene, start: Quality): Stage {
@@ -61,9 +74,11 @@ export function makeStage(canvas: HTMLCanvasElement, scene: THREE.Scene, start: 
   let w = 0;
   let h = 0;
 
+  let scale = 1;
+  const ratio = () => (quality === "high" ? Math.min(window.devicePixelRatio, 1.5) : quality === "medium" ? Math.min(window.devicePixelRatio, 1.1) : 1) * scale;
+
   const build = () => {
-    const ratio = quality === "high" ? Math.min(window.devicePixelRatio, 1.75) : quality === "medium" ? Math.min(window.devicePixelRatio, 1.25) : 1;
-    renderer.setPixelRatio(ratio);
+    renderer.setPixelRatio(ratio());
     renderer.shadowMap.enabled = quality !== "low";
     const target = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: quality === "high" ? 4 : 0 });
     composer = new EffectComposer(renderer, target);
@@ -89,13 +104,20 @@ export function makeStage(canvas: HTMLCanvasElement, scene: THREE.Scene, start: 
     setQuality(q) {
       if (q === quality) return;
       quality = q;
-      try {
-        localStorage.setItem("sack-v2-quality", q);
-      } catch {
-        /* private mode */
-      }
       composer.dispose();
       build();
+    },
+    get scale() {
+      return scale;
+    },
+    setScale(k) {
+      const next = Math.max(0.5, Math.min(1, k));
+      if (next === scale) return;
+      scale = next;
+      renderer.setPixelRatio(ratio());
+      composer.setPixelRatio(ratio());
+      w = 0;
+      stage.resize();
     },
     setBloom(strength) {
       if (bloom) bloom.strength = strength;

@@ -200,6 +200,8 @@ void main() {
 export class Sky {
   readonly look: Look = cloneLook(LOOKS.golden);
   readonly dome: THREE.Mesh;
+  /** Surfaces mirror the sky. Costly: off on the lightest graphics setting. */
+  reflect = true;
   readonly sun: THREE.DirectionalLight;
   readonly hemi: THREE.HemisphereLight;
   phase: Phase = "golden";
@@ -322,8 +324,14 @@ export class Sky {
     fog.color.copy(l.fog);
     fog.near = l.fogNear;
     fog.far = l.fogFar;
-    const env = t > 0.5 ? this.envs[this.phase] : undefined;
-    if (env && this.scene.environment !== env) this.scene.environment = env;
-    this.scene.environmentIntensity = l.env;
+    if (!this.reflect) {
+      // No sky reflections on the lightest setting: the sky light stands in for them.
+      if (this.scene.environment) this.scene.environment = null;
+      this.hemi.intensity = l.hemiPower + l.env * 2.6;
+    } else {
+      const env = t > 0.5 || !this.scene.environment ? this.envs[this.phase] : undefined;
+      if (env && this.scene.environment !== env) this.scene.environment = env;
+      this.scene.environmentIntensity = l.env;
+    }
   }
 }

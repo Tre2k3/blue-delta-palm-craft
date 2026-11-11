@@ -69,7 +69,8 @@ export const characters = {
   },
   kBlanco: {
     id: "k-blanco",
-    height: 1.94,
+    // A grown woman in heels next to a kid: she stands a good head and shoulders over Benji.
+    height: 2.6,
     views: turnaround("k-blanco", [170, 514], [175, 474], [108, 568], [123, 568]),
     portrait: "/game-v2/characters/k-blanco/portrait.png",
     bible: "02_Core_NPCs/01_K_Blanco_CANONICAL/k_blanco_CANONICAL_reference.png",
