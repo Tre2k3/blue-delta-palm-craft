@@ -364,7 +364,8 @@ export function buildFunRoom(): FunRoom {
   let whack: FunRoom["whack"] = { x: C.x, z: C.z, top: 0.9, holes: [], stand: { x: C.x, z: C.z } };
   let popshot: FunRoom["popshot"] = { x: C.x, z: C.z, hoop: { x: C.x, y: 2, z: C.z } };
   CABINETS.forEach((c, i) => {
-    const lx = (i - (CABINETS.length - 1) / 2) * 2.5;
+    // The row grows with the list: ten machines still fit between the ball pit and the laser door.
+    const lx = (i - (CABINETS.length - 1) / 2) * Math.min(2.5, 21 / (CABINETS.length - 1));
     if (c.id === "whack") {
       // A real table: felt top, nine holes, a lit back panel.
       const tz = cabZ + 0.5;

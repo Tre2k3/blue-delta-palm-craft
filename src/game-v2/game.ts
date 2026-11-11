@@ -10,6 +10,7 @@ import type { HoopsKind, Dialogue, HudState, Live, Mode, Overlay, Place, Results
 import { clamp, damp, dampAngle, wrapAngle } from "./core/util";
 import { makeStage, pickQuality, qualityIsChosen, type Quality, type Stage } from "./gfx/render";
 import { Lite } from "./gfx/lite";
+import { Sacks } from "./play/sacks";
 import { PHASES, Sky, type Phase } from "./gfx/sky";
 import { Bowling } from "./play/bowling";
 import { CATALOG, COLLECTION_BONUS, productById } from "./play/catalog";
@@ -205,6 +206,10 @@ export class Game {
   /** A game is running inside a cabinet's browser. */
   private webOn = false;
   private lite = new Lite();
+  /** Coins all over town. */
+  private coins!: Sacks;
+  private coinRun = 0;
+  private coinRunLeft = 0;
   /** Graphics follow the frame rate unless the player picked a level. */
   private auto = true;
   private rung = 1;
@@ -263,6 +268,8 @@ export class Game {
     this.city.exterior.add(this.car.group);
     this.traffic = new Traffic(this.stage.quality === "high" ? 14 : this.stage.quality === "medium" ? 10 : 6);
     this.city.exterior.add(this.traffic.group);
+    this.coins = new Sacks(this.save.flags);
+    this.city.exterior.add(this.coins.mesh);
     this.people = new People(this.stage.quality === "low" ? 22 : 34, this.stage.quality !== "low");
     this.city.exterior.add(this.people.group);
 
@@ -525,6 +532,7 @@ export class Game {
     if (fresh) {
       this.save = freshSave();
       this.hasSave = false;
+      this.coins.reset(this.save.flags);
       this.benji.setArt(OUTFITS.starter.art);
       this.driver.reset(CAR_START.x, CAR_START.z, CAR_START.heading);
       this.placeCar();
@@ -885,6 +893,33 @@ export class Game {
     this.toast(`${plate}. ${f.line}`, 4);
     this.emit("ate");
     this.close();
+  }
+
+  /** Coins: bank the ones Benji runs or drives through. A quick string of them pays a little more each. */
+  private updateCoins(dt: number, paused: boolean) {
+    if (this.room || this.mode === "title") return;
+    const riding = this.mode === "drive" || this.mode === "race";
+    const free = !paused && (this.mode === "walk" || riding);
+    const got = this.coins.update(this.time, riding ? this.driver.x : this.pos.x, riding ? this.driver.z : this.pos.z, free ? (riding ? 2.6 : 1.35) : 0, this.save.flags);
+    this.coinRunLeft -= dt;
+    if (this.coinRunLeft <= 0) this.coinRun = 0;
+    if (!got) return;
+    for (let i = 0; i < got; i++) {
+      this.coinRun++;
+      this.earn(5 + Math.min(10, this.coinRun - 1), 0, { quiet: true });
+    }
+    this.coinRunLeft = 4;
+    this.sound.cash();
+    const have = this.coins.total - this.coins.left;
+    if (this.coins.left === 0) {
+      // Every coin in Memphis: a real payout, and they all come back.
+      const bonus = this.earn(500, 25);
+      this.coins.reset(this.save.flags);
+      this.toast(`Every coin in Memphis. +$${bonus.dollars} and they're back out.`, 5);
+    } else if (have % 25 === 0) {
+      const bonus = this.earn(60, 3, { quiet: true });
+      this.toast(`${have} coins banked  +$${bonus.dollars} bonus  ·  ${this.coins.left} still out there`, 3.5);
+    } else this.toast(this.coinRun > 1 ? `Coin x${this.coinRun}  +$${5 + Math.min(10, this.coinRun - 1)}   ${have}/${this.coins.total}` : `Coin  +$5   ${have}/${this.coins.total}`, 1.6);
   }
 
   /**
@@ -1528,6 +1563,7 @@ export class Game {
     }
 
     this.updateVeli(dt);
+    this.updateCoins(dt, paused);
     this.mark();
 
     // Talk and toasts run on the clock even in menus.

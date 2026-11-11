@@ -398,6 +398,44 @@ try {
     return { trucks: Object.keys(a.windows), prompt, paid, cooler: g.save.cooler.length, video: !!g.veli, fed: g.fedUntil > g.time };
   });
   check(lot.trucks.join() === "catch,velis,brothers" && /Veli's Wings/.test(lot.prompt) && lot.paid === 14 && lot.cooler === 0 && lot.video && lot.fed, "the three food trucks serve their own menus and Veli's screen is on", lot);
+  // Coins: every street has some, and walking through one banks it.
+  const coins = await page.evaluate(() => {
+    const g = window.__GAME__;
+    const c = g.coins;
+    const spot = c.spots.find((q, i) => !c.taken[i]);
+    const before = g.save.dollars;
+    g.warp(spot.x, spot.z, 0);
+    const render = g.stage.render;
+    g.stage.render = () => {};
+    for (let i = 0; i < 10; i++) g.tick(1 / 30);
+    g.stage.render = render;
+    return { total: c.total, left: c.left, gained: g.save.dollars - before };
+  });
+  check(coins.total > 150 && coins.left < coins.total && coins.gained >= 5, "coins are out across the city and can be banked", coins);
+
+  // The newer cabinets: each one opens and starts.
+  await page.evaluate(() => {
+    const g = window.__GAME__;
+    g.enter("fun");
+  });
+  await ff(1.2);
+  const started = [];
+  for (const id of ["pinball", "skee", "wheel"]) {
+    await page.evaluate((cab) => {
+      const g = window.__GAME__;
+      g.cabinet = cab;
+      g.open("arcade");
+    }, id);
+    await page.getByText("Start", { exact: true }).first().click({ timeout: 10000 });
+    await page.keyboard.down("Space");
+    await page.waitForTimeout(500);
+    await page.keyboard.up("Space");
+    await page.waitForTimeout(700);
+    started.push(await page.evaluate(() => !!document.querySelector('[data-playing="1"] canvas')));
+    await page.evaluate(() => window.__GAME__.close());
+    await page.waitForTimeout(300);
+  }
+  check(started.every(Boolean), "pinball, skee-ball and the prize wheel all start", started);
   check(errors.length === 0, "no page errors", errors);
   console.log("Memphis smoke passed.");
 } finally {

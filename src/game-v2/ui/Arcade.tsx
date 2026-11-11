@@ -337,7 +337,546 @@ function dash(): Mini {
   return m;
 }
 
-const MAKERS: Record<string, () => Mini> = { catch: dropCatcher, stacker, dash };
+// ---------------------------------------------------------------- Sack Pinball
+
+type Seg = { ax: number; ay: number; bx: number; by: number; kick?: number; pts?: number };
+
+function pinball(): Mini {
+  const L = 130;
+  const R = 330;
+  const LANE = 350;
+  const BR = 6;
+  const walls: Seg[] = [
+    { ax: L, ay: 10, bx: L, by: 350 },
+    { ax: L, ay: 10, bx: LANE, by: 10 },
+    { ax: LANE, ay: 10, bx: LANE, by: 350 },
+    { ax: R, ay: 74, bx: R, by: 350 },
+    { ax: LANE, ay: 62, bx: 298, by: 10 },
+    { ax: L, ay: 62, bx: 182, by: 10 },
+    { ax: L, ay: 246, bx: 178, by: 300 },
+    { ax: R, ay: 246, bx: 282, by: 300 },
+    { ax: 152, ay: 214, bx: 172, by: 262, kick: 300, pts: 10 },
+    { ax: 308, ay: 214, bx: 288, by: 262, kick: 300, pts: 10 },
+  ];
+  const bumpers = [
+    { x: 196, y: 112, r: 16, lit: 0 },
+    { x: 264, y: 112, r: 16, lit: 0 },
+    { x: 230, y: 164, r: 16, lit: 0 },
+  ];
+  const drops = [202, 230, 258].map((x) => ({ x, y: 52, up: true }));
+  const flip = [
+    { px: 178, py: 300, dir: 1, a: 0.5, w: 0, on: false },
+    { px: 282, py: 300, dir: -1, a: 0.5, w: 0, on: false },
+  ];
+  const FLEN = 46;
+  const ball = { x: 340, y: 338, vx: 0, vy: 0, live: false };
+  let balls = 3;
+  let charge = 0;
+  let charging = false;
+  let note = "Hold Space to pull the plunger";
+  let noteLeft = 4;
+  const tip = (f: (typeof flip)[number]) => ({ x: f.px + Math.cos(f.a) * FLEN * f.dir, y: f.py + Math.sin(f.a) * FLEN });
+  const hit = (ax: number, ay: number, bx: number, by: number, rest: number, kick: number, sx: number, sy: number) => {
+    const dx = bx - ax;
+    const dy = by - ay;
+    const t = Math.max(0, Math.min(1, ((ball.x - ax) * dx + (ball.y - ay) * dy) / (dx * dx + dy * dy)));
+    const cx = ax + dx * t;
+    const cy = ay + dy * t;
+    let nx = ball.x - cx;
+    let ny = ball.y - cy;
+    const d = Math.hypot(nx, ny);
+    if (d >= BR || d === 0) return false;
+    nx /= d;
+    ny /= d;
+    ball.x = cx + nx * BR;
+    ball.y = cy + ny * BR;
+    const rel = (ball.vx - sx * t) * nx + (ball.vy - sy * t) * ny;
+    if (rel < 0) {
+      ball.vx -= (1 + rest) * rel * nx;
+      ball.vy -= (1 + rest) * rel * ny;
+    }
+    ball.vx += nx * kick;
+    ball.vy += ny * kick;
+    return true;
+  };
+  const m: Mini = {
+    score: 0,
+    over: false,
+    left: -1,
+    update(dt) {
+      noteLeft -= dt;
+      for (const b of bumpers) b.lit = Math.max(0, b.lit - dt * 4);
+      for (const f of flip) {
+        const want = f.on ? -0.55 : 0.5;
+        const before = f.a;
+        f.a += Math.max(-22 * dt, Math.min(22 * dt, want - f.a));
+        f.w = (f.a - before) / Math.max(dt, 1e-4);
+      }
+      if (!ball.live) {
+        // On the plunger.
+        ball.x = 340;
+        ball.y = 338 + charge * 8;
+        if (charging) charge = Math.min(1, charge + dt * 1.1);
+        return;
+      }
+      const steps = 8;
+      const h = dt / steps;
+      for (let s = 0; s < steps; s++) {
+        ball.vy += 620 * h;
+        ball.x += ball.vx * h;
+        ball.y += ball.vy * h;
+        for (const w of walls) {
+          if (hit(w.ax, w.ay, w.bx, w.by, 0.45, w.kick ?? 0, 0, 0) && w.pts) m.score += w.pts;
+        }
+        for (const f of flip) {
+          const t = tip(f);
+          // The tip of a swinging flipper is moving: that is what throws the ball.
+          const sx = -Math.sin(f.a) * FLEN * f.w * f.dir;
+          const sy = Math.cos(f.a) * FLEN * f.w;
+          hit(f.px, f.py, t.x, t.y, 0.35, 0, sx, sy);
+        }
+        for (const b of bumpers) {
+          const dx = ball.x - b.x;
+          const dy = ball.y - b.y;
+          const d = Math.hypot(dx, dy);
+          if (d < b.r + BR && d > 0) {
+            ball.x = b.x + (dx / d) * (b.r + BR);
+            ball.y = b.y + (dy / d) * (b.r + BR);
+            const sp = Math.max(330, Math.hypot(ball.vx, ball.vy) * 0.9);
+            ball.vx = (dx / d) * sp;
+            ball.vy = (dy / d) * sp;
+            b.lit = 1;
+            m.score += 100;
+          }
+        }
+        for (const d of drops) {
+          if (d.up && Math.abs(ball.x - d.x) < 12 + BR && Math.abs(ball.y - d.y) < 5 + BR) {
+            d.up = false;
+            ball.vy = Math.abs(ball.vy) * 0.6;
+            m.score += 250;
+            if (drops.every((q) => !q.up)) {
+              m.score += 1000;
+              note = "ALL TARGETS  +1000";
+              noteLeft = 1.6;
+              for (const q of drops) q.up = true;
+            }
+          }
+        }
+        // Never out through a corner, however hard it was hit.
+        ball.x = Math.max(L + BR, Math.min(LANE - BR, ball.x));
+        if (ball.y < 10 + BR) {
+          ball.y = 10 + BR;
+          ball.vy = Math.abs(ball.vy) * 0.5;
+        }
+        const sp = Math.hypot(ball.vx, ball.vy);
+        if (sp > 900) {
+          ball.vx *= 900 / sp;
+          ball.vy *= 900 / sp;
+        }
+      }
+      if (ball.y > 356) {
+        ball.live = false;
+        ball.vx = ball.vy = 0;
+        charge = 0;
+        balls--;
+        if (balls <= 0) m.over = true;
+        else {
+          note = `Ball ${4 - balls} of 3`;
+          noteLeft = 1.6;
+        }
+      }
+    },
+    draw(g) {
+      g.fillStyle = "#07050d";
+      g.fillRect(0, 0, W, H);
+      const bg = g.createLinearGradient(0, 10, 0, 350);
+      bg.addColorStop(0, "#1d0f3a");
+      bg.addColorStop(1, "#0d1a2e");
+      g.fillStyle = bg;
+      g.fillRect(L, 10, LANE - L, 340);
+      text(g, "$", 230, 232, 60, "rgba(224,179,58,0.16)");
+      g.strokeStyle = "#e0b33a";
+      g.lineWidth = 3;
+      g.lineCap = "round";
+      for (const w of walls) {
+        g.strokeStyle = w.kick ? "#ff5ad1" : "#e0b33a";
+        g.beginPath();
+        g.moveTo(w.ax, w.ay);
+        g.lineTo(w.bx, w.by);
+        g.stroke();
+      }
+      for (const b of bumpers) {
+        g.fillStyle = b.lit > 0 ? "#ffffff" : "#39ff14";
+        g.beginPath();
+        g.arc(b.x, b.y, b.r + b.lit * 3, 0, Math.PI * 2);
+        g.fill();
+        g.fillStyle = "#0a2a12";
+        g.beginPath();
+        g.arc(b.x, b.y, b.r - 6, 0, Math.PI * 2);
+        g.fill();
+        text(g, "100", b.x, b.y, 9, "#39ff14");
+      }
+      for (const d of drops) {
+        g.fillStyle = d.up ? "#35e0d0" : "rgba(53,224,208,0.2)";
+        g.fillRect(d.x - 12, d.y - 5, 24, 10);
+      }
+      g.strokeStyle = "#f4f1ea";
+      g.lineWidth = 9;
+      for (const f of flip) {
+        const t = tip(f);
+        g.beginPath();
+        g.moveTo(f.px, f.py);
+        g.lineTo(t.x, t.y);
+        g.stroke();
+      }
+      g.lineCap = "butt";
+      // Plunger.
+      g.fillStyle = "#c22a22";
+      g.fillRect(334, 346 + charge * 8, 12, 14);
+      g.fillStyle = "#e9edf2";
+      g.beginPath();
+      g.arc(ball.x, ball.y, BR, 0, Math.PI * 2);
+      g.fill();
+      text(g, "SACK", 66, 60, 26, "#e0b33a");
+      text(g, "PINBALL", 66, 88, 20, "#39ff14");
+      text(g, "A  left flipper", 66, 150, 11, "#ffffff");
+      text(g, "D  right flipper", 66, 168, 11, "#ffffff");
+      text(g, "Space  plunger", 66, 186, 11, "#ffffff");
+      text(g, "BALLS", 414, 60, 14, "#ffffff");
+      text(g, "● ".repeat(Math.max(0, balls)).trim() || "-", 414, 86, 20, "#e9edf2");
+      text(g, "Bumpers 100", 414, 150, 11, "#39ff14");
+      text(g, "Targets 250", 414, 168, 11, "#35e0d0");
+      text(g, "All three +1000", 414, 186, 11, "#35e0d0");
+      if (noteLeft > 0) text(g, note, 230, 200, 13, "#ffd23a");
+    },
+    key(code, down) {
+      const lane = !ball.live;
+      if (code === "KeyA" || code === "ArrowLeft") flip[0]!.on = down;
+      if (code === "KeyD" || code === "ArrowRight") flip[1]!.on = down;
+      if (code === "Space" || code === "ArrowDown") {
+        if (lane) {
+          if (down) charging = true;
+          else if (charging) {
+            charging = false;
+            ball.live = true;
+            ball.vx = 0;
+            ball.vy = -(520 + charge * 470);
+            charge = 0;
+          }
+        } else flip[0]!.on = flip[1]!.on = down;
+      }
+    },
+    point(x, _y, kind) {
+      if (kind === "move") return;
+      const down = kind === "down";
+      if (!ball.live) m.key?.("Space", down);
+      else if (down) flip[x < W / 2 ? 0 : 1]!.on = true;
+      else flip[0]!.on = flip[1]!.on = false;
+    },
+    tickets: () => Math.min(40, Math.floor(m.score / 400)),
+  };
+  return m;
+}
+
+// ---------------------------------------------------------------- Skee-Ball
+
+function skeeBall(): Mini {
+  // The target board, as you see it from the end of the lane.
+  const holes = [
+    { x: 176, y: 44, r: 11, v: 100 },
+    { x: 304, y: 44, r: 11, v: 100 },
+    { x: 240, y: 42, r: 13, v: 50 },
+    { x: 240, y: 84, r: 17, v: 40 },
+    { x: 240, y: 90, r: 30, v: 30 },
+    { x: 240, y: 96, r: 44, v: 20 },
+    { x: 240, y: 102, r: 58, v: 10 },
+  ];
+  let balls = 9;
+  let aim = 0;
+  let turn = 0;
+  let power = 0;
+  let dir = 1;
+  let charging = false;
+  let phase: "aim" | "roll" | "fly" | "show" = "aim";
+  let t = 0;
+  let from = { x: 240, y: 330 };
+  let land = { x: 240, y: 100 };
+  let got = 0;
+  const release = () => {
+    if (phase !== "aim" || !charging) return;
+    charging = false;
+    phase = "roll";
+    t = 0;
+    from = { x: 240 + aim * 74, y: 330 };
+    land = { x: 240 + aim * 92 + rand(-5, 5), y: 136 - power * 112 + rand(-4, 4) };
+  };
+  const m: Mini = {
+    score: 0,
+    over: false,
+    left: -1,
+    update(dt) {
+      if (phase === "aim") {
+        aim = Math.max(-1, Math.min(1, aim + turn * dt * 1.25));
+        if (charging) {
+          power += dir * dt * 1.15;
+          if (power >= 1) {
+            power = 1;
+            dir = -1;
+          } else if (power <= 0) {
+            power = 0;
+            dir = 1;
+          }
+        }
+        return;
+      }
+      t += dt;
+      if (phase === "roll" && t > 0.55) {
+        phase = "fly";
+        t = 0;
+      } else if (phase === "fly" && t > 0.5) {
+        phase = "show";
+        t = 0;
+        got = 0;
+        // Off the top of the board, or short of it, is a gutter ball.
+        if (land.y > 12 && land.y < 162) {
+          for (const h of holes) {
+            if (Math.hypot(land.x - h.x, land.y - h.y) < h.r) {
+              got = h.v;
+              break;
+            }
+          }
+        }
+        m.score += got;
+        balls--;
+      } else if (phase === "show" && t > 0.9) {
+        if (balls <= 0) m.over = true;
+        phase = "aim";
+        power = 0;
+        dir = 1;
+      }
+    },
+    draw(g) {
+      g.fillStyle = "#120a22";
+      g.fillRect(0, 0, W, H);
+      // Board.
+      g.fillStyle = "#2a1a4a";
+      g.fillRect(140, 8, 200, 160);
+      g.strokeStyle = "#ffd23a";
+      g.lineWidth = 3;
+      g.strokeRect(140, 8, 200, 160);
+      for (const h of [...holes].reverse()) {
+        g.fillStyle = h.v >= 50 ? "#0a0a12" : "rgba(10,10,18,0.55)";
+        g.strokeStyle = h.v === 100 ? "#ff5ad1" : h.v === 50 ? "#39ff14" : "#f4f1ea";
+        g.lineWidth = 3;
+        g.beginPath();
+        g.arc(h.x, h.y, h.r, 0, Math.PI * 2);
+        g.fill();
+        g.stroke();
+      }
+      text(g, "100", 176, 44, 9, "#ff5ad1");
+      text(g, "100", 304, 44, 9, "#ff5ad1");
+      text(g, "50", 240, 42, 10, "#39ff14");
+      text(g, "40", 240, 84, 11, "#ffffff");
+      text(g, "30", 240, 111, 10, "#ffffff");
+      text(g, "20", 240, 130, 10, "#ffffff");
+      text(g, "10", 240, 150, 10, "#ffffff");
+      // Lane, narrowing up to the ramp.
+      g.fillStyle = "#b9833e";
+      g.beginPath();
+      g.moveTo(150, 350);
+      g.lineTo(330, 350);
+      g.lineTo(292, 178);
+      g.lineTo(188, 178);
+      g.closePath();
+      g.fill();
+      g.fillStyle = "#8a5a26";
+      g.fillRect(188, 168, 104, 12);
+      g.strokeStyle = "rgba(0,0,0,0.25)";
+      g.lineWidth = 1;
+      for (let i = -2; i <= 2; i++) {
+        g.beginPath();
+        g.moveTo(240 + i * 36, 350);
+        g.lineTo(240 + i * 20.8, 178);
+        g.stroke();
+      }
+      // Aim line and the ball.
+      let bx = 240 + aim * 74;
+      let by = 330;
+      let br = 13;
+      if (phase === "aim") {
+        g.strokeStyle = "rgba(57,255,20,0.7)";
+        g.setLineDash([6, 6]);
+        g.lineWidth = 2;
+        g.beginPath();
+        g.moveTo(bx, by - 14);
+        g.lineTo(240 + aim * 42, 182);
+        g.stroke();
+        g.setLineDash([]);
+      } else if (phase === "roll") {
+        const k = Math.min(1, t / 0.55);
+        bx = from.x + (240 + aim * 42 - from.x) * k;
+        by = 330 - k * 152;
+        br = 13 - k * 6;
+      } else {
+        const k = phase === "fly" ? Math.min(1, t / 0.5) : 1;
+        bx = 240 + aim * 42 + (land.x - (240 + aim * 42)) * k;
+        by = 178 + (land.y - 178) * k - Math.sin(k * Math.PI) * 46;
+        br = 7 - k * 2;
+      }
+      g.fillStyle = "#f4f1ea";
+      g.beginPath();
+      g.arc(bx, by, br, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = "#c22a22";
+      g.lineWidth = 2;
+      g.stroke();
+      // Power bar.
+      g.fillStyle = "#0a0a12";
+      g.fillRect(40, 60, 22, 250);
+      g.fillStyle = power > 0.7 ? "#ff5ad1" : power > 0.36 ? "#39ff14" : "#ffd23a";
+      g.fillRect(43, 307 - power * 244, 16, power * 244);
+      text(g, "POWER", 51, 46, 11, "#ffffff");
+      text(g, "BALLS", 420, 46, 11, "#ffffff");
+      text(g, String(Math.max(0, balls)), 420, 78, 34, "#ffd23a");
+      text(g, "A D aim", 420, 250, 11, "#ffffff");
+      text(g, "Hold Space", 420, 268, 11, "#ffffff");
+      text(g, "let go to roll", 420, 286, 11, "#ffffff");
+      if (phase === "show") text(g, got ? `+${got}` : "GUTTER", 240, 215, 34, got >= 50 ? "#ff5ad1" : got ? "#39ff14" : "#ff5a5a");
+    },
+    key(code, down) {
+      if (code === "KeyA" || code === "ArrowLeft") turn = down ? -1 : turn === -1 ? 0 : turn;
+      if (code === "KeyD" || code === "ArrowRight") turn = down ? 1 : turn === 1 ? 0 : turn;
+      if (code === "Space" || code === "ArrowUp") {
+        if (down && phase === "aim" && !charging) {
+          charging = true;
+          power = 0;
+          dir = 1;
+        } else if (!down) release();
+      }
+    },
+    point(x, _y, kind) {
+      if (phase !== "aim") return;
+      if (kind !== "up") aim = Math.max(-1, Math.min(1, (x - 240) / 80));
+      if (kind === "down") m.key?.("Space", true);
+      if (kind === "up") release();
+    },
+    tickets: () => Math.min(40, Math.floor(m.score / 25)),
+  };
+  return m;
+}
+
+// ---------------------------------------------------------------- Spin-N-Win
+
+function prizeWheel(): Mini {
+  const wedges = [2, 5, 1, 10, 2, 3, 1, 25, 2, 5, 1, 8, 3, 2, 1, 50];
+  const colors = ["#ff5ad1", "#35e0d0", "#ffd23a", "#39ff14", "#b48cff", "#ff8a1e"];
+  const N = wedges.length;
+  let angle = 0;
+  let speed = 0.5;
+  let spins = 3;
+  let power = 0;
+  let charging = false;
+  let spinning = false;
+  let won = 0;
+  let show = 0;
+  let total = 0;
+  const m: Mini = {
+    score: 0,
+    over: false,
+    left: -1,
+    update(dt) {
+      show -= dt;
+      if (charging) power = (power + dt * 0.9) % 1;
+      if (spinning) {
+        // The pegs drag on the flapper: it slows the same way every time, so it can be learned.
+        speed = Math.max(0, speed - (1.1 + speed * 0.22) * dt);
+        if (speed <= 0.02) {
+          spinning = false;
+          const at = (((-Math.PI / 2 - angle) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+          won = wedges[Math.floor(at / ((Math.PI * 2) / N)) % N]!;
+          total += won;
+          m.score = total * 10;
+          show = 1.6;
+          spins--;
+          speed = 0;
+        }
+      } else if (spins <= 0) {
+        if (show <= 0) m.over = true;
+      } else if (!charging && show <= 0) speed = 0.5;
+      angle += speed * dt;
+    },
+    draw(g) {
+      g.fillStyle = "#0d0718";
+      g.fillRect(0, 0, W, H);
+      const cx = 240;
+      const cy = 190;
+      const r = 138;
+      for (let i = 0; i < N; i++) {
+        const a0 = angle + (i / N) * Math.PI * 2;
+        const a1 = angle + ((i + 1) / N) * Math.PI * 2;
+        g.fillStyle = wedges[i] === 50 ? "#f4f1ea" : colors[i % colors.length]!;
+        g.beginPath();
+        g.moveTo(cx, cy);
+        g.arc(cx, cy, r, a0, a1);
+        g.closePath();
+        g.fill();
+        g.save();
+        g.translate(cx + Math.cos((a0 + a1) / 2) * r * 0.74, cy + Math.sin((a0 + a1) / 2) * r * 0.74);
+        g.rotate((a0 + a1) / 2 + Math.PI / 2);
+        text(g, String(wedges[i]), 0, 0, wedges[i]! >= 25 ? 20 : 15, "#12081f");
+        g.restore();
+      }
+      g.strokeStyle = "#ffd23a";
+      g.lineWidth = 6;
+      g.beginPath();
+      g.arc(cx, cy, r, 0, Math.PI * 2);
+      g.stroke();
+      g.fillStyle = "#ffd23a";
+      g.beginPath();
+      g.arc(cx, cy, 16, 0, Math.PI * 2);
+      g.fill();
+      // Flapper at the top.
+      g.fillStyle = "#ff3b3b";
+      g.beginPath();
+      g.moveTo(cx - 11, 34);
+      g.lineTo(cx + 11, 34);
+      g.lineTo(cx, 62);
+      g.closePath();
+      g.fill();
+      g.fillStyle = "#0a0a12";
+      g.fillRect(40, 60, 22, 250);
+      g.fillStyle = "#39ff14";
+      g.fillRect(43, 307 - power * 244, 16, power * 244);
+      text(g, "PULL", 51, 46, 11, "#ffffff");
+      text(g, "SPINS", 426, 46, 11, "#ffffff");
+      text(g, String(Math.max(0, spins)), 426, 78, 34, "#ffd23a");
+      text(g, "TICKETS", 426, 150, 11, "#ffffff");
+      text(g, String(total), 426, 182, 34, "#39ff14");
+      text(g, "Hold Space,", 426, 268, 11, "#ffffff");
+      text(g, "let go to spin", 426, 286, 11, "#ffffff");
+      if (show > 0) text(g, won >= 25 ? `JACKPOT  +${won}` : `+${won}`, cx, cy, 30, "#12081f");
+    },
+    key(code, down) {
+      if (code !== "Space" && code !== "ArrowDown") return;
+      if (down && !spinning && !charging && spins > 0 && show <= 0) {
+        charging = true;
+        power = 0;
+      } else if (!down && charging) {
+        charging = false;
+        spinning = true;
+        speed = 5 + power * 7;
+      }
+    },
+    point(_x, _y, kind) {
+      if (kind === "down") m.key?.("Space", true);
+      if (kind === "up") m.key?.("Space", false);
+    },
+    tickets: () => Math.min(60, total),
+  };
+  return m;
+}
+
+const MAKERS: Record<string, () => Mini> = { catch: dropCatcher, stacker, dash, pinball, skee: skeeBall, wheel: prizeWheel };
 
 // ---------------------------------------------------------------- cabinet
 
@@ -362,7 +901,7 @@ export function Arcade({ game, id }: { game: Game; id: string }) {
             Back to the floor
           </button>
         </div>
-        {web ? <WebCabinet game={game} cab={cab} /> : <Playable game={game} cab={cab} />}
+        {web ? <WebCabinet game={game} cab={cab} /> : <Playable key={cab.id} game={game} cab={cab} />}
       </div>
     </div>
   );
