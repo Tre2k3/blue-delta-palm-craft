@@ -8,6 +8,9 @@ import { finish, light, shell, type Room } from "./rooms";
 const Y0 = CURB;
 const hot = (r: number, g: number, b: number) => new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b), toneMapped: false });
 
+/** Speed pads, as a share of the way round the lap. */
+export const KART_PADS = [0.2, 0.52, 0.8];
+
 // ------------------------------------------------------------------ kart line
 
 const KR = KART_TRACK.halfZ;
@@ -150,7 +153,8 @@ function buildKartTrack(ctx: BuildCtx) {
   const { cx, cz, width } = KART_TRACK;
   const y = Y0 + 0.014;
   const off = { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 };
-  const road = new THREE.MeshStandardMaterial({ color: 0x2b2c30, roughness: 0.82, ...off });
+  // Light asphalt with a glow of its own: this is a floodlit track, never a dark one.
+  const road = new THREE.MeshStandardMaterial({ color: 0x5a5d66, roughness: 0.82, emissive: 0x30333a, emissiveIntensity: 0.32, ...off });
   const outer = stadium(KR + width / 2);
   outer.holes.push(stadium(KR - width / 2));
   const rg = new THREE.ShapeGeometry(outer, 20);
@@ -163,8 +167,50 @@ function buildKartTrack(ctx: BuildCtx) {
   ctx.ground.add(ig, infield, cx, y, cz);
 
   // Kerbs inside, tyres outside.
-  const red = std(0xc22a22, 0.7);
-  const white = std(0xeeeae2, 0.7);
+  const red = new THREE.MeshStandardMaterial({ color: 0xd9302a, roughness: 0.7, emissive: 0xd9302a, emissiveIntensity: 0.35 });
+  const white = new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.7, emissive: 0xf4f1ea, emissiveIntensity: 0.4 });
+  // Floodlight towers all the way round, bulbs strung over both straights, light on the tarmac.
+  const lampMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 2.8, 2.3), toneMapped: false });
+  const towers = 12;
+  for (let i = 0; i < towers; i++) {
+    const p = kartAt((i / towers) * KART_LENGTH + 2, width / 2 + 2.2);
+    ctx.solid.cyl(0.1, 0.14, 7.2, p.x, y + 3.6, p.z, MAT.black(), 8);
+    ctx.flat.box(1.3, 0.5, 0.3, p.x, y + 7.3, p.z, lampMat, p.heading);
+    ctx.lamps.push({ x: p.x, y: y + 6.6, z: p.z, color: 0xfff2d8 });
+  }
+  for (let i = 0; i < 60; i++) {
+    const p = kartAt((i / 60) * KART_LENGTH, 0);
+    ctx.flat.add(new THREE.SphereGeometry(0.1, 6, 4), i % 3 === 0 ? lampMat : new THREE.MeshBasicMaterial({ color: i % 3 === 1 ? 0x39ff14 : 0xff5ad1, toneMapped: false }), p.x, y + 5.2 - Math.abs(Math.sin(i * 0.9)) * 0.5, p.z);
+  }
+  ctx.flat.flat((KS + KR + 7) * 2, (KR + 7) * 2, cx, y + 0.02, cz, poolMat(ctx, 0xfff2d8, 0.42));
+  ctx.flat.flat((KS + KR + 7) * 2, (KR + 7) * 2, cx, y + 0.024, cz, new THREE.MeshBasicMaterial({ color: 0xfff2d8, transparent: true, opacity: 0.035, blending: THREE.AdditiveBlending, depthWrite: false }));
+  // Speed pads: drive over the arrows.
+  const arrow = new THREE.MeshBasicMaterial({
+    map: tex(128, 128, (g, w, h) => {
+      g.fillStyle = "#06140a";
+      g.fillRect(0, 0, w, h);
+      g.fillStyle = "#39ff14";
+      for (const oy of [10, 62]) {
+        g.beginPath();
+        g.moveTo(w / 2, oy);
+        g.lineTo(w - 12, oy + 40);
+        g.lineTo(w - 40, oy + 40);
+        g.lineTo(w / 2, oy + 22);
+        g.lineTo(40, oy + 40);
+        g.lineTo(12, oy + 40);
+        g.closePath();
+        g.fill();
+      }
+    }),
+    toneMapped: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+    polygonOffsetUnits: -4,
+  });
+  for (const pad of KART_PADS) {
+    const p = kartAt(pad * KART_LENGTH, 0);
+    ctx.flat.flat(2.6, 2.6, p.x, y + 0.012, p.z, arrow, p.heading + Math.PI);
+  }
   const tyre = std(0x141416, 0.9);
   const inner = Math.floor((KART_LENGTH - Math.PI * width) / 0.9);
   for (let i = 0; i < inner; i++) {

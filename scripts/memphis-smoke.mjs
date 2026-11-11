@@ -158,7 +158,35 @@ try {
   await tap("interact");
   check((await get(() => window.__GAME__.save.step)) === 3, "the drop is delivered to Court OG");
   await tap("interact");
-  await ff(0.5);
+  await ff(0.3);
+  check((await get(() => window.__GAME__.overlay)) === "court", "Court OG's table offers the three games");
+  // A game to eleven: the other player shoots first, then Benji answers from the same spot.
+  await page.evaluate(() => window.__GAME__.playBall("versus"));
+  await ff(1.5);
+  const duel = await page.evaluate(() => {
+    const g = window.__GAME__;
+    const h = g.hoops;
+    const render = g.stage.render;
+    g.stage.render = () => {};
+    let mine = 0;
+    for (let i = 0; i < 30 * 240 && !h.over; i++) {
+      g.tick(1 / 30);
+      if (h.turn === "you" && !h.charging && h.cool <= 0) {
+        h.charge = 0.8;
+        h.release();
+        mine++;
+      }
+    }
+    for (let i = 0; i < 30; i++) g.tick(1 / 30);
+    g.stage.render = render;
+    const out = { kind: h.kind, over: h.over, you: h.score, them: h.rival.score, mine, title: g.results?.title, wins: g.save.best.versus };
+    g.close();
+    return out;
+  });
+  check(duel.kind === "versus" && duel.over && duel.mine >= 4 && Math.max(duel.you, duel.them) >= 11 && duel.you !== duel.them, "a game to eleven is played out shot for shot", duel);
+  await ff(1);
+  await page.evaluate(() => window.__GAME__.playBall("shootout"));
+  await ff(1.5);
   check((await get(() => window.__GAME__.mode)) === "hoops", "the shootout starts");
   const made = await get(() => {
     const g = window.__GAME__;

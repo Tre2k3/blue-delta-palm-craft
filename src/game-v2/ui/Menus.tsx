@@ -437,6 +437,33 @@ export function FoodMenu({ game, hud }: { game: Game; hud: HudState }) {
   );
 }
 
+/** Court OG's table: three ways to play. */
+export function CourtMenu({ game }: { game: Game }) {
+  const games: { kind: "shootout" | "versus" | "practice"; name: string; line: string; pay: string; color: string }[] = [
+    { kind: "versus", name: "Run one", line: "A game to 11 against whoever's on the court. Shot for shot from the same spot. Beat one and the next steps up.", pay: "Win: $80 and up", color: "#ff8a1e" },
+    { kind: "shootout", name: "60-second shootout", line: "Score as much as you can before the buzzer. Hot spots pay an extra point.", pay: "$4 a point", color: "#39ff14" },
+    { kind: "practice", name: "Practice", line: "No clock, no score to beat. Find your release and stay as long as you like.", pay: "Free", color: "#35e0d0" },
+  ];
+  return (
+    <Sheet title="901 Court" sub="Court OG's got next. What are we running?" onClose={() => game.close()}>
+      <div className="grid gap-2">
+        {games.map((g, i) => (
+          <button key={g.kind} data-primary={i === 0 ? true : undefined} onClick={() => game.playBall(g.kind)} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3 text-left transition hover:bg-white/10" style={{ borderColor: `${g.color}55` }}>
+            <div className="h-12 w-1.5 shrink-0 rounded-full" style={{ background: g.color }} />
+            <div className="min-w-0 flex-1">
+              <div className="sr-title text-xl" style={{ color: g.color }}>
+                {g.name}
+              </div>
+              <div className="text-xs text-white/70">{g.line}</div>
+            </div>
+            <div className="shrink-0 text-xs font-extrabold text-[#f4d77a]">{g.pay}</div>
+          </button>
+        ))}
+      </div>
+    </Sheet>
+  );
+}
+
 /** The music video from Veli's truck, full size. */
 export function VideoScreen({ game }: { game: Game }) {
   const v = FOOD_TRUCKS.find((t) => t.video);

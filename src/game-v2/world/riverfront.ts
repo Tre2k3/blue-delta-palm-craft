@@ -4,7 +4,7 @@ import { cropTex, glyphCells, paintMat, tex } from "../gfx/tex";
 import { addGround } from "./ground";
 import { lotSurface } from "./buildings";
 import { MAT, Frame, YAW, addSolid, bench, bush, emissiveMat, globeLamp, neon, poolMat, sign, std, tree, type BuildCtx } from "./kit";
-import { BAIT_SHOP, COURT, CURB, HQ, PIER, PLAZA, RIVER_Z, ROAD_HALF, STREETS_Z, TRUCKS, rect } from "./map";
+import { BAIT_SHOP, COURT, CURB, HQ, PIER, PLAZA, RACE_MEET, RIVER_Z, ROAD_HALF, STREETS_Z, TRUCKS, rect } from "./map";
 import { FOOD, FOOD_TRUCKS, type Truck, type TruckId } from "../play/goods";
 
 const Y0 = CURB;
@@ -78,6 +78,7 @@ export function buildRiverfront(ctx: BuildCtx): Riverfront {
   const pier = buildPier(ctx);
   const trucks = buildTrucks(ctx);
   buildMemphisSign(ctx);
+  buildRaceGate(ctx);
 
   // Park planting.
   const r = ctx.rand;
@@ -227,139 +228,47 @@ function buildHqExterior(ctx: BuildCtx) {
   return { x: HQ.doorX, z: HQ.frontZ + 1.1 };
 }
 
-/** The script sign lifted off the concept art, keyed out of its brick wall so it can be painted on a floor. */
-function stampLogo(g: CanvasRenderingContext2D, t: THREE.Texture, spots: { x: number; y: number; w: number; h: number; flip?: boolean }[]) {
-  const img = new Image();
-  img.onload = () => {
-    const sw = Math.round(0.264 * img.naturalWidth);
-    const sh = Math.round(0.182 * img.naturalHeight);
-    const c = document.createElement("canvas");
-    c.width = sw;
-    c.height = sh;
-    const k = c.getContext("2d")!;
-    k.drawImage(img, 0.272 * img.naturalWidth, 0.05 * img.naturalHeight, sw, sh, 0, 0, sw, sh);
-    const d = k.getImageData(0, 0, sw, sh);
-    for (let i = 0; i < d.data.length; i += 4) {
-      const lum = 0.3 * d.data[i]! + 0.6 * d.data[i + 1]! + 0.1 * d.data[i + 2]!;
-      d.data[i + 3] = Math.max(0, Math.min(1, (lum - 84) / 80)) * 255;
-    }
-    k.putImageData(d, 0, 0);
-    for (const s of spots) {
-      g.save();
-      g.translate(s.x, s.y);
-      if (s.flip) g.rotate(Math.PI);
-      g.drawImage(c, -s.w / 2, -s.h / 2, s.w, s.h);
-      g.restore();
-    }
-    t.needsUpdate = true;
-  };
-  img.src = "/game/opening-title.webp";
-}
 
-/** The 901 Court in SackReligious colours: green floor, clay keys, the script at centre and above each arc. */
+/** Quarter turn that lays the court art along the court. */
+const COURT_TURN = -Math.PI / 2;
+
+/** Size on the ground of the court art, which keeps the proportions it was made with. */
+const COURT_ART = { w: 18.4, l: 18.4 * (1378 / 988) };
+
+/**
+ * The floor of the 901 Court is the Sackrow Ballers court art: black boards, gold lines, the
+ * ball-faced mascot at centre court. The picture is drawn lying on its side, because the court
+ * runs north-south and the art was made long side across.
+ */
 function courtTexture() {
   const W = 1024;
-  const H = 2048;
-  const px = (m: number) => (m / 15.2) * W;
-  const pz = (m: number) => (m / 28) * H;
+  const H = Math.round(W * (1378 / 988));
   let ctx2: CanvasRenderingContext2D | null = null;
   const t = tex(
     W,
     H,
     (g, w, h) => {
       ctx2 = g;
-      // Black apron with the name down both sidelines.
-      g.fillStyle = "#0c0f0d";
+      g.fillStyle = "#15120f";
       g.fillRect(0, 0, w, h);
-      const line = "#f2efe6";
-      const gold = "#d8a93a";
-      g.fillStyle = "#1f5a39";
-      g.fillRect(px(0.6), pz(0.6), px(14), pz(26.8));
-      // Broad paint strokes so the green is not one flat fill.
-      for (let i = 0; i < 46; i++) {
-        g.fillStyle = `rgba(${i % 2 ? "57,255,20" : "0,0,0"},${0.025 + (i % 5) * 0.006})`;
-        g.fillRect(px(0.6), pz(0.6 + (i / 46) * 26.8), px(14), pz(0.6));
-      }
-      g.lineWidth = px(0.09);
-      g.strokeStyle = line;
-      g.strokeRect(px(0.6), pz(0.6), px(14), pz(26.8));
-      for (const end of [0, 1]) {
-        g.save();
-        if (end) {
-          g.translate(0, h);
-          g.scale(1, -1);
-        }
-        g.fillStyle = "#9c3a28";
-        g.fillRect(px(7.6 - 2.45), pz(0.6), px(4.9), pz(5.8));
-        g.strokeRect(px(7.6 - 2.45), pz(0.6), px(4.9), pz(5.8));
-        g.beginPath();
-        g.ellipse(px(7.6), pz(6.4), px(1.8), pz(1.8), 0, 0, Math.PI);
-        g.stroke();
-        // Three-point arc: 6.75 m from the rim, flattened at the sidelines.
-        g.beginPath();
-        g.moveTo(px(7.6 - 6.6), pz(0.6));
-        g.lineTo(px(7.6 - 6.6), pz(3));
-        g.ellipse(px(7.6), pz(1.6), px(6.75), pz(6.75), 0, Math.PI - 0.2112, 0.2112, true);
-        g.lineTo(px(7.6 + 6.6), pz(0.6));
-        g.stroke();
-        // Gold dollar sign in the lane.
-        g.fillStyle = "rgba(216,169,58,0.6)";
-        g.textAlign = "center";
-        g.textBaseline = "middle";
-        g.font = `900 ${pz(2.5)}px Georgia, "Times New Roman", serif`;
-        g.fillText("$", px(7.6), pz(3.9));
-        g.restore();
-      }
-      g.beginPath();
-      g.moveTo(px(0.6), h / 2);
-      g.lineTo(px(14.6), h / 2);
-      g.stroke();
-      // Centre medallion: clay ring, black disc, gold rim. The script lands on it when the art loads.
-      g.beginPath();
-      g.ellipse(w / 2, h / 2, px(3.1), pz(3.1), 0, 0, Math.PI * 2);
-      g.fillStyle = "#9c3a28";
-      g.fill();
-      g.stroke();
-      g.beginPath();
-      g.ellipse(w / 2, h / 2, px(2.6), pz(2.6), 0, 0, Math.PI * 2);
-      g.fillStyle = "#0c0f0d";
-      g.fill();
-      g.strokeStyle = gold;
-      g.lineWidth = px(0.07);
-      g.stroke();
-      g.fillStyle = gold;
-      g.textAlign = "center";
-      g.textBaseline = "middle";
-      g.font = `900 ${pz(0.42)}px Impact, "Arial Black", sans-serif`;
-      g.fillText("MEMPHIS  ·  901  ·  EST. 2020", w / 2, h / 2 + pz(1.75));
-      g.fillText("KLOTHING KOMPANY WORLDWIDE", w / 2, h / 2 - pz(1.75));
-      // Sideline lettering, read from inside the court.
-      g.font = `900 ${px(0.36)}px Impact, "Arial Black", sans-serif`;
-      for (const side of [0, 1]) {
-        g.save();
-        g.translate(side ? w - px(0.3) : px(0.3), h / 2);
-        g.rotate(side ? Math.PI / 2 : -Math.PI / 2);
-        g.fillStyle = "#39ff14";
-        g.fillText("SACKRELIGIOUS   ·   901 COURT   ·   SACKRELIGIOUS   ·   MEMPHIS   ·   SACKRELIGIOUS", 0, 0);
-        g.restore();
-      }
-      // Scuffs so it reads as a street court.
-      for (let i = 0; i < 5200; i++) {
-        g.fillStyle = `rgba(0,0,0,${Math.random() * 0.12})`;
-        g.fillRect(Math.random() * w, Math.random() * h, 3, 3);
-      }
     },
-    { repeat: false },
+    { aniso: 8 },
   );
-  if (ctx2) {
-    const aspect = 0.182 / 0.264 / (16 / 9);
-    const mark = (cyM: number, wM: number, flip = false) => ({ x: W / 2, y: pz(cyM), w: px(wM), h: pz(wM * aspect), flip });
-    stampLogo(ctx2, t, [mark(14, 4.5), mark(9.62, 5.2), mark(18.38, 5.2, true)]);
-  }
+  const img = new Image();
+  img.onload = () => {
+    const g = ctx2;
+    if (!g) return;
+    g.save();
+    g.translate(W / 2, H / 2);
+    g.rotate(COURT_TURN);
+    g.drawImage(img, -H / 2, -W / 2, H, W);
+    g.restore();
+    t.needsUpdate = true;
+  };
+  img.src = "/game/facades/court-floor.webp";
   return t;
 }
 
-/** Spray-can lettering on plywood: fat outlined letters with a drop shadow and a shine. */
 function graffitiMat(ctx: BuildCtx, lines: string[], fills: [string, string], accent: string) {
   const map = tex(
     1024,
@@ -439,10 +348,11 @@ function chainMat() {
 
 function buildCourt(ctx: BuildCtx) {
   const { cx, cz, halfW, halfL, rimY, rimIn } = COURT;
-  const surface = new THREE.MeshStandardMaterial({ map: courtTexture(), roughnessMap: MAT.plaza(ctx.glow).roughnessMap, roughness: 0.5, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-  surface.userData.roughScale = 1.1;
-  ctx.glow.wetSurface(surface);
-  ctx.ground.flat(halfW * 2, halfL * 2, cx, Y0 + 0.006, cz, surface);
+  // Matte, so the art reads as painted boards at any hour and is never washed out by glare.
+  const surface = new THREE.MeshStandardMaterial({ map: courtTexture(), roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  // Dark boards to the fence on every side, the art laid over them.
+  ctx.ground.flat((halfW + 1.6) * 2, (halfL + 1.6) * 2, cx, Y0 + 0.004, cz, std(0x15120f, 0.7));
+  ctx.ground.flat(COURT_ART.w, COURT_ART.l, cx, Y0 + 0.008, cz, surface);
 
   const hoops: Hoop[] = [];
   const nets: THREE.Mesh[] = [];
@@ -477,8 +387,8 @@ function buildCourt(ctx: BuildCtx) {
   ctx.glow.emissive(board, 0.05, 0.5);
   const netMap = tex(64, 64, (g, w, h) => {
     g.clearRect(0, 0, w, h);
-    g.strokeStyle = "rgba(255,255,255,0.95)";
-    g.lineWidth = 3;
+    g.strokeStyle = "rgba(255,255,255,1)";
+    g.lineWidth = 9;
     g.beginPath();
     g.moveTo(0, 0);
     g.lineTo(w, h);
@@ -486,7 +396,7 @@ function buildCourt(ctx: BuildCtx) {
     g.lineTo(0, h);
     g.stroke();
   });
-  netMap.repeat.set(10, 3);
+  netMap.repeat.set(9, 3);
 
   for (const dir of [-1, 1] as const) {
     const rimZ = cz + dir * (halfL - rimIn);
@@ -503,10 +413,10 @@ function buildCourt(ctx: BuildCtx) {
     rim.castShadow = true;
     rims.push(rim);
     const net = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.23, 0.13, 0.46, 14, 3, true),
-      new THREE.MeshBasicMaterial({ map: netMap, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide }),
+      new THREE.CylinderGeometry(0.235, 0.14, 0.52, 16, 4, true),
+      new THREE.MeshBasicMaterial({ map: netMap, transparent: true, alphaTest: 0.35, side: THREE.DoubleSide, color: 0xf4f1ea, toneMapped: false }),
     );
-    net.position.set(cx, rimY - 0.24, rimZ);
+    net.position.set(cx, rimY - 0.27, rimZ);
     nets.push(net);
     hoops.push({ x: cx, y: rimY, z: rimZ, dir, boardZ, boardHalfW: 0.93, boardMinY: 2.89, boardMaxY: 3.99, rimR: 0.23 });
     addSolid(ctx, cx - 0.45, cx + 0.45, poleZ - 0.45, poleZ + 0.45);
@@ -759,6 +669,36 @@ function buildTrucks(ctx: BuildCtx): TruckLot {
   }
   ctx.flat.flat(40, 12, TRUCKS.x, Y0 + 0.025, TRUCKS.z - 7, poolMat(ctx, 0xffc98a, 0.28));
   return { windows, screen };
+}
+
+/** The start gate over Riverside Drive by Nitro's corner: you can see where the racing is from blocks away. */
+function buildRaceGate(ctx: BuildCtx) {
+  const x = RACE_MEET.x;
+  const z = STREETS_Z[0];
+  const half = ROAD_HALF + 0.7;
+  for (const s of [-1, 1]) {
+    ctx.solid.cyl(0.2, 0.26, 7, x, Y0 + 3.5, z + s * half, MAT.black(), 10);
+    addSolid(ctx, x - 0.3, x + 0.3, z + s * half - 0.3, z + s * half + 0.3);
+  }
+  ctx.solid.box(0.6, 1.5, half * 2 + 0.6, x, Y0 + 7.2, z, MAT.black());
+  const board = neon(ctx, "STREET RACE", "#ff3b3b", { sub: "PULL UP · 3 LAPS OF DOWNTOWN", w: 768, h: 128 });
+  ctx.flat.wall(half * 2, 1.3, x + 0.32, Y0 + 7.2, z, board, YAW.east);
+  ctx.flat.wall(half * 2, 1.3, x - 0.32, Y0 + 7.2, z, board, YAW.west);
+  const check = new THREE.MeshBasicMaterial({
+    map: tex(64, 64, (g, w, h) => {
+      for (let i = 0; i < 4; i++)
+        for (let j = 0; j < 4; j++) {
+          g.fillStyle = (i + j) % 2 ? "#111" : "#eee";
+          g.fillRect((i * w) / 4, (j * h) / 4, w / 4, h / 4);
+        }
+    }),
+    polygonOffset: true,
+    polygonOffsetFactor: -3,
+    polygonOffsetUnits: -3,
+  });
+  ctx.flat.flat(1.6, ROAD_HALF * 2, x, 0.03, z, check, 0, 1.6);
+  ctx.lamps.push({ x, y: Y0 + 6, z, color: 0xff5a4a });
+  ctx.flat.flat(16, 16, x, 0.035, z, poolMat(ctx, 0xff6a4a, 0.4));
 }
 
 function buildMemphisSign(ctx: BuildCtx) {

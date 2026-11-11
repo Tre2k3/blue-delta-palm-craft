@@ -3,10 +3,10 @@ import { Card } from "./actors/card";
 import { People } from "./actors/people";
 import { Traffic } from "./actors/traffic";
 import { CarModel, Driver, STREET } from "./actors/vehicle";
-import { CAST, OUTFITS, BENJI_HEIGHT, type CastId, type OutfitId } from "./assets/cast";
+import { CAST, PEDS, OUTFITS, BENJI_HEIGHT, type CastId, type OutfitId } from "./assets/cast";
 import { Sound } from "./core/audio";
 import { Input, type Nav } from "./core/input";
-import type { Dialogue, HudState, Live, Mode, Overlay, Place, Results, Save, Solid } from "./core/types";
+import type { HoopsKind, Dialogue, HudState, Live, Mode, Overlay, Place, Results, Save, Solid } from "./core/types";
 import { clamp, damp, dampAngle, wrapAngle } from "./core/util";
 import { makeStage, pickQuality, qualityIsChosen, type Quality, type Stage } from "./gfx/render";
 import { Lite } from "./gfx/lite";
@@ -194,6 +194,9 @@ export class Game {
   private onAgain: (() => void) | null = null;
   private onResultsClose: (() => void) | null = null;
   private prompt = "";
+  private drivePrompt = "";
+  /** People with nothing to say who make a room feel used: shoppers, bowlers, kids at the cabinets. */
+  private extras: { card: Card; place: Exclude<Place, "street">; x: number; z: number; fx: number; fz: number }[] = [];
   private nearSpot: Spot | null = null;
   private camPos = new THREE.Vector3();
   private titleSpin = 0;
@@ -260,7 +263,7 @@ export class Game {
     this.city.exterior.add(this.car.group);
     this.traffic = new Traffic(this.stage.quality === "high" ? 14 : this.stage.quality === "medium" ? 10 : 6);
     this.city.exterior.add(this.traffic.group);
-    this.people = new People(this.stage.quality === "low" ? 12 : 22);
+    this.people = new People(this.stage.quality === "low" ? 22 : 34, this.stage.quality !== "low");
     this.city.exterior.add(this.people.group);
 
     this.beam = new THREE.Mesh(
@@ -315,6 +318,33 @@ export class Game {
     put("uncJ", "street", a.uncStand.x, a.uncStand.z, a.uncStand.heading);
     put("mamaDee", "street", a.trucks.windows.catch.x - 2.6, a.trucks.windows.catch.z + 0.6, Math.PI);
     put("nitro", "street", RACE_MEET.x, RACE_MEET.z, 0);
+    // Everyone else indoors: they stand where the thing they came for is, and look at it.
+    let k = 0;
+    const extra = (place: Exclude<Place, "street">, x: number, z: number, fx: number, fz: number) => {
+      const kind = PEDS[(k++ * 5 + 2) % PEDS.length]!;
+      const card = new Card(kind.art, kind.height);
+      card.place(x, z);
+      this.rooms[place].group.add(card.group);
+      this.extras.push({ card, place, x, z, fx, fz });
+    };
+    const fun = this.rooms.fun;
+    fun.cabinets.forEach((c, i) => {
+      if (i % 2 === 0) extra("fun", c.x + (i % 4 === 0 ? 1 : -1) * 1.05, c.z + 0.25, c.x, c.z - 2);
+    });
+    for (const s of [-1.7, 1.9]) extra("fun", fun.pizza.x + s, fun.pizza.z + 1.5, fun.pizza.x, fun.pizza.z - 1);
+    extra("fun", fun.prizes.x + 1.6, fun.prizes.z + 1.2, fun.prizes.x, fun.prizes.z - 1);
+    extra("fun", fun.pitEdge.x + 1.5, fun.pitEdge.z + 0.4, fun.pitEdge.x, fun.pitEdge.z - 3);
+    extra("fun", fun.trampEdge.x - 1.5, fun.trampEdge.z + 0.4, fun.trampEdge.x, fun.trampEdge.z - 3);
+    const hq = this.rooms.hq;
+    [1, 5, 8].forEach((i) => {
+      const st = hq.stands[i];
+      // Each shopper stands a step out from a display and looks at the wall it hangs on.
+      if (st) extra("hq", st.x + 0.9, st.z + 0.5, st.x + (st.x - hq.counter.x) * 0.4, st.z + (st.z - hq.counter.z) * 0.2);
+    });
+    const bowl = this.rooms.bowl;
+    extra("bowl", bowl.desk.x - 2.4, bowl.desk.z - 1.3, bowl.desk.x, bowl.desk.z);
+    extra("bowl", bowl.desk.x - 3.6, bowl.desk.z - 2.2, bowl.lane.x, bowl.lane.z - 6);
+    extra("bowl", bowl.lane.x - 3.4, bowl.lane.z + 4.6, bowl.lane.x - 3.4, bowl.lane.z - 8);
     // Strike works the desk from a step behind it, like K Blanco at her till.
     put("strike", "bowl", this.rooms.bowl.strikeSpot.x, this.rooms.bowl.strikeSpot.z - 0.1, this.rooms.bowl.strikeSpot.heading, 0.3);
   }
@@ -385,7 +415,7 @@ export class Game {
       a.ogSpot.x,
       a.ogSpot.z + 1.5,
       2.4,
-      () => (this.save.flags.carrying ? "Hand Court OG the drop" : "Run a 60-second shootout"),
+      () => (this.save.flags.carrying ? "Hand Court OG the drop" : "Play ball: shootout, a game to 11, or practice"),
       () => {
         if (this.save.flags.carrying) {
           this.save.flags.carrying = false;
@@ -393,8 +423,7 @@ export class Game {
           this.emit("delivered");
           return;
         }
-        this.begin(this.hoops, "hoops");
-        this.hoops.start();
+        this.open("court");
       },
     );
 
@@ -569,6 +598,15 @@ export class Game {
     this.sound.hush(o === "video");
     this.push();
     if (this.input.pad) setTimeout(() => this.onNav?.("init"), 60);
+  }
+
+  /** Court OG's table: which game to run. */
+  playBall(kind: HoopsKind) {
+    this.close();
+    this.transition(() => {
+      this.begin(this.hoops, "hoops");
+      this.hoops.start(kind);
+    });
   }
 
   /** A game inside a cabinet's browser takes the pad and the speakers, and gives them back. */
@@ -1200,7 +1238,22 @@ export class Game {
     this.pos.z = d.z;
     this.heading = d.heading;
     this.live.speed = d.speed * 2.237;
-    if (this.input.hit("interact")) this.exitCar();
+    // Pull up by Nitro on the strip and the race starts from the driver's seat.
+    const raceNear = Math.hypot(d.x - RACE_MEET.x, d.z - RACE_MEET.z) < 18 && d.speed < 15;
+    const label = raceNear ? "Race Nitro: 3 laps of downtown" : "";
+    if (label !== this.drivePrompt) {
+      this.drivePrompt = label;
+      this.push();
+    }
+    if (this.input.hit("interact")) {
+      if (raceNear) {
+        this.drivePrompt = "";
+        this.begin(this.race, "race");
+        this.race.start();
+        return;
+      }
+      this.exitCar();
+    }
     this.chaseCar(dt, d, 8.4, 3.1);
   }
 
@@ -1429,6 +1482,15 @@ export class Game {
       n.card.update(dt, cam, this.tint, n.place === "street" ? null : this.rooms[n.place].floorY + 0.03);
     }
 
+    for (const e of this.extras) {
+      if (e.place !== this.place) continue;
+      const dx = this.pos.x - e.x;
+      const dz = this.pos.z - e.z;
+      const want = dx * dx + dz * dz < 6 ? Math.atan2(dx, dz) : Math.atan2(e.fx - e.x, e.fz - e.z);
+      e.card.heading = dampAngle(e.card.heading, want, damp(4, dt));
+      e.card.update(dt, cam, this.tint, this.rooms[e.place].floorY + 0.03);
+    }
+
     // The city.
     const look = this.sky.look;
     _v.set(this.pos.x, 0, this.pos.z);
@@ -1440,7 +1502,7 @@ export class Game {
         blockers.push({ x: this.driver.x, z: this.driver.z, radius: 1.4, speed: this.driver.speed });
         this.traffic.update(dt, this.city.signals, blockers, cam);
         this.traffic.setLights(look.lights > 0.4 ? 3 : 0.2);
-        this.people.update(dt, cam, this.tint, this.pos);
+        this.people.update(dt, cam, this.tint, this.pos, this.veliVol > 0.25 && this.veli ? this.veli.video.currentTime : -1, this.city.anchors.trucks.screen.x, this.city.anchors.trucks.screen.z);
       }
       this.city.glow.apply(look.lights, look.roadRough);
       this.city.water.update(dt, look);
@@ -1592,7 +1654,7 @@ export class Game {
       mission: step
         ? { chapter: CHAPTER, index: s.step + 1, total: STORY.length, title: step.title, detail: step.detail }
         : { chapter: "BOUNTY BOARD", index: (s.bounty % BOUNTIES.length) + 1, total: BOUNTIES.length, title: bounty.title, detail: `${bounty.detail}  $${bounty.pay}` },
-      prompt: this.mode === "walk" && !this.overlay ? this.prompt : "",
+      prompt: this.overlay ? "" : this.mode === "walk" ? this.prompt : this.mode === "drive" ? this.drivePrompt : "",
       hints,
       dialogue: d ? { who: d.who, text: d.text, portrait: d.portrait } : null,
       toast: this.toastText,

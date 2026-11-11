@@ -4,7 +4,7 @@ import type { HudState, Live } from "../core/types";
 import { formatClock } from "../core/util";
 import type { Game } from "../game";
 import { Arcade } from "./Arcade";
-import { FoodMenu, MapScreen, Pause, Prizes, ResultsCard, Shop, Title, VideoScreen, Wardrobe } from "./Menus";
+import { CourtMenu, FoodMenu, MapScreen, Pause, Prizes, ResultsCard, Shop, Title, VideoScreen, Wardrobe } from "./Menus";
 import { drawMap } from "./map";
 import "./ui.css";
 
@@ -382,6 +382,7 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
       {hud.overlay === "prizes" && <Prizes game={game} hud={hud} />}
       {hud.overlay === "food" && <FoodMenu game={game} hud={hud} />}
       {hud.overlay === "video" && <VideoScreen game={game} />}
+      {hud.overlay === "court" && <CourtMenu game={game} />}
       {hud.overlay === "arcade" && hud.cabinet && <Arcade game={game} id={hud.cabinet} />}
       {hud.overlay === "results" && <ResultsCard game={game} hud={hud} />}
 
@@ -421,12 +422,27 @@ function ActivityBar({ hud }: { hud: HudState }) {
     <div className="sr-panel absolute left-1/2 top-3 z-20 flex -translate-x-1/2 items-center divide-x divide-white/10 py-2 sm:top-4">
       {h && (
         <>
-          <Stat label="Score" tone={h.fire ? "#ff8a1e" : "#39ff14"}>
-            {h.score}
+          <Stat label={h.rival ? "Benji" : h.kind === "practice" ? "Buckets" : "Score"} tone={h.fire ? "#ff8a1e" : "#39ff14"}>
+            {h.kind === "practice" ? h.made : h.score}
           </Stat>
-          <Stat label="Time" tone={h.left <= 10 ? "#ff5a5a" : undefined}>
-            {h.left}
-          </Stat>
+          {h.rival ? (
+            <>
+              <Stat label={h.rival.name} tone="#ff5a5a">
+                {h.rival.score}
+              </Stat>
+              <Stat label={h.rival.yours ? "Your shot" : "Watch"} tone={h.rival.yours && h.rival.clock <= 3 ? "#ff5a5a" : "#f4d77a"}>
+                {h.rival.yours ? h.rival.clock : `to ${h.rival.to}`}
+              </Stat>
+            </>
+          ) : h.kind === "practice" ? (
+            <Stat label="Clock">
+              <span className="text-base sm:text-lg">OFF</span>
+            </Stat>
+          ) : (
+            <Stat label="Time" tone={h.left <= 10 ? "#ff5a5a" : undefined}>
+              {h.left}
+            </Stat>
+          )}
           <Stat label="Made">
             {h.made}/{h.shots}
           </Stat>
@@ -481,6 +497,12 @@ function ActivityBar({ hud }: { hud: HudState }) {
             {l.left}
           </Stat>
           <Stat label="Tags">{l.tags}</Stat>
+          <Stat label="Vest" tone={l.vest <= 1 ? "#ff5a5a" : "#35e0d0"}>
+            <span className="text-base tracking-widest sm:text-lg">{l.down ? "OUT" : "●".repeat(l.vest) + "○".repeat(Math.max(0, 3 - l.vest))}</span>
+          </Stat>
+          <Stat label="Heat" tone="#ff8a1e">
+            {l.level}
+          </Stat>
         </>
       )}
       {t && (

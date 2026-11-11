@@ -1,6 +1,7 @@
 import * as THREE from "three";
-import { BENJI_HEIGHT } from "../assets/cast";
-import type { Hoop, HudState } from "../core/types";
+import { Card } from "../actors/card";
+import { BENJI_HEIGHT, PEDS } from "../assets/cast";
+import type { Hoop, HoopsKind, HudState } from "../core/types";
 import { clamp, damp, lerp } from "../core/util";
 import type { Activity, Game } from "../game";
 import { basketballTex } from "../gfx/tex";
@@ -11,7 +12,8 @@ const BALL_R = 0.12;
 const TUBE = 0.02;
 const SECONDS = 60;
 const FLOOR = CURB;
-const ARC = 6.75;
+/** Where the court art paints the arc. */
+const ARC = 6;
 
 type Ball = {
   mesh: THREE.Mesh;
@@ -28,10 +30,23 @@ type Ball = {
   age: number;
   error: number;
   hot: boolean;
+  /** Whose shot: 0 is Benji, 1 the other player. */
+  who: 0 | 1;
 };
 
+/** A game to this many, shot for shot from the same spot. */
+const TO = 11;
+/** Who Benji runs into at the court, easiest first. `skill` is how often they are in the green. */
+const RIVALS = [
+  { name: "Lil Tez", skill: 0.42, art: 2, height: 1.62, line: "First one's free." },
+  { name: "D-Mac", skill: 0.56, art: 0, height: 1.78, line: "I don't miss from here." },
+  { name: "Rico", skill: 0.68, art: 4, height: 1.82, line: "Corner pocket. Watch." },
+  { name: "Ace", skill: 0.8, art: 6, height: 1.84, line: "They call me Ace for a reason." },
+];
+
 /**
- * Sixty-second shootout on the north basket of the 901 Court. The ball is a real projectile:
+ * Basketball on the north basket of the 901 Court, three ways: the sixty-second shootout, a
+ * game to eleven against whoever is on the court, and practice with no clock at all. The ball is a real projectile:
  * it is thrown at the rim, and the rim, the glass and the floor decide what happens next.
  */
 export class Hoops implements Activity {
@@ -41,6 +56,12 @@ export class Hoops implements Activity {
     ["Release", "In the green"],
     ["Q", "Leave"],
   ];
+  kind: HoopsKind = "shootout";
+  private rival = { card: null as Card | null, tier: 0, name: "", skill: 0.5, score: 0, wait: 0 };
+  /** Versus: whose shot it is. "air" is a ball on its way, "next" the pause between rounds. */
+  private turn: "you" | "rival" | "air" | "next" = "you";
+  private shotClock = 0;
+  private pause = 0;
   private hoop: Hoop;
   private net: THREE.Mesh;
   private balls: Ball[] = [];
@@ -84,7 +105,7 @@ export class Hoops implements Activity {
       mesh.castShadow = true;
       mesh.visible = false;
       this.group.add(mesh);
-      this.balls.push({ mesh, live: false, p: new THREE.Vector3(), v: new THREE.Vector3(), spin: 0, rim: false, board: false, scored: false, judged: false, points: 2, bounces: 0, age: 0, error: 0, hot: false });
+      this.balls.push({ mesh, live: false, p: new THREE.Vector3(), v: new THREE.Vector3(), spin: 0, rim: false, board: false, scored: false, judged: false, points: 2, bounces: 0, age: 0, error: 0, who: 0, hot: false });
     }
     this.hand = new THREE.Mesh(geo, mat);
     this.hand.castShadow = true;
@@ -106,8 +127,9 @@ export class Hoops implements Activity {
     g.city.exterior.add(this.group);
   }
 
-  start() {
+  start(kind: HoopsKind = this.kind) {
     const g = this.g;
+    this.kind = kind;
     this.group.visible = true;
     this.left = SECONDS;
     this.started = false;
@@ -121,11 +143,43 @@ export class Hoops implements Activity {
       b.live = false;
       b.mesh.visible = false;
     }
-    this.say("Shoot to start the clock", 6);
     g.pos.x = COURT.cx;
     g.pos.z = this.hoop.z + 5.2;
     this.moveSpot();
+    const r = this.rival;
+    if (r.card) r.card.visible = kind === "versus";
+    this.turn = "you";
+    if (kind === "versus") {
+      r.tier = Math.min(RIVALS.length - 1, g.save.best.versus ?? 0);
+      const who = RIVALS[r.tier]!;
+      r.name = who.name;
+      r.skill = who.skill;
+      r.score = 0;
+      const art = PEDS[who.art % PEDS.length]!.art;
+      if (!r.card) {
+        r.card = new Card(art, who.height);
+        g.city.exterior.add(r.card.group);
+      } else r.card.setArt(art);
+      r.card.height = who.height;
+      r.card.visible = true;
+      this.started = true;
+      this.round();
+      this.say(`${r.name}: "${who.line}"  First to ${TO}.`, 3.2);
+    } else this.say(kind === "practice" ? "Practice. No clock, no pressure." : "Shoot to start the clock", 6);
     this.frame(0, true);
+  }
+
+  /** Versus: a new spot, the other player shoots first, Benji answers from the same place. */
+  private round() {
+    const r = this.rival;
+    this.moveSpot();
+    this.turn = "rival";
+    r.wait = 1.25;
+    r.card?.place(this.spot.x, this.spot.z);
+    this.g.pos.x = this.spot.x + 1.9;
+    this.g.pos.z = this.spot.z + 1.1;
+    this.g.vel.x = this.g.vel.z = 0;
+    this.g.push();
   }
 
   private say(text: string, seconds = 1.6) {
@@ -163,24 +217,22 @@ export class Hoops implements Activity {
     return { lo: 0.8 - half, hi: 0.8 + half, half };
   }
 
-  private release() {
-    const g = this.g;
+  /** Throw a ball from where a player stands. `e` is how far off the perfect release it was. */
+  private throwBall(who: 0 | 1, px: number, pz: number, e: number, half: number, speed: number, height: number, hot: boolean) {
     const h = this.hoop;
     const ball = this.balls.find((b) => !b.live) ?? this.balls.reduce((a, b) => (a.age > b.age ? a : b));
-    const sx = g.pos.x + Math.sin(g.heading) * 0.25;
-    const sz = g.pos.z + Math.cos(g.heading) * 0.25;
-    const far = Math.hypot(h.x - g.pos.x, h.z - g.pos.z);
+    const heading = Math.atan2(h.x - px, h.z - pz);
+    const sx = px + Math.sin(heading) * 0.25;
+    const sz = pz + Math.cos(heading) * 0.25;
+    const far = Math.hypot(h.x - px, h.z - pz);
     const d = Math.hypot(h.x - sx, h.z - sz);
-    const w = this.window(far);
-    const e = this.charge - 0.8;
-    const outside = Math.sign(e) * Math.max(0, Math.abs(e) - w.half);
-    const speed = Math.hypot(g.vel.x, g.vel.z);
-    const y0 = BENJI_HEIGHT + 0.42 + this.jump;
+    const outside = Math.sign(e) * Math.max(0, Math.abs(e) - half);
+    const y0 = height + 0.42;
     // Close shots go up steep so they drop in over the front of the rim.
     const theta = lerp(1.2, 0.93, clamp((d - 1) / 7.5, 0, 1));
     const rise = h.y - (FLOOR + y0);
     const v2 = (G * d * d) / (2 * Math.cos(theta) ** 2 * Math.max(0.2, d * Math.tan(theta) - rise));
-    const perfect = Math.abs(e) <= w.half;
+    const perfect = Math.abs(e) <= half;
     const factor = 1 + (perfect ? e * 0.035 : outside * 0.6 + Math.sign(e) * 0.012) + (Math.random() - 0.5) * 0.006;
     const v = Math.sqrt(v2) * factor;
     const side = (Math.random() + Math.random() - 1) * (0.004 + Math.abs(outside) * 0.3 + speed * 0.0035);
@@ -193,28 +245,72 @@ export class Hoops implements Activity {
     ball.bounces = 0;
     ball.age = 0;
     ball.error = e;
+    ball.who = who;
     ball.points = far > ARC ? 3 : 2;
-    ball.hot = Math.hypot(g.pos.x - this.spot.x, g.pos.z - this.spot.z) < 1.15;
+    ball.hot = hot;
     if (ball.hot) ball.points += 1;
     this.trailBall = ball;
     for (let i = 0; i < 30; i++) this.trailPos.set([ball.p.x, ball.p.y, ball.p.z], i * 3);
+    this.g.sound.release();
+    return perfect && Math.abs(e) < half * 0.4;
+  }
+
+  private release() {
+    const g = this.g;
+    const far = Math.hypot(this.hoop.x - g.pos.x, this.hoop.z - g.pos.z);
+    const w = this.window(far);
+    const hot = this.kind === "shootout" && Math.hypot(g.pos.x - this.spot.x, g.pos.z - this.spot.z) < 1.15;
+    const pure = this.throwBall(0, g.pos.x, g.pos.z, this.charge - 0.8, w.half, Math.hypot(g.vel.x, g.vel.z), BENJI_HEIGHT + this.jump, hot);
     this.shots++;
     this.started = true;
     this.cool = 0.55;
     this.jump = 0.001;
-    g.sound.release();
-    if (perfect && Math.abs(e) < w.half * 0.4) this.say("PERFECT RELEASE", 1);
+    if (this.kind === "versus") this.turn = "air";
+    if (pure) this.say("PERFECT RELEASE", 1);
+  }
+
+  /** The other player's shot: in the green as often as their skill says, off by a bit otherwise. */
+  private rivalShot() {
+    const r = this.rival;
+    const far = Math.hypot(this.hoop.x - this.spot.x, this.hoop.z - this.spot.z);
+    const half = lerp(0.085, 0.045, clamp((far - 2) / 7, 0, 1));
+    const good = Math.random() < r.skill;
+    const e = good ? (Math.random() - 0.5) * half * 1.5 : (Math.random() < 0.5 ? -1 : 1) * (half + 0.035 + Math.random() * 0.11);
+    this.throwBall(1, this.spot.x, this.spot.z, e, half, 0, (r.card?.height ?? 1.78) * 0.97, false);
+    this.turn = "air";
   }
 
   private judge(b: Ball, made: boolean) {
     if (b.judged) return;
     b.judged = true;
     const g = this.g;
+    if (made) g.people.cheer(COURT.cx, COURT.cz, 18, b.points >= 3 ? 1.8 : 1.1);
+    if (b.who === 1) {
+      const r = this.rival;
+      if (made) {
+        r.score += b.points;
+        this.netKick = 1;
+        g.sound.swish();
+        this.say(`${r.name} hits  +${b.points}`, 1.5);
+      } else this.say(`${r.name} bricks it. Your ball.`, 1.5);
+      // Benji answers from the same spot.
+      this.turn = "you";
+      this.shotClock = 10;
+      r.card?.place(this.spot.x - 2, this.spot.z + 1.2);
+      g.pos.x = this.spot.x;
+      g.pos.z = this.spot.z;
+      g.push();
+      return;
+    }
+    if (this.kind === "versus") {
+      this.turn = "next";
+      this.pause = 1.3;
+    }
     if (made) {
       this.made++;
       this.streak++;
       this.bestStreak = Math.max(this.bestStreak, this.streak);
-      const bonus = this.streak >= 3 ? 1 : 0;
+      const bonus = this.streak >= 3 && this.kind === "shootout" ? 1 : 0;
       this.score += b.points + bonus;
       this.netKick = 1;
       if (b.rim || b.board) g.sound.rim();
@@ -222,7 +318,7 @@ export class Hoops implements Activity {
       if (b.points >= 3 || this.streak === 3) g.sound.cheer();
       const what = !b.rim && !b.board ? "SWISH" : b.board ? "OFF THE GLASS" : "BUCKET";
       this.say(`${what}  +${b.points + bonus}${this.streak >= 3 ? "  ON FIRE" : ""}`, 1.4);
-      if (b.hot) this.moveSpot();
+      if (b.hot && this.kind === "shootout") this.moveSpot();
       g.stage.setPunch(0.5);
       g.input.rumble(0.45, 120);
     } else {
@@ -314,7 +410,8 @@ export class Hoops implements Activity {
     const h = this.hoop;
     const input = g.input;
 
-    if (this.started && !this.over) {
+    if (this.kind === "versus" && !this.over) this.versus(dt);
+    if (this.started && !this.over && this.kind === "shootout") {
       this.left -= dt;
       if (this.left <= this.tick && this.tick > 0) {
         if (this.tick <= 5) g.sound.countdown();
@@ -327,6 +424,7 @@ export class Hoops implements Activity {
         this.over = true;
       }
     }
+    if (this.over && this.kind === "versus") return;
     if (this.over && !this.balls.some((b) => b.live && !b.judged)) {
       this.finish();
       return;
@@ -345,6 +443,16 @@ export class Hoops implements Activity {
     g.vel.z += ((fz * m.y + fx * m.x) * top - g.vel.z) * k;
     g.pos.x = clamp(g.pos.x + g.vel.x * dt, COURT.cx - COURT.halfW + 0.5, COURT.cx + COURT.halfW - 0.5);
     g.pos.z = clamp(g.pos.z + g.vel.z * dt, h.z + 1.25, COURT.cz + 3);
+    if (this.kind === "versus" && this.turn !== "rival") {
+      // Shot for shot means the same shot: Benji stays inside the ring.
+      const ox = g.pos.x - this.spot.x;
+      const oz = g.pos.z - this.spot.z;
+      const od = Math.hypot(ox, oz);
+      if (od > 1) {
+        g.pos.x = this.spot.x + (ox / od) * 1;
+        g.pos.z = this.spot.z + (oz / od) * 1;
+      }
+    }
     g.heading = Math.atan2(h.x - g.pos.x, h.z - g.pos.z);
     g.benji.speed = Math.hypot(g.vel.x, g.vel.z);
 
@@ -354,7 +462,7 @@ export class Hoops implements Activity {
     g.live.sweetLo = w.lo;
     g.live.sweetHi = w.hi;
     if (!this.over) {
-      if (!this.charging && this.cool <= 0 && input.down("action")) {
+      if (!this.charging && this.cool <= 0 && input.down("action") && (this.kind !== "versus" || this.turn === "you")) {
         this.charging = true;
         this.charge = 0;
       }
@@ -380,7 +488,12 @@ export class Hoops implements Activity {
     const rz = Math.sin(g.heading);
     this.dribble += dt * (6 + g.benji.speed * 0.8);
     const bounce = Math.abs(Math.sin(this.dribble));
-    this.hand.visible = this.cool <= 0 && !this.over;
+    this.hand.visible = this.cool <= 0 && !this.over && (this.kind !== "versus" || this.turn === "you");
+    const rc = this.rival.card;
+    if (rc && rc.visible) {
+      rc.heading = Math.atan2(h.x - rc.group.position.x, h.z - rc.group.position.z);
+      rc.update(dt, g.camera.position, g.tint, FLOOR);
+    }
     if (this.charging) {
       const up = Math.min(1, this.charge * 2.2);
       this.hand.position.set(g.pos.x + rx * 0.12 + fx * 0.2, FLOOR + lerp(0.95, BENJI_HEIGHT + 0.3, up), g.pos.z + rz * 0.12 + fz * 0.2);
@@ -416,17 +529,80 @@ export class Hoops implements Activity {
     this.frame(dt, false);
   }
 
+  private versus(dt: number) {
+    const g = this.g;
+    const r = this.rival;
+    if (this.turn === "rival") {
+      r.wait -= dt;
+      if (r.wait <= 0) this.rivalShot();
+    } else if (this.turn === "you" && !this.charging) {
+      this.shotClock -= dt;
+      if (this.shotClock <= 0) {
+        this.say("Shot clock. No bucket.", 1.4);
+        this.streak = 0;
+        this.turn = "next";
+        this.pause = 1.1;
+      }
+    } else if (this.turn === "next") {
+      this.pause -= dt;
+      if (this.pause > 0) return;
+      if ((this.score >= TO || r.score >= TO) && this.score !== r.score) {
+        this.over = true;
+        this.finishVersus();
+      } else this.round();
+    }
+    void g;
+  }
+
+  private finishVersus() {
+    const g = this.g;
+    const r = this.rival;
+    const won = this.score > r.score;
+    const beaten = g.save.best.versus ?? 0;
+    if (won) g.save.best.versus = Math.max(beaten, r.tier + 1);
+    const got = won ? g.earn(80 + r.tier * 45, 6 + r.tier * 3) : g.earn(10, 1);
+    if (won) g.sound.cheer();
+    g.people.cheer(COURT.cx, COURT.cz, 20, 2.4);
+    g.emit("versus", won ? 1 : 0, r.tier);
+    this.hand.visible = false;
+    const next = RIVALS[Math.min(RIVALS.length - 1, g.save.best.versus ?? 0)]!;
+    g.showResults(
+      {
+        title: won ? "GAME. YOU RAN IT." : `${r.name.toUpperCase()} TOOK IT`,
+        sub: won ? (r.tier >= RIVALS.length - 1 ? "Nobody left on this court. It's yours." : `${next.name} wants next.`) : "Shot for shot, he had one more. Run it back.",
+        rows: [
+          ["Final", `${this.score} - ${r.score}`],
+          ["Against", r.name],
+          ["Shooting", `${this.made} of ${this.shots}`],
+          ["Court wins", `${g.save.best.versus ?? 0} of ${RIVALS.length}`],
+        ],
+        pay: got.dollars,
+        respect: got.respect,
+        tickets: 0,
+        record: won && r.tier + 1 > beaten,
+        again: won ? "Who's next" : "Run it back",
+      },
+      () => this.start("versus"),
+      () => this.leave(),
+    );
+  }
+
   private frame(dt: number, snap: boolean) {
     const g = this.g;
     const h = this.hoop;
-    const tx = g.pos.x - h.x;
-    const tz = g.pos.z - h.z;
+    // In a game to eleven the lens stays on the spot both players shoot from.
+    const px = this.kind === "versus" ? this.spot.x : g.pos.x;
+    const pz = this.kind === "versus" ? this.spot.z : g.pos.z;
+    const tx = px - h.x;
+    const tz = pz - h.z;
     const d = Math.hypot(tx, tz) || 1;
     const ux = tx / d;
     const uz = tz / d;
-    // Low behind his shoulder, looking up at the rim.
-    this.cam.set(g.pos.x + ux * 5.1 - uz * 1.25, FLOOR + 1.4 + d * 0.03, g.pos.z + uz * 5.1 + ux * 1.25);
-    this.look.set(lerp(g.pos.x, h.x, 0.6), FLOOR + 2.05, lerp(g.pos.z, h.z, 0.6));
+    // Low behind the shooter's shoulder, looking up at the rim, and never outside the fence.
+    this.cam.set(px + ux * 5.1 - uz * 1.25, FLOOR + 1.4 + d * 0.03, pz + uz * 5.1 + ux * 1.25);
+    this.cam.x = clamp(this.cam.x, COURT.cx - COURT.halfW - 1.1, COURT.cx + COURT.halfW + 1.1);
+    this.cam.z = Math.min(this.cam.z, COURT.cz + COURT.halfL + 1.1);
+    this.look.set(lerp(px, h.x, 0.6), FLOOR + 2.05, lerp(pz, h.z, 0.6));
     if (snap) g.camera.position.copy(this.cam);
     else g.camera.position.lerp(this.cam, damp(6, dt));
     g.camera.lookAt(this.look);
@@ -470,6 +646,7 @@ export class Hoops implements Activity {
   private leave() {
     const g = this.g;
     this.group.visible = false;
+    if (this.rival.card) this.rival.card.visible = false;
     g.benji.lift = 0;
     g.pos.x = g.city.anchors.ogSpot.x - 1.5;
     g.pos.z = g.city.anchors.ogSpot.z + 2.6;
@@ -495,7 +672,9 @@ export class Hoops implements Activity {
       best: this.g.save.best.hoops ?? 0,
       call: this.call,
       fire: this.streak >= 3,
-      range: `${d > ARC ? "3 PT" : "2 PT"}${onSpot ? "  HOT SPOT +1" : ""}`,
+      range: `${d > ARC ? "3 PT" : "2 PT"}${onSpot && this.kind === "shootout" ? "  HOT SPOT +1" : ""}`,
+      kind: this.kind,
+      rival: this.kind === "versus" ? { name: this.rival.name, score: this.rival.score, to: TO, yours: this.turn === "you", clock: Math.max(0, Math.ceil(this.shotClock)) } : null,
     };
   }
 }

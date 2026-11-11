@@ -28,7 +28,7 @@ export type Anchor = { x: number; z: number };
 
 export type Mode = "title" | "walk" | "drive" | "race" | "hoops" | "bowl" | "fish" | "kart" | "laser" | "bounce" | "pit" | "whack";
 
-export type Overlay = null | "pause" | "map" | "shop" | "wardrobe" | "arcade" | "prizes" | "food" | "results" | "video";
+export type Overlay = null | "pause" | "map" | "shop" | "wardrobe" | "arcade" | "prizes" | "food" | "results" | "video" | "court";
 
 export type Catch = { name: string; lb: number; pay: number; rarity: string; color: string };
 
@@ -72,11 +72,26 @@ export type Results = {
   again: string | null;
 };
 
-export type HoopsHud = { phase: "run" | "over"; score: number; left: number; shots: number; made: number; streak: number; best: number; call: string; fire: boolean; range: string };
+export type HoopsKind = "shootout" | "practice" | "versus";
+export type HoopsHud = {
+  phase: "run" | "over";
+  score: number;
+  left: number;
+  shots: number;
+  made: number;
+  streak: number;
+  best: number;
+  call: string;
+  fire: boolean;
+  range: string;
+  kind: HoopsKind;
+  /** The other player in a game to eleven. */
+  rival: { name: string; score: number; to: number; yours: boolean; clock: number } | null;
+};
 export type BowlHud = { phase: "position" | "aim" | "power" | "roll" | "settle" | "done"; frame: number; ball: number; marks: string[][]; totals: (number | null)[]; total: number; call: string; best: number; standing: boolean[] };
 export type FishHud = { phase: "ready" | "charge" | "flying" | "wait" | "bite" | "reel" | "landed" | "lost"; bait: number; distance: number; fish: Catch | null; call: string; cooler: number; value: number };
 export type RaceHud = { phase: "count" | "go" | "finish"; count: number; lap: number; laps: number; place: number; racers: number; time: number; best: number; call: string; wrongWay: boolean; kart: boolean };
-export type LaserHud = { phase: "count" | "go" | "over"; count: number; left: number; score: number; tags: number; hit: boolean; call: string };
+export type LaserHud = { phase: "count" | "go" | "over"; count: number; left: number; score: number; tags: number; hit: boolean; call: string; vest: number; level: number; down: boolean };
 export type BounceHud = { left: number; best: number; combo: number; score: number; call: string };
 export type PitHud = { left: number; found: number; total: number; call: string };
 export type WhackHud = { left: number; score: number; hits: number; call: string };

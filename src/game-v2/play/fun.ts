@@ -6,7 +6,7 @@ import type { HudState } from "../core/types";
 import { clamp, damp, dampAngle, formatClock, wrapAngle } from "../core/util";
 import type { Activity, Game } from "../game";
 import { pushOut, sight } from "../world/collide";
-import { KART_LENGTH, kartAt, kartNearest } from "../world/funhouse";
+import { KART_LENGTH, KART_PADS, kartAt, kartNearest } from "../world/funhouse";
 import { CURB, KART_TRACK } from "../world/map";
 
 function payTickets(g: Game, title: string, sub: string, rows: [string, string][], tickets: number, record: boolean, again: () => void, close: () => void) {
@@ -17,7 +17,7 @@ function payTickets(g: Game, title: string, sub: string, rows: [string, string][
 
 // ------------------------------------------------------------------ go-karts
 
-const KART: DriveTune = { top: 12.6, accel: 11, boostTop: 17, grip: 9.5 };
+const KART: DriveTune = { top: 14.2, accel: 12.5, boostTop: 19.5, grip: 9.8 };
 const KART_LAPS = 5;
 
 function makeKart(color: number) {
@@ -55,7 +55,7 @@ function makeKart(color: number) {
   return { group: g, wheels };
 }
 
-type Bot = { kart: ReturnType<typeof makeKart>; s: number; off: number; speed: number; top: number; done: number; x: number; z: number };
+type Bot = { kart: ReturnType<typeof makeKart>; driver: Card; name: string; s: number; off: number; drift: number; speed: number; top: number; done: number; x: number; z: number };
 
 /** Five laps of the oval behind the Fun House. Tickets for where you finish. */
 export class KartRace implements Activity {
@@ -76,7 +76,10 @@ export class KartRace implements Activity {
   private lap = 0;
   private lapStart = 0;
   private bestLap = 0;
-  private place = 4;
+  private place = 6;
+  /** Seconds of extra speed left, from a pad or from letting go of a long slide. */
+  private boost = 0;
+  private slide = 0;
   private call = "";
   private callLeft = 0;
   private wrong = 0;
@@ -86,17 +89,22 @@ export class KartRace implements Activity {
     this.d.radius = 0.6;
     this.kart.group.visible = false;
     g.city.exterior.add(this.kart.group);
-    [0xc22a22, 0x2a6cff, 0xe8a81e].forEach((color, i) => {
+    // Five other drivers, each a person from the neighbourhood sat down in a kart.
+    const field: [number, string, number][] = [
+      [0xc22a22, "Tasha", 1],
+      [0x2a6cff, "Dre", 0],
+      [0xe8a81e, "Keisha", 3],
+      [0x9a3ad6, "Marcus", 4],
+      [0xf2efe9, "Jay", 2],
+    ];
+    field.forEach(([color, name, art], i) => {
       const kart = makeKart(color);
-      // A helmet and shoulders, since the bots have no card.
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 10), new THREE.MeshStandardMaterial({ color: 0xeeeae2, roughness: 0.3 }));
-      head.position.set(0, 0.98, -0.3);
-      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.46, 0.26), new THREE.MeshStandardMaterial({ color, roughness: 0.7 }));
-      torso.position.set(0, 0.62, -0.32);
-      kart.group.add(head, torso);
       kart.group.visible = false;
       g.city.exterior.add(kart.group);
-      this.bots.push({ kart, s: 0, off: 0, speed: 0, top: 11.9 - i * 0.55, done: -1, x: 0, z: 0 });
+      const driver = new Card(PEDS[art % PEDS.length]!.art, 1.5);
+      driver.visible = false;
+      g.city.exterior.add(driver.group);
+      this.bots.push({ kart, driver, name, s: 0, off: 0, drift: 0, speed: 0, top: 13.5 - i * 0.42, done: -1, x: 0, z: 0 });
     });
   }
 
@@ -105,30 +113,36 @@ export class KartRace implements Activity {
     this.leaving = false;
     this.kart.group.visible = true;
     const grid: [number, number][] = [
+      [10.2, 1.2],
+      [10.2, -1.2],
+      [7.6, 1.2],
+      [7.6, -1.2],
       [5, 1.2],
-      [5, -1.2],
-      [2.4, 1.2],
     ];
     this.bots.forEach((b, i) => {
       b.s = grid[i]![0];
       b.off = grid[i]![1];
       b.speed = 0;
       b.done = -1;
+      b.drift = 0;
       b.kart.group.visible = true;
-      this.poseBot(b, 0);
+      b.driver.visible = true;
+      this.poseBot(b, 0, 0);
     });
-    const p = kartAt(2.4, -1.2);
+    this.boost = 0;
+    this.slide = 0;
+    const p = kartAt(5, -1.2);
     this.d.reset(p.x, p.z, p.heading);
     this.d.y = CURB;
     this.phase = "count";
     this.count = 3;
     this.clock = 0;
     this.time = 0;
-    this.prog = 2.4;
+    this.prog = 5;
     this.lap = 0;
     this.lapStart = 0;
     this.bestLap = 0;
-    this.place = 4;
+    this.place = this.bots.length + 1;
     this.wrong = 0;
     this.say("Five laps. Stay off the tyres.", 3);
     g.sound.countdown();
@@ -143,13 +157,20 @@ export class KartRace implements Activity {
     this.g.push();
   }
 
-  private poseBot(b: Bot, travel: number) {
+  private poseBot(b: Bot, travel: number, dt: number) {
     const p = kartAt(b.s, b.off);
     b.x = p.x;
     b.z = p.z;
     b.kart.group.position.set(p.x, CURB, p.z);
     b.kart.group.rotation.y = p.heading;
     for (const w of b.kart.wheels) w.rotation.x += travel / 0.19;
+    // The driver: a person, sat low enough that the kart hides their legs.
+    const g = this.g;
+    b.driver.place(p.x - Math.sin(p.heading) * 0.3, p.z - Math.cos(p.heading) * 0.3);
+    b.driver.heading = p.heading;
+    b.driver.lift = -0.3;
+    b.driver.speed = 0;
+    b.driver.update(dt, g.camera.position, g.tint, CURB);
   }
 
   private sync(dt: number) {
@@ -194,9 +215,31 @@ export class KartRace implements Activity {
     } else {
       if (this.phase === "go") this.time += dt;
       const done = this.phase === "finish";
-      d.step(dt, { throttle: done ? 0 : g.input.throttle(), steer: m.x, handbrake: done || g.input.down("action"), boost: false }, KART, [], CURB);
+      // Hold a slide through a bend and let go: the kart fires out of it.
+      const sliding = !done && g.input.down("action") && d.speed > 6 && Math.abs(m.x) > 0.3;
+      if (sliding) this.slide += dt;
+      else {
+        if (this.slide > 0.7 && !done) {
+          this.boost = Math.max(this.boost, Math.min(1.6, this.slide * 0.9));
+          this.say("DRIFT BOOST", 0.9);
+          g.sound.ui();
+        }
+        this.slide = 0;
+      }
+      this.boost = Math.max(0, this.boost - dt);
+      d.step(dt, { throttle: done ? 0 : g.input.throttle(), steer: m.x, handbrake: done || g.input.down("action"), boost: this.boost > 0 && !done }, KART, [], CURB);
+      g.stage.setPunch(this.boost > 0 ? 0.6 : 0);
       // The tyre wall and the kerb.
       const n = kartNearest(d.x, d.z);
+      for (const pad of KART_PADS) {
+        const ds = Math.abs(n.s - pad * KART_LENGTH);
+        if (ds < 1.6 && Math.abs(n.off) < 1.5 && this.boost < 0.9 && !done) {
+          this.boost = 1.5;
+          this.say("BOOST", 0.8);
+          g.sound.ui();
+          g.input.rumble(0.5, 160);
+        }
+      }
       const limit = KART_TRACK.width / 2 - 0.55;
       if (Math.abs(n.off) > limit) {
         const over = Math.abs(n.off) - limit;
@@ -227,13 +270,17 @@ export class KartRace implements Activity {
         const bend = Math.PI * KART_TRACK.halfZ;
         const onBend = (here > str - 2.5 && here < str + bend - 3) || here > 2 * str + bend - 2.5;
         let want = b.done >= 0 && b.s > KART_LENGTH * KART_LAPS + 12 ? 0 : onBend ? b.top * 0.74 : b.top;
+        // The pack stays a pack: leaders ease up a touch, back markers push.
         const gap = b.s - this.prog;
-        if (gap > 26) want *= 0.88;
-        else if (gap < -26) want *= 1.08;
-        b.speed += clamp(want - b.speed, -12 * dt, 7 * dt);
+        want *= gap > 30 ? 0.86 : gap > 12 ? 0.95 : gap < -30 ? 1.12 : gap < -12 ? 1.05 : 1;
+        for (const pad of KART_PADS) if (Math.abs(here - pad * KART_LENGTH) < 4) want *= 1.16;
+        b.speed += clamp(want - b.speed, -12 * dt, 7.5 * dt);
+        // Each driver has a line of their own and wanders off it.
+        b.drift += dt * (0.5 + (b.top % 1));
+        b.off = clamp(b.off + Math.sin(b.drift + b.top * 3) * 0.5 * dt, -1.5, 1.5);
         const travel = b.speed * dt;
         b.s += travel;
-        this.poseBot(b, travel);
+        this.poseBot(b, travel, dt);
         if (b.done < 0 && b.s >= KART_LENGTH * KART_LAPS) b.done = this.time;
       }
 
@@ -255,8 +302,14 @@ export class KartRace implements Activity {
             this.say(lap === KART_LAPS - 1 ? "Final lap!" : `Lap ${lap + 1}`, 1.6);
             g.sound.ui();
           }
+          g.people.cheer(KART_TRACK.cx, KART_TRACK.cz, 40, 1.4);
         }
+        const was = this.place;
         this.place = 1 + this.bots.filter((b) => b.s > this.prog).length;
+        if (this.place < was && this.time > 2) {
+          const passed = this.bots.filter((b) => b.s <= this.prog).sort((a, b) => b.s - a.s)[0];
+          this.say(this.place === 1 ? "YOU LEAD!" : `P${this.place}${passed ? `  ·  past ${passed.name}` : ""}`, 1.1);
+        }
         if (this.prog >= KART_LENGTH * KART_LAPS) this.finish();
       }
     }
@@ -295,7 +348,11 @@ export class KartRace implements Activity {
     this.leaving = true;
     g.transition(() => {
       this.kart.group.visible = false;
-      for (const b of this.bots) b.kart.group.visible = false;
+      for (const b of this.bots) {
+        b.kart.group.visible = false;
+        b.driver.visible = false;
+        b.driver.group.visible = false;
+      }
       g.sound.setEngine(false);
       g.benji.lift = 0;
       g.setPlace("fun");
@@ -332,14 +389,41 @@ export class KartRace implements Activity {
 
 // ------------------------------------------------------------------ laser tag
 
-type Tagger = { card: Card; lamp: THREE.Mesh; x: number; z: number; tx: number; tz: number; stun: number; aim: number; cool: number; stuck: number };
+type Tagger = { card: Card; lamp: THREE.Mesh; gun: THREE.Group; x: number; z: number; tx: number; tz: number; stun: number; aim: number; cool: number; stuck: number };
+
+/** A laser tag blaster: chunky body, a lit barrel, a sight on top. Held at the hip, pointing where its owner aims. */
+function makeBlaster(glow: THREE.Color) {
+  const g = new THREE.Group();
+  const shell = new THREE.MeshStandardMaterial({ color: 0x1a1c22, roughness: 0.45, metalness: 0.4 });
+  const lit = new THREE.MeshBasicMaterial({ color: glow, toneMapped: false });
+  const part = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    g.add(m);
+    return m;
+  };
+  part(new THREE.BoxGeometry(0.11, 0.15, 0.44), shell, 0, 0, 0.1);
+  part(new THREE.BoxGeometry(0.08, 0.2, 0.1), shell, 0, -0.15, -0.04);
+  part(new THREE.BoxGeometry(0.06, 0.06, 0.2), shell, 0, 0.1, 0.02);
+  const barrel = part(new THREE.CylinderGeometry(0.035, 0.035, 0.26, 10), lit, 0, 0.01, 0.42);
+  barrel.rotation.x = Math.PI / 2;
+  part(new THREE.BoxGeometry(0.125, 0.03, 0.3), lit, 0, 0.06, 0.1);
+  part(new THREE.SphereGeometry(0.05, 10, 8), lit, 0, 0.01, 0.56);
+  return g;
+}
+
+/** Hits a vest takes before its wearer is out for a few seconds. */
+const VEST = 3;
 type Beam = { mesh: THREE.Mesh; left: number };
 
 const _a = new THREE.Vector3();
 const _b = new THREE.Vector3();
 const _y = new THREE.Vector3(0, 1, 0);
 
-/** Ninety seconds in the dark with four taggers. Tag them, break their line of sight, keep moving. */
+/**
+ * Ninety seconds in the dark with five taggers, everyone carrying a blaster. They hunt harder
+ * every twenty seconds. Three hits on the vest and Benji is out for a moment and pays for it.
+ */
 export class LaserTag implements Activity {
   hints: [string, string][] = [
     ["W A S D", "Move and turn"],
@@ -348,6 +432,10 @@ export class LaserTag implements Activity {
     ["Q", "Leave the arena"],
   ];
   private bots: Tagger[] = [];
+  private gun = makeBlaster(new THREE.Color(0.4, 3, 0.3));
+  private vest = VEST;
+  /** Seconds left sitting out after the vest goes dark. */
+  private down = 0;
   private beams: Beam[] = [];
   private group = new THREE.Group();
   private phase: "count" | "go" | "over" = "count";
@@ -369,21 +457,24 @@ export class LaserTag implements Activity {
 
   constructor(private g: Game) {
     const room = g.rooms.laser;
-    const geo = new THREE.CylinderGeometry(0.035, 0.035, 1, 6);
+    this.group.add(this.gun);
+    const geo = new THREE.CylinderGeometry(0.05, 0.05, 1, 8);
     for (let i = 0; i < 8; i++) {
       const mesh = new THREE.Mesh(geo, this.green);
       mesh.visible = false;
       this.group.add(mesh);
       this.beams.push({ mesh, left: 0 });
     }
-    room.bots.slice(0, 4).forEach((p, i) => {
+    room.bots.slice(0, 5).forEach((p, i) => {
       const kind = PEDS[(i * 2 + 1) % PEDS.length]!;
       const card = new Card(kind.art, kind.height);
       const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 0.4, 2.2), toneMapped: false }));
       lamp.position.y = kind.height + 0.22;
       card.group.add(lamp);
       this.group.add(card.group);
-      this.bots.push({ card, lamp, x: p.x, z: p.z, tx: p.x, tz: p.z, stun: 0, aim: 0, cool: 1 + i * 0.4, stuck: 0 });
+      const gun = makeBlaster(new THREE.Color(3, 0.4, 2.2));
+      this.group.add(gun);
+      this.bots.push({ card, lamp, gun, x: p.x, z: p.z, tx: p.x, tz: p.z, stun: 0, aim: 0, cool: 1 + i * 0.4, stuck: 0 });
     });
     room.group.add(this.group);
   }
@@ -410,6 +501,8 @@ export class LaserTag implements Activity {
     this.clock = 0;
     this.left = 90;
     this.score = this.tags = this.combo = 0;
+    this.vest = VEST;
+    this.down = 0;
     this.shield = 0;
     this.say("Tag the pink lights. Break their line of sight.", 3);
     g.sound.countdown();
@@ -424,15 +517,20 @@ export class LaserTag implements Activity {
 
   private beam(ax: number, az: number, bx: number, bz: number, mat: THREE.Material) {
     const b = this.beams.find((k) => k.left <= 0) ?? this.beams[0]!;
-    _a.set(ax, 1.15, az);
-    _b.set(bx, 1.15, bz);
+    _a.set(ax, 1.08, az);
+    _b.set(bx, 1.12, bz);
     const len = _a.distanceTo(_b);
     b.mesh.material = mat;
     b.mesh.position.copy(_a).lerp(_b, 0.5);
     b.mesh.scale.set(1, len, 1);
     b.mesh.quaternion.setFromUnitVectors(_y, _b.sub(_a).normalize());
     b.mesh.visible = true;
-    b.left = 0.14;
+    b.left = 0.2;
+  }
+
+  /** 1 to 5: the arena heats up every twenty seconds. */
+  private level() {
+    return Math.min(5, 1 + Math.floor((90 - this.left) / 20));
   }
 
   private fire() {
@@ -453,14 +551,16 @@ export class LaserTag implements Activity {
         bestErr = err;
       }
     }
+    const mx = this.gun.position.x + Math.sin(this.gun.rotation.y) * 0.5;
+    const mz = this.gun.position.z + Math.cos(this.gun.rotation.y) * 0.5;
     if (best) {
-      this.beam(g.pos.x, g.pos.z, best.x, best.z, this.green);
-      best.stun = 3;
+      this.beam(mx, mz, best.x, best.z, this.green);
+      best.stun = Math.max(1.6, 3 - this.level() * 0.3);
       best.aim = 0;
       this.tags++;
       this.combo = this.comboLeft > 0 ? this.combo + 1 : 1;
       this.comboLeft = 4;
-      const pts = 100 + (this.combo - 1) * 25;
+      const pts = Math.round((100 + (this.combo - 1) * 25) * (1 + (this.level() - 1) * 0.15));
       this.score += pts;
       g.sound.swish();
       this.say(this.combo > 1 ? `TAG x${this.combo}  +${pts}` : `TAG  +${pts}`, 1.2);
@@ -469,7 +569,7 @@ export class LaserTag implements Activity {
       const fx = Math.sin(g.camYaw);
       const fz = Math.cos(g.camYaw);
       const t = sight(g.pos.x, g.pos.z, g.pos.x + fx * 30, g.pos.z + fz * 30, room.solids, 0.05);
-      this.beam(g.pos.x, g.pos.z, g.pos.x + fx * 30 * t, g.pos.z + fz * 30 * t, this.green);
+      this.beam(mx, mz, g.pos.x + fx * 30 * t, g.pos.z + fz * 30 * t, this.green);
       g.heading = g.camYaw;
     }
   }
@@ -503,7 +603,18 @@ export class LaserTag implements Activity {
     }
 
     // Benji.
-    const live = this.phase === "go";
+    if (this.down > 0) {
+      this.down -= dt;
+      if (this.down <= 0) {
+        // Back in at the base with a fresh vest and a moment of cover.
+        g.pos.x = room.start.x;
+        g.pos.z = room.start.z;
+        this.vest = VEST;
+        this.shield = 2.2;
+        this.say("BACK IN", 1);
+      }
+    }
+    const live = this.phase === "go" && this.down <= 0;
     const m = live ? input.move() : { x: 0, y: 0 };
     const look = input.takeLook();
     g.camYaw = wrapAngle(g.camYaw - look - m.x * 1.9 * dt);
@@ -523,7 +634,12 @@ export class LaserTag implements Activity {
     this.shield -= dt;
     this.gotHit -= dt;
     this.comboLeft -= dt;
+    // The blaster rides at Benji's hip and points where he is looking.
+    this.gun.visible = this.down <= 0;
+    this.gun.position.set(g.pos.x + Math.sin(g.camYaw) * 0.3 - Math.cos(g.camYaw) * 0.3, 1.02 + (this.cool > 0.26 ? 0.04 : 0), g.pos.z + Math.cos(g.camYaw) * 0.3 + Math.sin(g.camYaw) * 0.3);
+    this.gun.rotation.y = g.camYaw;
     if (live && this.cool <= 0 && input.down("action")) this.fire();
+    const lv = this.level();
 
     // Taggers.
     for (const b of this.bots) {
@@ -534,18 +650,24 @@ export class LaserTag implements Activity {
       const dx = b.tx - b.x;
       const dz = b.tz - b.z;
       const dist = Math.hypot(dx, dz);
-      const sees = live && !stunned && Math.hypot(g.pos.x - b.x, g.pos.z - b.z) < 15 && sight(b.x, b.z, g.pos.x, g.pos.z, room.solids, 0.05) >= 1;
+      const sees = live && !stunned && Math.hypot(g.pos.x - b.x, g.pos.z - b.z) < 15 + lv && sight(b.x, b.z, g.pos.x, g.pos.z, room.solids, 0.05) >= 1;
+      b.gun.visible = !stunned;
+      b.gun.position.set(b.x + Math.sin(b.card.heading) * 0.3 + Math.cos(b.card.heading) * 0.28, 1.02, b.z + Math.cos(b.card.heading) * 0.3 - Math.sin(b.card.heading) * 0.28);
+      b.gun.rotation.y = b.card.heading;
       if (dist < 0.5 || b.stuck > 1.2) {
         // Next stop: any node this one can walk straight to.
         const open = room.nodes.filter((nd) => Math.hypot(nd.x - b.x, nd.z - b.z) > 3 && sight(b.x, b.z, nd.x, nd.z, room.solids, 0.45) >= 1);
-        const pick = open[Math.floor(Math.random() * open.length)] ?? room.nodes[Math.floor(Math.random() * room.nodes.length)]!;
+        // Later on they stop wandering and close in on wherever Benji is.
+        const hunt = live && Math.random() < 0.2 + lv * 0.13;
+        const near = hunt ? [...open].sort((p, q) => Math.hypot(p.x - g.pos.x, p.z - g.pos.z) - Math.hypot(q.x - g.pos.x, q.z - g.pos.z))[0] : undefined;
+        const pick = near ?? open[Math.floor(Math.random() * open.length)] ?? room.nodes[Math.floor(Math.random() * room.nodes.length)]!;
         b.tx = pick.x;
         b.tz = pick.z;
         b.stuck = 0;
       }
       let moved = 0;
       if (live && b.aim <= 0 && dist > 0.01) {
-        const v = stunned ? 3.4 : 2.5;
+        const v = stunned ? 3.4 : 2.4 + lv * 0.36;
         const bx = b.x;
         const bz = b.z;
         b.x += (dx / dist) * v * dt;
@@ -557,27 +679,37 @@ export class LaserTag implements Activity {
       }
       b.card.speed = moved;
       b.cool -= dt;
-      if (sees && b.aim <= 0 && b.cool <= 0) b.aim = 0.75;
+      if (sees && b.aim <= 0 && b.cool <= 0) b.aim = 0.78 - lv * 0.07;
       if (b.aim > 0) {
         b.card.heading = Math.atan2(g.pos.x - b.x, g.pos.z - b.z);
         b.aim -= dt;
         if (b.aim <= 0) {
-          b.cool = 2.2 + Math.random() * 1.6;
+          b.cool = (2.2 + Math.random() * 1.6) * (1 - lv * 0.09);
           const clear = !stunned && sight(b.x, b.z, g.pos.x, g.pos.z, room.solids, 0.05) >= 1;
           if (clear) {
-            const hit = this.shield <= 0 && Math.random() < (speed > 3.2 ? 0.3 : 0.62);
+            const hit = this.shield <= 0 && Math.random() < (speed > 3.2 ? 0.28 + lv * 0.03 : 0.6 + lv * 0.05);
             const miss = hit ? 0 : (Math.random() > 0.5 ? 1 : -1) * 0.9;
-            this.beam(b.x, b.z, g.pos.x + miss, g.pos.z + miss, this.pink);
+            this.beam(b.gun.position.x + Math.sin(b.card.heading) * 0.5, b.gun.position.z + Math.cos(b.card.heading) * 0.5, g.pos.x + miss, g.pos.z + miss, this.pink);
             g.sound.release();
             if (hit) {
-              this.score = Math.max(0, this.score - 50);
-              this.shield = 1.6;
+              this.vest--;
               this.gotHit = 0.5;
               this.combo = 0;
               g.sound.bad();
               g.stage.setPunch(0.8);
               g.input.rumble(0.8, 220);
-              this.say("TAGGED  -50", 1.2);
+              if (this.vest <= 0) {
+                // Vest dark: out for three seconds, and it costs.
+                this.score = Math.max(0, this.score - 200);
+                this.down = 3;
+                this.shield = 3;
+                g.vel.x = g.vel.z = 0;
+                this.say("VEST DOWN  -200", 2);
+              } else {
+                this.score = Math.max(0, this.score - 50);
+                this.shield = 1.2;
+                this.say(`TAGGED  -50   ${this.vest} left on the vest`, 1.3);
+              }
             }
           }
         }
@@ -644,7 +776,7 @@ export class LaserTag implements Activity {
   }
 
   hud(h: HudState) {
-    h.laser = { phase: this.phase, count: this.count, left: Math.max(0, Math.ceil(this.left)), score: this.score, tags: this.tags, hit: this.gotHit > 0, call: this.call };
+    h.laser = { phase: this.phase, count: this.count, left: Math.max(0, Math.ceil(this.left)), score: this.score, tags: this.tags, hit: this.gotHit > 0, call: this.call, vest: Math.max(0, this.vest), level: this.level(), down: this.down > 0 };
   }
 }
 

@@ -570,6 +570,6 @@ export class PopShot implements Activity {
   }
 
   hud(h: HudState) {
-    h.hoops = { phase: this.left > 0 ? "run" : "over", score: this.score, left: Math.max(0, Math.ceil(this.left)), shots: this.taken, made: this.made, streak: this.streak, best: this.g.save.best.popshot ?? 0, call: this.call, fire: this.streak >= 3, range: this.left < 10 ? "3 PT" : "2 PT" };
+    h.hoops = { phase: this.left > 0 ? "run" : "over", score: this.score, left: Math.max(0, Math.ceil(this.left)), shots: this.taken, made: this.made, streak: this.streak, best: this.g.save.best.popshot ?? 0, call: this.call, fire: this.streak >= 3, range: this.left < 10 ? "3 PT" : "2 PT", kind: "shootout", rival: null };
   }
 }
