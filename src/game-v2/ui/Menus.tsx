@@ -3,7 +3,7 @@ import { OUTFITS, type OutfitId } from "../assets/cast";
 import type { HudState } from "../core/types";
 import type { Game } from "../game";
 import { CATALOG, productById } from "../play/catalog";
-import { FOOD, PRIZES } from "../play/goods";
+import { FOOD, FOOD_TRUCKS, PRIZES } from "../play/goods";
 import { buyReal, openStore } from "../play/store";
 import { POIS } from "../world/map";
 import { drawMap } from "./map";
@@ -396,20 +396,58 @@ export function Prizes({ game, hud }: { game: Game; hud: HudState }) {
 
 export function FoodMenu({ game, hud }: { game: Game; hud: HudState }) {
   const list = FOOD.filter((f) => f.at === hud.foodAt);
+  const truck = FOOD_TRUCKS.find((t) => t.id === hud.foodAt) ?? null;
   return (
-    <Sheet title={hud.foodAt === "pizza" ? "Fun House Pizza" : "Riverfront food trucks"} sub="A full stomach pays: +10% SackDollars from everything while it lasts." onClose={() => game.close()}>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {list.map((f) => (
-          <button key={f.id} disabled={hud.dollars < f.cost} onClick={() => game.order(f.id)} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3 text-left transition hover:border-[#39ff14] disabled:opacity-40">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-black/40 text-2xl">{f.emoji}</div>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-extrabold text-white">{f.name}</div>
-              <div className="text-xs text-white/60">{f.line}</div>
-              <div className="mt-0.5 text-[11px] font-bold text-[#39ff14]">Well fed for {Math.round(f.seconds / 60)} min</div>
+    <Sheet title={truck ? truck.name : "Fun House Pizza"} sub="A full stomach pays: +10% SackDollars from everything while it lasts." onClose={() => game.close()}>
+      {truck && (
+        <div className="mb-3 flex items-center gap-3 rounded-xl border p-3" style={{ borderColor: `${truck.color}66`, background: `linear-gradient(90deg, ${truck.color}22, transparent)` }}>
+          <img src={truck.logo} alt={truck.name} className="h-16 w-24 shrink-0 rounded-lg bg-black/40 object-contain" />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm text-white/85">{truck.blurb}</div>
+            <div className="mt-1 text-xs font-extrabold" style={{ color: truck.color }}>
+              {truck.social}
             </div>
-            <div className="text-base font-black text-[#f4d77a]">${f.cost}</div>
-          </button>
-        ))}
+          </div>
+          {truck.video && (
+            <button className="sr-btn sr-btn-gold shrink-0 px-4 py-2 text-xs" onClick={() => game.open("video")}>
+              Watch the video
+            </button>
+          )}
+        </div>
+      )}
+      <div className="grid gap-2 sm:grid-cols-2">
+        {list.map((f) => {
+          const noFish = !!f.fish && hud.cooler.length === 0;
+          return (
+            <button key={f.id} disabled={hud.dollars < f.cost || noFish} onClick={() => game.order(f.id)} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3 text-left transition hover:border-[#39ff14]/60 disabled:opacity-40">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-black/40 text-2xl">{f.emoji}</div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-extrabold text-white">{f.name}</div>
+                <div className="text-xs text-white/60">{noFish ? "Bring a fish from the pier and they'll cook it." : f.line}</div>
+                <div className="mt-0.5 text-[11px] font-bold text-[#39ff14]">
+                  Well fed for {Math.round(f.seconds / 60)} min{f.respect ? ` · +${f.respect} respect` : ""}
+                </div>
+              </div>
+              <div className="text-base font-black text-[#f4d77a]">${f.cost}</div>
+            </button>
+          );
+        })}
+      </div>
+    </Sheet>
+  );
+}
+
+/** The music video from Veli's truck, full size. */
+export function VideoScreen({ game }: { game: Game }) {
+  const v = FOOD_TRUCKS.find((t) => t.video);
+  if (!v?.video) return null;
+  return (
+    <Sheet title={`${v.video.artist} · ${v.video.title}`} sub={`Playing at ${v.name} on the riverfront. ${v.social}`} onClose={() => game.close()} wide>
+      <video src={v.video.src} controls autoPlay loop playsInline className="mx-auto block max-h-[68vh] w-full rounded-xl bg-black" />
+      <div className="mt-3 flex justify-center">
+        <button data-primary className="sr-btn sr-btn-green px-8 py-3" onClick={() => game.close()}>
+          Back to the trucks
+        </button>
       </div>
     </Sheet>
   );

@@ -5,6 +5,7 @@ import { addGround } from "./ground";
 import { lotSurface } from "./buildings";
 import { MAT, Frame, YAW, addSolid, bench, bush, emissiveMat, globeLamp, neon, poolMat, sign, std, tree, type BuildCtx } from "./kit";
 import { BAIT_SHOP, COURT, CURB, HQ, PIER, PLAZA, RIVER_Z, ROAD_HALF, STREETS_Z, TRUCKS, rect } from "./map";
+import { FOOD, FOOD_TRUCKS, type Truck, type TruckId } from "../play/goods";
 
 const Y0 = CURB;
 const OPENING = "/game/opening-title.webp";
@@ -15,9 +16,12 @@ export type Riverfront = {
   rims: THREE.Mesh[];
   hqDoor: { x: number; z: number };
   baitCounter: { x: number; z: number };
-  truckCounter: { x: number; z: number };
+  trucks: TruckLot;
   castSpots: { x: number; z: number }[];
   ogSpot: { x: number; z: number };
+  /** Where Court OG stands, behind his table. */
+  ogStand: { x: number; z: number };
+  uncStand: { x: number; z: number; heading: number };
 };
 
 /** Solid block lettering, readable from across the plaza. */
@@ -72,7 +76,7 @@ export function buildRiverfront(ctx: BuildCtx): Riverfront {
   const hqDoor = buildHqExterior(ctx);
   const court = buildCourt(ctx);
   const pier = buildPier(ctx);
-  const truckCounter = buildTrucks(ctx);
+  const trucks = buildTrucks(ctx);
   buildMemphisSign(ctx);
 
   // Park planting.
@@ -89,7 +93,7 @@ export function buildRiverfront(ctx: BuildCtx): Riverfront {
     for (let i = 0; i < n; i++) bush(ctx, x0 + r() * (x1 - x0), z0 + r() * (z1 - z0), 0.9 + r() * 0.6, Y0);
   }
 
-  return { ...court, hqDoor, baitCounter: pier.baitCounter, castSpots: pier.castSpots, truckCounter };
+  return { ...court, hqDoor, baitCounter: pier.baitCounter, castSpots: pier.castSpots, uncStand: pier.uncStand, trucks };
 }
 
 /**
@@ -556,7 +560,17 @@ function buildCourt(ctx: BuildCtx) {
   addSolid(ctx, fx1 + 0.6, fx1 + 4.8, cz - 8, cz + 8);
   ctx.solid.wall(7, 1.5, cx, Y0 + 4.4, fz1 + 0.05, neon(ctx, "901 COURT", "#ff8a1e", { sub: "RIVERFRONT" }), YAW.south);
   addGround({ minX: fx0, maxX: fx1, minZ: fz0, maxZ: fz1, y: Y0 });
-  return { hoops, nets, rims, ogSpot: { x: cx + 4.4, z: fz1 + 2.2 } };
+  // The sign-up table by the gate, against the fence. Court OG runs the court from behind it.
+  const ox = cx + 4.6;
+  const table = std(0x121214, 0.6);
+  ctx.solid.box(2.8, 1.02, 0.1, ox, Y0 + 0.51, fz1 + 1.3, table);
+  for (const s of [-1, 1]) ctx.solid.box(0.1, 1.02, 1.2, ox + s * 1.4, Y0 + 0.51, fz1 + 0.7, table);
+  ctx.solid.box(2.9, 0.06, 0.46, ox, Y0 + 1.05, fz1 + 1.12, MAT.wood());
+  ctx.flat.wall(2.6, 0.8, ox, Y0 + 0.52, fz1 + 1.36, sign("901 COURT", "#ff8a1e", "#121214", { sub: "SHOOTOUT · PRACTICE · RUN ONE", w: 512, h: 160 }), YAW.south);
+  for (const bx of [-0.9, -0.55, 0.85]) ctx.solid.add(new THREE.SphereGeometry(0.17, 12, 10), std(0xc8611c, 0.7), ox + bx, Y0 + 1.25, fz1 + 1.12);
+  ctx.solid.box(0.34, 0.26, 0.24, ox + 0.3, Y0 + 1.21, fz1 + 1.12, std(0x1f6a3c, 0.6));
+  addSolid(ctx, ox - 1.5, ox + 1.5, fz1, fz1 + 1.4);
+  return { hoops, nets, rims, ogSpot: { x: ox, z: fz1 + 2.2 }, ogStand: { x: ox, z: fz1 + 0.62 } };
 }
 
 function buildPier(ctx: BuildCtx) {
@@ -610,6 +624,11 @@ function buildPier(ctx: BuildCtx) {
   f.add(new THREE.BoxGeometry(6.2, 0.14, 3), std(0x2f4a38, 0.8), 0, Y0 + 3.45, -3.3, ctx.solid, 0, -0.3);
   f.box(3.2, 1.3, 0.1, 0, Y0 + 1.9, 0.02, emissiveMat(ctx, 0xffc27a, 0.5, 2.4));
   f.box(3.6, 0.12, 0.7, 0, Y0 + 1.2, 0.3, dark);
+  // A proper counter under the shelf. Unc J serves from behind it, in the window.
+  f.box(3.6, 1.14, 0.1, 0, Y0 + 0.57, 0.6, MAT.wood());
+  for (const sx of [-1.8, 1.8]) f.box(0.1, 1.14, 0.62, sx, Y0 + 0.57, 0.3, MAT.wood());
+  f.wall(3.2, 0.6, 0, Y0 + 0.6, 0.66, sign("LIVE BAIT", "#35e0d0", "#17110e", { sub: "WORMS · MINNOWS · ICE", w: 512, h: 110 }), ctx.flat);
+  f.solid(-1.85, 1.85, 0, 0.7);
   f.wall(4.4, 0.95, 0, Y0 + 3.05, 0.08, neon(ctx, "BAIT & TACKLE", "#35e0d0", { w: 512, h: 112 }), ctx.flat);
   f.flat(5, 5, 0, Y0 + 0.02, 2.4, poolMat(ctx, 0xffb46a, 0.36), ctx.flat);
   f.lamp(0, Y0 + 2.6, 1.2, 0xffc27a);
@@ -621,32 +640,105 @@ function buildPier(ctx: BuildCtx) {
     { x: x - half + 0.7, z: z1 + 7 },
     { x: x + half - 0.7, z: z1 + 12 },
   ];
-  return { baitCounter, castSpots };
+  return { baitCounter, castSpots, uncStand: { x: f.wx(0.75, 0.22), z: f.wz(0.75, 0.22), heading: Math.PI / 2 } };
 }
 
-function buildTrucks(ctx: BuildCtx) {
-  const trucks: [number, string, string, number][] = [
-    [-12, "WINGS & THINGS", "#ff3b3b", 0xb3261c],
-    [0, "SOUL BOWL", "#ffb400", 0x1f4a2c],
-    [12, "TAMALES 901", "#39ff14", 0x1d2f55],
-  ];
+/** The menu board beside a truck: its own dishes at its own prices. */
+function menuBoard(truck: Truck) {
+  const items = FOOD.filter((f) => f.at === truck.id);
+  return new THREE.MeshBasicMaterial({
+    map: tex(384, 512, (g) => {
+      g.fillStyle = "#14100c";
+      g.fillRect(0, 0, 384, 512);
+      g.strokeStyle = truck.color;
+      g.lineWidth = 8;
+      g.strokeRect(8, 8, 368, 496);
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      g.fillStyle = truck.color;
+      g.font = `900 46px Impact, "Arial Narrow Bold", "Arial Black", sans-serif`;
+      g.fillText("MENU", 192, 52);
+      g.fillStyle = "#ffe9b8";
+      g.font = `800 20px ui-sans-serif, system-ui, sans-serif`;
+      g.fillText(truck.tag, 192, 92, 340);
+      const step = Math.min(120, 380 / Math.max(1, items.length));
+      items.forEach((it, i) => {
+        const y = 150 + i * step;
+        g.textAlign = "left";
+        g.fillStyle = "#ffffff";
+        g.font = `800 25px ui-sans-serif, system-ui, sans-serif`;
+        g.fillText(it.name, 28, y, 250);
+        g.textAlign = "right";
+        g.fillStyle = truck.color;
+        g.font = `900 28px "Arial Black", Impact, sans-serif`;
+        g.fillText(`$${it.cost}`, 356, y);
+        g.textAlign = "left";
+        g.fillStyle = "rgba(255,233,184,0.72)";
+        g.font = `500 16px ui-sans-serif, system-ui, sans-serif`;
+        g.fillText(it.line, 28, y + 28, 328);
+      });
+    }),
+    toneMapped: false,
+    color: 0xdedad0,
+  });
+}
+
+export type TruckLot = {
+  /** Where to stand to order, by truck. */
+  windows: Record<TruckId, { x: number; z: number }>;
+  /** The big screen at Veli's: the game puts the video on this material once it is playing. */
+  screen: { x: number; z: number; mat: THREE.MeshBasicMaterial };
+};
+
+function buildTrucks(ctx: BuildCtx): TruckLot {
   lotSurface(ctx, rect(TRUCKS.x - 22, TRUCKS.x + 22, TRUCKS.z - 16, TRUCKS.z + 5.5), "concrete");
-  for (const [off, name, color, body] of trucks) {
+  const windows = {} as TruckLot["windows"];
+  const offsets: Record<TruckId, number> = { catch: -13, velis: -1, brothers: 13 };
+  for (const truck of FOOD_TRUCKS) {
+    const off = offsets[truck.id];
     const f = new Frame(ctx, TRUCKS.x + off, TRUCKS.z, YAW.north);
-    f.box(6.4, 2.7, 2.5, 0, Y0 + 1.95, 0, std(body, 0.55, 0.2));
-    f.box(1.9, 2, 2.4, 4, Y0 + 1.5, 0, std(body, 0.55, 0.2));
+    const body = std(truck.body, 0.55, 0.2);
+    const trim = std(truck.trim, 0.4, 0.5);
+    const logo = new THREE.MeshBasicMaterial({ map: cropTex(truck.logo, 0, 0, 1, 1, 512, 340), toneMapped: false, color: 0xe6e2da });
+    f.box(6.4, 2.7, 2.5, 0, Y0 + 1.95, 0, body);
+    f.box(1.9, 2, 2.4, 4, Y0 + 1.5, 0, body);
     f.box(1.7, 0.8, 2.2, 4.1, Y0 + 2.05, 0, MAT.glassDark());
+    f.box(6.44, 0.12, 2.54, 0, Y0 + 0.72, 0, trim);
+    f.box(6.44, 0.1, 2.54, 0, Y0 + 3.26, 0, trim);
     for (const wx of [-2.1, 3.7]) for (const wz of [-1.15, 1.15]) f.add(new THREE.CylinderGeometry(0.42, 0.42, 0.3, 12), MAT.black(), wx, Y0 + 0.42, wz, ctx.solid, 0, 0, Math.PI / 2);
-    // Serving window on the park side, awning, menu and the sign on the roof.
-    f.box(3.6, 1.1, 0.08, -0.6, Y0 + 2.35, 1.27, emissiveMat(ctx, 0xffd9a0, 0.5, 2.6));
-    f.add(new THREE.BoxGeometry(4.2, 0.08, 1.5), std(0xeeeae2, 0.8), -0.6, Y0 + 3.1, 1.95, ctx.solid, 0, 0.22);
-    f.box(3.8, 0.1, 0.5, -0.6, Y0 + 1.75, 1.5, MAT.chrome());
-    f.wall(5.6, 1, 0, Y0 + 3.85, 1.28, neon(ctx, name, color, { w: 512, h: 96 }), ctx.flat);
-    f.wall(1.2, 1.5, -3.5, Y0 + 1.6, 1.3, sign("MENU", "#ffe9b8", "#17110e", { sub: "WINGS · PLATE · BOWL", w: 256, h: 320 }), ctx.flat);
+    // Serving window on the park side, awning, counter, and the truck's own art beside it.
+    f.box(3.2, 1.1, 0.08, -1.2, Y0 + 2.35, 1.27, emissiveMat(ctx, 0xffd9a0, 0.4, 1.2));
+    f.add(new THREE.BoxGeometry(3.8, 0.08, 1.5), std(truck.trim, 0.8), -1.2, Y0 + 3.1, 1.95, ctx.solid, 0, 0.22);
+    f.box(3.4, 0.1, 0.5, -1.2, Y0 + 1.75, 1.5, MAT.chrome());
+    f.box(2.36, 1.62, 0.06, 1.85, Y0 + 2.12, 1.27, MAT.black());
+    f.wall(2.24, 1.5, 1.85, Y0 + 2.12, 1.31, logo, ctx.flat);
+    f.wall(2.24, 1.5, 0, Y0 + 2.05, -1.27, logo, ctx.flat, Math.PI);
+    f.wall(5.8, 1, 0, Y0 + 3.9, 1.28, neon(ctx, truck.tag, truck.color, { w: 640, h: 110 }), ctx.flat);
+    f.wall(3.2, 0.34, -1.2, Y0 + 1.36, 1.28, sign(truck.social.toUpperCase(), "#ffe9b8", "#17110e", { w: 640, h: 68 }), ctx.flat);
+    // Menu on a board by the window.
+    f.box(0.08, 2.1, 0.08, -3.9, Y0 + 1.05, 1.7, MAT.black());
+    f.box(1.34, 1.8, 0.06, -3.9, Y0 + 1.5, 1.74, MAT.black());
+    f.wall(1.26, 1.7, -3.9, Y0 + 1.5, 1.78, menuBoard(truck), ctx.flat);
+    f.solid(-4.5, -3.3, 1.5, 2);
     f.flat(6.5, 5.5, 0, Y0 + 0.02, 3.4, poolMat(ctx, 0xffb46a, 0.42), ctx.flat);
     f.lamp(0, Y0 + 2.8, 2.2, 0xffc27a);
     f.solid(-3.3, 5, -1.3, 1.3);
+    windows[truck.id] = { x: f.wx(-1.2, 2.6), z: f.wz(-1.2, 2.6) };
   }
+
+  // Veli's stage screen: the video plays here whenever someone is on the lot.
+  const vf = new Frame(ctx, TRUCKS.x + offsets.velis + 6.6, TRUCKS.z, YAW.north);
+  const screenMat = new THREE.MeshBasicMaterial({ map: cropTex("/game/food/velis-wings.webp", 0, 0, 1, 1, 512, 288), toneMapped: false });
+  for (const sx of [-1.75, 1.75]) vf.box(0.14, 4.1, 0.14, sx, Y0 + 2.05, 0.9, MAT.black());
+  vf.box(3.84, 2.24, 0.16, 0, Y0 + 2.95, 0.9, MAT.black());
+  vf.wall(3.64, 2.05, 0, Y0 + 2.95, 0.99, screenMat, ctx.flat);
+  vf.wall(3.6, 0.42, 0, Y0 + 1.56, 0.99, sign("NOW PLAYING  ·  YUNG VELI  ·  GO GIRL", "#d4af37", "#0b0a08", { w: 768, h: 84 }), ctx.flat);
+  vf.box(3.84, 0.06, 0.06, 0, Y0 + 4.1, 0.98, new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 1.6, 0.5), toneMapped: false }), ctx.flat);
+  for (const sx of [-1.75, 1.75]) vf.box(0.5, 0.9, 0.5, sx, Y0 + 0.45, 0.9, std(0x101012, 0.5));
+  vf.solid(-2, 2, 0.6, 1.2);
+  vf.lamp(0, Y0 + 2.6, 2.6, 0xd4af37);
+  const screen = { x: vf.wx(0, 3.2), z: vf.wz(0, 3.2), mat: screenMat };
+
   // Picnic tables and string lights.
   const bulb = emissiveMat(ctx, 0xffd9a0, 0.5, 3.6);
   for (const tx of [-14, -4, 6, 16]) {
@@ -666,7 +758,7 @@ function buildTrucks(ctx: BuildCtx) {
     ctx.solid.add(new THREE.SphereGeometry(0.09, 6, 4), bulb, TRUCKS.x - 20 + t * 40, y, TRUCKS.z - 6);
   }
   ctx.flat.flat(40, 12, TRUCKS.x, Y0 + 0.025, TRUCKS.z - 7, poolMat(ctx, 0xffc98a, 0.28));
-  return { x: TRUCKS.x, z: TRUCKS.z - 2.6 };
+  return { windows, screen };
 }
 
 function buildMemphisSign(ctx: BuildCtx) {

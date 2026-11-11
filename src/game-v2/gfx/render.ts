@@ -126,7 +126,11 @@ export function makeStage(canvas: HTMLCanvasElement, scene: THREE.Scene, start: 
       grade.uniforms.uPunch!.value = v;
     },
     render() {
-      composer.render();
+      // The lightest level draws straight to the screen: no off-screen pass, no grading.
+      if (quality === "low") {
+        renderer.setRenderTarget(null);
+        renderer.render(scene, camera);
+      } else composer.render();
     },
     resize() {
       const cw = canvas.clientWidth || window.innerWidth;

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Game } from "../game";
 import { CABINETS, type Cabinet } from "../play/goods";
+import { WebCabinet } from "./WebCabinet";
 
 const W = 480;
 const H = 360;
@@ -342,37 +343,27 @@ const MAKERS: Record<string, () => Mini> = { catch: dropCatcher, stacker, dash }
 
 export function Arcade({ game, id }: { game: Game; id: string }) {
   const cab = CABINETS.find((c) => c.id === id) ?? CABINETS[0]!;
+  // A web cabinet's screen is as big as the window allows: the game inside is 16:9.
+  const web = !!cab.link;
   return (
-    <div data-menu className="pointer-events-auto absolute inset-0 z-40 flex items-center justify-center bg-black/85 p-3">
-      <div className="w-full max-w-[760px] rounded-2xl border-2 p-3 shadow-2xl sm:p-5" style={{ borderColor: cab.color, background: "linear-gradient(180deg,#14101f,#07060c)" }}>
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
-            <div className="sr-title text-2xl sm:text-3xl" style={{ color: cab.color }}>
+    <div data-menu className="pointer-events-auto absolute inset-0 z-40 flex items-center justify-center bg-black/85 p-2 sm:p-3">
+      <div
+        className={`w-full rounded-2xl border-2 shadow-2xl ${web ? "p-2 sm:p-3" : "max-w-[760px] p-3 sm:p-5"}`}
+        style={{ borderColor: cab.color, background: "linear-gradient(180deg,#14101f,#07060c)", ...(web ? { width: "min(100%, calc((100dvh - 206px) * 16 / 9))", minWidth: "min(100%, 520px)", maxWidth: 1360 } : null) }}
+      >
+        <div className={`flex items-center justify-between gap-3 ${web ? "mb-2" : "mb-3"}`}>
+          <div className="min-w-0">
+            <div className={`sr-title truncate ${web ? "text-xl sm:text-2xl" : "text-2xl sm:text-3xl"}`} style={{ color: cab.color }}>
               {cab.name}
             </div>
-            <div className="text-xs text-white/60 sm:text-sm">{cab.blurb}</div>
+            {!web && <div className="text-xs text-white/60 sm:text-sm">{cab.blurb}</div>}
           </div>
           <button className="sr-btn sr-btn-ghost shrink-0" onClick={() => game.close()}>
             Back to the floor
           </button>
         </div>
-        {cab.link ? <LinkCabinet cab={cab} /> : <Playable game={game} cab={cab} />}
+        {web ? <WebCabinet game={game} cab={cab} /> : <Playable game={game} cab={cab} />}
       </div>
-    </div>
-  );
-}
-
-function LinkCabinet({ cab }: { cab: Cabinet }) {
-  return (
-    <div className="flex flex-col items-center gap-4 rounded-xl border border-white/10 p-6 text-center sm:p-10" style={{ background: `radial-gradient(circle at 50% 0%, ${cab.color}44, #05040a 70%)` }}>
-      <div className="sr-title text-4xl sm:text-6xl" style={{ color: cab.accent, textShadow: `0 0 28px ${cab.color}` }}>
-        {cab.tag}
-      </div>
-      <p className="max-w-md text-sm text-white/75">This cabinet runs the full game. It opens on itch.io in a new tab, and your Memphis save stays right here.</p>
-      <a data-primary className="sr-btn sr-btn-gold px-8 py-3 text-lg" href={cab.link} target="_blank" rel="noopener noreferrer">
-        Play on itch.io
-      </a>
-      <div className="break-all text-[11px] text-white/40">{cab.link}</div>
     </div>
   );
 }

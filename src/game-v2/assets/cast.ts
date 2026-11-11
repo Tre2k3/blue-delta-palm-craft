@@ -44,14 +44,25 @@ export const OUTFITS: Record<OutfitId, { name: string; art: CardArt; perk: strin
 
 export const BENJI_HEIGHT = characters.benji.height;
 
-export const CAST = {
-  kBlanco: { name: "K Blanco", art: turn("k-blanco"), height: characters.kBlanco.height, portrait: characters.kBlanco.portrait },
-  courtOg: { name: "Court OG", art: turn("court-og"), height: characters.courtOg.height },
-  mamaDee: { name: "Mama Dee", art: turn("mama-dee"), height: characters.mamaDee.height },
-  uncJ: { name: "Unc J", art: turn("unc-j"), height: characters.uncJ.height },
-  nitro: { name: "Nitro", art: turn("nitro"), height: characters.nitro.height },
-  strike: { name: "Strike", art: turn("strike"), height: characters.strike.height },
-} as const;
+const file = (folder: string, name: string) => `/game-v2/characters/${folder}/${name}.png${V}`;
+
+/**
+ * `cut` is the share of the body a character's drawings leave off at the bottom. Court OG,
+ * Unc J and Strike were drawn down to the shin, so their cards are lifted by that much and
+ * each of them works from behind a counter: nobody stands in the pavement.
+ *
+ * Two sets of files are also not what their names say. Strike's "front" is her back and her
+ * "back" is her front. Unc J's "right" is his back, his "left" is a second front, and his
+ * "back" is a damaged cut-out that is not used.
+ */
+export const CAST: Record<"kBlanco" | "courtOg" | "mamaDee" | "uncJ" | "nitro" | "strike", { name: string; art: CardArt; height: number; cut: number; portrait?: string }> = {
+  kBlanco: { name: "K Blanco", art: turn("k-blanco"), height: characters.kBlanco.height, cut: 0, portrait: characters.kBlanco.portrait },
+  courtOg: { name: "Court OG", art: turn("court-og"), height: characters.courtOg.height, cut: 0.13 },
+  mamaDee: { name: "Mama Dee", art: turn("mama-dee"), height: characters.mamaDee.height, cut: 0 },
+  uncJ: { name: "Unc J", art: { front: file("unc-j", "front"), back: file("unc-j", "right") }, height: characters.uncJ.height, cut: 0.11 },
+  nitro: { name: "Nitro", art: turn("nitro"), height: characters.nitro.height, cut: 0 },
+  strike: { name: "Strike", art: { front: file("strike", "back"), back: file("strike", "front"), left: file("strike", "left"), right: file("strike", "right") }, height: characters.strike.height, cut: 0.14 },
+};
 
 export type CastId = keyof typeof CAST;
 

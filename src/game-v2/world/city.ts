@@ -82,9 +82,11 @@ export function buildCity(): City {
       ...blocks,
       hqDoor: river.hqDoor,
       baitCounter: river.baitCounter,
-      truckCounter: river.truckCounter,
+      trucks: river.trucks,
       castSpots: river.castSpots,
       ogSpot: river.ogSpot,
+      ogStand: river.ogStand,
+      uncStand: river.uncStand,
     },
     signals: signalState(0),
     update(dt, time) {

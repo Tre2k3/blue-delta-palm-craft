@@ -1,6 +1,6 @@
 import type { OutfitId } from "../assets/cast";
 
-/** Cabinets on the Fun House floor. `link` cabinets open the real game on itch.io. */
+/** Cabinets on the Fun House floor. `link` cabinets run the real game from itch.io in a browser on their screen. */
 /** `machine` cabinets are not screens: they are built on the floor and played in the room. */
 export type Cabinet = { id: string; name: string; tag: string; color: string; accent: string; link?: string; machine?: boolean; blurb: string; how: string };
 
@@ -17,8 +17,8 @@ export const CABINETS: Cabinet[] = [
     color: "#b48cff",
     accent: "#ffd23a",
     link: "https://trey2k23.itch.io/martin-no-filter-fighters-unofficial-fan-game",
-    blurb: "The fan-made fighter. Full game, free on itch.io.",
-    how: "Opens the real game in a new tab.",
+    blurb: "The fan-made fighter. The full game, right here in the cabinet.",
+    how: "Plays right here, in the cabinet's browser.",
   },
   {
     id: "durag",
@@ -27,18 +27,67 @@ export const CABINETS: Cabinet[] = [
     color: "#5ac8ff",
     accent: "#ff8a1e",
     link: "https://trey2k23.itch.io/durag-man-time-rift",
-    blurb: "DuRag Man fights through time. Full game, free on itch.io.",
-    how: "Opens the real game in a new tab.",
+    blurb: "DuRag Man fights through time. The full game, right here in the cabinet.",
+    how: "Plays right here, in the cabinet's browser.",
   },
 ];
 
-export type Food = { id: string; at: "trucks" | "pizza"; name: string; cost: number; seconds: number; line: string; emoji: string };
+export type TruckId = "catch" | "velis" | "brothers";
+
+/**
+ * The trucks on the riverfront lot. Two are real Memphis businesses that sponsor the game and
+ * one is the house truck: names, art, menus and handles are theirs and are shown as given.
+ */
+export type Truck = { id: TruckId; name: string; tag: string; blurb: string; color: string; body: number; trim: number; logo: string; social: string; video?: { src: string; artist: string; title: string } };
+
+export const FOOD_TRUCKS: Truck[] = [
+  {
+    id: "catch",
+    name: "901 Catch Kitchen",
+    tag: "CATCH KITCHEN",
+    blurb: "They grill what you pulled out of the Mississippi. Walk up, open the window, hand over the cooler.",
+    color: "#1db954",
+    body: 0x0f2a1c,
+    trim: 0xd4af37,
+    logo: "/game/food/901-catch.png",
+    social: "House truck · grill the Mississippi catch",
+  },
+  {
+    id: "velis",
+    name: "Veli's Wings",
+    tag: "VELI'S WINGS",
+    blurb: "Gold-rim plate. Lemon pepper or extra hot. Don't play about the sauce.",
+    color: "#d4af37",
+    body: 0x14110b,
+    trim: 0xd4af37,
+    logo: "/game/food/velis-wings.webp",
+    social: "@yungveli",
+    video: { src: "/game/food/yung-veli.mp4", artist: "Yung Veli", title: "Go Girl" },
+  },
+  {
+    id: "brothers",
+    name: "Brothers Wingz N Things",
+    tag: "WINGZ N THINGS",
+    blurb: "Two kings, one window. Wingz, burger, fries. Crown included.",
+    color: "#e11d48",
+    body: 0xf2efe9,
+    trim: 0xe11d48,
+    logo: "/game/food/brothers-wingz.webp",
+    social: "@brotherswingznthings",
+  },
+];
+
+export type Food = { id: string; at: TruckId | "pizza"; name: string; cost: number; seconds: number; line: string; emoji: string; respect?: number; /** Cooks a fish out of the cooler. */ fish?: boolean };
 
 export const FOOD: Food[] = [
-  { id: "wings", at: "trucks", name: "Hot Wings", cost: 12, seconds: 240, line: "Lemon pepper, all flats.", emoji: "🍗" },
-  { id: "soul", at: "trucks", name: "Soul Bowl", cost: 14, seconds: 300, line: "Greens, yams, mac. Mama Dee approves.", emoji: "🍲" },
-  { id: "tamales", at: "trucks", name: "Delta Tamales", cost: 9, seconds: 180, line: "Three to a plate, still steaming.", emoji: "🫔" },
-  { id: "tea", at: "trucks", name: "Sweet Tea", cost: 4, seconds: 90, line: "Sweet enough to stand a spoon in.", emoji: "🥤" },
+  { id: "catch_plate", at: "catch", name: "901 Plate", cost: 12, seconds: 240, line: "Greens, mac, hot sauce. Ready now.", emoji: "🍽️", respect: 1 },
+  { id: "catch_grill", at: "catch", name: "Grill the Catch", cost: 8, seconds: 420, line: "Cook fee. They plate whatever is in your cooler.", emoji: "🐟", respect: 3, fish: true },
+  { id: "velis_lemon", at: "velis", name: "Lemon Pepper 8", cost: 14, seconds: 270, line: "Dry rub, extra lemon. Memphis classic.", emoji: "🍋", respect: 2 },
+  { id: "velis_hot", at: "velis", name: "Veli Hot 10", cost: 16, seconds: 300, line: "Sauce all the way down the fingers.", emoji: "🌶️", respect: 2 },
+  { id: "velis_combo", at: "velis", name: "Gold Plate Combo", cost: 18, seconds: 360, line: "Wings + fries. Feeds the block.", emoji: "🍗", respect: 3 },
+  { id: "bro_wingz", at: "brothers", name: "Crown Wingz", cost: 13, seconds: 270, line: "8 piece, ranch on the side.", emoji: "👑", respect: 2 },
+  { id: "bro_burger", at: "brothers", name: "King Burger", cost: 11, seconds: 240, line: "Smash patty, pickles, that sauce.", emoji: "🍔", respect: 1 },
+  { id: "bro_combo", at: "brothers", name: "Wingz N Things Combo", cost: 20, seconds: 390, line: "Wings, fries, burger. Don't share.", emoji: "🍟", respect: 3 },
   { id: "slice", at: "pizza", name: "Pepperoni Slice", cost: 6, seconds: 150, line: "Folded, like you're supposed to.", emoji: "🍕" },
   { id: "pie", at: "pizza", name: "Whole Pie", cost: 18, seconds: 360, line: "The whole table eats.", emoji: "🍕" },
   { id: "nachos", at: "pizza", name: "Loaded Nachos", cost: 8, seconds: 180, line: "Extra cheese, no napkins.", emoji: "🧀" },

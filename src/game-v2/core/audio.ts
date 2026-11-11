@@ -78,7 +78,7 @@ export class Sound {
 
   setMusic(on: boolean) {
     this.musicOn = on;
-    if (this.musicGain && this.ctx) this.musicGain.gain.setTargetAtTime(on ? 0.22 : 0, this.ctx.currentTime, 0.2);
+    if (this.musicGain && this.ctx) this.musicGain.gain.setTargetAtTime(on ? 0.22 * this.bedLevel : 0, this.ctx.currentTime, 0.2);
     this.save();
   }
 
@@ -88,9 +88,34 @@ export class Sound {
     this.save();
   }
 
+  private bedLevel = 1;
+
+  /** How much of the city's own music plays, 0..1. Another track nearby turns it down. */
+  bed(k: number) {
+    const next = Math.max(0, Math.min(1, k));
+    if (Math.abs(next - this.bedLevel) < 0.01) return;
+    this.bedLevel = next;
+    if (this.musicGain && this.ctx) this.musicGain.gain.setTargetAtTime(this.musicOn ? 0.22 * next : 0, this.ctx.currentTime, 0.12);
+  }
+
+  private ducked = false;
+  private hushed = false;
+
   /** Duck everything when the tab is paused or a menu is up. */
   duck(on: boolean) {
-    if (this.master && this.ctx) this.master.gain.setTargetAtTime(on ? this.volume * 0.35 : this.volume, this.ctx.currentTime, 0.15);
+    this.ducked = on;
+    this.level();
+  }
+
+  /** Silence while another game on the page has the speakers. */
+  hush(on: boolean) {
+    this.hushed = on;
+    this.level();
+  }
+
+  private level() {
+    const v = this.hushed ? 0 : this.ducked ? this.volume * 0.35 : this.volume;
+    if (this.master && this.ctx) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.15);
   }
 
   private env(gain: GainNode, t: number, peak: number, attack: number, decay: number) {

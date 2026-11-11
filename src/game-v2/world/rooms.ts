@@ -537,7 +537,7 @@ export function buildBowlRoom(): BowlRoom {
   f.box(4.6, 1.15, 1, 5.4, 0.58, 9.2, std(0x241a3a, 0.5));
   f.box(4.7, 0.06, 1.1, 5.4, 1.18, 9.2, std(0xff5ad1, 0.5));
   f.wall(4.2, 1, 5.4, 3.2, zFront - 0.05, neon(ctx, "SHOES · LANES · PRIZES", "#ffd23a", { w: 640, h: 128 }), ctx.flat, Math.PI);
-  f.solid(3.1, 7.7, 8.7, 9.7);
+  f.solid(3.1, 7.7, 8.7, zFront);
   f.box(2.4, 3.2, 0.14, 0, 1.6, zFront - 0.08, emissiveMat(ctx, 0xffb46a, 0.5, 0.9));
   f.wall(1.6, 0.36, 0, 3.6, zFront - 0.2, sign("EXIT", "#39ff14", "#0a0a0b", { w: 256, h: 64 }), ctx.flat, Math.PI);
   for (const s of [-1, 1]) f.box(0.05, 0.05, D - 1, s * (W / 2 - 0.2), H - 0.3, (zFront + zBack) / 2, s < 0 ? pink : teal, ctx.flat);

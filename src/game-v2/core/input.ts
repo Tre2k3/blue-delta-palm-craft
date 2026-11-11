@@ -86,6 +86,8 @@ export class Input {
   pad = false;
   /** Blocks game input while a menu owns the keyboard. */
   locked = false;
+  /** Set while something else on the page (a game in a cabinet's browser) is using the pad. */
+  padOff = false;
   /** True once the player has touched the screen: the HUD shows touch controls. */
   touch = false;
   private off: (() => void)[] = [];
@@ -228,6 +230,18 @@ export class Input {
     const pads = typeof navigator !== "undefined" && navigator.getGamepads ? navigator.getGamepads() : [];
     const pad = [...pads].find((p) => p && p.connected);
     const now = new Set<Action>();
+    if (this.padOff) {
+      // Not ours right now. Remember what is held, so nothing counts as a fresh press later.
+      pad?.buttons.forEach((b, i) => {
+        const a = PAD_FOOT[i];
+        if (b.pressed && a) now.add(a);
+      });
+      this.padHeld = now;
+      this.aWas = !!pad?.buttons[0]?.pressed;
+      const t = performance.now() + 380;
+      for (const d of DIRS) this.repeat[d] = t;
+      return;
+    }
     if (pad) {
       const dead = (v: number) => (Math.abs(v) < 0.18 ? 0 : v);
       this.padX = dead(pad.axes[0] ?? 0);

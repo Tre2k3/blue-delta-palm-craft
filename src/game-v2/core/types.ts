@@ -28,7 +28,7 @@ export type Anchor = { x: number; z: number };
 
 export type Mode = "title" | "walk" | "drive" | "race" | "hoops" | "bowl" | "fish" | "kart" | "laser" | "bounce" | "pit" | "whack";
 
-export type Overlay = null | "pause" | "map" | "shop" | "wardrobe" | "arcade" | "prizes" | "food" | "results";
+export type Overlay = null | "pause" | "map" | "shop" | "wardrobe" | "arcade" | "prizes" | "food" | "results" | "video";
 
 export type Catch = { name: string; lb: number; pay: number; rarity: string; color: string };
 
@@ -119,7 +119,7 @@ export type HudState = {
   /** Product the shop opens on. */
   shopFocus: string | null;
   cabinet: string | null;
-  foodAt: "trucks" | "pizza";
+  foodAt: "catch" | "velis" | "brothers" | "pizza";
   settings: { quality: "low" | "medium" | "high"; auto: boolean; music: boolean; sfx: boolean; clock: boolean };
   hasSave: boolean;
   storyDone: boolean;

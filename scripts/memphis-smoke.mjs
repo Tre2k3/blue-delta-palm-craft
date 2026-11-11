@@ -324,6 +324,52 @@ try {
   });
   await page.getByText("Start", { exact: true }).first().waitFor({ timeout: 10000 });
   check(true, "an arcade cabinet opens");
+
+  // The itch.io cabinets play inside a browser on the cabinet's screen. itch.io is not part
+  // of this test: the look-up and the game it finds are both stood in for here.
+  await page.route("**/api/itch?*", (r) =>
+    r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, id: "martin", kind: "embed", src: "https://itch.io/embed-upload/1?color=0b0b0d", width: 1280, height: 740, page: "", probes: [] }) }),
+  );
+  await page.route("https://itch.io/**", (r) => r.fulfill({ contentType: "text/html", body: "<!doctype html><body style='margin:0;background:#123'><canvas id='c' width='1280' height='720'></canvas></body>" }));
+  await page.evaluate(() => window.__GAME__.swapCabinet("martin"));
+  await page.getByText("Press start").click({ timeout: 10000 });
+  await page.waitForSelector("iframe", { timeout: 10000 });
+  await page.waitForTimeout(800);
+  const web = await page.evaluate(() => {
+    const g = window.__GAME__;
+    const f = document.querySelector("iframe");
+    return { src: f?.getAttribute("src"), padOff: g.input.padOff, allow: f?.getAttribute("allow") ?? "" };
+  });
+  check(web.src?.startsWith("https://itch.io/embed-upload/") && web.padOff && web.allow.includes("gamepad"), "the itch.io cabinet runs the game in its own browser", web);
+  await page.getByRole("button", { name: "Back to the floor" }).click();
+  await page.waitForTimeout(400);
+  const left = await page.evaluate(() => ({ overlay: window.__GAME__.overlay, padOff: window.__GAME__.input.padOff, frame: !!document.querySelector("iframe") }));
+  check(left.overlay === null && !left.padOff && !left.frame, "leaving the cabinet hands the pad back", left);
+
+  // The riverfront lot: the three real trucks, each with its own menu, and Veli's screen.
+  const lot = await page.evaluate(async () => {
+    const g = window.__GAME__;
+    g.leave(0, -150, 0);
+    await new Promise((r) => setTimeout(r, 900));
+    const a = g.city.anchors.trucks;
+    const w = a.windows.velis;
+    g.warp(w.x, w.z, 0);
+    g.save.dollars = 500;
+    g.save.cooler = [{ name: "Blue Catfish", lb: 12, pay: 40, rarity: "rare", color: "#fff" }];
+    const render = g.stage.render;
+    g.stage.render = () => {};
+    for (let i = 0; i < 30; i++) g.tick(1 / 30);
+    g.stage.render = render;
+    const prompt = g.prompt;
+    const before = g.save.dollars;
+    g.foodAt = "velis";
+    g.order("velis_lemon");
+    const paid = before - g.save.dollars;
+    g.foodAt = "catch";
+    g.order("catch_grill");
+    return { trucks: Object.keys(a.windows), prompt, paid, cooler: g.save.cooler.length, video: !!g.veli, fed: g.fedUntil > g.time };
+  });
+  check(lot.trucks.join() === "catch,velis,brothers" && /Veli's Wings/.test(lot.prompt) && lot.paid === 14 && lot.cooler === 0 && lot.video && lot.fed, "the three food trucks serve their own menus and Veli's screen is on", lot);
   check(errors.length === 0, "no page errors", errors);
   console.log("Memphis smoke passed.");
 } finally {

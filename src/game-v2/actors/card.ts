@@ -107,6 +107,8 @@ export class Card {
   /** Extra lift above the ground (jumps, trampolines). */
   lift = 0;
   pose: string | null = null;
+  /** Seconds into a song playing nearby, or -1. Standing still, the character bops to it. */
+  groove = -1;
   visible = true;
   private phase = 0;
   private art: CardArt;
@@ -181,10 +183,13 @@ export class Card {
     const aspect = img?.width && img?.height ? img.width / img.height : 0.4;
     const step = moving ? Math.abs(Math.sin(this.phase * Math.PI)) : 0;
     const breathe = moving ? 0 : Math.sin(this.idle * 1.6) * 0.006;
-    const h = this.height * (1 + breathe - step * 0.012);
+    // About 95 beats a minute: dip on the beat, sway across two.
+    const bop = !moving && this.groove >= 0 ? Math.pow(Math.abs(Math.sin(this.groove * Math.PI * 1.58)), 1.6) : 0;
+    const sway = bop > 0 || (!moving && this.groove >= 0) ? Math.sin(this.groove * Math.PI * 1.58) * 0.05 : 0;
+    const h = this.height * (1 + breathe - step * 0.012 - bop * 0.035);
     this.mesh.scale.set(h * aspect, h, 1);
     this.mesh.position.y = this.lift + step * 0.055;
-    this.mesh.rotation.set(0, toCam - g.rotation.y, moving ? Math.sin(this.phase * Math.PI) * 0.035 : Math.sin(this.idle * 1.3) * 0.008);
+    this.mesh.rotation.set(0, toCam - g.rotation.y, moving ? Math.sin(this.phase * Math.PI) * 0.035 : Math.sin(this.idle * 1.3) * 0.008 + sway);
     // Pull the card a touch toward the lens so a curb never clips the shoes.
     this.mesh.position.x = Math.sin(toCam) * 0.1;
     this.mesh.position.z = Math.cos(toCam) * 0.1;

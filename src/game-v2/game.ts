@@ -9,12 +9,13 @@ import { Input, type Nav } from "./core/input";
 import type { Dialogue, HudState, Live, Mode, Overlay, Place, Results, Save, Solid } from "./core/types";
 import { clamp, damp, dampAngle, wrapAngle } from "./core/util";
 import { makeStage, pickQuality, qualityIsChosen, type Quality, type Stage } from "./gfx/render";
+import { Lite } from "./gfx/lite";
 import { PHASES, Sky, type Phase } from "./gfx/sky";
 import { Bowling } from "./play/bowling";
 import { CATALOG, COLLECTION_BONUS, productById } from "./play/catalog";
 import { Fishing } from "./play/fishing";
 import { BallPit, Bounce, KartRace, LaserTag } from "./play/fun";
-import { CABINETS, FOOD, PRIZES } from "./play/goods";
+import { CABINETS, FOOD, FOOD_TRUCKS, PRIZES, type TruckId } from "./play/goods";
 import { Hoops } from "./play/hoops";
 import { PopShot, Whack } from "./play/machines";
 import { StreetRace } from "./play/race";
@@ -48,7 +49,7 @@ export interface Activity {
   tap?(nx: number, ny: number): void;
 }
 
-type Npc = { id: CastId; card: Card; place: Place; x: number; z: number; home: number; rise: number };
+type Npc = { id: CastId; card: Card; place: Place; x: number; z: number; home: number };
 
 /** Longest stretch of game time played in one go. */
 const STEP = 1 / 30;
@@ -59,11 +60,11 @@ const RUNGS: { quality: Quality; scale: number }[] = [
   { quality: "medium", scale: 1 },
   { quality: "medium", scale: 0.8 },
   { quality: "low", scale: 1 },
-  { quality: "low", scale: 0.78 },
-  { quality: "low", scale: 0.62 },
-  { quality: "low", scale: 0.5 },
+  { quality: "low", scale: 0.8 },
+  { quality: "low", scale: 0.66 },
+  { quality: "low", scale: 0.55 },
 ];
-const RUNG_KEY = "sack-v2-auto";
+const RUNG_KEY = "sack-v2-auto-2";
 
 function loadRung() {
   try {
@@ -164,7 +165,10 @@ export class Game {
   fishTrip = 0;
   shopFocus: string | null = null;
   cabinet: string | null = null;
-  foodAt: "trucks" | "pizza" = "trucks";
+  foodAt: TruckId | "pizza" = "catch";
+  /** The video on the big screen at Veli's Wings. Made the first time Benji gets near the lot. */
+  private veli: { video: HTMLVideoElement; tex: THREE.VideoTexture } | null = null;
+  private veliVol = 0;
   results: Results | null = null;
   /** The HUD's handler for pad presses while a menu is up. */
   onNav: ((n: Nav) => void) | null = null;
@@ -195,6 +199,9 @@ export class Game {
   private titleSpin = 0;
   private skip = 0;
   private padWas = false;
+  /** A game is running inside a cabinet's browser. */
+  private webOn = false;
+  private lite = new Lite();
   /** Graphics follow the frame rate unless the player picked a level. */
   private auto = true;
   private rung = 1;
@@ -295,18 +302,21 @@ export class Game {
     const a = this.city.anchors;
     const put = (id: CastId, place: Place, x: number, z: number, heading: number, rise = 0) => {
       const c = CAST[id];
-      const card = new Card(c.art, c.height);
+      // A drawing that stops at the shin is hung at shin height, so the head is where it should be.
+      const card = new Card(c.art, c.height * (1 - c.cut));
+      card.lift = c.height * c.cut + rise;
       card.place(x, z);
       card.heading = heading;
       (place === "street" ? this.city.exterior : this.rooms[place].group).add(card.group);
-      this.npcs.push({ id, card, place, x, z, home: heading, rise });
+      this.npcs.push({ id, card, place, x, z, home: heading });
     };
     put("kBlanco", "hq", this.rooms.hq.kSpot.x, this.rooms.hq.kSpot.z, this.rooms.hq.kSpot.heading, this.rooms.hq.kSpot.lift);
-    put("courtOg", "street", a.ogSpot.x, a.ogSpot.z, 0);
-    put("uncJ", "street", a.baitCounter.x + 2.4, a.baitCounter.z + 1.2, -Math.PI / 2);
-    put("mamaDee", "street", a.truckCounter.x + 2.2, a.truckCounter.z - 0.4, Math.PI);
+    put("courtOg", "street", a.ogStand.x, a.ogStand.z, 0);
+    put("uncJ", "street", a.uncStand.x, a.uncStand.z, a.uncStand.heading);
+    put("mamaDee", "street", a.trucks.windows.catch.x - 2.6, a.trucks.windows.catch.z + 0.6, Math.PI);
     put("nitro", "street", RACE_MEET.x, RACE_MEET.z, 0);
-    put("strike", "bowl", this.rooms.bowl.strikeSpot.x, this.rooms.bowl.strikeSpot.z, this.rooms.bowl.strikeSpot.heading);
+    // Strike works the desk from a step behind it, like K Blanco at her till.
+    put("strike", "bowl", this.rooms.bowl.strikeSpot.x, this.rooms.bowl.strikeSpot.z - 0.1, this.rooms.bowl.strikeSpot.heading, 0.3);
   }
 
   private spot(place: Place, x: number, z: number, r: number, label: string | (() => string), act: () => void, when?: () => boolean) {
@@ -414,10 +424,14 @@ export class Game {
     );
 
     // Food, bowling, the strip.
-    this.spot("street", a.truckCounter.x, a.truckCounter.z, 2.6, "Order a plate", () => {
-      this.foodAt = "trucks";
-      this.open("food");
-    });
+    for (const truck of FOOD_TRUCKS) {
+      const w = a.trucks.windows[truck.id];
+      this.spot("street", w.x, w.z, 2.4, `Order at ${truck.name}`, () => {
+        this.foodAt = truck.id;
+        this.open("food");
+      });
+    }
+    this.spot("street", a.trucks.screen.x, a.trucks.screen.z, 2.6, "Watch the video: Yung Veli, Go Girl", () => this.open("video"));
     this.spot("bowl", bowl.desk.x, bowl.desk.z, 2.2, "Bowl a game ($5)", () => {
       if (!this.spend(5)) return;
       this.begin(this.bowling, "bowl");
@@ -552,12 +566,29 @@ export class Game {
     this.input.clear();
     this.sound.ui();
     this.sound.duck(o === "arcade");
+    this.sound.hush(o === "video");
     this.push();
     if (this.input.pad) setTimeout(() => this.onNav?.("init"), 60);
   }
 
+  /** A game inside a cabinet's browser takes the pad and the speakers, and gives them back. */
+  webPlay(on: boolean) {
+    this.webOn = on;
+    this.input.padOff = on;
+    this.sound.hush(on);
+  }
+
+  /** Another tab in the cabinet's browser. */
+  swapCabinet(id: string) {
+    if (this.overlay !== "arcade" || !CABINETS.some((c) => c.id === id && c.link)) return;
+    this.cabinet = id;
+    this.sound.ui();
+    this.push();
+  }
+
   close() {
     const was = this.overlay;
+    this.webPlay(false);
     this.overlay = null;
     this.input.locked = false;
     this.input.clear();
@@ -796,11 +827,72 @@ export class Game {
 
   order(id: string) {
     const f = FOOD.find((x) => x.id === id);
-    if (!f || !this.spend(f.cost)) return;
+    if (!f) return;
+    let plate = f.name;
+    if (f.fish) {
+      // The house truck cooks what you caught: the best fish in the cooler goes on the grill.
+      const cooler = this.save.cooler;
+      if (!cooler.length) {
+        this.sound.bad();
+        this.toast("Nothing in the cooler. Catch something off the pier and bring it back.", 4);
+        return;
+      }
+      if (!this.spend(f.cost)) return;
+      const best = cooler.reduce((a, b) => (b.pay > a.pay ? b : a));
+      cooler.splice(cooler.indexOf(best), 1);
+      plate = `Blackened ${best.name}`;
+    } else if (!this.spend(f.cost)) return;
     this.fedUntil = this.time + f.seconds;
-    this.toast(`${f.name}. ${f.line}`, 4);
+    if (f.respect) this.earn(0, f.respect, { quiet: true });
+    this.toast(`${plate}. ${f.line}`, 4);
     this.emit("ate");
     this.close();
+  }
+
+  /**
+   * Veli's screen. The video runs whenever Benji is on the lot and its sound comes up as he
+   * walks toward it, with the city's own music stepping back so the track is the one you hear.
+   */
+  private updateVeli(dt: number) {
+    const scr = this.city.anchors.trucks.screen;
+    const out = !this.room && this.mode !== "title";
+    const px = this.mode === "drive" || this.mode === "race" ? this.driver.x : this.pos.x;
+    const pz = this.mode === "drive" || this.mode === "race" ? this.driver.z : this.pos.z;
+    const d = out ? Math.hypot(px - scr.x, pz - scr.z) : 999;
+    if (!this.veli && d < 80 && typeof document !== "undefined") {
+      const video = document.createElement("video");
+      video.src = FOOD_TRUCKS.find((t) => t.video)!.video!.src;
+      video.loop = true;
+      video.muted = true;
+      video.playsInline = true;
+      video.preload = "auto";
+      video.setAttribute("playsinline", "true");
+      const tex = new THREE.VideoTexture(video);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      this.veli = { video, tex };
+      video.addEventListener("playing", () => {
+        if (scr.mat.map !== tex) {
+          scr.mat.map = tex;
+          scr.mat.needsUpdate = true;
+        }
+      });
+    }
+    const v = this.veli;
+    if (!v) return;
+    // Watching it full size, in a menu, or far away: the screen on the lot rests.
+    const on = d < 70 && this.overlay !== "video";
+    let want = 0;
+    if (on) {
+      if (v.video.paused) void v.video.play().catch(() => undefined);
+      want = this.sound.musicOn && this.overlay === null ? clamp(1 - (d - 5) / 30, 0, 1) : 0;
+    } else if (!v.video.paused) v.video.pause();
+    this.veliVol += clamp(want - this.veliVol, -dt * 1.6, dt * 1.2);
+    v.video.muted = this.veliVol < 0.01;
+    v.video.volume = clamp(this.veliVol * 0.9, 0, 1);
+    this.sound.bed(1 - this.veliVol);
+    // Benji and whoever is standing around catch the beat.
+    this.benji.groove = this.veliVol > 0.25 ? v.video.currentTime : -1;
+    for (const n of this.npcs) if (n.id === "mamaDee") n.card.groove = this.veliVol > 0.25 ? v.video.currentTime + 0.3 : -1;
   }
 
   redeem(id: string) {
@@ -872,6 +964,7 @@ export class Game {
   private fitQuality() {
     const q = this.stage.quality;
     this.sky.reflect = q !== "low";
+    if (this.lite.on !== (q === "low")) this.lite.apply(this.scene, q === "low");
     const size = q === "high" ? 2048 : 1024;
     const shadow = this.sky.sun.shadow;
     if (shadow.mapSize.x !== size) {
@@ -1333,7 +1426,7 @@ export class Game {
       const d = Math.hypot(this.pos.x - n.x, this.pos.z - n.z);
       const want = d < 7 ? Math.atan2(this.pos.x - n.x, this.pos.z - n.z) : n.home;
       n.card.heading = dampAngle(n.card.heading, want, damp(5, dt));
-      n.card.update(dt, cam, this.tint, n.place === "street" ? null : this.rooms[n.place].floorY + 0.03 + n.rise);
+      n.card.update(dt, cam, this.tint, n.place === "street" ? null : this.rooms[n.place].floorY + 0.03);
     }
 
     // The city.
@@ -1372,6 +1465,7 @@ export class Game {
       this.carSpot.z = this.driver.z;
     }
 
+    this.updateVeli(dt);
     this.mark();
 
     // Talk and toasts run on the clock even in menus.
@@ -1397,7 +1491,10 @@ export class Game {
     this.live.camYaw = this.camYaw;
     // A cabinet game covers the screen: draw the room behind it only now and then.
     if (draw) this.skip = this.overlay === "arcade" ? (this.skip + 1) % 12 : 0;
-    if (this.skip === 0 && draw) this.stage.render();
+    if (this.skip === 0 && draw && !this.webOn) {
+      this.lite.sync(this.sky.look.hemiSky, this.room ? 0.06 : 0.3 * this.sky.look.hemiPower + 0.05);
+      this.stage.render();
+    }
 
     this.hudClock -= dt;
     if (this.hudClock <= 0) this.push();
@@ -1539,6 +1636,13 @@ export class Game {
   dispose() {
     this.dead = true;
     cancelAnimationFrame(this.raf);
+    if (this.veli) {
+      this.veli.video.pause();
+      this.veli.video.removeAttribute("src");
+      this.veli.video.load();
+      this.veli.tex.dispose();
+      this.veli = null;
+    }
     this.persist();
     this.input.dispose();
     this.sound.dispose();
