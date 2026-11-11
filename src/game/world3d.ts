@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { halloweenOn } from "./season";
 import { POIS } from "./data";
 import { WorldLifePass } from "./worldLifePass";
 import { S, World3D as World3DCore, wx, wz, type WorldFrame } from "./world3dCore";
@@ -6,6 +7,7 @@ import { applyPolygonOffset } from "./polygonOffset";
 import { poiBuildingRect } from "./worldTopology";
 import { APPROACH_Z, LANE_XS, PIN_Z, pinHome } from "./bowling";
 import { CUTOUT_ALPHA } from "./cutout";
+import { HQ_ROOM, HQ_FRONT_DOOR, HQ_COUNTER, HQ_K_BLANCO, HQ_TABLES, HQ_RACKS, HQ_VITRINE, HQ_SHOWROOM } from "./hqLocation";
 
 export { S, wx, wz };
 export type { WorldFrame };
@@ -50,6 +52,7 @@ export class World3D extends World3DCore {
   private apartmentInterior: THREE.Group | null = null;
   private hqExterior: THREE.Group | null = null;
   private hqInterior: THREE.Group | null = null;
+  private pendingCatalog: { id: string; name: string; imageUrl?: string; backImage?: string }[] | null = null;
   private lanesExterior: THREE.Group | null = null;
   private lanesInterior: THREE.Group | null = null;
   private bowlCamPos = new THREE.Vector3();
@@ -90,6 +93,7 @@ export class World3D extends World3DCore {
       this.hqInterior = this.buildHQInterior(wx(STORE.x + STORE.w / 2), wz(STORE.y + STORE.h / 2));
       this.hqInterior.visible = false;
       this.scene.add(this.hqInterior);
+      if (this.pendingCatalog) this.setHqCatalog(this.pendingCatalog);
     } catch (err) {
       console.warn("[sack] HQ interior failed", err);
       this.hqInterior = null;
@@ -232,23 +236,23 @@ export class World3D extends World3DCore {
     const wallPaint = new THREE.MeshStandardMaterial({ color: 0x2c261e, roughness: 0.88 });
     const wood = new THREE.MeshStandardMaterial({ color: 0x3a2a1c, roughness: 0.78 });
     const glass = new THREE.MeshStandardMaterial({ color: 0x8aa4b8, roughness: 0.12, metalness: 0.55, transparent: true, opacity: 0.35 });
-    const width = wx(STORE.w) - 0.2;
-    const depth = wz(STORE.h) - 0.2;
+    const width = HQ_ROOM.width;
+    const depth = HQ_ROOM.depth;
     const halfW = width / 2;
     const halfD = depth / 2;
-    const wallH = 3.35;
+    const wallH = HQ_ROOM.wallHeight;
     const wallT = 0.12;
 
     const floorMat = new THREE.MeshStandardMaterial({ color: 0x3c2f24, roughness: 0.48, metalness: 0.16 });
-    root.add(box(width, 0.12, depth, floorMat, 0, 0.06, 0));
-    root.add(box(2.35, 0.04, depth * 0.78, gold, 0, 0.14, 0.35));
-    root.add(box(2.05, 0.03, depth * 0.76, new THREE.MeshStandardMaterial({ color: 0x1a1610, roughness: 0.55 }), 0, 0.165, 0.35));
+    root.add(box(width, 0.12, depth, floorMat, 0, HQ_ROOM.floorHeight - 0.06, 0));
+    root.add(box(2.35, 0.012, depth * 0.78, gold, 0, HQ_ROOM.floorHeight + 0.006, 0.35));
+    root.add(box(2.05, 0.006, depth * 0.76, new THREE.MeshStandardMaterial({ color: 0x1a1610, roughness: 0.55 }), 0, HQ_ROOM.floorHeight + 0.015, 0.35));
 
     root.add(box(width, 0.08, depth, black, 0, wallH + 0.04, 0));
     root.add(box(width, wallH, wallT, wallPaint, 0, wallH / 2, -halfD));
     root.add(box(wallT, wallH, depth, wallPaint, -halfW, wallH / 2, 0));
     root.add(box(wallT, wallH, depth, wallPaint, halfW, wallH / 2, 0));
-    this.addSouthDoor(root, width, halfD, wallH, wallT, wallPaint, green, 0, wx(48 * 1.7));
+    this.addSouthDoor(root, width, halfD, wallH, wallT, wallPaint, green, 0, wx(HQ_FRONT_DOOR.width));
 
     const left = this.photoWall(depth - 0.5, wallH - 0.2, store.merch, 0x111111);
     left.rotation.y = Math.PI / 2;
@@ -271,7 +275,7 @@ export class World3D extends World3DCore {
     root.add(box(3.2, 0.08, 0.08, green, 0, 2.72, -halfD + 0.1));
 
     // Hollow checkout — thin front + top so K can stand close, adult-scale.
-    const counterZ = -halfD + 3.15;
+    const counterZ = HQ_COUNTER.z;
     const deskH = 0.72;
     const deskD = 0.52;
     const matte = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.82, metalness: 0.08 });
@@ -296,10 +300,8 @@ export class World3D extends World3DCore {
       root.add(box(1.55, 0.05, 0.95, gold, x, 0.78, z));
       root.add(box(1.4, 0.03, 0.82, this.photoMat(tex, 0x1a1612), x, 0.82, z));
     };
-    addTable(-3.55, 1.55, store.featured);
-    addTable(3.55, 1.55, store.merch);
-    addTable(-3.45, -1.85, store.counter);
-    addTable(3.45, -1.85, store.featured);
+    const tableArt = [store.featured, store.merch, store.counter, store.featured];
+    HQ_TABLES.forEach((p, i) => addTable(p.x, p.z, tableArt[i]));
 
     const addRack = (x: number, z: number, rotY: number) => {
       const g = new THREE.Group();
@@ -314,16 +316,35 @@ export class World3D extends World3DCore {
       g.add(art);
       root.add(g);
     };
-    addRack(-halfW + 0.7, 2.4, Math.PI / 2);
-    addRack(-halfW + 0.7, -1.6, Math.PI / 2);
-    addRack(halfW - 0.7, 2.4, -Math.PI / 2);
-    addRack(halfW - 0.7, -1.6, -Math.PI / 2);
+    HQ_RACKS.forEach((p) => addRack(p.x, p.z, p.x < 0 ? Math.PI / 2 : -Math.PI / 2));
 
-    root.add(box(1.15, 0.95, 0.7, black, -halfW + 1.4, 0.5, halfD - 1.6));
-    root.add(box(0.9, 0.08, 0.55, gold, -halfW + 1.4, 1.02, halfD - 1.6));
+    root.add(box(HQ_VITRINE.width, 0.95, HQ_VITRINE.depth, black, HQ_VITRINE.x, 0.5, HQ_VITRINE.z));
+    root.add(box(0.9, 0.08, 0.55, gold, HQ_VITRINE.x, 1.02, HQ_VITRINE.z));
     const vitrine = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.7, 0.62), glass);
-    vitrine.position.set(-halfW + 1.4, 1.42, halfD - 1.6);
+    vitrine.position.set(HQ_VITRINE.x, 1.42, HQ_VITRINE.z);
     root.add(vitrine);
+
+    const showroomLabel = document.createElement("canvas");
+    showroomLabel.width = 512;
+    showroomLabel.height = 128;
+    const labelCtx = showroomLabel.getContext("2d")!;
+    labelCtx.fillStyle = "#10100f";
+    labelCtx.fillRect(0, 0, 512, 128);
+    labelCtx.fillStyle = "#d6aa2d";
+    labelCtx.font = "bold 54px sans-serif";
+    labelCtx.textAlign = "center";
+    labelCtx.textBaseline = "middle";
+    labelCtx.fillText("SHOWROOM", 256, 64);
+    const labelTex = new THREE.CanvasTexture(showroomLabel);
+    labelTex.colorSpace = THREE.SRGBColorSpace;
+    const label = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 0.8), new THREE.MeshBasicMaterial({ map: labelTex, side: THREE.DoubleSide }));
+    label.name = "hq-showroom-label";
+    label.position.set(HQ_SHOWROOM.x, 2.25, HQ_SHOWROOM.z + 1.1);
+    root.add(label);
+    const browseRing = new THREE.Mesh(new THREE.RingGeometry(0.65, 0.8, 32), new THREE.MeshBasicMaterial({ color: 0xd6aa2d, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide }));
+    browseRing.rotation.x = -Math.PI / 2;
+    browseRing.position.set(HQ_SHOWROOM.x, HQ_ROOM.floorHeight + 0.025, HQ_SHOWROOM.z);
+    root.add(browseRing);
 
     const key = new THREE.PointLight(0xffe8c4, 10.5, 24, 1.05);
     key.position.set(0, 2.95, 0.4);
@@ -361,14 +382,59 @@ export class World3D extends World3DCore {
       });
       const kMesh = new THREE.Mesh(new THREE.PlaneGeometry(kW, kH), kMat);
       kMesh.name = "k-blanco-desk";
-      kMesh.position.set(0, riser + kH / 2, counterZ + 0.06);
+      kMesh.position.set(HQ_K_BLANCO.x, riser + kH / 2, HQ_K_BLANCO.z);
       kMesh.renderOrder = 2;
       root.add(kMesh);
       const faceLight = new THREE.PointLight(0xffe4c4, 1.45, 2.8, 1.55);
-      faceLight.position.set(0.04, deskH + 0.7, counterZ + deskD / 2 + 0.18);
+      faceLight.position.set(HQ_K_BLANCO.x + 0.04, deskH + 0.7, counterZ + deskD / 2 + 0.18);
       root.add(faceLight);
     }
     return root;
+  }
+
+  setHqCatalog(products: { id: string; name: string; imageUrl?: string; backImage?: string }[]) {
+    this.pendingCatalog = products;
+    const root = this.hqInterior;
+    if (!root) return;
+    root.getObjectByName("hq-live-displays")?.removeFromParent();
+    const group = new THREE.Group();
+    group.name = "hq-live-displays";
+    const loader = new THREE.TextureLoader();
+    loader.setCrossOrigin("anonymous");
+    const list = products.filter((p) => p.imageUrl || p.backImage).slice(0, 6);
+    const wood = new THREE.MeshStandardMaterial({ color: 0x3a2a1c, roughness: 0.78 });
+    const slots = [
+      { x: -3.55, z: 1.72 },
+      { x: 3.55, z: 1.72 },
+      { x: -3.45, z: -1.55 },
+      { x: 3.45, z: -1.55 },
+      { x: -1.7, z: 2.35 },
+      { x: 1.7, z: 2.35 },
+    ];
+    list.forEach((product, i) => {
+      const slot = slots[i] ?? { x: (i - 2) * 1.5, z: 0.4 };
+      const x = slot.x;
+      group.add(box(0.9, 0.06, 0.7, wood, x, 0.86, slot.z));
+      const hang = (url: string | undefined, z: number, rotY: number) => {
+        const mat = new THREE.MeshBasicMaterial({ color: 0x141210, side: THREE.FrontSide });
+        const card = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 1.28), mat);
+        card.name = `hq-display-${product.id}`;
+        card.position.set(x, 1.58, z);
+        card.rotation.y = rotY;
+        if (url) {
+          loader.load(url, (tex) => {
+            tex.colorSpace = THREE.SRGBColorSpace;
+            mat.map = tex;
+            mat.color.set(0xffffff);
+            mat.needsUpdate = true;
+          });
+        }
+        group.add(card);
+      };
+      hang(product.imageUrl, slot.z + 0.28, 0);
+      if (product.backImage) hang(product.backImage, slot.z - 0.28, Math.PI);
+    });
+    root.add(group);
   }
 
   private neonMat(color: number, intensity = 1.35) {
@@ -397,16 +463,16 @@ export class World3D extends World3DCore {
     canvas.width = 1024;
     canvas.height = 256;
     const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = "#120814";
+    ctx.fillStyle = halloweenOn() ? "#14080c" : "#120814";
     ctx.fillRect(0, 0, 1024, 256);
-    ctx.fillStyle = "#ff2bd6";
+    ctx.fillStyle = halloweenOn() ? "#ff7a1a" : "#ff2bd6";
     ctx.font = "800 118px ui-sans-serif, system-ui";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("901 LANES", 512, 118);
-    ctx.fillStyle = "#d4af37";
+    ctx.fillText(halloweenOn() ? "MONSTER LANES" : "901 LANES", 512, 118);
+    ctx.fillStyle = halloweenOn() ? "#39ff14" : "#d4af37";
     ctx.font = "700 36px ui-sans-serif, system-ui";
-    ctx.fillText("OPEN · NEXT TO 901 COURT", 512, 200);
+    ctx.fillText(halloweenOn() ? "TRIPLE TROUBLE · AFTER DARK" : "OPEN · NEXT TO 901 COURT", 512, 200);
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     const face = new THREE.Mesh(
@@ -446,13 +512,13 @@ export class World3D extends World3DCore {
     const halfD = depth / 2;
     const wallH = 3.45;
     const wallT = 0.12;
-    const wood = new THREE.MeshStandardMaterial({ color: 0xb8894a, roughness: 0.48, metalness: 0.06 });
+    const wood = new THREE.MeshStandardMaterial({ color: halloweenOn() ? 0x6a3a28 : 0xb8894a, roughness: 0.48, metalness: 0.06 });
     const darkWood = new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.62 });
     const carpet = new THREE.MeshStandardMaterial({ color: 0x2a1233, roughness: 0.92 });
     const wallPaint = new THREE.MeshStandardMaterial({ color: 0x1a1022, roughness: 0.88 });
     const gutterMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.4, metalness: 0.25 });
-    const pinMat = new THREE.MeshStandardMaterial({ color: 0xf7f1e6, roughness: 0.42 });
-    const pinStripe = new THREE.MeshStandardMaterial({ color: 0xc41e3a, roughness: 0.45 });
+    const pinMat = new THREE.MeshStandardMaterial({ color: halloweenOn() ? 0xf4e4c8 : 0xf7f1e6, roughness: 0.42 });
+    const pinStripe = new THREE.MeshStandardMaterial({ color: halloweenOn() ? 0xff7a1a : 0xc41e3a, roughness: 0.45 });
     const black = new THREE.MeshStandardMaterial({ color: 0x141014, roughness: 0.7 });
     const gold = this.neonMat(0xd4af37, 0.85);
     const neon = this.neonMat(0xff2bd6, 1.45);
@@ -469,15 +535,15 @@ export class World3D extends World3DCore {
     boardCanvas.width = 1024;
     boardCanvas.height = 160;
     const bctx = boardCanvas.getContext("2d")!;
-    bctx.fillStyle = "#0d0b0a";
+    bctx.fillStyle = halloweenOn() ? "#14080c" : "#0d0b0a";
     bctx.fillRect(0, 0, 1024, 160);
-    bctx.fillStyle = "#ff2bd6";
+    bctx.fillStyle = halloweenOn() ? "#ff7a1a" : "#ff2bd6";
     bctx.font = "800 72px ui-sans-serif, system-ui";
     bctx.textAlign = "center";
-    bctx.fillText("901 LANES", 512, 70);
-    bctx.fillStyle = "#d4af37";
+    bctx.fillText(halloweenOn() ? "MONSTER LANES" : "901 LANES", 512, 70);
+    bctx.fillStyle = halloweenOn() ? "#39ff14" : "#d4af37";
     bctx.font = "700 28px ui-sans-serif, system-ui";
-    bctx.fillText("TEN DOWN. CITY UP.", 512, 122);
+    bctx.fillText(halloweenOn() ? "TRIPLE TROUBLE. TEN DOWN." : "TEN DOWN. CITY UP.", 512, 122);
     const btex = new THREE.CanvasTexture(boardCanvas);
     btex.colorSpace = THREE.SRGBColorSpace;
     const board = new THREE.Mesh(
@@ -644,31 +710,19 @@ export class World3D extends World3DCore {
     }
   }
 
-  private frameBowlShot(f: WorldFrame, root: THREE.Group, ball: THREE.Mesh | undefined, lx: number) {
+  private frameBowlShot(f: WorldFrame, root: THREE.Group, _ball: THREE.Mesh | undefined, lx: number) {
     const data = f.bowling;
     this.bowlShot = false;
-    if (!data || f.cameraView === "first") return;
-    if (data.phase !== "rolling" && data.phase !== "pins" && data.phase !== "mark") return;
+    if (!data?.active) return;
     root.updateMatrixWorld(true);
-    const t = data.phase === "rolling" ? data.progress : 1;
-    if (ball) ball.getWorldPosition(this.bowlBallWorld);
-    else this.bowlBallWorld.set(root.position.x + lx + data.ballX, 0.28, root.position.z + APPROACH_Z + (PIN_Z - APPROACH_Z) * t);
-    this.bowlPinWorld.set(lx + data.ballX * 0.15, 0.48, PIN_Z);
-    this.bowlPinWorld.applyMatrix4(root.matrixWorld);
-    const impact = data.phase === "pins" ? 1 : Math.max(0, (t - 0.38) / 0.62);
-    this.bowlCamLook.copy(this.bowlBallWorld).lerp(this.bowlPinWorld, impact);
-    this.bowlCamLook.y = 0.38 + impact * 0.22;
-    const side = lx >= 0 ? -1.15 : 1.15;
-    const localX = lx + side * (1.85 + impact * 0.55);
-    const localY = 1.22 + impact * 0.42;
-    const localZ = data.phase === "pins"
-      ? PIN_Z + 1.42
-      : APPROACH_Z + (PIN_Z - APPROACH_Z) * Math.max(0.18, t - 0.12) + 1.65 - impact * 0.55;
-    this.bowlCamPos.set(localX, localY, localZ).applyMatrix4(root.matrixWorld);
-    const snap = data.phase === "rolling" && t < 0.16 ? 0.22 : 0.28;
-    this.camera.position.lerp(this.bowlCamPos, snap);
-    this.camera.lookAt(this.bowlCamLook);
-    this.camera.fov = data.phase === "pins" ? 50 : 55;
+    const eye = new THREE.Vector3(lx, 1.58, APPROACH_Z - 0.15);
+    const look = new THREE.Vector3(lx + data.ballX * 0.25, 0.38, PIN_Z);
+    eye.applyMatrix4(root.matrixWorld);
+    look.applyMatrix4(root.matrixWorld);
+    this.camera.up.set(0, 1, 0);
+    this.camera.position.lerp(eye, 0.35);
+    this.camera.lookAt(look);
+    this.camera.fov = data.phase === "pins" ? 62 : 68;
     this.camera.updateProjectionMatrix();
     this.bowlShot = true;
   }
@@ -773,6 +827,15 @@ export class World3D extends World3DCore {
     if (inLanes) this.syncBowling(f);
     const kSprite = this.npcSprites.get("k_blanco");
     if (kSprite) kSprite.visible = false;
+    const kTex = this.art.people["k-blanco"];
+    if (kTex) {
+      this.scene.traverse((obj) => {
+        const mesh = obj as THREE.Mesh;
+        const mat = mesh.material as THREE.MeshStandardMaterial | THREE.SpriteMaterial | undefined;
+        if (!mat || !("map" in mat) || mat.map !== kTex) return;
+        mesh.visible = mesh.name === "k-blanco-desk" && inHQ;
+      });
+    }
     const clerk = this.npcSprites.get("lane_clerk");
     if (clerk) clerk.visible = inLanes;
     const kDesk = this.hqInterior?.getObjectByName("k-blanco-desk");

@@ -64,7 +64,7 @@ export function PlaytestKit({
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
         <div>
           <p className="font-display text-xl leading-none text-gold">PLAYTEST KIT</p>
-          <p className="text-[10px] uppercase tracking-[0.16em] text-muted">F3 / KIT · debug while you play</p>
+          <p className="text-[10px] uppercase tracking-[0.16em] text-muted">Admin · F3</p>
         </div>
         <button type="button" className="min-h-9 rounded-lg px-2 text-xs text-muted" onClick={onClose}>
           Close

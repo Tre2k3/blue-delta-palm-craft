@@ -68,6 +68,12 @@ jobs:
           cat artifacts/preview.log || true
           exit 1
 
+      - name: Foundation safety
+        run: npm run test:foundation
+
+      - name: Connected HQ route
+        run: npm run test:slice
+
       - name: Game smoke
         run: xvfb-run -a node scripts/game-smoke.mjs
 
@@ -115,10 +121,20 @@ jobs:
         if: failure()
         run: cat artifacts/preview.log || true
 
+      - name: Stage QA screenshots
+        if: always()
+        run: |
+          set -eu
+          mkdir -p qa-screenshots
+          if [ -d artifacts ]; then
+            cp -a artifacts/. qa-screenshots/
+          fi
+          find qa-screenshots -type f -print
+
       - name: Upload QA screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: sackreligious-qa
-          path: artifacts/
-          if-no-files-found: error
+          path: qa-screenshots/
+          if-no-files-found: warn

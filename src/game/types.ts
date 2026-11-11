@@ -35,7 +35,8 @@ export type LocationId =
   | "listenpost"
   | "billboard"
   | "lanes"
-  | "rcmworx";
+  | "rcmworx"
+  | "haunt";
 
 export type ApparelId =
   | "starter_tee"
@@ -56,7 +57,10 @@ export type ApparelId =
   | "jersey_blue_fresh"
   | "jersey_black_fresh"
   | "black_sackrow_11"
-  | "blue_901_day";
+  | "blue_901_day"
+  | "hw_doll"
+  | "hw_sackrow"
+  | "hw_claw";
 
 export type TrophyId =
   | "first_steps"
@@ -77,7 +81,8 @@ export type TrophyId =
   | "river_rat"
   | "block_eats"
   | "lane_king"
-  | "always_ready";
+  | "always_ready"
+  | "after_dark";
 
 export interface ApparelItem {
   id: ApparelId;
@@ -200,6 +205,21 @@ export interface SaveData {
   courtVenue?: string;
   bowlingHighScore?: number;
   rcmRuns?: number;
+  halloween2026?: {
+    letters?: string[];
+    entered?: boolean;
+    houseComplete?: boolean;
+    shootoutBest?: number;
+    shootout?: boolean;
+    fishing?: boolean;
+    bowling?: boolean;
+    race?: boolean;
+    food?: boolean;
+    sponsor?: boolean;
+    badge?: boolean;
+    cleared?: string[];
+    visited?: string[];
+  };
 }
 
 export interface GameSettings {
@@ -298,6 +318,7 @@ export interface HudSnapshot {
     call?: string | null;
     board?: { score: number; label: string }[];
     venue?: string;
+    shootout?: boolean;
   } | null;
   courtMenu?: {
     difficulty: string;
@@ -330,6 +351,7 @@ export interface HudSnapshot {
   bestRunScore: number;
   buildVersion: string;
   dropLive: boolean;
+  inHq?: boolean;
   driving: boolean;
   jooking?: boolean;
   nextUnlock?: { label: string; at: number } | null;
@@ -346,6 +368,57 @@ export interface HudSnapshot {
   rcm?: import("./rcmWorx").RcmHud | null;
   playtest?: PlaytestHud | null;
   playtestOpen?: boolean;
+  halloween?: {
+    on: boolean;
+    letters: number;
+    lettersMax: number;
+    master: boolean;
+    event: string | null;
+    checklist: { id: string; label: string; done: boolean }[];
+    tonight: { id: string; label: string; done: boolean }[];
+    haunt: {
+      room: number;
+      rooms: number;
+      name: string;
+      image: string;
+      objective: string;
+      x: number;
+      y: number;
+      farY: number;
+      nearY: number;
+      view: number;
+      tint: "warm" | "hex" | "cool";
+      letter: { x: number; y: number; got: boolean } | null;
+      hotspot: { x: number; y: number; label: string; done: boolean };
+      exits: { x: number; y: number; label: string; back: boolean; open: boolean }[];
+      decoys: { x: number; y: number }[];
+      action: { x: number; y: number; label: string; done: boolean };
+      doorOpen: boolean;
+      scare: string | null;
+      note: string | null;
+      kind: string;
+      letters: number;
+      lettersMax: number;
+      found: string[];
+      visited: string[];
+      outfit: string;
+      popped: boolean;
+      hall: boolean;
+      floorY: number;
+      walkMinX: number;
+      walkMaxX: number;
+      doorX: number;
+      aspect: string;
+      prompt: string | null;
+      pop: { image: string; line: string; x: number; y: number } | null;
+      lurk: { image: string; x: number; y: number } | null;
+      face: { fx: number; fy: number; x: number; y: number; w: number; rx?: number; ry?: number } | null;
+      fore: string | null;
+      benjiH: number;
+      steam: boolean;
+      step: number;
+    } | null;
+  } | null;
 }
 
 export type GameTestState = {

@@ -30,6 +30,9 @@ export const OUTFIT_PLATES: Partial<Record<ApparelId, OutfitPlatePack>> = {
   jersey_black_fresh: plates("black_sackrow_11"),
   black_sackrow_11: plates("black_sackrow_11"),
   blue_901_day: plates("blue_901_day"),
+  hw_doll: plates("hw_doll"),
+  hw_sackrow: plates("hw_sackrow"),
+  hw_claw: plates("hw_claw"),
 };
 
 export function outfitPlatesFor(id: ApparelId | string | null | undefined): OutfitPlatePack | null {

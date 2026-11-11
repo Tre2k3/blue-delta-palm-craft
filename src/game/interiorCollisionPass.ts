@@ -1,4 +1,6 @@
 import { POIS } from "./data";
+import { GAME_PIXELS_PER_UNIT } from "./worldScale";
+import { HQ_FURNITURE } from "./hqLocation";
 import { GameEngine } from "./engine";
 import { circleHitsRect, type Rect } from "./worldTopology";
 
@@ -17,8 +19,6 @@ function gameRect(cx: number, cy: number, w: number, h: number): Rect {
 
 const apartmentCx = APARTMENT.x + APARTMENT.w / 2;
 const apartmentCy = APARTMENT.y + APARTMENT.h / 2;
-const hqCx = STORE.x + STORE.w / 2;
-const hqCy = STORE.y + STORE.h / 2;
 const lanesCx = LANES.x + LANES.w / 2;
 const lanesCy = LANES.y + LANES.h / 2;
 
@@ -27,28 +27,15 @@ const lanesCy = LANES.y + LANES.h / 2;
 // dresser was moved to the far east side of the room because its old west-side
 // placement physically overlapped Benji's doorway approach and trapped New Game.
 const APARTMENT_FURNITURE: Rect[] = [
-  gameRect(apartmentCx - 2.55 * 16, apartmentCy - 2.55 * 16, 3.55 * 16, 2.25 * 16), // bed
-  gameRect(apartmentCx - 4.25 * 16, apartmentCy - 2.70 * 16, 0.95 * 16, 0.85 * 16), // nightstand
-  gameRect(apartmentCx + 2.05 * 16, apartmentCy - 0.15 * 16, 3.05 * 16, 1.18 * 16), // couch
-  gameRect(apartmentCx + 1.30 * 16, apartmentCy + 1.35 * 16, 1.80 * 16, 1.02 * 16), // coffee table
-  gameRect(apartmentCx + 4.35 * 16, apartmentCy + 2.45 * 16, 1.95 * 16, 0.72 * 16), // dresser
-];
-
-const HQ_FURNITURE: Rect[] = [
-  loc(0, -5.25, 4.7, 1.15), // checkout counter at the back
-  loc(-8.15, 2.4, 0.75, 2.0), // west rack south
-  loc(-8.15, -1.6, 0.75, 2.0), // west rack north
-  loc(8.15, 2.4, 0.75, 2.0), // east rack south
-  loc(8.15, -1.6, 0.75, 2.0), // east rack north
-  loc(-3.55, 1.55, 1.75, 1.15), // left front table
-  loc(3.55, 1.55, 1.75, 1.15), // right front table
-  loc(-3.45, -1.85, 1.75, 1.15), // left rear table
-  loc(3.45, -1.85, 1.75, 1.15), // right rear table
-  loc(-7.5, 5.8, 1.25, 0.85), // entry vitrine
+  gameRect(apartmentCx - 2.55 * GAME_PIXELS_PER_UNIT, apartmentCy - 2.55 * GAME_PIXELS_PER_UNIT, 3.55 * GAME_PIXELS_PER_UNIT, 2.25 * GAME_PIXELS_PER_UNIT), // bed
+  gameRect(apartmentCx - 4.25 * GAME_PIXELS_PER_UNIT, apartmentCy - 2.70 * GAME_PIXELS_PER_UNIT, 0.95 * GAME_PIXELS_PER_UNIT, 0.85 * GAME_PIXELS_PER_UNIT), // nightstand
+  gameRect(apartmentCx + 2.05 * GAME_PIXELS_PER_UNIT, apartmentCy - 0.15 * GAME_PIXELS_PER_UNIT, 3.05 * GAME_PIXELS_PER_UNIT, 1.18 * GAME_PIXELS_PER_UNIT), // couch
+  gameRect(apartmentCx + 1.30 * GAME_PIXELS_PER_UNIT, apartmentCy + 1.35 * GAME_PIXELS_PER_UNIT, 1.80 * GAME_PIXELS_PER_UNIT, 1.02 * GAME_PIXELS_PER_UNIT), // coffee table
+  gameRect(apartmentCx + 4.35 * GAME_PIXELS_PER_UNIT, apartmentCy + 2.45 * GAME_PIXELS_PER_UNIT, 1.95 * GAME_PIXELS_PER_UNIT, 0.72 * GAME_PIXELS_PER_UNIT), // dresser
 ];
 
 function locL(lx: number, lz: number, w: number, d: number): Rect {
-  return gameRect(lanesCx + lx * 16, lanesCy + lz * 16, w * 16, d * 16);
+  return gameRect(lanesCx + lx * GAME_PIXELS_PER_UNIT, lanesCy + lz * GAME_PIXELS_PER_UNIT, w * GAME_PIXELS_PER_UNIT, d * GAME_PIXELS_PER_UNIT);
 }
 
 const LANES_FURNITURE: Rect[] = [
@@ -63,10 +50,6 @@ const LANES_FURNITURE: Rect[] = [
   locL(0, 1.4, 0.55, 1.1),
   locL(4.14, 1.4, 0.55, 1.1),
 ];
-
-function loc(lx: number, lz: number, w: number, d: number): Rect {
-  return gameRect(hqCx + lx * 16, hqCy + lz * 16, w * 16, d * 16);
-}
 
 function inside(p: { x: number; y: number; w: number; h: number }, x: number, y: number, pad = 12) {
   return x >= p.x - pad && x <= p.x + p.w + pad && y >= p.y - pad && y <= p.y + p.h + pad;
