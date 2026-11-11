@@ -24,6 +24,13 @@ const check = (ok, name, detail) => {
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   page.on("pageerror", (e) => errors.push(e.message));
+  // A stand-in controller the test can press.
+  await page.addInitScript(() => {
+    const pad = { id: "smoke pad", index: 0, connected: true, mapping: "standard", timestamp: 0, axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 })) };
+    window.__pad = pad;
+    window.__padOn = false;
+    navigator.getGamepads = () => (window.__padOn ? [pad] : []);
+  });
   await page.goto(`${base}?q=low`, { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => !!window.__GAME__, undefined, { timeout: 120000 });
 
@@ -51,9 +58,54 @@ try {
   await ff(2);
   check((await get(() => window.__GAME__.mode)) === "title", "boots to the title screen");
   await shot("01-title");
-  await page.getByText("Play", { exact: true }).first().click();
+
+  // Gamepad: A on the title, the stick on foot, Start and the d-pad in a menu, the trigger in a car.
+  const button = (i, on) =>
+    page.evaluate(([n, down]) => {
+      window.__padOn = true;
+      window.__pad.buttons[n].pressed = down;
+      window.__pad.buttons[n].value = down ? 1 : 0;
+    }, [i, on]);
+  const press = async (i) => {
+    await button(i, true);
+    await ff(0.1);
+    await page.waitForTimeout(150);
+    await button(i, false);
+    await ff(0.1);
+  };
+  await press(0);
+  await page.waitForTimeout(300);
   await ff(1);
-  check((await get(() => window.__GAME__.mode)) === "walk", "Play starts the day on foot");
+  check((await get(() => window.__GAME__.mode)) === "walk", "A on the pad starts the day from the title");
+  const z0 = await get(() => window.__GAME__.pos.z);
+  await page.evaluate(() => (window.__pad.axes[1] = -1));
+  await ff(1.2);
+  await page.evaluate(() => (window.__pad.axes[1] = 0));
+  await ff(0.1);
+  const z1 = await get(() => window.__GAME__.pos.z);
+  check(z1 < z0 - 2 && (await get(() => window.__GAME__.input.pad)), "the left stick walks Benji", { from: z0, to: z1 });
+  await press(9);
+  await page.waitForTimeout(400);
+  check((await get(() => window.__GAME__.overlay)) === "pause", "Start opens the pause menu");
+  await press(13);
+  await page.waitForTimeout(200);
+  check((await page.locator('[data-padfocus="1"]').count()) === 1, "the d-pad moves a highlight through the menu");
+  await press(1);
+  check((await get(() => window.__GAME__.overlay)) === null, "B closes the menu");
+  await page.evaluate(() => window.__GAME__.drive());
+  await button(7, true);
+  await ff(2);
+  const rolled = await get(() => window.__GAME__.driver.speed);
+  await button(7, false);
+  check(rolled > 5, "the right trigger is the gas", rolled);
+  await page.evaluate(() => {
+    const g = window.__GAME__;
+    g.driver.reset(g.save.car.x, g.save.car.z, g.save.car.heading);
+    g.exitCar(true);
+    g.warp(-13.4, -160.5, Math.PI);
+    window.__padOn = false;
+  });
+  await ff(0.3);
 
   // Controls: W walks away from the camera, A swings left.
   const before = await get(() => ({ z: window.__GAME__.pos.z, yaw: window.__GAME__.camYaw }));

@@ -224,6 +224,7 @@ export class Hoops implements Activity {
       this.say(`${what}  +${b.points + bonus}${this.streak >= 3 ? "  ON FIRE" : ""}`, 1.4);
       if (b.hot) this.moveSpot();
       g.stage.setPunch(0.5);
+      g.input.rumble(0.45, 120);
     } else {
       this.streak = 0;
       this.say(Math.abs(b.error) < 0.06 ? "Rimmed out" : b.error < 0 ? "Short. Hold it longer." : "Long. Let go sooner.", 1.4);

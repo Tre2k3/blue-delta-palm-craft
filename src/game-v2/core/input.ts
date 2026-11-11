@@ -28,17 +28,36 @@ const KEYMAP: Record<string, Action> = {
   KeyC: "camera",
 };
 
-const PAD: Partial<Record<number, Action>> = {
+/**
+ * Standard gamepad layout. On foot the right trigger is the action button; in a car the
+ * triggers are gas and brake, so they are left out of the car map and read as analogue values.
+ */
+const PAD_FOOT: Partial<Record<number, Action>> = {
   0: "interact",
-  2: "action",
   1: "back",
+  2: "action",
   3: "map",
-  9: "pause",
   5: "run",
-  7: "run",
-  6: "brake",
+  6: "run",
+  7: "action",
   8: "time",
+  9: "pause",
+  10: "horn",
 };
+const PAD_CAR: Partial<Record<number, Action>> = {
+  0: "interact",
+  1: "back",
+  2: "action",
+  3: "map",
+  5: "run",
+  8: "time",
+  9: "pause",
+  10: "horn",
+};
+
+/** What a pad sends to a menu. */
+export type Nav = "up" | "down" | "left" | "right" | "accept" | "back" | "init";
+const DIRS = ["up", "down", "left", "right"] as const;
 
 /**
  * One input surface. Edges (`hit`) last exactly one simulation frame, so a tap is never
@@ -54,6 +73,17 @@ export class Input {
   private padX = 0;
   private padY = 0;
   private lookDX = 0;
+  private gas = 0;
+  private brakeAmt = 0;
+  private nav: Nav[] = [];
+  private repeat: Record<string, number> = { up: 0, down: 0, left: 0, right: 0 };
+  private aWas = false;
+  /** Set by the game: in a car the triggers are pedals. */
+  driving = false;
+  /** Set by the game: in an activity the A button is also the action button. */
+  actionOnA = false;
+  /** True while the last thing touched was a gamepad. The HUD shows pad buttons. */
+  pad = false;
   /** Blocks game input while a menu owns the keyboard. */
   locked = false;
   /** True once the player has touched the screen: the HUD shows touch controls. */
@@ -67,6 +97,7 @@ export class Input {
       if (e.code === "Space" || e.code.startsWith("Arrow") || e.code === "Backspace") e.preventDefault();
       if (!this.held.has(a)) this.queued.add(a);
       this.held.add(a);
+      this.pad = false;
     };
     const up = (e: KeyboardEvent) => {
       const a = KEYMAP[e.code];
@@ -94,7 +125,6 @@ export class Input {
     this.held.clear();
     this.queued.clear();
     this.edges.clear();
-    this.padHeld.clear();
     this.stickX = 0;
     this.stickY = 0;
   }
@@ -132,6 +162,34 @@ export class Input {
     return { x, y };
   }
 
+  /**
+   * Gas and brake for anything with wheels, -1..1. Keys and the touch stick, or the pad's
+   * triggers. The pad's stick only steers, so leaning on it in a corner never lifts the gas.
+   */
+  throttle() {
+    if (this.locked) return 0;
+    const keys = (this.held.has("up") ? 1 : 0) - (this.held.has("down") ? 1 : 0) + this.stickY;
+    return clamp(keys + this.gas - this.brakeAmt, -1, 1);
+  }
+
+  /** Menu presses from the pad since the last call. */
+  takeNav() {
+    const n = this.nav;
+    this.nav = [];
+    return n;
+  }
+
+  /** Shake the pad, if it can. */
+  rumble(strength = 0.5, ms = 120) {
+    if (!this.pad || typeof navigator === "undefined" || !navigator.getGamepads) return;
+    const pad = [...navigator.getGamepads()].find((p) => p && p.connected) as (Gamepad & { vibrationActuator?: { playEffect?: (kind: string, o: object) => Promise<unknown> } }) | undefined;
+    try {
+      void pad?.vibrationActuator?.playEffect?.("dual-rumble", { duration: ms, strongMagnitude: clamp(strength, 0, 1), weakMagnitude: clamp(strength * 0.7, 0, 1) })?.catch(() => undefined);
+    } catch {
+      /* no rumble on this pad */
+    }
+  }
+
   /** Camera drag accumulated since the last call. */
   takeLook() {
     const v = this.lookDX;
@@ -165,6 +223,8 @@ export class Input {
   private pollPad() {
     this.padX = 0;
     this.padY = 0;
+    this.gas = 0;
+    this.brakeAmt = 0;
     const pads = typeof navigator !== "undefined" && navigator.getGamepads ? navigator.getGamepads() : [];
     const pad = [...pads].find((p) => p && p.connected);
     const now = new Set<Action>();
@@ -172,15 +232,44 @@ export class Input {
       const dead = (v: number) => (Math.abs(v) < 0.18 ? 0 : v);
       this.padX = dead(pad.axes[0] ?? 0);
       this.padY = -dead(pad.axes[1] ?? 0);
-      this.lookDX += dead(pad.axes[2] ?? 0) * 0.04;
+      const look = dead(pad.axes[2] ?? 0);
+      this.lookDX += look * 0.045;
+      let used = this.padX !== 0 || this.padY !== 0 || look !== 0;
+      const map = this.driving ? PAD_CAR : PAD_FOOT;
       pad.buttons.forEach((b, i) => {
-        const a = PAD[i];
-        if (a && b.pressed) now.add(a);
+        if (!b.pressed) return;
+        used = true;
+        const a = map[i];
+        if (a) now.add(a);
       });
+      const a = !!pad.buttons[0]?.pressed;
+      if (this.actionOnA && a) now.add("action");
+      if (this.driving) {
+        this.gas = pad.buttons[7]?.value ?? 0;
+        this.brakeAmt = pad.buttons[6]?.value ?? 0;
+      }
       if (pad.buttons[12]?.pressed) this.padY = 1;
       if (pad.buttons[13]?.pressed) this.padY = -1;
       if (pad.buttons[14]?.pressed) this.padX = -1;
       if (pad.buttons[15]?.pressed) this.padX = 1;
+      if (used) this.pad = true;
+
+      // Stick and d-pad as direction presses, repeating while held: menus and the mole table.
+      const t = performance.now();
+      const on = { up: this.padY > 0.55, down: this.padY < -0.55, left: this.padX < -0.55, right: this.padX > 0.55 };
+      for (const d of DIRS) {
+        if (!on[d]) {
+          this.repeat[d] = 0;
+          continue;
+        }
+        if (this.repeat[d] === 0 || t >= this.repeat[d]!) {
+          this.repeat[d] = t + (this.repeat[d] === 0 ? 380 : 150);
+          this.queued.add(d);
+          this.nav.push(d);
+        }
+      }
+      if (a && !this.aWas) this.nav.push("accept");
+      this.aWas = a;
     }
     for (const a of now) if (!this.padHeld.has(a)) this.queued.add(a);
     this.padHeld = now;

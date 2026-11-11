@@ -251,6 +251,7 @@ export class Bowling implements Activity {
                 this.hitAt = 0;
                 g.sound.pins(5);
                 g.stage.setPunch(0.6);
+                g.input.rumble(0.8, 240);
               }
             }
           }

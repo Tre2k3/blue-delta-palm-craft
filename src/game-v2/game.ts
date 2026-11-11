@@ -5,7 +5,7 @@ import { Traffic } from "./actors/traffic";
 import { CarModel, Driver, STREET } from "./actors/vehicle";
 import { CAST, OUTFITS, BENJI_HEIGHT, type CastId, type OutfitId } from "./assets/cast";
 import { Sound } from "./core/audio";
-import { Input } from "./core/input";
+import { Input, type Nav } from "./core/input";
 import type { Dialogue, HudState, Live, Mode, Overlay, Place, Results, Save, Solid } from "./core/types";
 import { clamp, damp, dampAngle, wrapAngle } from "./core/util";
 import { makeStage, pickQuality, type Quality, type Stage } from "./gfx/render";
@@ -133,6 +133,8 @@ export class Game {
   cabinet: string | null = null;
   foodAt: "trucks" | "pizza" = "trucks";
   results: Results | null = null;
+  /** The HUD's handler for pad presses while a menu is up. */
+  onNav: ((n: Nav) => void) | null = null;
 
   private spots: Spot[] = [];
   private carSpot: Spot | null = null;
@@ -159,6 +161,7 @@ export class Game {
   private camPos = new THREE.Vector3();
   private titleSpin = 0;
   private skip = 0;
+  private padWas = false;
   private hoops: Hoops;
   private bowling: Bowling;
   private fishing: Fishing;
@@ -470,6 +473,7 @@ export class Game {
     this.overlay = "results";
     this.input.locked = true;
     this.push();
+    if (this.input.pad) setTimeout(() => this.onNav?.("init"), 60);
   }
 
   resultsAgain() {
@@ -490,6 +494,7 @@ export class Game {
     this.sound.ui();
     this.sound.duck(o === "arcade");
     this.push();
+    if (this.input.pad) setTimeout(() => this.onNav?.("init"), 60);
   }
 
   close() {
@@ -904,18 +909,25 @@ export class Game {
 
   private updateDrive(dt: number) {
     const m = this.input.move();
+    const gas = this.input.throttle();
     const d = this.driver;
-    d.step(dt, { throttle: m.y, steer: m.x, handbrake: this.input.down("action"), boost: false }, STREET, this.city.carSolids);
+    d.step(dt, { throttle: gas, steer: m.x, handbrake: this.input.down("action"), boost: false }, STREET, this.city.carSolids);
     for (const c of this.traffic.list()) {
       const hit = d.bump(c.x, c.z, c.radius);
-      if (hit > 2.5) this.sound.crash(Math.min(1, hit / 14));
+      if (hit > 2.5) {
+        this.sound.crash(Math.min(1, hit / 14));
+        this.input.rumble(Math.min(1, hit / 10), 160);
+      }
     }
-    if (d.hit > 3) this.sound.crash(Math.min(1, d.hit / 16));
+    if (d.hit > 3) {
+      this.sound.crash(Math.min(1, d.hit / 16));
+      this.input.rumble(Math.min(1, d.hit / 12), 180);
+    }
     if (d.slip > 5 && d.speed > 8) this.sound.skid(Math.min(1, d.slip / 12));
     this.car.place(d.x, d.y, d.z, d.heading);
     this.car.roll(d.forward * dt, d.steer * 0.5);
     this.car.lean(-d.steer * Math.min(1, d.speed / 20) * 0.05, 0);
-    this.car.lamps(this.sky.look.lights > 0.4 ? 3 : 0.2, m.y < 0 && d.forward > 1 ? 3 : 0.5);
+    this.car.lamps(this.sky.look.lights > 0.4 ? 3 : 0.2, gas < 0 && d.forward > 1 ? 3 : 0.5);
     this.sound.setEngine(true, d.speed / STREET.top);
     if (this.input.hit("horn")) this.sound.horn();
     this.pos.x = d.x;
@@ -1077,9 +1089,22 @@ export class Game {
 
   private tick(dt: number) {
     const input = this.input;
+    input.driving = this.mode === "drive" || this.mode === "race" || this.mode === "kart";
+    input.actionOnA = !!this.activity && !input.driving;
     input.begin();
     this.stage.resize();
     this.time += dt;
+
+    // A pad drives the menus through the HUD: d-pad to move, A to press.
+    const nav = input.takeNav();
+    if (this.mode === "title" || this.overlay) {
+      for (const n of nav) this.onNav?.(n);
+      if (this.mode === "title" && input.pad && input.hitRaw("pause")) this.onNav?.("accept");
+    }
+    if (input.pad !== this.padWas) {
+      this.padWas = input.pad;
+      this.push();
+    }
 
     // Keys that work everywhere.
     if (this.mode !== "title") {
@@ -1089,7 +1114,7 @@ export class Game {
       } else if (input.hitRaw("map") && (this.overlay === null || this.overlay === "map")) {
         if (this.overlay) this.close();
         else if (this.mode === "walk" || this.mode === "drive") this.open("map");
-      } else if (input.hitRaw("back") && this.overlay && this.overlay !== "results") this.close();
+      } else if (input.hitRaw("back") && this.overlay) this.close();
       if (input.hit("time") && !this.room) {
         this.sky.auto = false;
         this.sky.setPhase(PHASES[(PHASES.indexOf(this.sky.phase) + 1) % PHASES.length]!);
@@ -1321,6 +1346,7 @@ export class Game {
       hasSave: this.hasSave && s.step > 0,
       storyDone: !step,
       touch: this.input.touch,
+      pad: this.input.pad,
     };
     this.activity?.hud(h);
     this.onHud(h);

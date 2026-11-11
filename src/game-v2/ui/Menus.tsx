@@ -10,7 +10,7 @@ import { drawMap } from "./map";
 
 function Sheet({ title, sub, onClose, children, wide }: { title: string; sub?: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   return (
-    <div className="pointer-events-auto absolute inset-0 z-40 flex items-center justify-center bg-black/70 p-2 sm:p-5">
+    <div data-menu className="pointer-events-auto absolute inset-0 z-40 flex items-center justify-center bg-black/70 p-2 sm:p-5">
       <div className={`sr-panel sr-pop flex max-h-full w-full flex-col ${wide ? "max-w-[1080px]" : "max-w-[620px]"}`}>
         <div className="flex items-start justify-between gap-3 border-b border-white/10 px-4 py-3 sm:px-6">
           <div>
@@ -21,7 +21,9 @@ function Sheet({ title, sub, onClose, children, wide }: { title: string; sub?: s
             Close
           </button>
         </div>
-        <div className="sr-scroll min-h-0 flex-1 p-3 sm:p-5">{children}</div>
+        <div data-menu-body className="sr-scroll min-h-0 flex-1 p-3 sm:p-5">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -38,7 +40,7 @@ export function Title({ game, hud }: { game: Game; hud: HudState }) {
     return () => window.removeEventListener("keydown", key);
   }, [game, hud.hasSave]);
   return (
-    <div className="pointer-events-auto absolute inset-0 z-30 flex flex-col justify-end" style={{ background: "linear-gradient(180deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.82) 100%)" }}>
+    <div data-menu className="pointer-events-auto absolute inset-0 z-30 flex flex-col justify-end" style={{ background: "linear-gradient(180deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.82) 100%)" }}>
       <div className="mx-auto w-full max-w-[1200px] px-5 pb-8 sm:px-10 sm:pb-12">
         <div className="sr-rise max-w-[400px]">
           <div className="sr-script sr-neon text-4xl sm:text-5xl">$ackReligious</div>
@@ -48,11 +50,11 @@ export function Title({ game, hud }: { game: Game; hud: HudState }) {
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
             {hud.hasSave && (
-              <button className="sr-btn sr-btn-green px-8 py-3 text-lg" onClick={() => game.play(false)}>
+              <button data-primary className="sr-btn sr-btn-green px-8 py-3 text-lg" onClick={() => game.play(false)}>
                 Continue
               </button>
             )}
-            <button className={`sr-btn px-8 py-3 text-lg ${hud.hasSave ? "sr-btn-ghost" : "sr-btn-green"}`} onClick={() => game.play(true)}>
+            <button data-primary={hud.hasSave ? undefined : true} className={`sr-btn px-8 py-3 text-lg ${hud.hasSave ? "sr-btn-ghost" : "sr-btn-green"}`} onClick={() => game.play(true)}>
               {hud.hasSave ? "New game" : "Play"}
             </button>
             <button
@@ -65,7 +67,7 @@ export function Title({ game, hud }: { game: Game; hud: HudState }) {
               Shop the real store
             </button>
           </div>
-          <div className="mt-4 text-[11px] font-semibold uppercase tracking-widest text-white/45">Keyboard, gamepad or touch</div>
+          <div className="mt-4 text-[11px] font-semibold uppercase tracking-widest text-white/45">{hud.pad ? "Gamepad ready: press A" : "Keyboard, gamepad or touch"}</div>
         </div>
       </div>
     </div>
@@ -99,7 +101,7 @@ export function Pause({ game, hud }: { game: Game; hud: HudState }) {
   const s = hud.settings;
   return (
     <Sheet title="Paused" sub="Your day is saved as you go." onClose={() => game.close()}>
-      <button className="sr-btn sr-btn-green mb-3 w-full py-3 text-lg" onClick={() => game.close()}>
+      <button data-primary className="sr-btn sr-btn-green mb-3 w-full py-3 text-lg" onClick={() => game.close()}>
         Back to Memphis
       </button>
       <Row label="Graphics">
@@ -146,17 +148,29 @@ export function Pause({ game, hud }: { game: Game; hud: HudState }) {
         />
       </Row>
       <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-xs text-white/70">
-        {(
-          [
-            ["W A S D", "Move, steer"],
-            ["Shift", "Run, nitro"],
-            ["E", "Interact"],
-            ["Space", "Shoot, cast, bowl, handbrake"],
-            ["M", "Map and taxi"],
-            ["N", "Change time of day"],
-            ["Q", "Leave an activity"],
-            ["Esc", "Pause"],
-          ] as const
+        {(hud.pad
+          ? ([
+              ["L stick", "Move, steer, aim"],
+              ["R stick", "Look around"],
+              ["A", "Interact, and the action in any game"],
+              ["X  RT", "Shoot, cast, swing, handbrake"],
+              ["RT  LT", "Gas and brake in a car"],
+              ["RB", "Run, nitro"],
+              ["B", "Leave an activity, close a menu"],
+              ["Y", "Map and taxi"],
+              ["View", "Change time of day"],
+              ["Start", "Pause"],
+            ] as const)
+          : ([
+              ["W A S D", "Move, steer"],
+              ["Shift", "Run, nitro"],
+              ["E", "Interact"],
+              ["Space", "Shoot, cast, bowl, handbrake"],
+              ["M", "Map and taxi"],
+              ["N", "Change time of day"],
+              ["Q", "Leave an activity"],
+              ["Esc", "Pause"],
+            ] as const)
         ).map(([k, v]) => (
           <div key={k} className="flex items-center gap-2">
             <span className="sr-key">{k}</span>
@@ -415,7 +429,7 @@ export function ResultsCard({ game, hud }: { game: Game; hud: HudState }) {
   }, [game, r?.again]);
   if (!r) return null;
   return (
-    <div className="pointer-events-auto absolute inset-0 z-40 flex items-center justify-center bg-black/65 p-3">
+    <div data-menu className="pointer-events-auto absolute inset-0 z-40 flex items-center justify-center bg-black/65 p-3">
       <div className="sr-panel sr-pop w-full max-w-md p-5 text-center sm:p-7">
         {r.record && <div className="sr-chip sr-pulse mb-3 !border-[#e0b33a] !text-[#f4d77a]">New record</div>}
         <div className="sr-title text-4xl text-white sm:text-5xl">{r.title}</div>
@@ -436,11 +450,11 @@ export function ResultsCard({ game, hud }: { game: Game; hud: HudState }) {
         <div className="mt-5 flex flex-col gap-2 sm:flex-row">
           {r.again && (
             <button className="sr-btn sr-btn-ghost flex-1 py-3" onClick={() => game.resultsAgain()}>
-              {r.again} <span className="sr-key ml-1">R</span>
+              {r.again} {!hud.pad && <span className="sr-key ml-1">R</span>}
             </button>
           )}
-          <button className="sr-btn sr-btn-green flex-1 py-3" onClick={() => game.close()}>
-            Continue <span className="sr-key ml-1">E</span>
+          <button data-primary className="sr-btn sr-btn-green flex-1 py-3" onClick={() => game.close()}>
+            Continue <span className="sr-key ml-1">{hud.pad ? "A" : "E"}</span>
           </button>
         </div>
       </div>

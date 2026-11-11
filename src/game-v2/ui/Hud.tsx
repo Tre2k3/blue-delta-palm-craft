@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
-import type { Action } from "../core/input";
+import type { Action, Nav } from "../core/input";
 import type { HudState, Live } from "../core/types";
 import { formatClock } from "../core/util";
 import type { Game } from "../game";
@@ -24,6 +24,76 @@ function useLive(game: Game, fn: (l: Live) => void) {
 
 const PHASE_LABEL = { golden: "Sunset", night: "Night", day: "Day" } as const;
 
+/** Keyboard hint to gamepad hint. An empty string hides the line on a pad. */
+function padKey(key: string, driving: boolean, activity: boolean) {
+  const table: Record<string, string> = {
+    "W A S D": "L stick",
+    "A D": "L stick",
+    "W S": "RT  LT",
+    Shift: "RB",
+    E: "A",
+    M: "Y",
+    N: "View",
+    Q: "B",
+    H: "L3",
+    Esc: "Start",
+    Space: driving ? "X" : activity ? "A" : "X",
+    "Hold Space": "Hold A",
+    Release: "Release",
+    "1 - 9": "",
+  };
+  return table[key] ?? key;
+}
+
+/**
+ * Move the pad's highlight round whatever menu is on top. Buttons are found by where they sit
+ * on screen, so every sheet works without listing its own order.
+ */
+function padNav(dir: Nav) {
+  const roots = document.querySelectorAll<HTMLElement>("[data-menu]");
+  const root = roots[roots.length - 1];
+  if (!root || root.querySelector('[data-playing="1"]')) return;
+  const items = [...root.querySelectorAll<HTMLElement>("button:not(:disabled), a[href]")].filter((el) => el.offsetParent !== null);
+  if (!items.length) return;
+  const cur = items.find((el) => el.dataset.padfocus === "1") ?? null;
+  const first = () => root.querySelector<HTMLElement>("[data-primary]:not(:disabled)") ?? root.querySelector<HTMLElement>("[data-menu-body] button:not(:disabled)") ?? items[0]!;
+  const focus = (el: HTMLElement) => {
+    for (const i of document.querySelectorAll<HTMLElement>('[data-padfocus="1"]')) delete i.dataset.padfocus;
+    el.dataset.padfocus = "1";
+    el.focus({ preventScroll: true });
+    el.scrollIntoView({ block: "nearest", inline: "nearest" });
+  };
+  if (dir === "accept") {
+    (cur ?? first()).click();
+    return;
+  }
+  if (dir === "back") return;
+  if (!cur || dir === "init") {
+    if (!cur) focus(first());
+    return;
+  }
+  const a = cur.getBoundingClientRect();
+  const ax = a.left + a.width / 2;
+  const ay = a.top + a.height / 2;
+  let best: HTMLElement | null = null;
+  let bestScore = Infinity;
+  for (const el of items) {
+    if (el === cur) continue;
+    const r = el.getBoundingClientRect();
+    const dx = r.left + r.width / 2 - ax;
+    const dy = r.top + r.height / 2 - ay;
+    const along = dir === "left" ? -dx : dir === "right" ? dx : dir === "up" ? -dy : dy;
+    const across = dir === "left" || dir === "right" ? Math.abs(dy) : Math.abs(dx);
+    if (along < 6) continue;
+    const score = along + across * 2.4;
+    if (score < bestScore) {
+      bestScore = score;
+      best = el;
+    }
+  }
+  if (best) focus(best);
+}
+
 export function Hud({ game, hud }: { game: Game; hud: HudState }) {
   const fade = useRef<HTMLDivElement>(null);
   const mark = useRef<HTMLDivElement>(null);
@@ -39,6 +109,12 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
   const touch = coarse || hud.touch;
   const hudRef = useRef(hud);
   hudRef.current = hud;
+  useEffect(() => {
+    game.onNav = padNav;
+    return () => {
+      game.onNav = null;
+    };
+  }, [game]);
 
   useLive(game, (l) => {
     if (fade.current) fade.current.style.opacity = String(l.fade);
@@ -77,7 +153,7 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
   const outdoors = hud.place === "street";
 
   return (
-    <div className="sr-root pointer-events-none absolute inset-0 overflow-hidden">
+    <div className="sr-root pointer-events-none absolute inset-0 overflow-hidden" data-pad={hud.pad ? "1" : "0"}>
       <div
         className="sr-touch pointer-events-auto absolute inset-0"
         onPointerDown={(e) => {
@@ -160,7 +236,7 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
             <div className="absolute bottom-4 left-4 z-20">
               <canvas ref={mini} width={190} height={190} className="h-[168px] w-[168px] rounded-2xl border-2 border-white/20 shadow-xl" />
               <div className="mt-1 text-center text-[10px] font-bold text-white/50">
-                <span className="sr-key mr-1">M</span>Map
+                <span className="sr-key mr-1">{hud.pad ? "Y" : "M"}</span>Map
               </div>
             </div>
           )}
@@ -198,7 +274,7 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
             )}
             {hud.prompt && (
               <button className="sr-panel sr-rise pointer-events-auto flex items-center gap-2 px-4 py-2.5 text-sm font-extrabold text-white" onClick={() => game.input.press("interact")}>
-                <span className="sr-key">E</span>
+                <span className="sr-key">{hud.pad ? "A" : "E"}</span>
                 {hud.prompt}
               </button>
             )}
@@ -207,7 +283,7 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
                 <div className="mb-1 flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">
                   {hud.hoops ? (
                     <>
-                      Hold <span className="sr-key">Space</span> / Shoot
+                      Hold <span className="sr-key">{hud.pad ? "A" : "Space"}</span> / Shoot
                     </>
                   ) : hud.bowl ? (
                     "Power"
@@ -275,12 +351,16 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
           {/* Keys. */}
           {!touch && (
             <div className="absolute bottom-4 right-4 z-20 flex flex-col items-end gap-1">
-              {hud.hints.map(([k, v]) => (
-                <div key={k + v} className="flex items-center gap-2 rounded-md bg-black/55 px-2 py-1 text-[11px] font-bold text-white/85">
-                  <span>{v}</span>
-                  <span className="sr-key">{k}</span>
-                </div>
-              ))}
+              {hud.hints.map(([k, v]) => {
+                const label = hud.pad ? padKey(k, hud.driving || !!hud.race, !!activity) : k;
+                if (!label) return null;
+                return (
+                  <div key={k + v} className="flex items-center gap-2 rounded-md bg-black/55 px-2 py-1 text-[11px] font-bold text-white/85">
+                    <span>{v}</span>
+                    <span className="sr-key">{label}</span>
+                  </div>
+                );
+              })}
             </div>
           )}
 

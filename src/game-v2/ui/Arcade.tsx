@@ -343,7 +343,7 @@ const MAKERS: Record<string, () => Mini> = { catch: dropCatcher, stacker, dash }
 export function Arcade({ game, id }: { game: Game; id: string }) {
   const cab = CABINETS.find((c) => c.id === id) ?? CABINETS[0]!;
   return (
-    <div className="pointer-events-auto absolute inset-0 z-40 flex items-center justify-center bg-black/85 p-3">
+    <div data-menu className="pointer-events-auto absolute inset-0 z-40 flex items-center justify-center bg-black/85 p-3">
       <div className="w-full max-w-[760px] rounded-2xl border-2 p-3 shadow-2xl sm:p-5" style={{ borderColor: cab.color, background: "linear-gradient(180deg,#14101f,#07060c)" }}>
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
@@ -369,7 +369,7 @@ function LinkCabinet({ cab }: { cab: Cabinet }) {
         {cab.tag}
       </div>
       <p className="max-w-md text-sm text-white/75">This cabinet runs the full game. It opens on itch.io in a new tab, and your Memphis save stays right here.</p>
-      <a className="sr-btn sr-btn-gold px-8 py-3 text-lg" href={cab.link} target="_blank" rel="noopener noreferrer">
+      <a data-primary className="sr-btn sr-btn-gold px-8 py-3 text-lg" href={cab.link} target="_blank" rel="noopener noreferrer">
         Play on itch.io
       </a>
       <div className="break-all text-[11px] text-white/40">{cab.link}</div>
@@ -394,10 +394,25 @@ function Playable({ game, cab }: { game: Game; cab: Cabinet }) {
     let raf = 0;
     let last = performance.now();
     let shown = -1;
+    // Gamepad: stick or d-pad for left and right, A or X for the button. Whatever is already
+    // held when the game starts is ignored until it is let go.
+    const readPad = () => {
+      const pad = typeof navigator !== "undefined" && navigator.getGamepads ? [...navigator.getGamepads()].find((q) => q && q.connected) : null;
+      const x = pad?.axes[0] ?? 0;
+      return {
+        KeyA: !!pad && (x < -0.5 || !!pad.buttons[14]?.pressed),
+        KeyD: !!pad && (x > 0.5 || !!pad.buttons[15]?.pressed),
+        Space: !!pad && (!!pad.buttons[0]?.pressed || !!pad.buttons[2]?.pressed || !!pad.buttons[7]?.pressed),
+      };
+    };
+    let padWas = readPad();
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
+      const padNow = readPad();
+      for (const code of ["KeyA", "KeyD", "Space"] as const) if (padNow[code] !== padWas[code]) mini.key?.(code, padNow[code]);
+      padWas = padNow;
       mini.update(dt);
       g.setTransform(el.width / W, 0, 0, el.height / H, 0, 0);
       mini.draw(g);
@@ -463,7 +478,7 @@ function Playable({ game, cab }: { game: Game; cab: Cabinet }) {
         </span>
         {left >= 0 && state === "play" ? <span>TIME {left}</span> : <span />}
       </div>
-      <div className="relative overflow-hidden rounded-xl border border-white/15 bg-black" style={{ aspectRatio: `${W} / ${H}` }}>
+      <div data-playing={state === "play" ? "1" : "0"} className="relative overflow-hidden rounded-xl border border-white/15 bg-black" style={{ aspectRatio: `${W} / ${H}` }}>
         <canvas ref={canvas} width={W * 2} height={H * 2} className="h-full w-full touch-none" />
         {state !== "play" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/75 p-4 text-center">
@@ -483,6 +498,7 @@ function Playable({ game, cab }: { game: Game; cab: Cabinet }) {
               </>
             )}
             <button
+              data-primary
               className="sr-btn sr-btn-green px-8 py-3 text-lg"
               onClick={() => {
                 setScore(0);

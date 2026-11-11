@@ -194,7 +194,7 @@ export class KartRace implements Activity {
     } else {
       if (this.phase === "go") this.time += dt;
       const done = this.phase === "finish";
-      d.step(dt, { throttle: done ? 0 : m.y, steer: m.x, handbrake: done || g.input.down("action"), boost: false }, KART, [], CURB);
+      d.step(dt, { throttle: done ? 0 : g.input.throttle(), steer: m.x, handbrake: done || g.input.down("action"), boost: false }, KART, [], CURB);
       // The tyre wall and the kerb.
       const n = kartNearest(d.x, d.z);
       const limit = KART_TRACK.width / 2 - 0.55;
@@ -342,7 +342,7 @@ const _y = new THREE.Vector3(0, 1, 0);
 /** Ninety seconds in the dark with four taggers. Tag them, break their line of sight, keep moving. */
 export class LaserTag implements Activity {
   hints: [string, string][] = [
-    ["W A S D", "Move, A and D turn"],
+    ["W A S D", "Move and turn"],
     ["Space", "Fire"],
     ["Shift", "Run"],
     ["Q", "Leave the arena"],
@@ -576,6 +576,7 @@ export class LaserTag implements Activity {
               this.combo = 0;
               g.sound.bad();
               g.stage.setPunch(0.8);
+              g.input.rumble(0.8, 220);
               this.say("TAGGED  -50", 1.2);
             }
           }

@@ -202,6 +202,7 @@ export class StreetRace implements Activity {
     const g = this.g;
     const d = g.driver;
     const m = g.input.move();
+    const gas = g.input.throttle();
     this.clock += dt;
     if (this.callLeft > 0) {
       this.callLeft -= dt;
@@ -223,17 +224,17 @@ export class StreetRace implements Activity {
         g.push();
       }
       d.step(dt, { throttle: 0, steer: 0, handbrake: true, boost: false }, RACE, g.city.carSolids);
-      g.sound.setEngine(true, m.y > 0 ? 0.5 + Math.sin(g.time * 30) * 0.05 : 0.1);
+      g.sound.setEngine(true, gas > 0 ? 0.5 + Math.sin(g.time * 30) * 0.05 : 0.1);
     } else {
       if (this.phase === "go") this.time += dt;
-      const boosting = this.phase === "go" && g.input.down("run") && this.nitro > 0.02 && m.y > 0;
+      const boosting = this.phase === "go" && g.input.down("run") && this.nitro > 0.02 && gas > 0;
       if (boosting) {
         if (this.nitro === 1 || !this.boostWas) g.sound.nitro();
         this.nitro = Math.max(0, this.nitro - 0.36 * dt);
       } else this.nitro = Math.min(1, this.nitro + (g.wearing("tour_red") ? 0.11 : 0.065) * dt + (d.slip > 4 && d.speed > 10 ? 0.2 * dt : 0));
       this.boostWas = boosting;
       const done = this.phase === "finish";
-      d.step(dt, { throttle: done ? 0 : m.y, steer: m.x, handbrake: done || g.input.down("action"), boost: boosting }, RACE, g.city.carSolids);
+      d.step(dt, { throttle: done ? 0 : gas, steer: m.x, handbrake: done || g.input.down("action"), boost: boosting }, RACE, g.city.carSolids);
       for (const r of this.rivals) {
         const hit = d.bump(r.x, r.z, 1.3);
         if (hit > 2) {
@@ -244,7 +245,9 @@ export class StreetRace implements Activity {
       if (d.hit > 3) {
         g.sound.crash(Math.min(1, d.hit / 16));
         g.stage.setPunch(0.5);
+        g.input.rumble(Math.min(1, d.hit / 12), 200);
       }
+      if (boosting) g.input.rumble(0.25, 60);
       if (d.slip > 5 && d.speed > 8) g.sound.skid(Math.min(1, d.slip / 12));
       g.sound.setEngine(true, d.speed / RACE.top, boosting);
       for (const r of this.rivals) this.rival(r, dt);
@@ -286,7 +289,7 @@ export class StreetRace implements Activity {
     g.car.place(d.x, d.y, d.z, d.heading);
     g.car.roll(d.forward * dt, d.steer * 0.5);
     g.car.lean(-d.steer * Math.min(1, d.speed / 20) * 0.06, 0);
-    g.car.lamps(g.sky.look.lights > 0.4 ? 3 : 0.2, m.y < 0 ? 3 : 0.5);
+    g.car.lamps(g.sky.look.lights > 0.4 ? 3 : 0.2, gas < 0 ? 3 : 0.5);
     g.pos.x = d.x;
     g.pos.z = d.z;
     g.heading = d.heading;

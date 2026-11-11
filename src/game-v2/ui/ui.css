@@ -164,3 +164,18 @@
 .sr-touch {
   touch-action: none;
 }
+
+/* The pad's highlight. Only drawn while a pad is the device in use. */
+.sr-root[data-pad="1"] [data-padfocus="1"] {
+  outline: 3px solid var(--sr-green);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 7px rgba(57, 255, 20, 0.22);
+}
+.sr-root button:focus {
+  outline: none;
+}
+.sr-root[data-pad="0"] button:focus-visible,
+.sr-root[data-pad="0"] a:focus-visible {
+  outline: 2px solid var(--sr-green);
+  outline-offset: 2px;
+}

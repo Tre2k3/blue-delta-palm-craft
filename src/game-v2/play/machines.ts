@@ -121,6 +121,7 @@ export class Whack implements Activity {
       if (m.kind === 2) g.sound.bad();
       this.say(m.kind === 2 ? "HARD HAT  -20" : m.kind === 1 ? "GOLD  +30" : "+10", 0.6);
       g.stage.setPunch(0.35);
+      g.input.rumble(0.5, 90);
     } else g.sound.bounce(0.4);
   }
 

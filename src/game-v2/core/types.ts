@@ -124,6 +124,8 @@ export type HudState = {
   hasSave: boolean;
   storyDone: boolean;
   touch: boolean;
+  /** A gamepad is in use: show its buttons in the hints. */
+  pad: boolean;
 };
 
 /** Numbers the HUD reads every frame without waiting for a state push. */
