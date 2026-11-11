@@ -338,7 +338,6 @@ export function Shop({ game, hud }: { game: Game; hud: HudState }) {
 
 export function Wardrobe({ game, hud }: { game: Game; hud: HudState }) {
   const ids = Object.keys(OUTFITS) as OutfitId[];
-  const source = (id: OutfitId) => (PRIZES.some((p) => p.outfit === id) ? "Fun House prize" : id === "blue_901" ? "Coming soon" : "At the HQ");
   return (
     <Sheet title="Benji's fits" sub="What you wear changes how the day plays." onClose={() => game.close()} wide>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -358,7 +357,7 @@ export function Wardrobe({ game, hud }: { game: Game; hud: HudState }) {
                   {on ? "Wearing" : "Wear"}
                 </button>
               ) : (
-                <div className="mt-2 rounded-lg border border-white/10 py-2 text-center text-[11px] font-black uppercase tracking-wide text-white/60">{source(id)}</div>
+                <div className="mt-2 rounded-lg border border-white/10 py-2 text-center text-[11px] font-black uppercase tracking-wide text-white/60">{o.from}</div>
               )}
             </div>
           );

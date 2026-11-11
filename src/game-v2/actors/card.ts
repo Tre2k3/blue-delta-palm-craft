@@ -11,8 +11,10 @@ export type CardArt = {
   right?: string;
   /** Stride frames per view. Shown in a loop while the character moves. */
   walk?: Partial<Record<View, string[]>>;
-  /** One-off poses by name: shoot, cheer, crouch. */
-  poses?: Record<string, string>;
+  /** One-off poses by name: shoot, ready. A pose can have its own drawing for each side it is seen from. */
+  poses?: Record<string, string | Partial<Record<View, string>>>;
+  /** How tall a drawing stands next to the standing one, by file: arms up is taller, a crouch is shorter. */
+  scale?: Record<string, number>;
 };
 
 const loader = new THREE.TextureLoader();
@@ -25,6 +27,23 @@ export function cutout(src: string) {
     t = tinted(src);
     cache.set(src, t);
     return t;
+  }
+  if (!t && src.startsWith("flip:")) {
+    // The same drawing facing the other way.
+    const flipped = new THREE.Texture();
+    flipped.colorSpace = THREE.SRGBColorSpace;
+    flipped.generateMipmaps = false;
+    flipped.minFilter = THREE.LinearFilter;
+    flipped.magFilter = THREE.LinearFilter;
+    flipped.repeat.x = -1;
+    flipped.offset.x = 1;
+    loader.load(src.slice(5), (base) => {
+      flipped.image = base.image;
+      flipped.needsUpdate = true;
+      base.dispose();
+    });
+    cache.set(src, flipped);
+    return flipped;
   }
   if (!t) {
     t = loader.load(src);
@@ -140,7 +159,8 @@ export class Card {
 
   private preload() {
     const a = this.art;
-    for (const src of [a.front, a.back, a.left, a.right, ...Object.values(a.walk ?? {}).flat(), ...Object.values(a.poses ?? {})]) if (src) cutout(src);
+    const poses = Object.values(a.poses ?? {}).flatMap((p) => (typeof p === "string" ? [p] : Object.values(p)));
+    for (const src of [a.front, a.back, a.left, a.right, ...Object.values(a.walk ?? {}).flat(), ...poses]) if (src) cutout(src);
   }
 
   place(x: number, z: number) {
@@ -161,6 +181,8 @@ export class Card {
     const abs = Math.abs(rel);
     let view: View = "front";
     if (this.art.back) view = abs < 0.8 ? "front" : abs > 2.3 ? "back" : rel > 0 ? "left" : "right";
+    // No side drawing: whichever of front and back is nearer the truth.
+    if ((view === "left" || view === "right") && !this.art[view]) view = this.art.back && abs > Math.PI / 2 ? "back" : "front";
     if (view !== "front" && !this.art[view]) view = "front";
 
     const moving = this.speed > 0.35;
@@ -168,7 +190,10 @@ export class Card {
     this.idle += dt;
     let src = this.art[view] ?? this.art.front;
     const strides = this.art.walk?.[view];
-    if (this.pose && this.art.poses?.[this.pose]) src = this.art.poses[this.pose]!;
+    const pose = this.pose ? this.art.poses?.[this.pose] : undefined;
+    // A pose drawn for some sides only is not shown from the others.
+    const posed = typeof pose === "string" ? pose : pose ? (pose[view] ?? (view === "left" || view === "right" ? pose[abs > Math.PI / 2 ? "back" : "front"] : undefined)) : undefined;
+    if (posed) src = posed;
     else if (moving && strides?.length) {
       // Alternate the standing drawing with each stride frame: stand, step, stand, step.
       const slot = Math.floor(this.phase * 2) % (strides.length * 2);
@@ -186,7 +211,7 @@ export class Card {
     // About 95 beats a minute: dip on the beat, sway across two.
     const bop = !moving && this.groove >= 0 ? Math.pow(Math.abs(Math.sin(this.groove * Math.PI * 1.58)), 1.6) : 0;
     const sway = bop > 0 || (!moving && this.groove >= 0) ? Math.sin(this.groove * Math.PI * 1.58) * 0.05 : 0;
-    const h = this.height * (1 + breathe - step * 0.012 - bop * 0.035);
+    const h = this.height * (this.art.scale?.[src] ?? 1) * (1 + breathe - step * 0.012 - bop * 0.035);
     this.mesh.scale.set(h * aspect, h, 1);
     this.mesh.position.y = this.lift + step * 0.055;
     this.mesh.rotation.set(0, toCam - g.rotation.y, moving ? Math.sin(this.phase * Math.PI) * 0.035 : Math.sin(this.idle * 1.3) * 0.008 + sway);

@@ -263,6 +263,17 @@ function buildKartTrack(ctx: BuildCtx) {
   addSolid(ctx, x0, x1, cz - KR - width / 2 - 0.7, z1);
 }
 
+/** Skee-Ball rings, in metres on the board: across from the middle, up from the bottom edge, radius, points. Smallest first. */
+export const SKEE_HOLES = [
+  { u: -0.29, v0: 1.14, r: 0.055, v: 100 },
+  { u: 0.29, v0: 1.14, r: 0.055, v: 100 },
+  { u: 0, v0: 1.16, r: 0.065, v: 50 },
+  { u: 0, v0: 0.78, r: 0.085, v: 40 },
+  { u: 0, v0: 0.72, r: 0.15, v: 30 },
+  { u: 0, v0: 0.66, r: 0.22, v: 20 },
+  { u: 0, v0: 0.6, r: 0.29, v: 10 },
+];
+
 // ------------------------------------------------------------------ the hall
 
 export type FunRoom = Room & {
@@ -277,6 +288,12 @@ export type FunRoom = Room & {
   whack: { x: number; z: number; top: number; holes: { x: number; z: number }[]; stand: { x: number; z: number } };
   /** The hoop-shot machine: where you stand and where the rim rests. */
   popshot: { x: number; z: number; hoop: { x: number; y: number; z: number } };
+  /** The pinball table: the playfield mesh the game draws on, and where to stand. */
+  pinball: { x: number; y: number; z: number; w: number; l: number; tilt: number; field: THREE.Mesh; stand: { x: number; z: number } };
+  /** The Skee-Ball lane: roll surface, ramp and the tilted target board. */
+  skee: { x: number; y: number; z0: number; zRamp: number; board: { y: number; z: number; w: number; l: number; tilt: number }; stand: { x: number; z: number } };
+  /** Spin-N-Win: the wheel that turns, its wedges in order, and where to stand. */
+  wheel: { x: number; y: number; z: number; disc: THREE.Mesh; wedges: number[]; stand: { x: number; z: number } };
   /** Inside of the ball pit. */
   pit: Rect;
   tramp: { x: number; z: number; r: number; y: number };
@@ -364,8 +381,8 @@ export function buildFunRoom(): FunRoom {
   let whack: FunRoom["whack"] = { x: C.x, z: C.z, top: 0.9, holes: [], stand: { x: C.x, z: C.z } };
   let popshot: FunRoom["popshot"] = { x: C.x, z: C.z, hoop: { x: C.x, y: 2, z: C.z } };
   CABINETS.forEach((c, i) => {
-    // The row grows with the list: ten machines still fit between the ball pit and the laser door.
-    const lx = (i - (CABINETS.length - 1) / 2) * Math.min(2.5, 21 / (CABINETS.length - 1));
+    // The row sits clear of the ball pit on one side and the laser tag door on the other.
+    const lx = (i - (CABINETS.length - 1) / 2) * 2.5 + 2;
     if (c.id === "whack") {
       // A real table: felt top, nine holes, a lit back panel.
       const tz = cabZ + 0.5;
@@ -546,7 +563,137 @@ export function buildFunRoom(): FunRoom {
     f.box(0.12, 0.12, 0.12, -W / 2 + 1 + i * 1.5, H - 0.5 - Math.sin((i / 25) * Math.PI) * 0.5, 0.5, m, ctx.flat);
     f.box(0.12, 0.12, 0.12, -W / 2 + 1 + i * 1.5, H - 0.5 - Math.sin((i / 25) * Math.PI) * 0.5, 8, m, ctx.flat);
   }
-  f.flat(9, 9, 1, 0.02, 4, poolMat(ctx, 0xffd23a, 0.34), ctx.flat);
+
+  // ---- Real machines on the floor, played standing at them.
+  const dark = std(0x16121f, 0.5, 0.2);
+  const chromeLeg = MAT.chrome();
+
+  // Pinball: a table on four legs with a glass-topped playfield and a lit backbox.
+  const pbx = 12.6;
+  const pbz = D / 2 - 1.55;
+  const PB = { w: 0.88, l: 1.36, tilt: 0.11, y: 1.1 };
+  f.box(1.02, 0.3, 1.52, pbx, 0.86, pbz, std(0x3a1260, 0.5));
+  for (const sx of [-0.44, 0.44]) for (const sz of [-0.66, 0.66]) f.box(0.06, 0.74, 0.06, pbx + sx, 0.37, pbz + sz, chromeLeg);
+  for (const sx of [-0.485, 0.485]) f.box(0.05, 0.28, 1.52, pbx + sx, 1.1, pbz, std(0xe0b33a, 0.4, 0.5));
+  f.box(1.02, 0.14, 0.06, pbx, 0.98, pbz - 0.74, std(0xe0b33a, 0.4, 0.5));
+  f.box(1.02, 0.86, 0.2, pbx, 1.72, D / 2 - 0.5, dark);
+  f.wall(0.94, 0.78, pbx, 1.72, D / 2 - 0.61, neon(ctx, "SACK PINBALL", "#e0b33a", { sub: "3 BALLS", w: 512, h: 424 }), ctx.flat, Math.PI);
+  f.solid(pbx - 0.56, pbx + 0.56, pbz - 0.8, D / 2);
+  const fieldGeo = new THREE.PlaneGeometry(PB.w, PB.l);
+  fieldGeo.rotateX(-Math.PI / 2);
+  fieldGeo.rotateY(Math.PI);
+  const field = new THREE.Mesh(fieldGeo, new THREE.MeshBasicMaterial({ color: 0x1d0f3a, toneMapped: false }));
+  field.position.set(C.x + pbx, PB.y, C.z + pbz);
+  field.rotation.x = -PB.tilt;
+  group.add(field);
+  // A second table beside it, for whoever else is in the room.
+  f.box(1.02, 0.3, 1.52, pbx + 1.5, 0.86, pbz, std(0x12305a, 0.5));
+  for (const sx of [-0.44, 0.44]) for (const sz of [-0.66, 0.66]) f.box(0.06, 0.74, 0.06, pbx + 1.5 + sx, 0.37, pbz + sz, chromeLeg);
+  f.box(0.9, 0.02, 1.4, pbx + 1.5, 1.03, pbz, emissiveMat(ctx, 0x35e0d0, 0.5, 0.9));
+  f.box(1.02, 0.86, 0.2, pbx + 1.5, 1.72, D / 2 - 0.5, dark);
+  f.wall(0.94, 0.78, pbx + 1.5, 1.72, D / 2 - 0.61, neon(ctx, "BEALE BALL", "#35e0d0", { sub: "PINBALL", w: 512, h: 424 }), ctx.flat, Math.PI);
+  f.solid(pbx + 0.94, pbx + 2.06, pbz - 0.8, D / 2);
+  f.flat(4.6, 3.2, pbx + 0.75, 0.02, pbz - 1.6, poolMat(ctx, 0xe0b33a, 0.4), ctx.flat);
+
+  // Skee-Ball: two wooden lanes running up to tilted target boards against the wall.
+  const SK = { y: 0.86, z0: D / 2 - 4.3, zRamp: D / 2 - 1.75, board: { y: 1.36, z: D / 2 - 1.05, w: 0.9, l: 1.36, tilt: 0.8 } };
+  const lane = std(0xb9833e, 0.55);
+  const rings = new THREE.MeshBasicMaterial({
+    map: tex(288, 432, (g, w, h) => {
+      const px = w / SK.board.w;
+      g.fillStyle = "#2a1a4a";
+      g.fillRect(0, 0, w, h);
+      g.strokeStyle = "#ffd23a";
+      g.lineWidth = 8;
+      g.strokeRect(4, 4, w - 8, h - 8);
+      for (const hole of [...SKEE_HOLES].reverse()) {
+        g.fillStyle = hole.v >= 50 ? "#07070c" : "rgba(8,8,14,0.55)";
+        g.strokeStyle = hole.v === 100 ? "#ff5ad1" : hole.v === 50 ? "#39ff14" : "#f4f1ea";
+        g.lineWidth = 5;
+        g.beginPath();
+        g.arc(w / 2 + hole.u * px, h - hole.v0 * px, hole.r * px, 0, Math.PI * 2);
+        g.fill();
+        g.stroke();
+      }
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      g.font = `900 22px "Arial Black", Impact, sans-serif`;
+      for (const hole of SKEE_HOLES) {
+        g.fillStyle = hole.v === 100 ? "#ff5ad1" : hole.v === 50 ? "#39ff14" : "#ffffff";
+        g.fillText(String(hole.v), w / 2 + hole.u * px, h - (hole.v0 - (hole.v >= 40 ? 0 : hole.r - 0.04)) * px);
+      }
+    }),
+    toneMapped: false,
+  });
+  const skx = 7.9;
+  for (const [k, sx] of [skx, skx + 1.25].entries()) {
+    f.box(0.9, SK.y, SK.zRamp - SK.z0, sx, SK.y / 2, (SK.z0 + SK.zRamp) / 2, std(0x241a3a, 0.6));
+    f.box(0.8, 0.03, SK.zRamp - SK.z0, sx, SK.y + 0.015, (SK.z0 + SK.zRamp) / 2, lane);
+    for (const sd of [-0.45, 0.45]) f.box(0.05, 0.14, SK.zRamp - SK.z0, sx + sd, SK.y + 0.07, (SK.z0 + SK.zRamp) / 2, std(0xff8a1e, 0.5));
+    f.add(new THREE.BoxGeometry(0.8, 0.04, 0.5), lane, sx, SK.y + 0.1, SK.zRamp - 0.18, ctx.solid, 0, -0.42);
+    f.box(1, 1.22, D / 2 - SK.zRamp, sx, 0.61, (SK.zRamp + D / 2) / 2, std(0x241a3a, 0.6));
+    f.box(1, 0.08, D / 2 - SK.zRamp, sx, 2.84, (SK.zRamp + D / 2) / 2, std(0x241a3a, 0.6));
+    f.box(1, 1.66, 0.08, sx, 2.05, D / 2 - 0.3, std(0x1a1230, 0.7));
+    const board = new THREE.PlaneGeometry(SK.board.w, SK.board.l);
+    board.rotateX(-Math.PI / 2);
+    board.rotateY(Math.PI);
+    f.add(board, rings, sx, SK.board.y + 0.36, SK.board.z, ctx.flat, 0, -SK.board.tilt);
+    for (const sd of [-0.5, 0.5]) f.box(0.05, 1.66, D / 2 - SK.zRamp, sx + sd, 2.05, (SK.zRamp + D / 2) / 2, std(0xff8a1e, 0.5));
+    f.wall(0.98, 0.4, sx, 3.1, SK.zRamp - 0.02, neon(ctx, k ? "LANE 2" : "SKEE-BALL", "#ff8a1e", { w: 384, h: 128 }), ctx.flat, Math.PI);
+    f.box(1.04, 0.46, 0.06, sx, 3.1, SK.zRamp + 0.02, std(0x1a1230, 0.7));
+    f.solid(sx - 0.5, sx + 0.5, SK.z0, D / 2);
+  }
+  f.flat(3.4, 3, skx + 0.6, 0.02, SK.z0 - 1.4, poolMat(ctx, 0xff8a1e, 0.4), ctx.flat);
+
+  // Spin-N-Win: the big wheel in the middle of the floor, facing the door.
+  const WH = { x: -1.5, y: 2.15, z: 1.2, r: 1.3 };
+  const wedges = [2, 5, 1, 10, 2, 3, 1, 25, 2, 5, 1, 8, 3, 2, 1, 50];
+  const wheelTex = tex(512, 512, (g, w) => {
+    const colors = ["#ff5ad1", "#35e0d0", "#ffd23a", "#39ff14", "#b48cff", "#ff8a1e"];
+    const n = wedges.length;
+    const c = w / 2;
+    for (let i = 0; i < n; i++) {
+      const a0 = (i / n) * Math.PI * 2;
+      const a1 = ((i + 1) / n) * Math.PI * 2;
+      g.fillStyle = wedges[i] === 50 ? "#f4f1ea" : colors[i % colors.length]!;
+      g.beginPath();
+      g.moveTo(c, c);
+      g.arc(c, c, c - 6, a0, a1);
+      g.closePath();
+      g.fill();
+      g.save();
+      g.translate(c + Math.cos((a0 + a1) / 2) * c * 0.72, c + Math.sin((a0 + a1) / 2) * c * 0.72);
+      g.rotate((a0 + a1) / 2 + Math.PI / 2);
+      g.fillStyle = "#12081f";
+      g.font = `900 ${wedges[i]! >= 25 ? 54 : 42}px "Arial Black", Impact, sans-serif`;
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      g.fillText(String(wedges[i]), 0, 0);
+      g.restore();
+    }
+    g.strokeStyle = "#ffd23a";
+    g.lineWidth = 12;
+    g.beginPath();
+    g.arc(c, c, c - 8, 0, Math.PI * 2);
+    g.stroke();
+    g.fillStyle = "#ffd23a";
+    g.beginPath();
+    g.arc(c, c, 34, 0, Math.PI * 2);
+    g.fill();
+  });
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(WH.r, 48), new THREE.MeshBasicMaterial({ map: wheelTex, toneMapped: false }));
+  disc.position.set(C.x + WH.x, WH.y, C.z + WH.z + 0.14);
+  group.add(disc);
+  f.box(0.5, WH.y + 0.4, 0.22, WH.x, (WH.y + 0.4) / 2, WH.z, dark);
+  f.box(2.4, 0.3, 1, WH.x, 0.15, WH.z, std(0x3a1260, 0.5));
+  f.add(new THREE.CylinderGeometry(WH.r + 0.09, WH.r + 0.09, 0.2, 40), std(0xc22a22, 0.4, 0.3), WH.x, WH.y, WH.z, ctx.solid, 0, Math.PI / 2);
+  f.wall(2.6, 0.6, WH.x, WH.y + WH.r + 0.75, WH.z + 0.13, neon(ctx, "SPIN-N-WIN", "#ff3b3b", { sub: "PULL THE LEVER", w: 640, h: 150 }), ctx.flat);
+  f.box(2.7, 0.7, 0.1, WH.x, WH.y + WH.r + 0.75, WH.z + 0.06, dark);
+  for (const sx of [-1.25, 1.25]) f.box(0.08, WH.y + WH.r + 1.1, 0.08, WH.x + sx, (WH.y + WH.r + 1.1) / 2, WH.z, chromeLeg);
+  f.box(0.1, 0.9, 0.1, WH.x + 1.55, 0.75, WH.z + 0.5, chromeLeg);
+  f.solid(WH.x - 1.4, WH.x + 1.7, WH.z - 0.5, WH.z + 0.6);
+  f.flat(5, 4.4, WH.x, 0.02, WH.z + 2.4, poolMat(ctx, 0xff3b3b, 0.36), ctx.flat);
+  f.flat(9, 9, 1, 0.02, 7, poolMat(ctx, 0xffd23a, 0.3), ctx.flat);
   light(group, lights, C.x + 1, 4.6, C.z + 5, 0xfff0d0, 34, 22);
   finish(ctx, group);
   return {
@@ -569,6 +716,9 @@ export function buildFunRoom(): FunRoom {
     kartDoor: { x: C.x - 8.2, z: C.z + D / 2 - 1.3 },
     whack,
     popshot,
+    pinball: { x: C.x + pbx, y: PB.y, z: C.z + pbz, w: PB.w, l: PB.l, tilt: PB.tilt, field, stand: { x: C.x + pbx, z: C.z + pbz - 1.25 } },
+    skee: { x: C.x + skx, y: SK.y, z0: C.z + SK.z0, zRamp: C.z + SK.zRamp, board: { y: SK.board.y + 0.36, z: C.z + SK.board.z, w: SK.board.w, l: SK.board.l, tilt: SK.board.tilt }, stand: { x: C.x + skx, z: C.z + SK.z0 - 0.65 } },
+    wheel: { x: C.x + WH.x, y: WH.y, z: C.z + WH.z, disc, wedges, stand: { x: C.x + WH.x, z: C.z + WH.z + 2.7 } },
     pit: { minX: C.x + px0 + 0.3, maxX: C.x + px1 - 0.55, minZ: C.z + pz0 + 0.3, maxZ: C.z + pz1 - 0.55 },
     tramp: { x: C.x + tx, z: C.z + tz, r: tr, y: ty },
   };

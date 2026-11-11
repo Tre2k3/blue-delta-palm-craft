@@ -536,6 +536,9 @@ export function buildBowlRoom(): BowlRoom {
   }
   f.box(4.6, 1.15, 1, 5.4, 0.58, 9.2, std(0x241a3a, 0.5));
   f.box(4.7, 0.06, 1.1, 5.4, 1.18, 9.2, std(0xff5ad1, 0.5));
+  // The desk turns the corner, so whoever works it is behind a counter from the door as well.
+  f.box(0.5, 1.15, 1.9, 3.35, 0.58, 10.05, std(0x241a3a, 0.5));
+  f.box(0.6, 0.06, 2, 3.35, 1.18, 10.05, std(0xff5ad1, 0.5));
   f.wall(4.2, 1, 5.4, 3.2, zFront - 0.05, neon(ctx, "SHOES · LANES · PRIZES", "#ffd23a", { w: 640, h: 128 }), ctx.flat, Math.PI);
   f.solid(3.1, 7.7, 8.7, zFront);
   f.box(2.4, 3.2, 0.14, 0, 1.6, zFront - 0.08, emissiveMat(ctx, 0xffb46a, 0.5, 0.9));

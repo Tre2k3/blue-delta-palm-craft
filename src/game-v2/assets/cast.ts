@@ -9,37 +9,56 @@ const turn = (folder: string): CardArt => ({
   right: `/game-v2/characters/${folder}/right.png${V}`,
 });
 
-/**
- * The fit plates are all drawn from the front, so the back view is Benji's own back drawing
- * with the tee repainted in the colour of the piece.
- */
-const fit = (folder: string, shirt: string): CardArt => ({
-  front: `/game/benji/outfits/${folder}/front.png`,
-  back: `tint:${shirt}:/game-v2/characters/benji/back.png${V}`,
-  left: `/game/benji/outfits/${folder}/left.png`,
-  right: `/game/benji/outfits/${folder}/right.png`,
-});
-
-export type OutfitId = "starter" | "tour_white" | "tour_black" | "tour_red" | "sackrow_11" | "blue_901" | "doll" | "nightmare" | "claw";
+const FITS = "/game-v2/characters/benji-fits";
 
 /**
- * Benji in each fit he actually has four-view art for.
- * Two folders on disk are mislabelled: `tour_white` holds the black tee and `tour_black` the white.
+ * Benji on the court in a fit: the jumper from in front and from behind, the defensive stance,
+ * and the drive with the ball, seen from the side. `shot` is how much taller the arms-up drawing
+ * is than the standing one.
  */
-export const OUTFITS: Record<OutfitId, { name: string; art: CardArt; perk: string }> = {
+function court(id: string, shot = 1.2): Pick<CardArt, "poses" | "scale"> {
+  const f = (n: string) => `${FITS}/${id}/${n}.webp`;
+  const drive = f("drive");
+  const ready = f("ready");
+  return {
+    poses: {
+      shoot: { front: f("shot-front"), back: f("shot-back") },
+      ready: { front: ready, left: ready, right: `flip:${ready}` },
+      drive: { right: drive, left: `flip:${drive}` },
+    },
+    scale: { [f("shot-front")]: shot, [f("shot-back")]: shot, [ready]: 0.92, [`flip:${ready}`]: 0.92, [drive]: 0.97, [`flip:${drive}`]: 0.97 },
+  };
+}
+
+/** A fit with all four sides drawn. `hoops` false for the ones with no court drawings. */
+function fit(id: string, hoops = true): CardArt {
+  const f = (n: string) => `${FITS}/${id}/${n}.webp`;
+  return { front: f("front"), back: f("back"), left: f("left"), right: f("right"), ...(hoops ? court(id) : {}) };
+}
+
+export type OutfitId = "starter" | "tour_white" | "tour_black" | "tour_red" | "fresh_black" | "fresh_blue" | "jersey_224" | "sackrow_11" | "blue_901" | "doll" | "nightmare" | "claw";
+
+const starterCourt = court("starter", 1.17);
+
+/** Benji in each fit he has art for, what wearing it does, and where it comes from. */
+export const OUTFITS: Record<OutfitId, { name: string; art: CardArt; perk: string; from: string }> = {
   starter: {
     name: "Starter Green Tee",
-    art: { ...turn("benji"), walk: { front: [`/game-v2/characters/benji/walk.png${V}`] } },
+    art: { ...turn("benji"), ...starterCourt, walk: { front: [`/game-v2/characters/benji/walk.png${V}`] } },
     perk: "The original. No perk, all Memphis.",
+    from: "Yours",
   },
-  tour_white: { name: "Worldwide Tour Tee · White", art: fit("tour_black", "#f2f0ea"), perk: "+10% Respect from everything." },
-  tour_black: { name: "Worldwide Tour Tee · Black", art: fit("tour_white", "#1b1b1f"), perk: "+10% SackDollars from deliveries and races." },
-  tour_red: { name: "Worldwide Tour Tee · Red", art: fit("tour_red", "#c22a22"), perk: "Nitro refills faster on the strip." },
-  sackrow_11: { name: "FRESH Sackrow #11", art: fit("black_sackrow_11", "#1b1b1f"), perk: "Wider green window on your jumper." },
-  blue_901: { name: "901 Day Jersey", art: fit("blue_901_day", "#2a5fc2"), perk: "Run faster on foot." },
-  doll: { name: "Fun House Overalls", art: fit("hw_doll", "#2f4f8a"), perk: "More tickets from every arcade game." },
-  nightmare: { name: "Sackrow After Dark Tee", art: fit("hw_sackrow", "#1b1b1f"), perk: "Longer bite window on the river." },
-  claw: { name: "Striped Sweater", art: fit("hw_claw", "#a8261c"), perk: "Bowling ball hooks harder." },
+  tour_white: { name: "Worldwide Tour Tee · White", art: fit("tour_white"), perk: "+10% Respect from everything.", from: "At the HQ" },
+  tour_black: { name: "Worldwide Tour Tee · Black", art: fit("tour_black"), perk: "+10% SackDollars from deliveries and races.", from: "At the HQ" },
+  tour_red: { name: "Worldwide Tour Tee · Red", art: fit("tour_red"), perk: "Nitro refills faster on the strip.", from: "At the HQ" },
+  fresh_black: { name: "FRESH 38127 Jersey · Black", art: fit("fresh_black"), perk: "+15% SackDollars from every game at the court.", from: "At the HQ" },
+  sackrow_11: { name: "Sackrow Ballers #11", art: fit("sackrow_11"), perk: "Wider green window on your jumper.", from: "Beat a player to 11 at the court" },
+  blue_901: { name: "901 Day Jersey", art: fit("blue_901"), perk: "Run faster on foot.", from: "Win the street race" },
+  fresh_blue: { name: "FRESH 38127 Jersey · Blue", art: fit("fresh_blue", false), perk: "Coins around town are worth double.", from: "Bank 100 coins around town" },
+  jersey_224: { name: "224 Jersey · White", art: fit("jersey_224"), perk: "Boost pads hit harder in the go-karts.", from: "Fun House prize" },
+  doll: { name: "Fun House Overalls", art: fit("doll", false), perk: "More tickets from every arcade game.", from: "Fun House prize" },
+  nightmare: { name: "Sackrow After Dark Tee", art: fit("nightmare", false), perk: "Longer bite window on the river.", from: "Fun House prize" },
+  claw: { name: "Striped Sweater", art: fit("claw", false), perk: "Bowling ball hooks harder.", from: "Fun House prize" },
 };
 
 export const BENJI_HEIGHT = characters.benji.height;
@@ -61,15 +80,20 @@ export const CAST: Record<"kBlanco" | "courtOg" | "mamaDee" | "uncJ" | "nitro" |
   mamaDee: { name: "Mama Dee", art: turn("mama-dee"), height: characters.mamaDee.height, cut: 0 },
   uncJ: { name: "Unc J", art: { front: file("unc-j", "front"), back: file("unc-j", "right") }, height: characters.uncJ.height, cut: 0.11 },
   nitro: { name: "Nitro", art: turn("nitro"), height: characters.nitro.height, cut: 0 },
-  strike: { name: "Strike", art: { front: file("strike", "back"), back: file("strike", "front"), left: file("strike", "left"), right: file("strike", "right") }, height: characters.strike.height, cut: 0.14 },
+  strike: { name: "Strike", art: { front: "/game-v2/characters/strike/back.webp", back: "/game-v2/characters/strike/front.webp", left: "/game-v2/characters/strike/left.webp", right: "/game-v2/characters/strike/right.webp" }, height: characters.strike.height, cut: 0.14 },
 };
 
 export type CastId = keyof typeof CAST;
 
+/**
+ * People on the street were only ever drawn from the front. Their back views are made from those
+ * drawings (hair over the face, a plain back to the jacket), so nobody walks away face first.
+ */
 const ped = (name: string, height: number): { art: CardArt; height: number } => ({
   art: {
     front: `/game-v2/characters/pedestrians/${name}.png${V}`,
-    walk: { front: [`/game-v2/characters/pedestrians/${name}-walk.png${V}`] },
+    back: `/game-v2/characters/pedestrians/${name}-back.webp`,
+    walk: { front: [`/game-v2/characters/pedestrians/${name}-walk.png${V}`], back: [`/game-v2/characters/pedestrians/${name}-walk-back.webp`] },
   },
   height,
 });

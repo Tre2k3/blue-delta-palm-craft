@@ -131,6 +131,7 @@ export class Hoops implements Activity {
     const g = this.g;
     this.kind = kind;
     this.group.visible = true;
+    g.benji.visible = true;
     this.left = SECONDS;
     this.started = false;
     this.over = false;
@@ -284,7 +285,7 @@ export class Hoops implements Activity {
     if (b.judged) return;
     b.judged = true;
     const g = this.g;
-    if (made) g.people.cheer(COURT.cx, COURT.cz, 18, b.points >= 3 ? 1.8 : 1.1);
+    if (made) g.cheer(COURT.cx, COURT.cz, 18, b.points >= 3 ? 1.8 : 1.1);
     if (b.who === 1) {
       const r = this.rival;
       if (made) {
@@ -482,6 +483,8 @@ export class Hoops implements Activity {
       g.benji.lift = t >= 1 ? 0 : Math.sin(t * Math.PI) * 0.34;
       if (t >= 1) this.jump = 0;
     } else g.benji.lift = 0;
+    // Arms up through the shot and the follow-through; the stance while the other player shoots.
+    g.benji.pose = this.charging || this.jump > 0 ? "shoot" : this.kind === "versus" && this.turn === "rival" && g.benji.speed < 0.5 ? "ready" : g.benji.speed > 0.8 ? "drive" : null;
 
     // Ball in hand: dribbled low, lifted to the forehead on the way up.
     const rx = -Math.cos(g.heading);
@@ -560,9 +563,11 @@ export class Hoops implements Activity {
     const won = this.score > r.score;
     const beaten = g.save.best.versus ?? 0;
     if (won) g.save.best.versus = Math.max(beaten, r.tier + 1);
-    const got = won ? g.earn(80 + r.tier * 45, 6 + r.tier * 3) : g.earn(10, 1);
+    const k = g.wearing("fresh_black") ? 1.15 : 1;
+    const got = won ? g.earn(Math.round((80 + r.tier * 45) * k), 6 + r.tier * 3) : g.earn(10, 1);
     if (won) g.sound.cheer();
-    g.people.cheer(COURT.cx, COURT.cz, 20, 2.4);
+    if (won) g.award("sackrow_11");
+    g.cheer(COURT.cx, COURT.cz, 20, 2.4);
     g.emit("versus", won ? 1 : 0, r.tier);
     this.hand.visible = false;
     const next = RIVALS[Math.min(RIVALS.length - 1, g.save.best.versus ?? 0)]!;
@@ -618,7 +623,7 @@ export class Hoops implements Activity {
     const best = g.save.best.hoops ?? 0;
     const record = this.score > best;
     if (record) g.save.best.hoops = this.score;
-    const got = g.earn(this.score * 4, Math.floor(this.score / 3));
+    const got = g.earn(Math.round(this.score * 4 * (g.wearing("fresh_black") ? 1.15 : 1)), Math.floor(this.score / 3));
     g.emit("hoops", this.score, this.bestStreak);
     this.over = true;
     this.hand.visible = false;

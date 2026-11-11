@@ -3,9 +3,8 @@ import { Card } from "../actors/card";
 import { Driver, type DriveTune } from "../actors/vehicle";
 import { PEDS } from "../assets/cast";
 import type { HudState } from "../core/types";
-import { clamp, damp, dampAngle, formatClock, wrapAngle } from "../core/util";
+import { clamp, damp, dampAngle, formatClock } from "../core/util";
 import type { Activity, Game } from "../game";
-import { pushOut, sight } from "../world/collide";
 import { KART_LENGTH, KART_PADS, kartAt, kartNearest } from "../world/funhouse";
 import { CURB, KART_TRACK } from "../world/map";
 
@@ -234,7 +233,7 @@ export class KartRace implements Activity {
       for (const pad of KART_PADS) {
         const ds = Math.abs(n.s - pad * KART_LENGTH);
         if (ds < 1.6 && Math.abs(n.off) < 1.5 && this.boost < 0.9 && !done) {
-          this.boost = 1.5;
+          this.boost = g.wearing("jersey_224") ? 2.3 : 1.5;
           this.say("BOOST", 0.8);
           g.sound.ui();
           g.input.rumble(0.5, 160);
@@ -302,7 +301,7 @@ export class KartRace implements Activity {
             this.say(lap === KART_LAPS - 1 ? "Final lap!" : `Lap ${lap + 1}`, 1.6);
             g.sound.ui();
           }
-          g.people.cheer(KART_TRACK.cx, KART_TRACK.cz, 40, 1.4);
+          g.cheer(KART_TRACK.cx, KART_TRACK.cz, 40, 1.4);
         }
         const was = this.place;
         this.place = 1 + this.bots.filter((b) => b.s > this.prog).length;
@@ -328,14 +327,14 @@ export class KartRace implements Activity {
     if (place === 1) g.sound.cheer();
     payTickets(
       g,
-      place === 1 ? "CHECKERED FLAG" : `FINISHED ${["1ST", "2ND", "3RD", "4TH"][place - 1]}`,
+      place === 1 ? "CHECKERED FLAG" : `FINISHED ${["1ST", "2ND", "3RD", "4TH", "5TH", "6TH"][place - 1]}`,
       place === 1 ? "Fastest kart in Orange Mound." : "Brake before the bend, gas out of it.",
       [
-        ["Place", `${place} of 4`],
+        ["Place", `${place} of ${this.bots.length + 1}`],
         ["Time", formatClock(this.time)],
         ["Best lap", this.bestLap ? formatClock(this.bestLap) : "--"],
       ],
-      [30, 18, 10, 5][place - 1]!,
+      [30, 20, 14, 9, 6, 4][place - 1] ?? 4,
       record,
       () => this.start(),
       () => this.leave(),
@@ -377,7 +376,7 @@ export class KartRace implements Activity {
       lap: Math.min(KART_LAPS, this.lap + 1),
       laps: KART_LAPS,
       place: this.place,
-      racers: 4,
+      racers: this.bots.length + 1,
       time: this.time,
       best: this.g.save.best.kart ?? 0,
       call: this.call,
@@ -387,12 +386,10 @@ export class KartRace implements Activity {
   }
 }
 
-// ------------------------------------------------------------------ laser tag
-
-type Tagger = { card: Card; lamp: THREE.Mesh; gun: THREE.Group; x: number; z: number; tx: number; tz: number; stun: number; aim: number; cool: number; stuck: number };
+// ------------------------------------------------------------------ laser tag (the game itself is in laser.ts)
 
 /** A laser tag blaster: chunky body, a lit barrel, a sight on top. Held at the hip, pointing where its owner aims. */
-function makeBlaster(glow: THREE.Color) {
+export function makeBlaster(glow: THREE.Color) {
   const g = new THREE.Group();
   const shell = new THREE.MeshStandardMaterial({ color: 0x1a1c22, roughness: 0.45, metalness: 0.4 });
   const lit = new THREE.MeshBasicMaterial({ color: glow, toneMapped: false });
@@ -410,374 +407,6 @@ function makeBlaster(glow: THREE.Color) {
   part(new THREE.BoxGeometry(0.125, 0.03, 0.3), lit, 0, 0.06, 0.1);
   part(new THREE.SphereGeometry(0.05, 10, 8), lit, 0, 0.01, 0.56);
   return g;
-}
-
-/** Hits a vest takes before its wearer is out for a few seconds. */
-const VEST = 3;
-type Beam = { mesh: THREE.Mesh; left: number };
-
-const _a = new THREE.Vector3();
-const _b = new THREE.Vector3();
-const _y = new THREE.Vector3(0, 1, 0);
-
-/**
- * Ninety seconds in the dark with five taggers, everyone carrying a blaster. They hunt harder
- * every twenty seconds. Three hits on the vest and Benji is out for a moment and pays for it.
- */
-export class LaserTag implements Activity {
-  hints: [string, string][] = [
-    ["W A S D", "Move and turn"],
-    ["Space", "Fire"],
-    ["Shift", "Run"],
-    ["Q", "Leave the arena"],
-  ];
-  private bots: Tagger[] = [];
-  private gun = makeBlaster(new THREE.Color(0.4, 3, 0.3));
-  private vest = VEST;
-  /** Seconds left sitting out after the vest goes dark. */
-  private down = 0;
-  private beams: Beam[] = [];
-  private group = new THREE.Group();
-  private phase: "count" | "go" | "over" = "count";
-  private count = 3;
-  private clock = 0;
-  private left = 90;
-  private score = 0;
-  private tags = 0;
-  private combo = 0;
-  private comboLeft = 0;
-  private cool = 0;
-  private shield = 0;
-  private gotHit = 0;
-  private call = "";
-  private callLeft = 0;
-  private leaving = false;
-  private green = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 3, 0.3), toneMapped: false, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
-  private pink = new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 0.4, 2.2), toneMapped: false, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
-
-  constructor(private g: Game) {
-    const room = g.rooms.laser;
-    this.group.add(this.gun);
-    const geo = new THREE.CylinderGeometry(0.05, 0.05, 1, 8);
-    for (let i = 0; i < 8; i++) {
-      const mesh = new THREE.Mesh(geo, this.green);
-      mesh.visible = false;
-      this.group.add(mesh);
-      this.beams.push({ mesh, left: 0 });
-    }
-    room.bots.slice(0, 5).forEach((p, i) => {
-      const kind = PEDS[(i * 2 + 1) % PEDS.length]!;
-      const card = new Card(kind.art, kind.height);
-      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 0.4, 2.2), toneMapped: false }));
-      lamp.position.y = kind.height + 0.22;
-      card.group.add(lamp);
-      this.group.add(card.group);
-      const gun = makeBlaster(new THREE.Color(3, 0.4, 2.2));
-      this.group.add(gun);
-      this.bots.push({ card, lamp, gun, x: p.x, z: p.z, tx: p.x, tz: p.z, stun: 0, aim: 0, cool: 1 + i * 0.4, stuck: 0 });
-    });
-    room.group.add(this.group);
-  }
-
-  start() {
-    const g = this.g;
-    const room = g.rooms.laser;
-    this.leaving = false;
-    g.pos.x = room.start.x;
-    g.pos.z = room.start.z;
-    g.heading = room.start.heading;
-    g.camYaw = room.start.heading;
-    g.vel.x = g.vel.z = 0;
-    this.bots.forEach((b, i) => {
-      const p = room.bots[i]!;
-      b.x = b.tx = p.x;
-      b.z = b.tz = p.z;
-      b.stun = 0;
-      b.aim = 0;
-      b.cool = 1.5 + i * 0.5;
-    });
-    this.phase = "count";
-    this.count = 3;
-    this.clock = 0;
-    this.left = 90;
-    this.score = this.tags = this.combo = 0;
-    this.vest = VEST;
-    this.down = 0;
-    this.shield = 0;
-    this.say("Tag the pink lights. Break their line of sight.", 3);
-    g.sound.countdown();
-    g.chase(0, true);
-  }
-
-  private say(text: string, seconds = 1.6) {
-    this.call = text;
-    this.callLeft = seconds;
-    this.g.push();
-  }
-
-  private beam(ax: number, az: number, bx: number, bz: number, mat: THREE.Material) {
-    const b = this.beams.find((k) => k.left <= 0) ?? this.beams[0]!;
-    _a.set(ax, 1.08, az);
-    _b.set(bx, 1.12, bz);
-    const len = _a.distanceTo(_b);
-    b.mesh.material = mat;
-    b.mesh.position.copy(_a).lerp(_b, 0.5);
-    b.mesh.scale.set(1, len, 1);
-    b.mesh.quaternion.setFromUnitVectors(_y, _b.sub(_a).normalize());
-    b.mesh.visible = true;
-    b.left = 0.2;
-  }
-
-  /** 1 to 5: the arena heats up every twenty seconds. */
-  private level() {
-    return Math.min(5, 1 + Math.floor((90 - this.left) / 20));
-  }
-
-  private fire() {
-    const g = this.g;
-    const room = g.rooms.laser;
-    this.cool = 0.36;
-    g.sound.release();
-    // Aim where the camera looks, with a little help toward anyone close to the line.
-    let best: Tagger | null = null;
-    let bestErr = 0.3;
-    for (const b of this.bots) {
-      if (b.stun > 0) continue;
-      const dx = b.x - g.pos.x;
-      const dz = b.z - g.pos.z;
-      const err = Math.abs(wrapAngle(Math.atan2(dx, dz) - g.camYaw));
-      if (err < bestErr && sight(g.pos.x, g.pos.z, b.x, b.z, room.solids, 0.05) >= 1) {
-        best = b;
-        bestErr = err;
-      }
-    }
-    const mx = this.gun.position.x + Math.sin(this.gun.rotation.y) * 0.5;
-    const mz = this.gun.position.z + Math.cos(this.gun.rotation.y) * 0.5;
-    if (best) {
-      this.beam(mx, mz, best.x, best.z, this.green);
-      best.stun = Math.max(1.6, 3 - this.level() * 0.3);
-      best.aim = 0;
-      this.tags++;
-      this.combo = this.comboLeft > 0 ? this.combo + 1 : 1;
-      this.comboLeft = 4;
-      const pts = Math.round((100 + (this.combo - 1) * 25) * (1 + (this.level() - 1) * 0.15));
-      this.score += pts;
-      g.sound.swish();
-      this.say(this.combo > 1 ? `TAG x${this.combo}  +${pts}` : `TAG  +${pts}`, 1.2);
-      g.heading = Math.atan2(best.x - g.pos.x, best.z - g.pos.z);
-    } else {
-      const fx = Math.sin(g.camYaw);
-      const fz = Math.cos(g.camYaw);
-      const t = sight(g.pos.x, g.pos.z, g.pos.x + fx * 30, g.pos.z + fz * 30, room.solids, 0.05);
-      this.beam(mx, mz, g.pos.x + fx * 30 * t, g.pos.z + fz * 30 * t, this.green);
-      g.heading = g.camYaw;
-    }
-  }
-
-  update(dt: number) {
-    const g = this.g;
-    const room = g.rooms.laser;
-    const input = g.input;
-    this.clock += dt;
-    if (this.callLeft > 0) {
-      this.callLeft -= dt;
-      if (this.callLeft <= 0) {
-        this.call = "";
-        g.push();
-      }
-    }
-    for (const b of this.beams) {
-      if (b.left > 0) {
-        b.left -= dt;
-        if (b.left <= 0) b.mesh.visible = false;
-      }
-    }
-    if (this.phase === "count" && this.clock >= 1) {
-      this.clock -= 1;
-      this.count--;
-      if (this.count <= 0) {
-        this.phase = "go";
-        g.sound.countdown(true);
-      } else g.sound.countdown();
-      g.push();
-    }
-
-    // Benji.
-    if (this.down > 0) {
-      this.down -= dt;
-      if (this.down <= 0) {
-        // Back in at the base with a fresh vest and a moment of cover.
-        g.pos.x = room.start.x;
-        g.pos.z = room.start.z;
-        this.vest = VEST;
-        this.shield = 2.2;
-        this.say("BACK IN", 1);
-      }
-    }
-    const live = this.phase === "go" && this.down <= 0;
-    const m = live ? input.move() : { x: 0, y: 0 };
-    const look = input.takeLook();
-    g.camYaw = wrapAngle(g.camYaw - look - m.x * 1.9 * dt);
-    const top = input.down("run") ? 6.2 : 4;
-    const fx = Math.sin(g.camYaw);
-    const fz = Math.cos(g.camYaw);
-    const k = damp(12, dt);
-    g.vel.x += ((fx * m.y - fz * m.x * 0.6) * top - g.vel.x) * k;
-    g.vel.z += ((fz * m.y + fx * m.x * 0.6) * top - g.vel.z) * k;
-    g.pos.x += g.vel.x * dt;
-    g.pos.z += g.vel.z * dt;
-    pushOut(g.pos, 0.36, room.solids);
-    const speed = Math.hypot(g.vel.x, g.vel.z);
-    if (speed > 0.5) g.heading = dampAngle(g.heading, Math.atan2(g.vel.x, g.vel.z), damp(12, dt));
-    g.benji.speed = speed;
-    this.cool -= dt;
-    this.shield -= dt;
-    this.gotHit -= dt;
-    this.comboLeft -= dt;
-    // The blaster rides at Benji's hip and points where he is looking.
-    this.gun.visible = this.down <= 0;
-    this.gun.position.set(g.pos.x + Math.sin(g.camYaw) * 0.3 - Math.cos(g.camYaw) * 0.3, 1.02 + (this.cool > 0.26 ? 0.04 : 0), g.pos.z + Math.cos(g.camYaw) * 0.3 + Math.sin(g.camYaw) * 0.3);
-    this.gun.rotation.y = g.camYaw;
-    if (live && this.cool <= 0 && input.down("action")) this.fire();
-    const lv = this.level();
-
-    // Taggers.
-    for (const b of this.bots) {
-      b.card.visible = true;
-      const stunned = b.stun > 0;
-      b.stun -= dt;
-      (b.lamp.material as THREE.MeshBasicMaterial).color.setRGB(stunned ? 0.15 : 3, stunned ? 0.15 : b.aim > 0 && Math.sin(g.time * 40) > 0 ? 2.4 : 0.4, stunned ? 0.2 : 2.2);
-      const dx = b.tx - b.x;
-      const dz = b.tz - b.z;
-      const dist = Math.hypot(dx, dz);
-      const sees = live && !stunned && Math.hypot(g.pos.x - b.x, g.pos.z - b.z) < 15 + lv && sight(b.x, b.z, g.pos.x, g.pos.z, room.solids, 0.05) >= 1;
-      b.gun.visible = !stunned;
-      b.gun.position.set(b.x + Math.sin(b.card.heading) * 0.3 + Math.cos(b.card.heading) * 0.28, 1.02, b.z + Math.cos(b.card.heading) * 0.3 - Math.sin(b.card.heading) * 0.28);
-      b.gun.rotation.y = b.card.heading;
-      if (dist < 0.5 || b.stuck > 1.2) {
-        // Next stop: any node this one can walk straight to.
-        const open = room.nodes.filter((nd) => Math.hypot(nd.x - b.x, nd.z - b.z) > 3 && sight(b.x, b.z, nd.x, nd.z, room.solids, 0.45) >= 1);
-        // Later on they stop wandering and close in on wherever Benji is.
-        const hunt = live && Math.random() < 0.2 + lv * 0.13;
-        const near = hunt ? [...open].sort((p, q) => Math.hypot(p.x - g.pos.x, p.z - g.pos.z) - Math.hypot(q.x - g.pos.x, q.z - g.pos.z))[0] : undefined;
-        const pick = near ?? open[Math.floor(Math.random() * open.length)] ?? room.nodes[Math.floor(Math.random() * room.nodes.length)]!;
-        b.tx = pick.x;
-        b.tz = pick.z;
-        b.stuck = 0;
-      }
-      let moved = 0;
-      if (live && b.aim <= 0 && dist > 0.01) {
-        const v = stunned ? 3.4 : 2.4 + lv * 0.36;
-        const bx = b.x;
-        const bz = b.z;
-        b.x += (dx / dist) * v * dt;
-        b.z += (dz / dist) * v * dt;
-        pushOut(b, 0.36, room.solids);
-        moved = Math.hypot(b.x - bx, b.z - bz) / dt;
-        b.stuck = moved < v * 0.35 ? b.stuck + dt : 0;
-        b.card.heading = Math.atan2(dx, dz);
-      }
-      b.card.speed = moved;
-      b.cool -= dt;
-      if (sees && b.aim <= 0 && b.cool <= 0) b.aim = 0.78 - lv * 0.07;
-      if (b.aim > 0) {
-        b.card.heading = Math.atan2(g.pos.x - b.x, g.pos.z - b.z);
-        b.aim -= dt;
-        if (b.aim <= 0) {
-          b.cool = (2.2 + Math.random() * 1.6) * (1 - lv * 0.09);
-          const clear = !stunned && sight(b.x, b.z, g.pos.x, g.pos.z, room.solids, 0.05) >= 1;
-          if (clear) {
-            const hit = this.shield <= 0 && Math.random() < (speed > 3.2 ? 0.28 + lv * 0.03 : 0.6 + lv * 0.05);
-            const miss = hit ? 0 : (Math.random() > 0.5 ? 1 : -1) * 0.9;
-            this.beam(b.gun.position.x + Math.sin(b.card.heading) * 0.5, b.gun.position.z + Math.cos(b.card.heading) * 0.5, g.pos.x + miss, g.pos.z + miss, this.pink);
-            g.sound.release();
-            if (hit) {
-              this.vest--;
-              this.gotHit = 0.5;
-              this.combo = 0;
-              g.sound.bad();
-              g.stage.setPunch(0.8);
-              g.input.rumble(0.8, 220);
-              if (this.vest <= 0) {
-                // Vest dark: out for three seconds, and it costs.
-                this.score = Math.max(0, this.score - 200);
-                this.down = 3;
-                this.shield = 3;
-                g.vel.x = g.vel.z = 0;
-                this.say("VEST DOWN  -200", 2);
-              } else {
-                this.score = Math.max(0, this.score - 50);
-                this.shield = 1.2;
-                this.say(`TAGGED  -50   ${this.vest} left on the vest`, 1.3);
-              }
-            }
-          }
-        }
-      }
-      b.card.place(b.x, b.z);
-      b.card.update(dt, g.camera.position, g.tint, room.floorY + 0.03);
-    }
-    g.benji.mat.opacity = 1;
-    g.benji.visible = this.shield <= 0 || Math.sin(g.time * 30) > 0;
-
-    if (live) {
-      const before = Math.ceil(this.left);
-      this.left -= dt;
-      if (Math.ceil(this.left) !== before) {
-        if (this.left <= 5) g.sound.countdown();
-        g.push();
-      }
-      if (this.left <= 0) this.finish();
-    }
-    if (!this.leaving) g.chase(dt);
-  }
-
-  private finish() {
-    const g = this.g;
-    this.phase = "over";
-    g.benji.visible = true;
-    const best = g.save.best.laser ?? 0;
-    const record = this.score > best;
-    if (record) g.save.best.laser = this.score;
-    payTickets(
-      g,
-      this.score >= 1500 ? "ARENA MVP" : "GAME OVER",
-      this.tags >= 10 ? "They never saw you coming." : "Use the walls. They can't tag what they can't see.",
-      [
-        ["Score", String(this.score)],
-        ["Tags", String(this.tags)],
-        ["Record", String(Math.max(best, this.score))],
-      ],
-      Math.min(60, Math.floor(this.score / 40)),
-      record,
-      () => this.start(),
-      () => this.leave(),
-    );
-  }
-
-  private leave() {
-    const g = this.g;
-    if (this.leaving) return;
-    this.leaving = true;
-    g.benji.visible = true;
-    g.transition(() => {
-      g.setPlace("fun");
-      const door = g.rooms.fun.laserDoor;
-      g.pos.x = door.x;
-      g.pos.z = door.z + 0.6;
-      g.heading = 0;
-      g.camYaw = 0;
-      g.end("walk");
-    });
-  }
-
-  quit() {
-    this.leave();
-  }
-
-  hud(h: HudState) {
-    h.laser = { phase: this.phase, count: this.count, left: Math.max(0, Math.ceil(this.left)), score: this.score, tags: this.tags, hit: this.gotHit > 0, call: this.call, vest: Math.max(0, this.vest), level: this.level(), down: this.down > 0 };
-  }
 }
 
 // ------------------------------------------------------------------ trampoline

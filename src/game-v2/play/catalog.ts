@@ -37,7 +37,7 @@ export const CATALOG: Product[] = [
   p("sr-tour-black", "Worldwide Tour Tee · Black", 55, 180, "/game/apparel/tour-black-front.webp", "Diamond $ on black. EST. 2020. Klothing Kompany Worldwide.", "tour_black"),
   p("sr-tour-white", "Worldwide Tour Tee · White", 55, 180, "/game/apparel/tour-white-front.webp", "White diamond $ tour tee. Clean enough for Sunday, loud enough for Beale.", "tour_white"),
   p("sr-tour-red", "Worldwide Tour Tee · Red", 55, 180, "/game/apparel/tour-red-front.webp", "Red tour tee. You will be seen from the bleachers.", "tour_red"),
-  p("sr-fresh-jersey", "FRESH 38127 Jersey", 120, 320, "/game/products/sr-fresh-jersey.webp", "Court kit. Sackrow on the chest, 38127 on the back.", "sackrow_11"),
+  p("sr-fresh-jersey", "FRESH 38127 Jersey", 120, 320, "/game/products/sr-fresh-jersey.webp", "Court kit. Sackrow on the chest, 38127 on the back.", "fresh_black"),
   p("sr-black-gold-tee", "Black & Gold Tee", 48, 150, "/game/products/sr-black-gold-tee.webp", "Black cotton, gold script. The boutique's best seller."),
   p("sr-moneybag-hoodie", "Moneybag Hoodie", 92, 260, "/game/products/sr-moneybag-hoodie.webp", "Heavyweight fleece with the moneybag on the back."),
   p("sr-midnight-hoodie", "Midnight Hoodie", 88, 240, "/game/products/sr-midnight-hoodie.webp", "All black. For the river after dark."),

@@ -91,10 +91,12 @@ export type HoopsHud = {
 export type BowlHud = { phase: "position" | "aim" | "power" | "roll" | "settle" | "done"; frame: number; ball: number; marks: string[][]; totals: (number | null)[]; total: number; call: string; best: number; standing: boolean[] };
 export type FishHud = { phase: "ready" | "charge" | "flying" | "wait" | "bite" | "reel" | "landed" | "lost"; bait: number; distance: number; fish: Catch | null; call: string; cooler: number; value: number };
 export type RaceHud = { phase: "count" | "go" | "finish"; count: number; lap: number; laps: number; place: number; racers: number; time: number; best: number; call: string; wrongWay: boolean; kart: boolean };
-export type LaserHud = { phase: "count" | "go" | "over"; count: number; left: number; score: number; tags: number; hit: boolean; call: string; vest: number; level: number; down: boolean };
+export type LaserHud = { phase: "count" | "go" | "over"; count: number; left: number; score: number; tags: number; hit: boolean; call: string; vest: number; level: number; down: boolean; us: number; them: number; power: string };
 export type BounceHud = { left: number; best: number; combo: number; score: number; call: string };
 export type PitHud = { left: number; found: number; total: number; call: string };
 export type WhackHud = { left: number; score: number; hits: number; call: string };
+/** A machine on the arcade floor: its name, a row of numbers (label, value, colour), and what it is shouting. */
+export type MachineHud = { name: string; stats: [string, string, string?][]; call: string; meter: boolean; act: string };
 
 export type HudState = {
   mode: Mode;
@@ -129,6 +131,7 @@ export type HudState = {
   bounce: BounceHud | null;
   pit: PitHud | null;
   whack: WhackHud | null;
+  machine: MachineHud | null;
   driving: boolean;
   results: Results | null;
   /** Product the shop opens on. */
@@ -157,6 +160,13 @@ export type Live = {
   nitro: number;
   /** Black fade between places, 0..1. */
   fade: number;
+  /** Laser tag radar: `radarN` blips, three numbers each (across, ahead, kind), in units of its radius. */
+  radar: number[];
+  radarN: number;
+  /** Street race: metres to the next boost gate (negative once past it), 999 when there is none coming. */
+  cue: number;
+  /** Street race: metres to the next bend, -1 when it is a long way off. */
+  turn: number;
   /** Objective marker in screen space, 0..1 each way. */
   markX: number;
   markY: number;

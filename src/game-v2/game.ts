@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { Card } from "./actors/card";
+import { Troupe, type Act, type Stop } from "./actors/crowd";
 import { People } from "./actors/people";
 import { Traffic } from "./actors/traffic";
 import { CarModel, Driver, STREET } from "./actors/vehicle";
@@ -15,17 +16,19 @@ import { PHASES, Sky, type Phase } from "./gfx/sky";
 import { Bowling } from "./play/bowling";
 import { CATALOG, COLLECTION_BONUS, productById } from "./play/catalog";
 import { Fishing } from "./play/fishing";
-import { BallPit, Bounce, KartRace, LaserTag } from "./play/fun";
+import { BallPit, Bounce, KartRace } from "./play/fun";
+import { LaserTag } from "./play/laser";
 import { CABINETS, FOOD, FOOD_TRUCKS, PRIZES, type TruckId } from "./play/goods";
 import { Hoops } from "./play/hoops";
+import { PinballTable, PrizeWheel, SkeeLane } from "./play/floor";
 import { PopShot, Whack } from "./play/machines";
 import { StreetRace } from "./play/race";
 import { BOUNTIES, CHAPTER, STORY } from "./play/story";
 import { buildCity, type City } from "./world/city";
 import { pushCircle, pushOut, sight } from "./world/collide";
 import { buildFunRoom, buildLaserRoom, type FunRoom, type LaserRoom } from "./world/funhouse";
-import { FUN, HQ, POIS, RACE_MEET, districtAt, nearestStreet } from "./world/map";
-import { buildBowlRoom, buildHomeRoom, buildHqRoom, type BowlRoom, type HomeRoom, type HqRoom, type Room } from "./world/rooms";
+import { BOWL, FUN, HQ, POIS, RACE_MEET, RIVER_Z, ROAD_HALF, ROOM, STREETS_X, STREETS_Z, TRUCKS, WALK, districtAt, nearestStreet } from "./world/map";
+import { LANE, buildBowlRoom, buildHomeRoom, buildHqRoom, type BowlRoom, type HomeRoom, type HqRoom, type Room } from "./world/rooms";
 
 const SAVE_KEY = "sack-v2-save-4";
 
@@ -117,7 +120,12 @@ function loadSave(): Save | null {
     if (!raw) return null;
     const s = JSON.parse(raw) as Save;
     if (s.v !== 4 || typeof s.dollars !== "number") return null;
-    return { ...freshSave(), ...s };
+    const out = { ...freshSave(), ...s };
+    // The FRESH jersey in the store is the black 38127: anyone who already bought it has it.
+    if (out.owned.includes("sr-fresh-jersey") && !out.outfits.includes("fresh_black")) out.outfits.push("fresh_black");
+    out.outfits = out.outfits.filter((o) => o in OUTFITS);
+    if (!(out.wearing in OUTFITS)) out.wearing = "starter";
+    return out;
   } catch {
     return null;
   }
@@ -141,7 +149,7 @@ export class Game {
   readonly camera: THREE.PerspectiveCamera;
   readonly sky: Sky;
   readonly rooms: { hq: HqRoom; home: HomeRoom; bowl: BowlRoom; fun: FunRoom; laser: LaserRoom };
-  readonly live: Live = { meter: 0, sweetLo: 0, sweetHi: 0, aim: 0, tension: 0, speed: 0, nitro: 0, fade: 1, markX: 0.5, markY: 0.5, markOn: false, markDist: 0, x: 0, z: 0, heading: 0, camYaw: 0 };
+  readonly live: Live = { meter: 0, sweetLo: 0, sweetHi: 0, aim: 0, tension: 0, speed: 0, nitro: 0, fade: 1, radar: new Array<number>(48).fill(0), radarN: 0, cue: 999, turn: -1, markX: 0.5, markY: 0.5, markOn: false, markDist: 0, x: 0, z: 0, heading: 0, camYaw: 0 };
   readonly benji: Card;
   readonly car: CarModel;
   readonly driver = new Driver();
@@ -156,6 +164,8 @@ export class Game {
   place: Place = "street";
   room: Room | null = null;
   activity: Activity | null = null;
+  /** The art tables, where tools and tests can read them. */
+  readonly tables = { OUTFITS, PEDS };
   pos = { x: START.x, z: START.z };
   vel = { x: 0, z: 0 };
   heading = 0;
@@ -197,7 +207,12 @@ export class Game {
   private prompt = "";
   private drivePrompt = "";
   /** People with nothing to say who make a room feel used: shoppers, bowlers, kids at the cabinets. */
-  private extras: { card: Card; place: Exclude<Place, "street">; x: number; z: number; fx: number; fz: number }[] = [];
+  /** Everyone indoors, by room, and the people on the street who have somewhere to be. */
+  private troupes: Partial<Record<Exclude<Place, "street">, Troupe>> = {};
+  private street!: Troupe;
+  /** Balls other people have sent down their lanes at the bowl. */
+  private laneBalls: { mesh: THREE.Mesh; z: number; end: number; live: boolean }[] = [];
+  private rolling = { x: 0, z: 0, vx: 0, vz: 0, speed: 0 };
   private nearSpot: Spot | null = null;
   private camPos = new THREE.Vector3();
   private titleSpin = 0;
@@ -237,6 +252,9 @@ export class Game {
   private pit: BallPit;
   private whack: Whack;
   private popshot: PopShot;
+  private pinball: PinballTable;
+  private skee: SkeeLane;
+  private wheel: PrizeWheel;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -264,7 +282,7 @@ export class Game {
 
     this.benji = new Card(OUTFITS[this.save.wearing]?.art ?? OUTFITS.starter.art, BENJI_HEIGHT);
     this.scene.add(this.benji.group);
-    this.car = new CarModel("coupe", 0x14592f);
+    this.car = new CarModel("coupe", 0x14592f, "klothing-coupe");
     this.city.exterior.add(this.car.group);
     this.traffic = new Traffic(this.stage.quality === "high" ? 14 : this.stage.quality === "medium" ? 10 : 6);
     this.city.exterior.add(this.traffic.group);
@@ -291,6 +309,9 @@ export class Game {
     this.pit = new BallPit(this);
     this.whack = new Whack(this);
     this.popshot = new PopShot(this);
+    this.pinball = new PinballTable(this);
+    this.skee = new SkeeLane(this);
+    this.wheel = new PrizeWheel(this);
 
     this.cast();
     this.wire();
@@ -325,35 +346,218 @@ export class Game {
     put("uncJ", "street", a.uncStand.x, a.uncStand.z, a.uncStand.heading);
     put("mamaDee", "street", a.trucks.windows.catch.x - 2.6, a.trucks.windows.catch.z + 0.6, Math.PI);
     put("nitro", "street", RACE_MEET.x, RACE_MEET.z, 0);
-    // Everyone else indoors: they stand where the thing they came for is, and look at it.
-    let k = 0;
-    const extra = (place: Exclude<Place, "street">, x: number, z: number, fx: number, fz: number) => {
-      const kind = PEDS[(k++ * 5 + 2) % PEDS.length]!;
-      const card = new Card(kind.art, kind.height);
-      card.place(x, z);
-      this.rooms[place].group.add(card.group);
-      this.extras.push({ card, place, x, z, fx, fz });
-    };
-    const fun = this.rooms.fun;
-    fun.cabinets.forEach((c, i) => {
-      if (i % 2 === 0) extra("fun", c.x + (i % 4 === 0 ? 1 : -1) * 1.05, c.z + 0.25, c.x, c.z - 2);
-    });
-    for (const s of [-1.7, 1.9]) extra("fun", fun.pizza.x + s, fun.pizza.z + 1.5, fun.pizza.x, fun.pizza.z - 1);
-    extra("fun", fun.prizes.x + 1.6, fun.prizes.z + 1.2, fun.prizes.x, fun.prizes.z - 1);
-    extra("fun", fun.pitEdge.x + 1.5, fun.pitEdge.z + 0.4, fun.pitEdge.x, fun.pitEdge.z - 3);
-    extra("fun", fun.trampEdge.x - 1.5, fun.trampEdge.z + 0.4, fun.trampEdge.x, fun.trampEdge.z - 3);
-    const hq = this.rooms.hq;
-    [1, 5, 8].forEach((i) => {
-      const st = hq.stands[i];
-      // Each shopper stands a step out from a display and looks at the wall it hangs on.
-      if (st) extra("hq", st.x + 0.9, st.z + 0.5, st.x + (st.x - hq.counter.x) * 0.4, st.z + (st.z - hq.counter.z) * 0.2);
-    });
-    const bowl = this.rooms.bowl;
-    extra("bowl", bowl.desk.x - 2.4, bowl.desk.z - 1.3, bowl.desk.x, bowl.desk.z);
-    extra("bowl", bowl.desk.x - 3.6, bowl.desk.z - 2.2, bowl.lane.x, bowl.lane.z - 6);
-    extra("bowl", bowl.lane.x - 3.4, bowl.lane.z + 4.6, bowl.lane.x - 3.4, bowl.lane.z - 8);
     // Strike works the desk from a step behind it, like K Blanco at her till.
     put("strike", "bowl", this.rooms.bowl.strikeSpot.x, this.rooms.bowl.strikeSpot.z - 0.1, this.rooms.bowl.strikeSpot.heading, 0.3);
+    this.populate();
+  }
+
+  /**
+   * Everyone else. Nobody is parked: each person has a round of things to do, and the few who
+   * stay put are working (a cook at a window) or playing (a kid on a trampoline).
+   */
+  private populate() {
+    let k = 0;
+    const who = () => PEDS[(k++ * 5 + 2) % PEDS.length]!;
+    const at = (x: number, z: number, fx: number, fz: number, act: Act, more: Partial<Stop> = {}): Stop => ({ x, z, fx, fz, act, ...more });
+    const hand = (name: string): { art: { front: string }; height: number } => ({ art: { front: `/game/people/${name}.webp` }, height: 1.76 });
+    const few = this.stage.quality === "low";
+
+    // ---- Fun House: play, eat, watch, queue for laser tag and the karts.
+    const fun = this.rooms.fun;
+    const F = ROOM.fun;
+    const ft = (this.troupes.fun = new Troupe(fun.group, fun.solids, fun.floorY + 0.03, 11));
+    const funStops: Stop[] = [];
+    for (const c of fun.cabinets) {
+      const cab = CABINETS.find((q) => q.id === c.id);
+      if (cab && !cab.machine) funStops.push(at(c.x + 0.62, c.z + 0.3, c.x + 0.3, c.z - 2, "play"));
+    }
+    funStops.push(
+      at(fun.pinball.x + 1.5, fun.pinball.stand.z + 0.1, fun.pinball.x + 1.5, fun.pinball.z + 2, "play"),
+      at(fun.skee.x + 1.25, fun.skee.stand.z, fun.skee.x + 1.25, fun.skee.zRamp, "play"),
+      at(fun.wheel.x - 2.3, fun.wheel.z + 3.3, fun.wheel.x, fun.wheel.z, "cheer"),
+      at(fun.wheel.x + 2.7, fun.wheel.z + 3.6, fun.wheel.x, fun.wheel.z, "cheer"),
+      at(fun.pizza.x - 0.3, fun.pizza.z + 1.2, fun.pizza.x + 3, fun.pizza.z + 1.2, "watch", { stay: [3, 6] }),
+      at(fun.prizes.x - 0.3, fun.prizes.z - 1.5, fun.prizes.x + 3, fun.prizes.z - 1.5, "watch"),
+      at(fun.pitEdge.x + 1.7, fun.pitEdge.z + 1.3, (fun.pit.minX + fun.pit.maxX) / 2, (fun.pit.minZ + fun.pit.maxZ) / 2, "cheer"),
+      at(fun.trampEdge.x + 0.7, fun.trampEdge.z - 2.1, fun.tramp.x, fun.tramp.z, "cheer"),
+      at(fun.trampEdge.x + 0.9, fun.trampEdge.z + 2.2, fun.tramp.x, fun.tramp.z, "watch"),
+      at(fun.laserDoor.x + 1, fun.laserDoor.z - 0.5, fun.laserDoor.x, fun.laserDoor.z - 3, "inside", { stay: [14, 24] }),
+      at(fun.kartDoor.x + 1.2, fun.kartDoor.z + 0.4, fun.kartDoor.x, fun.kartDoor.z + 3, "inside", { stay: [14, 24] }),
+      at(fun.exit.x - 1.3, fun.exit.z + 0.1, fun.exit.x, fun.exit.z + 3, "inside", { stay: [6, 12] }),
+    );
+    for (const [tx, tz] of [
+      [7.5, -3.6],
+      [11, 0.4],
+      [7.5, 3.6],
+    ] as const) {
+      funStops.push(at(F.x + tx + 0.25, F.z + tz + 1.3, F.x + tx, F.z + tz, "eat"), at(F.x + tx - 0.25, F.z + tz - 1.3, F.x + tx, F.z + tz, "eat"));
+    }
+    ft.stops(funStops);
+    for (let i = 0; i < (few ? 7 : 11); i++) {
+      const w = who();
+      ft.roam(w.art, w.height, funStops);
+    }
+    // Two kids on the small trampolines, one up to the waist in the ball pit, and the staff.
+    // PEDS 2, 5 and 7 are the youngest three: they get the trampolines and the pit.
+    for (const [bx, bz, h, kid] of [
+      [-17.9, 1.2, 1.5, 2],
+      [-11.2, 10.2, 1.42, 7],
+    ] as const) {
+      ft.post(PEDS[kid]!.art, h, at(F.x + bx, F.z + bz, F.x, F.z + 2, "bounce", { lift: 0.42 }));
+    }
+    const wader = PEDS[5]!;
+    ft.post(wader.art, 1.5, at(fun.pit.minX + 2.6, fun.pit.minZ + 2.4, fun.pit.maxX, fun.pit.maxZ, "wade", { lift: -0.42 }));
+    const cook = PEDS[6]!;
+    ft.post(cook.art, cook.height, at(F.x + 18.5, F.z - 5.1, F.x + 14, F.z - 5.1, "serve"));
+    const clerk = PEDS[1]!;
+    ft.post(clerk.art, clerk.height, at(F.x + 18.85, F.z + 8, F.x + 14, F.z + 8, "serve"));
+
+    // ---- HQ: shoppers work their way round the displays, try things on, come and go.
+    const hq = this.rooms.hq;
+    const H = ROOM.hq;
+    const ht = (this.troupes.hq = new Troupe(hq.group, hq.solids, hq.floorY + 0.03, 5));
+    const hqStops: Stop[] = hq.stands.map((st, i) => at(st.x + (i % 2 ? 0.75 : -0.75), st.z, st.x + (st.x - H.x) * 2, st.z + (st.z - H.z) * 2, "watch", { stay: [5, 11] }));
+    hqStops.push(
+      at(hq.counter.x - 1.9, hq.counter.z + 0.3, hq.kSpot.x, hq.kSpot.z, "watch"),
+      at(hq.fitting.x + 1.3, hq.fitting.z - 0.5, hq.fitting.x, hq.fitting.z + 2, "inside", { stay: [8, 14] }),
+      at(hq.exit.x + 1.4, hq.exit.z - 0.2, hq.exit.x, hq.exit.z + 3, "inside", { stay: [6, 12] }),
+    );
+    ht.stops(hqStops);
+    const shopper = hand("fan");
+    ht.roam(shopper.art, 1.7, hqStops);
+    for (let i = 0; i < 3; i++) {
+      const w = who();
+      ht.roam(w.art, w.height, hqStops);
+    }
+
+    // ---- 901 Bowl: two lanes in play beside yours, people behind the seats, a line at the desk.
+    const bowl = this.rooms.bowl;
+    const B = ROOM.bowl;
+    const bt = (this.troupes.bowl = new Troupe(bowl.group, bowl.solids, bowl.floorY + 0.03, 9));
+    const pitch = LANE.width + LANE.gutter * 2 + 0.5;
+    const ballGeo = new THREE.SphereGeometry(0.109, 16, 12);
+    for (const [lane, color] of [
+      [-1, 0xa3261c],
+      [2, 0x1f4a8a],
+    ] as const) {
+      const lx = B.x + lane * pitch;
+      const mesh = new THREE.Mesh(ballGeo, new THREE.MeshStandardMaterial({ color, roughness: 0.2, metalness: 0.3 }));
+      mesh.visible = false;
+      mesh.position.set(lx, 0.19, B.z);
+      bowl.group.add(mesh);
+      const ball = { mesh, z: 0, end: B.z + LANE.pinZ, live: false };
+      this.laneBalls.push(ball);
+      const w = who();
+      bt.roam(
+        w.art,
+        w.height,
+        [
+          at(lx + 0.45, B.z + 3.5, lx, B.z - 10, "watch", { stay: [4, 9] }),
+          at(lx, B.z + 0.75, lx, B.z - 10, "throw", {
+            on: () => {
+              ball.live = true;
+              ball.z = B.z - 0.2;
+              if (this.place === "bowl") this.sound.roll();
+            },
+          }),
+        ],
+        true,
+      );
+    }
+    const bowlStops: Stop[] = [-5.4, -2.6, 2.6].map((sx) => at(B.x + sx, B.z + 7.4, B.x + sx, B.z - 8, "cheer"));
+    bowlStops.push(at(bowl.desk.x - 1.5, bowl.desk.z + 0.2, bowl.strikeSpot.x, bowl.strikeSpot.z, "watch"), at(bowl.exit.x - 1.4, bowl.exit.z - 0.1, bowl.exit.x, bowl.exit.z + 3, "inside", { stay: [6, 12] }));
+    bt.stops(bowlStops);
+    for (let i = 0; i < 3; i++) {
+      const w = who();
+      bt.roam(w.art, w.height, bowlStops);
+    }
+
+    // ---- The street: the truck lot, the plaza, the river rail, the doors on Lamar and Union.
+    const st = (this.street = new Troupe(this.city.exterior, this.city.solids, null, 23));
+    const lot: Stop[] = [];
+    const offs = { catch: -13, velis: -1, brothers: 13 } as const;
+    for (const id of ["catch", "velis", "brothers"] as const) {
+      const wx = TRUCKS.x + offs[id] + 1.2;
+      lot.push(at(wx - 1.2, TRUCKS.z - 3.5, wx, TRUCKS.z, "watch", { stay: [4, 8] }), at(wx + 1.1, TRUCKS.z - 3.8, wx, TRUCKS.z, "watch", { stay: [4, 8] }));
+      // Whoever runs the truck is in the window: Veli's, the two brothers, the Catch.
+      const crew = id === "velis" ? [["local", 0]] : id === "brothers" ? [["dj", -0.7], ["baller-1", 0.7]] : [["host", 0]];
+      for (const [name, dx] of crew as [string, number][]) {
+        const v = hand(name);
+        st.post(v.art, v.height, at(wx + dx, TRUCKS.z - 1.5, wx + dx, TRUCKS.z - 8, "serve", { lift: 0.74 }));
+      }
+    }
+    for (const tx of [-14, -4, 6, 16]) lot.push(at(TRUCKS.x + tx - 1.75, TRUCKS.z - 9.5, TRUCKS.x + tx, TRUCKS.z - 9.5, "eat"), at(TRUCKS.x + tx + 1.75, TRUCKS.z - 9.5, TRUCKS.x + tx, TRUCKS.z - 9.5, "eat"));
+    for (const [vx, vz] of [
+      [4, -5.6],
+      [5.8, -6.8],
+      [7.4, -5.5],
+    ] as const)
+      lot.push(at(TRUCKS.x + vx, TRUCKS.z + vz, TRUCKS.x + 5.6, TRUCKS.z, "dance"));
+    st.stops(lot);
+    for (let i = 0; i < (few ? 6 : 10); i++) {
+      const w = who();
+      st.roam(w.art, w.height, lot);
+    }
+    const plaza: Stop[] = [
+      [-24, -168.5],
+      [-16.5, -167],
+      [-11, -169.5],
+      [-28, -165],
+      [-3, -166],
+      [8, -168],
+    ].map(([px, pz]) => at(px!, pz!, HQ.doorX, HQ.frontZ, "watch"));
+    plaza.push(at(HQ.doorX + 1.1, HQ.frontZ + 1.1, HQ.doorX, HQ.frontZ - 3, "inside", { stay: [10, 20] }), at(HQ.doorX - 1.2, HQ.frontZ + 1.2, HQ.doorX, HQ.frontZ - 3, "inside", { stay: [10, 20] }));
+    st.stops(plaza);
+    for (let i = 0; i < (few ? 3 : 5); i++) {
+      const w = who();
+      st.roam(w.art, w.height, plaza);
+    }
+    const rail: Stop[] = [];
+    for (let x = -66; x <= 46; x += 14) rail.push(at(x, RIVER_Z + 2.4, x, RIVER_Z - 30, "watch", { stay: [5, 11] }));
+    st.stops(rail);
+    for (let i = 0; i < (few ? 2 : 4); i++) {
+      const w = who();
+      st.roam(w.art, w.height, rail);
+    }
+    // Beale Street: every block has its regulars, working along the storefronts and dancing outside the clubs.
+    const beale = STREETS_Z[1];
+    for (let bx = 0; bx < 4; bx++) {
+      for (const side of [-1, 1]) {
+        const x0 = STREETS_X[bx]! + ROAD_HALF + WALK + 3;
+        const x1 = STREETS_X[bx + 1]! - ROAD_HALF - WALK - 3;
+        const z = beale + side * (ROAD_HALF + 1.7);
+        const block: Stop[] = [0.1, 0.36, 0.64, 0.9].map((t, i) => {
+          const x = x0 + (x1 - x0) * t;
+          // Odd stops look across the street, even ones at the windows behind them.
+          return at(x, z, x + (i % 2 ? 1.5 : -1.5), i % 2 ? beale : z + side * 8, (i + bx) % 3 === 1 ? "dance" : "watch", { stay: [4, 10] });
+        });
+        st.stops(block);
+        for (let i = 0; i < (few ? 1 : 2); i++) {
+          const w = who();
+          st.roam(w.art, w.height, block);
+        }
+      }
+    }
+    for (const d of [
+      { x: FUN.doorX, z: FUN.frontZ, out: -1, spots: [-6, -4.4, -2.6, 3, 4.6, 6.4] },
+      { x: BOWL.doorX, z: BOWL.frontZ, out: 1, spots: [-4.5, -2.8, 3.4, 5] },
+    ]) {
+      const door: Stop[] = d.spots.map((dx) => at(d.x + dx, d.z + d.out * 2.3, d.x, d.z, "watch"));
+      door.push(at(d.x + 0.9, d.z + d.out * 0.9, d.x, d.z - d.out * 3, "inside", { stay: [12, 22] }), at(d.x - 0.9, d.z + d.out * 0.9, d.x, d.z - d.out * 3, "inside", { stay: [12, 22] }));
+      st.stops(door);
+      for (let i = 0; i < 3; i++) {
+        const w = who();
+        st.roam(w.art, w.height, door);
+      }
+    }
+  }
+
+  /** Everyone near a point jumps for a moment: the crowd outside, or whoever is in the room. */
+  cheer(x: number, z: number, r: number, seconds = 1.3) {
+    if (this.place === "street") {
+      this.people.cheer(x, z, r, seconds);
+      this.street.cheer(x, z, r, seconds);
+    } else this.troupes[this.place]?.cheer(x, z, r, seconds);
   }
 
   private spot(place: Place, x: number, z: number, r: number, label: string | (() => string), act: () => void, when?: () => boolean) {
@@ -468,11 +672,17 @@ export class Game {
       });
     }
     this.spot("street", a.trucks.screen.x, a.trucks.screen.z, 2.6, "Watch the video: Yung Veli, Go Girl", () => this.open("video"));
-    this.spot("bowl", bowl.desk.x, bowl.desk.z, 2.2, "Bowl a game ($5)", () => {
-      if (!this.spend(5)) return;
-      this.begin(this.bowling, "bowl");
-      this.bowling.start();
-    });
+    // Pay at the desk or just step up to the lane: either starts a game.
+    for (const [bx, bz, r] of [
+      [bowl.desk.x, bowl.desk.z, 2.2],
+      [bowl.lane.x, bowl.lane.z + 2.7, 2.1],
+    ] as const) {
+      this.spot("bowl", bx, bz, r, "Bowl a game ($5)", () => {
+        if (!this.spend(5)) return;
+        this.begin(this.bowling, "bowl");
+        this.bowling.start();
+      });
+    }
     this.spot("street", RACE_MEET.x, RACE_MEET.z + 1.6, 2.6, "Race Nitro: 3 laps of downtown", () => {
       this.begin(this.race, "race");
       this.race.start();
@@ -495,6 +705,18 @@ export class Game {
         }
       });
     }
+    this.spot("fun", fun.pinball.stand.x, fun.pinball.stand.z, 1.3, "Play Sack Pinball", () => {
+      this.begin(this.pinball, "whack");
+      this.pinball.start();
+    });
+    this.spot("fun", fun.skee.stand.x, fun.skee.stand.z, 1.3, "Roll Skee-Ball", () => {
+      this.begin(this.skee, "whack");
+      this.skee.start();
+    });
+    this.spot("fun", fun.wheel.stand.x, fun.wheel.stand.z, 1.6, "Pull the Spin-N-Win lever", () => {
+      this.begin(this.wheel, "whack");
+      this.wheel.start();
+    });
     this.spot("fun", fun.pizza.x, fun.pizza.z, 2, "Order pizza", () => {
       this.foodAt = "pizza";
       this.open("food");
@@ -508,7 +730,7 @@ export class Game {
       this.begin(this.bounce, "bounce");
       this.bounce.start();
     });
-    this.spot("fun", fun.laserDoor.x, fun.laserDoor.z, 1.8, "Laser tag: 90 seconds", () => {
+    this.spot("fun", fun.laserDoor.x, fun.laserDoor.z, 1.8, "Laser tag: green against pink", () => {
       this.transition(() => {
         this.setPlace("laser");
         this.begin(this.laser, "laser");
@@ -566,6 +788,8 @@ export class Game {
     this.mode = mode;
     this.live.meter = 0;
     this.live.tension = 0;
+    this.live.cue = 999;
+    this.live.turn = -1;
     this.benji.pose = null;
     this.benji.lift = 0;
     this.benji.visible = mode !== "drive";
@@ -861,6 +1085,17 @@ export class Game {
     this.push();
   }
 
+  /** A fit earned by doing something, not bought. */
+  award(id: OutfitId) {
+    if (this.save.outfits.includes(id)) return false;
+    this.save.outfits.push(id);
+    this.toast(`${OUTFITS[id].name} unlocked. It's in your closet at the HQ.`, 5);
+    this.sound.cash();
+    this.persist();
+    this.push();
+    return true;
+  }
+
   wear(id: OutfitId) {
     if (!this.save.outfits.includes(id)) return;
     this.save.wearing = id;
@@ -906,11 +1141,12 @@ export class Game {
     if (!got) return;
     for (let i = 0; i < got; i++) {
       this.coinRun++;
-      this.earn(5 + Math.min(10, this.coinRun - 1), 0, { quiet: true });
+      this.earn((5 + Math.min(10, this.coinRun - 1)) * (this.wearing("fresh_blue") ? 2 : 1), 0, { quiet: true });
     }
     this.coinRunLeft = 4;
     this.sound.cash();
     const have = this.coins.total - this.coins.left;
+    if (have >= 100) this.award("fresh_blue");
     if (this.coins.left === 0) {
       // Every coin in Memphis: a real payout, and they all come back.
       const bonus = this.earn(500, 25);
@@ -1268,7 +1504,11 @@ export class Game {
     this.car.lean(-d.steer * Math.min(1, d.speed / 20) * 0.05, 0);
     this.car.lamps(this.sky.look.lights > 0.4 ? 3 : 0.2, gas < 0 && d.forward > 1 ? 3 : 0.5);
     this.sound.setEngine(true, d.speed / STREET.top);
-    if (this.input.hit("horn")) this.sound.horn();
+    if (this.input.hit("horn")) {
+      this.sound.horn();
+      // Everybody in earshot jumps.
+      this.cheer(this.driver.x, this.driver.z, 11, 0.7);
+    }
     this.pos.x = d.x;
     this.pos.z = d.z;
     this.heading = d.heading;
@@ -1517,13 +1757,24 @@ export class Game {
       n.card.update(dt, cam, this.tint, n.place === "street" ? null : this.rooms[n.place].floorY + 0.03);
     }
 
-    for (const e of this.extras) {
-      if (e.place !== this.place) continue;
-      const dx = this.pos.x - e.x;
-      const dz = this.pos.z - e.z;
-      const want = dx * dx + dz * dz < 6 ? Math.atan2(dx, dz) : Math.atan2(e.fx - e.x, e.fz - e.z);
-      e.card.heading = dampAngle(e.card.heading, want, damp(4, dt));
-      e.card.update(dt, cam, this.tint, this.rooms[e.place].floorY + 0.03);
+    // Benji only counts as someone to walk round and talk to while he is on foot.
+    const afoot = this.mode === "walk" ? this.pos : null;
+    if (this.place !== "street") {
+      this.troupes[this.place]?.update(dt, cam, this.tint, afoot, this.time);
+      if (this.place === "bowl") {
+        for (const b of this.laneBalls) {
+          if (!b.live) continue;
+          b.z -= 7.6 * dt;
+          b.mesh.visible = true;
+          b.mesh.position.z = b.z;
+          b.mesh.rotation.x -= dt * 30;
+          if (b.z < b.end) {
+            b.live = false;
+            b.mesh.visible = false;
+            this.sound.pins(5 + Math.floor(Math.random() * 6));
+          }
+        }
+      }
     }
 
     // The city.
@@ -1537,7 +1788,19 @@ export class Game {
         blockers.push({ x: this.driver.x, z: this.driver.z, radius: 1.4, speed: this.driver.speed });
         this.traffic.update(dt, this.city.signals, blockers, cam);
         this.traffic.setLights(look.lights > 0.4 ? 3 : 0.2);
-        this.people.update(dt, cam, this.tint, this.pos, this.veliVol > 0.25 && this.veli ? this.veli.video.currentTime : -1, this.city.anchors.trucks.screen.x, this.city.anchors.trucks.screen.z);
+        const beat = this.veliVol > 0.25 && this.veli ? this.veli.video.currentTime : -1;
+        // Whatever Benji is driving, people get out of its way.
+        const wheels = this.mode === "drive" || this.mode === "race" ? this.rolling : null;
+        if (wheels) {
+          wheels.x = this.driver.x;
+          wheels.z = this.driver.z;
+          wheels.vx = this.driver.vx;
+          wheels.vz = this.driver.vz;
+          wheels.speed = this.driver.speed;
+        }
+        this.people.update(dt, cam, this.tint, this.pos, beat, this.city.anchors.trucks.screen.x, this.city.anchors.trucks.screen.z, wheels);
+        // The song only reaches the lot, so only the lot moves to it.
+        this.street.update(dt, cam, this.tint, afoot, this.time, Math.hypot(this.pos.x - TRUCKS.x, this.pos.z - TRUCKS.z) < 40 ? beat : -1, this.stage.quality === "low" ? 115 : 150, wheels);
       }
       this.city.glow.apply(look.lights, look.roadRough);
       this.city.water.update(dt, look);
@@ -1711,6 +1974,7 @@ export class Game {
       bounce: null,
       pit: null,
       whack: null,
+      machine: null,
       driving: this.mode === "drive",
       results: this.results,
       shopFocus: this.shopFocus,

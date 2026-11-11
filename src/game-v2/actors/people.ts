@@ -1,12 +1,13 @@
 import * as THREE from "three";
 import { PEDS } from "../assets/cast";
 import { rng } from "../core/util";
-import { BOWL, COURT, FUN, HQ, KART_TRACK, PIER, RACE_MEET, RIVER_Z, ROAD_HALF, STREETS_Z, TRUCKS, WALK, slab, type Rect } from "../world/map";
+import { COURT, KART_TRACK, PIER, RACE_MEET, WALK, slab, type Rect } from "../world/map";
 import { Card } from "./card";
+import { stepClear, type Moving } from "./crowd";
 
-type Walker = { card: Card; ring: Rect; s: number; dir: 1 | -1; pace: number; wait: number };
+type Walker = { card: Card; ring: Rect; s: number; dir: 1 | -1; pace: number; wait: number; ox: number; oz: number; hop: number };
 /** Someone who stays put: where they are, what they are watching, and how long they keep jumping. */
-type Stander = { card: Card; x: number; z: number; fx: number; fz: number; hop: number; seed: number };
+type Stander = { card: Card; x: number; z: number; fx: number; fz: number; hop: number; seed: number; ox: number; oz: number };
 
 /** Point `s` metres clockwise round a rectangle, starting at its north-west corner. */
 function ringAt(r: Rect, s: number, out: { x: number; z: number; heading: number }) {
@@ -35,6 +36,7 @@ function ringAt(r: Rect, s: number, out: { x: number; z: number; heading: number
 }
 
 const _p = { x: 0, z: 0, heading: 0 };
+const _q = { x: 0, z: 0 };
 
 /**
  * Memphians. Walkers do laps of their block; everyone else has somewhere to be: the rail at
@@ -61,7 +63,7 @@ export class People {
       const kind = PEDS[i % PEDS.length]!;
       const card = new Card(kind.art, kind.height);
       this.group.add(card.group);
-      this.walkers.push({ card, ring, s: rand() * 400, dir: rand() > 0.5 ? 1 : -1, pace: 1.15 + rand() * 0.5, wait: 0 });
+      this.walkers.push({ card, ring, s: rand() * 400, dir: rand() > 0.5 ? 1 : -1, pace: 1.15 + rand() * 0.5, wait: 0, ox: 0, oz: 0, hop: 0 });
     }
 
     let n = 0;
@@ -72,32 +74,11 @@ export class People {
       const jz = (rand() - 0.5) * 0.5;
       card.place(x + jx, z + jz);
       this.group.add(card.group);
-      this.standing.push({ card, x: x + jx, z: z + jz, fx, fz, hop: 0, seed: rand() * 10 });
+      this.standing.push({ card, x: x + jx, z: z + jz, fx, fz, hop: 0, seed: rand() * 10, ox: 0, oz: 0 });
       n++;
     };
     // The court: both sidelines, inside the fence, watching the floor.
     for (const side of [-1, 1]) for (let z = -11; z <= 11; z += dense ? 2.4 : 4.8) stand(COURT.cx + side * (COURT.halfW + 1.1), COURT.cz + z, COURT.cx, COURT.cz + z * 0.4);
-    // The truck lot: a line at each window, people at the tables, a knot in front of Veli's screen.
-    for (const off of [-13, -1, 13]) for (let k = 0; k < (dense ? 3 : 2); k++) stand(TRUCKS.x + off - 0.3 + k * 0.5, TRUCKS.z - 4.4 - k * 1.2, TRUCKS.x + off - 1.2, TRUCKS.z);
-    for (const tx of [-14, -4, 6, 16]) stand(TRUCKS.x + tx + 1.6, TRUCKS.z - 10.6, TRUCKS.x + tx, TRUCKS.z - 9.5);
-    for (const [vx, vz] of [
-      [4.2, -5.6],
-      [5.8, -6.6],
-      [7.2, -5.4],
-      [6.4, -8],
-    ] as const)
-      stand(TRUCKS.x + vx, TRUCKS.z + vz, TRUCKS.x + 5.6, TRUCKS.z);
-    // The plaza in front of the boutique, and the river rail.
-    for (const [px, pz] of [
-      [-24, -168.5],
-      [-16.5, -167],
-      [-11, -169.5],
-      [-28, -165],
-      [-3, -166],
-      [8, -168],
-    ] as const)
-      stand(px, pz, HQ.doorX, HQ.frontZ);
-    for (let x = -60; x <= 40; x += dense ? 16 : 30) stand(x, RIVER_Z + 2.4, x, RIVER_Z - 30);
     for (const pz of [-203, -211, -219]) stand(PIER.x + (pz % 2 ? 1.3 : -1.3), pz, PIER.x, pz - 12);
     // Riverside Strip, where the racers meet.
     for (const [rx, rz] of [
@@ -107,19 +88,32 @@ export class People {
       [-3.6, -1],
     ] as const)
       stand(RACE_MEET.x + rx, RACE_MEET.z + rz, RACE_MEET.x, RACE_MEET.z);
-    // Beale Street: both sidewalks, block after block.
-    const beale = STREETS_Z[1];
-    for (let x = -112; x <= 112; x += dense ? 9 : 18) {
-      const side = Math.round(x / 9) % 2 ? 1 : -1;
-      if (Math.abs(((x + 128) % 64) - 0) < ROAD_HALF + 2 || Math.abs(((x + 128) % 64) - 64) < ROAD_HALF + 2) continue;
-      stand(x, beale + side * (ROAD_HALF + 1.7), x + 3, beale);
-    }
-    // 901 Bowl, the Fun House door, and the fence round the kart track.
-    for (const bx of [-4.5, -2.8, 3.4, 5]) stand(BOWL.doorX + bx, BOWL.frontZ + 2.2, BOWL.doorX, BOWL.frontZ);
-    for (const fx of [-6, -4.4, -2.6, 3, 4.6, 6.4]) stand(FUN.doorX + fx, FUN.frontZ - 2.4, FUN.doorX, FUN.frontZ);
+    // The fence round the kart track.
     const k = KART_TRACK;
     for (const side of [-1, 1]) for (let x = -16; x <= 16; x += dense ? 3.2 : 6.4) stand(k.cx + x, k.cz + side * (k.halfZ + k.width / 2 + 2.3), k.cx + x * 0.6, k.cz);
     for (const side of [-1, 1]) for (const z of [-3, 0, 3]) stand(k.cx + side * (k.halfX + k.width / 2 + 2.4), k.cz + z, k.cx, k.cz);
+  }
+
+  /**
+   * Nobody gets run over: anyone a moving car comes at jumps clear of it, and steps back to
+   * where they were once it has gone by. Returns true while they are out of its way.
+   */
+  private dodge(x: number, z: number, o: { ox: number; oz: number; hop: number }, car: Moving | null, dt: number) {
+    if (car && car.speed > 2.5) {
+      _q.x = x + o.ox;
+      _q.z = z + o.oz;
+      if (stepClear(_q, car, dt)) {
+        o.ox = _q.x - x;
+        o.oz = _q.z - z;
+        o.hop = Math.max(o.hop, 0.5);
+        return true;
+      }
+      if (Math.hypot(_q.x - car.x, _q.z - car.z) < 7) return true;
+    }
+    const back = Math.min(1, dt * 1.6);
+    o.ox -= o.ox * back;
+    o.oz -= o.oz * back;
+    return false;
   }
 
   /** Everyone standing within `r` of a point jumps for a moment. */
@@ -131,13 +125,14 @@ export class People {
    * `beat` is the song playing on the truck lot (seconds in, or -1) and `bx`, `bz` where it is
    * coming from: people close enough to hear it move to it.
    */
-  update(dt: number, camera: THREE.Vector3, tint: THREE.Color, player: { x: number; z: number }, beat = -1, bx = 0, bz = 0) {
+  update(dt: number, camera: THREE.Vector3, tint: THREE.Color, player: { x: number; z: number }, beat = -1, bx = 0, bz = 0, car: Moving | null = null) {
     this.time += dt;
     for (const w of this.walkers) {
       ringAt(w.ring, w.s, _p);
       const far = Math.abs(_p.x - camera.x) + Math.abs(_p.z - camera.z) > this.reach;
       const near = Math.hypot(_p.x - player.x, _p.z - player.z) < 1.3;
-      w.wait = near ? 0.6 : Math.max(0, w.wait - dt);
+      const clear = this.dodge(_p.x, _p.z, w, car, dt);
+      w.wait = near || clear ? 0.6 : Math.max(0, w.wait - dt);
       const v = w.wait > 0 ? 0 : w.pace;
       w.s += v * w.dir * dt;
       w.card.visible = !far;
@@ -145,9 +140,11 @@ export class People {
         w.card.group.visible = false;
         continue;
       }
-      w.card.place(_p.x, _p.z);
+      w.card.place(_p.x + w.ox, _p.z + w.oz);
       w.card.heading = w.dir > 0 ? _p.heading : _p.heading + Math.PI;
       w.card.speed = v;
+      w.hop = Math.max(0, w.hop - dt);
+      w.card.lift = w.hop > 0 ? Math.abs(Math.sin(w.hop * 12)) * 0.22 : 0;
       w.card.update(dt, camera, tint);
     }
     for (const s of this.standing) {
@@ -158,6 +155,8 @@ export class People {
         continue;
       }
       c.visible = true;
+      this.dodge(s.x, s.z, s, car, dt);
+      c.place(s.x + s.ox, s.z + s.oz);
       const dx = player.x - s.x;
       const dz = player.z - s.z;
       const close = dx * dx + dz * dz < 9;
@@ -165,7 +164,7 @@ export class People {
       if (s.hop > 0) {
         s.hop = Math.max(0, s.hop - dt);
         c.lift = Math.abs(Math.sin((this.time + s.seed) * 9)) * 0.24 * Math.min(1, s.hop * 2);
-      } else c.lift = 0;
+      } else c.lift = Math.sin(this.time * 0.6 + s.seed * 3) > 0.86 ? Math.abs(Math.sin((this.time + s.seed) * 8)) * 0.12 : 0;
       c.groove = beat >= 0 && Math.hypot(s.x - bx, s.z - bz) < 16 ? beat + s.seed * 0.05 : -1;
       c.update(dt, camera, tint);
     }

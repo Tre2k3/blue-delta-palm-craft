@@ -105,6 +105,11 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
   const speed = useRef<HTMLSpanElement>(null);
   const nitro = useRef<HTMLDivElement>(null);
   const mini = useRef<HTMLCanvasElement>(null);
+  const radar = useRef<HTMLCanvasElement>(null);
+  const cue = useRef<HTMLDivElement>(null);
+  const cueRing = useRef<HTMLDivElement>(null);
+  const turn = useRef<HTMLDivElement>(null);
+  const turnText = useRef<HTMLSpanElement>(null);
   const coarse = useMemo(() => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches, []);
   const touch = coarse || hud.touch;
   const hudRef = useRef(hud);
@@ -136,6 +141,67 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
     }
     if (speed.current) speed.current.textContent = String(Math.round(l.speed));
     if (nitro.current) nitro.current.style.width = `${l.nitro * 100}%`;
+    if (cue.current) {
+      const on = l.cue < 48 && l.cue > -18;
+      cue.current.style.display = on ? "flex" : "none";
+      if (on && cueRing.current) {
+        // The ring closes on the button as the gate comes up: press when it lands.
+        const hot = Math.abs(l.cue) <= 8;
+        cueRing.current.style.transform = `scale(${1 + Math.max(0, l.cue) / 20})`;
+        cueRing.current.style.borderColor = hot ? "#39ff14" : "#ffd23a";
+        cue.current.style.color = hot ? "#39ff14" : "#ffffff";
+      }
+    }
+    if (turn.current) {
+      const on = l.turn >= 0;
+      turn.current.style.display = on ? "flex" : "none";
+      if (on && turnText.current) turnText.current.textContent = l.turn < 8 ? "NOW" : `${Math.round(l.turn / 5) * 5} m`;
+    }
+    const rc = radar.current;
+    const rg = rc?.getContext("2d");
+    if (rc && rg) {
+      const w = rc.width;
+      const c = w / 2;
+      rg.clearRect(0, 0, w, w);
+      rg.fillStyle = "rgba(6,10,8,0.72)";
+      rg.beginPath();
+      rg.arc(c, c, c - 2, 0, Math.PI * 2);
+      rg.fill();
+      rg.strokeStyle = "rgba(57,255,20,0.55)";
+      rg.lineWidth = 2;
+      rg.stroke();
+      rg.strokeStyle = "rgba(57,255,20,0.2)";
+      rg.beginPath();
+      rg.arc(c, c, (c - 2) / 2, 0, Math.PI * 2);
+      rg.stroke();
+      // Green ally, pink tagger, the two bases, a power-up, and grey for anything out of action.
+      const colors = ["#39ff14", "#ff5ad1", "#39ff14", "#ff5ad1", "#ffd23a", "#6a6f76"];
+      for (let i = 0; i < l.radarN; i++) {
+        let x = l.radar[i * 3]!;
+        let y = l.radar[i * 3 + 1]!;
+        const kind = l.radar[i * 3 + 2]!;
+        const d = Math.hypot(x, y);
+        if (d > 0.92) {
+          x *= 0.92 / d;
+          y *= 0.92 / d;
+        }
+        rg.fillStyle = colors[kind] ?? "#fff";
+        const px = c + x * (c - 2);
+        const py = c - y * (c - 2);
+        if (kind === 2 || kind === 3) rg.fillRect(px - 5, py - 5, 10, 10);
+        else {
+          rg.beginPath();
+          rg.arc(px, py, kind === 4 ? 3.5 : 4.5, 0, Math.PI * 2);
+          rg.fill();
+        }
+      }
+      rg.fillStyle = "#ffffff";
+      rg.beginPath();
+      rg.moveTo(c, c - 7);
+      rg.lineTo(c - 5, c + 5);
+      rg.lineTo(c + 5, c + 5);
+      rg.fill();
+    }
     const el = mini.current;
     const g = el?.getContext("2d");
     const h = hudRef.current;
@@ -146,9 +212,9 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
   const drag = useRef<{ id: number; x: number } | null>(null);
   const title = hud.mode === "title";
   const playing = !title && !hud.overlay;
-  const activity = hud.hoops || hud.bowl || hud.fish || hud.race || hud.laser || hud.bounce || hud.pit || hud.whack;
-  const showMeter = !!hud.hoops || hud.bowl?.phase === "power" || hud.fish?.phase === "charge" || !!hud.bounce;
-  const call = hud.hoops?.call || hud.bowl?.call || hud.fish?.call || hud.race?.call || hud.laser?.call || hud.bounce?.call || hud.pit?.call || hud.whack?.call || "";
+  const activity = hud.hoops || hud.bowl || hud.fish || hud.race || hud.laser || hud.bounce || hud.pit || hud.whack || hud.machine;
+  const showMeter = !!hud.hoops || hud.bowl?.phase === "power" || hud.fish?.phase === "charge" || !!hud.bounce || !!hud.machine?.meter;
+  const call = hud.hoops?.call || hud.bowl?.call || hud.fish?.call || hud.race?.call || hud.laser?.call || hud.bounce?.call || hud.pit?.call || hud.whack?.call || hud.machine?.call || "";
   const count = hud.race?.phase === "count" ? hud.race.count : hud.laser?.phase === "count" ? hud.laser.count : 0;
   const outdoors = hud.place === "street";
 
@@ -259,8 +325,22 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
               <span className="sr-title sr-neon text-[120px] sm:text-[180px]">{count}</span>
             </div>
           )}
+          {hud.race && !hud.race.kart && (
+            <>
+              <div ref={turn} style={{ display: "none" }} className="sr-panel absolute left-1/2 top-[196px] z-20 -translate-x-1/2 items-center gap-2 whitespace-nowrap px-3 py-1.5 text-sm font-black uppercase tracking-widest text-[#ffd23a]">
+                <span className="text-xl leading-none">↱</span>
+                Right turn
+                <span ref={turnText} className="text-white" />
+              </div>
+              <div ref={cue} style={{ display: "none" }} className="absolute left-1/2 top-[72%] z-20 h-16 w-16 -translate-x-1/2 items-center justify-center text-white">
+                <div ref={cueRing} className="absolute inset-0 rounded-full border-4 border-[#ffd23a]" />
+                <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-white/70 bg-black/55 text-xl font-black">{hud.pad ? "A" : "E"}</div>
+              </div>
+            </>
+          )}
           {hud.race?.wrongWay && <div className="sr-title sr-pulse absolute inset-x-0 top-[40%] z-20 text-center text-4xl text-[#ff3b3b] drop-shadow-lg">Wrong way</div>}
           {hud.laser?.hit && <div className="absolute inset-0 z-10 bg-[#ff2aa0]/25" />}
+          {hud.laser && <canvas ref={radar} width={132} height={132} className="absolute left-3 top-20 z-20 h-[104px] w-[104px] sm:top-24 sm:h-[132px] sm:w-[132px]" />}
 
           <div className={`absolute inset-x-0 z-20 flex flex-col items-center gap-2 px-3 ${touch ? "bottom-40" : "bottom-6"}`}>
             {hud.dialogue && (
@@ -289,6 +369,8 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
                     "Power"
                   ) : hud.fish ? (
                     "Cast"
+                  ) : hud.machine ? (
+                    hud.machine.act === "Pull" ? "Pull" : "Power"
                   ) : (
                     "Landing"
                   )}
@@ -490,19 +572,24 @@ function ActivityBar({ hud }: { hud: HudState }) {
       )}
       {l && (
         <>
-          <Stat label="Score" tone="#39ff14">
-            {l.score}
+          <Stat label="Green" tone="#39ff14">
+            {l.us}
+          </Stat>
+          <Stat label="Pink" tone="#ff5ad1">
+            {l.them}
           </Stat>
           <Stat label="Time" tone={l.left <= 10 ? "#ff5a5a" : undefined}>
             {l.left}
           </Stat>
-          <Stat label="Tags">{l.tags}</Stat>
+          <Stat label="You">{l.score}</Stat>
           <Stat label="Vest" tone={l.vest <= 1 ? "#ff5a5a" : "#35e0d0"}>
             <span className="text-base tracking-widest sm:text-lg">{l.down ? "OUT" : "●".repeat(l.vest) + "○".repeat(Math.max(0, 3 - l.vest))}</span>
           </Stat>
-          <Stat label="Heat" tone="#ff8a1e">
-            {l.level}
-          </Stat>
+          {l.power && (
+            <Stat label="Power" tone="#ffd23a">
+              <span className="text-base sm:text-lg">{l.power}</span>
+            </Stat>
+          )}
         </>
       )}
       {t && (
@@ -518,6 +605,11 @@ function ActivityBar({ hud }: { hud: HudState }) {
           </Stat>
         </>
       )}
+      {hud.machine?.stats.map(([label, value, tone]) => (
+        <Stat key={label} label={label} tone={tone}>
+          {value}
+        </Stat>
+      ))}
       {hud.whack && (
         <>
           <Stat label="Score" tone="#39ff14">
@@ -585,7 +677,7 @@ function Touch({ game, hud }: { game: Game; hud: HudState }) {
     game.input.setStick(0, 0);
     if (nub.current) nub.current.style.transform = "translate(0px, 0px)";
   };
-  const act = hud.hoops ? "Shoot" : hud.fish ? "Reel" : hud.bowl ? "Go" : hud.race ? "Drift" : hud.driving ? "Brake" : hud.laser ? "Fire" : hud.bounce ? "Jump" : hud.whack ? "Whack" : "Act";
+  const act = hud.hoops ? "Shoot" : hud.fish ? "Reel" : hud.bowl ? "Go" : hud.race ? "Drift" : hud.driving ? "Brake" : hud.laser ? "Fire" : hud.bounce ? "Jump" : hud.whack ? "Whack" : hud.machine ? hud.machine.act : "Act";
   const run = hud.race && !hud.race.kart ? "Nitro" : "Run";
   const activity = hud.mode !== "walk" && hud.mode !== "drive";
   const Hold = ({ a, label, big }: { a: Action; label: string; big?: boolean }) => (

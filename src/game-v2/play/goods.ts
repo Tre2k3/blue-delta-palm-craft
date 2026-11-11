@@ -10,9 +10,6 @@ export const CABINETS: Cabinet[] = [
   { id: "catch", name: "Drop Catcher", tag: "DROP", color: "#ff3b3b", accent: "#ffd23a", blurb: "The new drop is falling off the truck. Bag what the order says, dodge the bricks.", how: "A and D or drag to slide the bag." },
   { id: "stacker", name: "Sack Stacker", tag: "STACK", color: "#39ff14", accent: "#e0b33a", blurb: "Stack the moneybags to the top of the vault.", how: "Space or tap to drop the row." },
   { id: "dash", name: "Beale Street Dash", tag: "DASH", color: "#35e0d0", accent: "#ff5ad1", blurb: "Three lanes, no brakes, all the way down Beale.", how: "A and D or tap a side to change lanes." },
-  { id: "pinball", name: "Sack Pinball", tag: "PINBALL", color: "#e0b33a", accent: "#39ff14", blurb: "Three balls, two flippers, three bumpers. Drop all the targets for the big one.", how: "A and D are the flippers. Hold Space to pull the plunger, let go to launch." },
-  { id: "skee", name: "Skee-Ball", tag: "SKEE-BALL", color: "#ff8a1e", accent: "#ffd23a", blurb: "Nine balls up the lane. The hundreds are in the corners.", how: "A and D to aim. Hold Space for power and let go to roll." },
-  { id: "wheel", name: "Spin-N-Win", tag: "SPIN-N-WIN", color: "#ff3b3b", accent: "#ffd23a", blurb: "Three pulls on the big wheel. It stops where it stops: learn the pull.", how: "Hold Space to pull, let go to spin. The number under the flapper is your tickets." },
   {
     id: "martin",
     name: "Martin: No Filter Fighters",
@@ -103,6 +100,7 @@ export const PRIZES: Prize[] = [
   { id: "bait", name: "Tackle Pack", tickets: 20, blurb: "Five bait for the pier.", bait: 5, emoji: "🪱" },
   { id: "cash50", name: "Cash Voucher", tickets: 60, blurb: "$50 SackDollars.", dollars: 50, emoji: "💵" },
   { id: "doll", name: "Fun House Overalls", tickets: 150, blurb: "Wear it: +25% tickets from every game.", outfit: "doll", emoji: "🎪" },
+  { id: "jersey224", name: "224 Jersey · White", tickets: 180, blurb: "Wear it: boost pads hit harder in the go-karts.", outfit: "jersey_224", emoji: "🎽" },
   { id: "cash200", name: "Big Voucher", tickets: 200, blurb: "$200 SackDollars.", dollars: 200, emoji: "💰" },
   { id: "claw", name: "Striped Sweater", tickets: 220, blurb: "Wear it: your bowling ball hooks harder.", outfit: "claw", emoji: "🧶" },
   { id: "nightmare", name: "Sackrow After Dark Tee", tickets: 300, blurb: "Wear it: longer bite window on the river.", outfit: "nightmare", emoji: "🌙" },

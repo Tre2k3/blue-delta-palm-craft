@@ -619,12 +619,15 @@ function buildTrucks(ctx: BuildCtx): TruckLot {
     // Serving window on the park side, awning, counter, and the truck's own art beside it.
     f.box(3.2, 1.1, 0.08, -1.2, Y0 + 2.35, 1.27, emissiveMat(ctx, 0xffd9a0, 0.4, 1.2));
     f.add(new THREE.BoxGeometry(3.8, 0.08, 1.5), std(truck.trim, 0.8), -1.2, Y0 + 3.1, 1.95, ctx.solid, 0, 0.22);
-    f.box(3.4, 0.1, 0.5, -1.2, Y0 + 1.75, 1.5, MAT.chrome());
+    f.box(3.4, 0.1, 0.7, -1.2, Y0 + 1.75, 1.6, MAT.chrome());
+    // The counter is boxed in below the shelf: the crew stand behind it, in the window.
+    f.box(3.4, 1.14, 0.08, -1.2, Y0 + 1.13, 1.91, body);
+    for (const sx of [-2.9, 0.5]) f.box(0.08, 1.14, 0.66, sx, Y0 + 1.13, 1.6, body);
     f.box(2.36, 1.62, 0.06, 1.85, Y0 + 2.12, 1.27, MAT.black());
     f.wall(2.24, 1.5, 1.85, Y0 + 2.12, 1.31, logo, ctx.flat);
     f.wall(2.24, 1.5, 0, Y0 + 2.05, -1.27, logo, ctx.flat, Math.PI);
     f.wall(5.8, 1, 0, Y0 + 3.9, 1.28, neon(ctx, truck.tag, truck.color, { w: 640, h: 110 }), ctx.flat);
-    f.wall(3.2, 0.34, -1.2, Y0 + 1.36, 1.28, sign(truck.social.toUpperCase(), "#ffe9b8", "#17110e", { w: 640, h: 68 }), ctx.flat);
+    f.wall(3.2, 0.34, -1.2, Y0 + 1.36, 1.96, sign(truck.social.toUpperCase(), "#ffe9b8", "#17110e", { w: 640, h: 68 }), ctx.flat);
     // Menu on a board by the window.
     f.box(0.08, 2.1, 0.08, -3.9, Y0 + 1.05, 1.7, MAT.black());
     f.box(1.34, 1.8, 0.06, -3.9, Y0 + 1.5, 1.74, MAT.black());
@@ -633,7 +636,8 @@ function buildTrucks(ctx: BuildCtx): TruckLot {
     f.flat(6.5, 5.5, 0, Y0 + 0.02, 3.4, poolMat(ctx, 0xffb46a, 0.42), ctx.flat);
     f.lamp(0, Y0 + 2.8, 2.2, 0xffc27a);
     f.solid(-3.3, 5, -1.3, 1.3);
-    windows[truck.id] = { x: f.wx(-1.2, 2.6), z: f.wz(-1.2, 2.6) };
+    f.solid(-2.95, 0.55, 1.3, 1.95);
+    windows[truck.id] = { x: f.wx(-1.2, 3), z: f.wz(-1.2, 3) };
   }
 
   // Veli's stage screen: the video plays here whenever someone is on the lot.

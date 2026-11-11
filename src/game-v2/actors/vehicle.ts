@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { buildCarBody, WHEEL_RADIUS, type CarBody } from "../../game/carBody";
+import type { WrapPackName } from "../../game/vehicleWraps";
 import type { Solid } from "../core/types";
 import { clamp, damp, wrapAngle } from "../core/util";
 import { groundHeightAt } from "../world/ground";
@@ -13,6 +14,11 @@ const SZ = 1.9;
 
 export const PAINTS = [0xb9bcc2, 0x1b1d21, 0x7a1f1f, 0x23406a, 0xe9e6de, 0x4a4d52, 0x8a6a2c, 0x2f5a3a, 0x5a2a6a];
 
+/** Livery art is lit a little from within, so the logo still reads on a black car at night. */
+function wrapMat(t: THREE.Texture) {
+  return new THREE.MeshStandardMaterial({ map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.5, roughness: 0.3, metalness: 0.3, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+}
+
 /** A car you can see: body, turning wheels, lamps. No behaviour. */
 export class CarModel {
   readonly group = new THREE.Group();
@@ -21,11 +27,53 @@ export class CarModel {
   readonly width: number;
   private spin = 0;
 
+  /** `wrap` dresses the car in one of the SackReligious liveries: black paint, the logo down each side and on the hood. */
   constructor(
     readonly kind: CarKind,
     color: number,
+    wrap: WrapPackName | null = null,
   ) {
-    this.body = buildCarBody(kind, { color });
+    this.body = buildCarBody(kind, { color, pack: wrap });
+    if (wrap) {
+      const loader = new THREE.TextureLoader();
+      const mats = new Map<string, THREE.Material>();
+      this.body.hull.traverse((o) => {
+        const face = o.userData.wrapFace as string | undefined;
+        if (!(o instanceof THREE.Mesh) || !face) return;
+        let m = mats.get(face);
+        if (!m) {
+          const t = loader.load(`/game/wraps/${wrap}/${face}.webp`);
+          t.colorSpace = THREE.SRGBColorSpace;
+          t.anisotropy = 8;
+          m = wrapMat(t);
+          mats.set(face, m);
+        }
+        o.material = m;
+      });
+      if (kind === "coupe") {
+        // The mark on the roof, the right way up for the camera that follows the car.
+        const geo = new THREE.PlaneGeometry(0.56, 0.31);
+        geo.rotateX(-Math.PI / 2);
+        geo.rotateY(-Math.PI / 2);
+        const uv = geo.attributes.uv!;
+        for (let i = 0; i < uv.count; i++) uv.setXY(i, 0.2 + uv.getX(i) * 0.6, 0.25 + uv.getY(i) * 0.51);
+        const t = loader.load(`/game/wraps/${wrap}/roof.webp`);
+        t.colorSpace = THREE.SRGBColorSpace;
+        t.anisotropy = 8;
+        const mat = wrapMat(t);
+        const roof = new THREE.Mesh(geo, mat);
+        roof.position.set(-0.265, 0.998, 0);
+        this.body.hull.add(roof);
+        // And the round mark on the tail, between the lamps: it is what you see most of the time you drive.
+        const badge = new THREE.PlaneGeometry(0.2, 0.2);
+        badge.rotateY(-Math.PI / 2);
+        const buv = badge.attributes.uv!;
+        for (let i = 0; i < buv.count; i++) buv.setXY(i, 0.34 + buv.getX(i) * 0.32, 0.27 + buv.getY(i) * 0.5);
+        const tail = new THREE.Mesh(badge, mat);
+        tail.position.set(-1.196, 0.5, 0);
+        this.body.hull.add(tail);
+      }
+    }
     const inner = this.body.root;
     inner.rotation.y = -Math.PI / 2;
     inner.scale.set(SX, SY, SZ);

@@ -337,7 +337,7 @@ try {
   });
   check(fun.whack >= 10, "a mole can be whacked", fun.whack);
   check(fun.pop === 1, "the hoop machine scores a clean throw", fun.pop);
-  check(fun.laser === "go", "laser tag starts");
+  check(fun.laser === "go", "laser tag starts", fun.laser);
   check(fun.kart > 10, "the kart drives", fun.kart);
   check(fun.place === "fun" && fun.mode === "walk", "every attraction hands the controls back", fun);
   await page.evaluate(() => {
@@ -413,29 +413,215 @@ try {
   });
   check(coins.total > 150 && coins.left < coins.total && coins.gained >= 5, "coins are out across the city and can be banked", coins);
 
-  // The newer cabinets: each one opens and starts.
-  await page.evaluate(() => {
+  // The machines on the floor are real machines: played standing at them, never on a cabinet screen.
+  const floor = await page.evaluate(() => {
     const g = window.__GAME__;
     g.enter("fun");
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    const run = (until, seconds) => {
+      for (let i = 0; i < seconds * 30 && !until(); i++) g.tick(1 / 30);
+    };
+    run(() => false, 1.5);
+    const fun = g.rooms.fun;
+    const prompts = [];
+    for (const m of [fun.pinball, fun.skee, fun.wheel, fun.whack]) {
+      g.pos.x = m.stand.x;
+      g.pos.z = m.stand.z;
+      run(() => false, 0.2);
+      prompts.push(g.prompt);
+    }
+    const onScreen = ["pinball", "skee", "wheel"].filter((id) => fun.cabinets.some((c) => c.id === id));
+    // Pinball: pull the plunger, the ball goes up the lane and scores.
+    g.begin(g.pinball, "whack");
+    g.pinball.start();
+    g.input.hold("action", true);
+    run(() => false, 0.8);
+    g.input.hold("action", false);
+    run(() => g.pinball.score > 0, 8);
+    const pinball = { score: g.pinball.score, live: g.pinball.ball.live, balls: g.pinball.balls };
+    g.pinball.quit();
+    // Skee-Ball: one ball rolled with some power lands and counts.
+    g.begin(g.skee, "whack");
+    g.skee.start();
+    run(() => false, 0.5);
+    g.input.hold("action", true);
+    run(() => g.skee.power > 0.5, 2);
+    g.input.hold("action", false);
+    run(() => g.skee.balls < 9, 4);
+    const skee = { balls: g.skee.balls, score: g.skee.score };
+    g.skee.quit();
+    // The wheel: pull, let go, it stops on a wedge and pays it.
+    g.begin(g.wheel, "whack");
+    g.wheel.start();
+    g.input.hold("action", true);
+    run(() => false, 0.6);
+    g.input.hold("action", false);
+    run(() => g.wheel.spins < 3, 20);
+    const wheel = { spins: g.wheel.spins, total: g.wheel.total };
+    g.wheel.quit();
+    g.stage.render = draw;
+    return { prompts, onScreen, pinball, skee, wheel, mode: g.mode };
   });
-  await ff(1.2);
-  const started = [];
-  for (const id of ["pinball", "skee", "wheel"]) {
-    await page.evaluate((cab) => {
-      const g = window.__GAME__;
-      g.cabinet = cab;
-      g.open("arcade");
-    }, id);
-    await page.getByText("Start", { exact: true }).first().click({ timeout: 10000 });
-    await page.keyboard.down("Space");
-    await page.waitForTimeout(500);
-    await page.keyboard.up("Space");
-    await page.waitForTimeout(700);
-    started.push(await page.evaluate(() => !!document.querySelector('[data-playing="1"] canvas')));
-    await page.evaluate(() => window.__GAME__.close());
-    await page.waitForTimeout(300);
-  }
-  check(started.every(Boolean), "pinball, skee-ball and the prize wheel all start", started);
+  check(/Pinball/.test(floor.prompts[0]) && /Skee-Ball/.test(floor.prompts[1]) && /Spin-N-Win/.test(floor.prompts[2]) && /Whack-A-Mole/.test(floor.prompts[3]), "pinball, Skee-Ball, the wheel and Whack-A-Mole can all be walked up to", floor.prompts);
+  check(floor.onScreen.length === 0, "none of them is a cabinet screen", floor.onScreen);
+  check(floor.pinball.score > 0, "the pinball table launches a ball and scores", floor.pinball);
+  check(floor.skee.balls === 8, "a Skee-Ball rolls up the lane and lands", floor.skee);
+  check(floor.wheel.spins === 2 && floor.wheel.total > 0, "the wheel spins down and pays the wedge under the flapper", floor.wheel);
+  check(floor.mode === "walk", "the floor machines hand the controls back", floor.mode);
+  await shot("21-fun-floor");
+
+  // Laser tag is a team game: allies, a base worth points, power-ups on the floor.
+  const tag = await page.evaluate(() => {
+    const g = window.__GAME__;
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    const run = (until, seconds) => {
+      for (let i = 0; i < seconds * 30 && !until(); i++) g.tick(1 / 30);
+    };
+    g.setPlace("laser");
+    g.begin(g.laser, "laser");
+    g.laser.start();
+    run(() => g.laser.phase === "go", 5);
+    const L = g.laser;
+    const sides = [L.bots.filter((b) => b.team === 0).length, L.bots.filter((b) => b.team === 1).length];
+    // Stand in front of the pink base with a clear line and put three into it.
+    const base = L.bases[1];
+    g.pos.x = base.x - 3;
+    g.pos.z = base.z + 1.5;
+    g.camYaw = Math.atan2(base.x - g.pos.x, base.z - g.pos.z);
+    for (const b of L.bots) b.stun = 30;
+    let hits = 0;
+    for (let i = 0; i < 3; i++) {
+      const before = base.hp + (base.dark > 0 ? -99 : 0);
+      L.cool = 0;
+      L.fire();
+      if (base.hp !== before || base.dark > 0) hits++;
+    }
+    const scored = { hits, score: L.score, dark: base.dark > 0, green: L.team[0] };
+    run(() => L.powers.some((p) => p.mesh.visible), 12);
+    const p = L.powers.find((q) => q.mesh.visible);
+    let power = "";
+    if (p) {
+      g.pos.x = p.x;
+      g.pos.z = p.z;
+      run(() => !p.mesh.visible, 1);
+      power = L.rapid > 0 ? "rapid" : L.double > 0 ? "double" : L.shield > 0 ? "shield" : "";
+    }
+    const radar = g.live.radarN;
+    L.quit();
+    run(() => g.place === "fun" && g.mode === "walk", 4);
+    g.stage.render = draw;
+    return { sides, scored, power, radar, place: g.place };
+  });
+  check(tag.sides.join() === "2,4" && tag.scored.hits === 3 && tag.scored.dark && tag.scored.score >= 400, "laser tag has teams and a base that pays when it goes down", tag);
+  check(!!tag.power && tag.radar >= 8, "power-ups drop and the radar tracks the arena", { power: tag.power, radar: tag.radar });
+
+  // The street race: arrows on the road, a launch on GO, and a boost for hitting a gate on time.
+  const race = await page.evaluate(async () => {
+    const g = window.__GAME__;
+    g.leave(0, -150, 0);
+    await new Promise((r) => setTimeout(r, 900));
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    const run = (until, seconds) => {
+      for (let i = 0; i < seconds * 30 && !until(); i++) g.tick(1 / 30);
+    };
+    run(() => false, 0.5);
+    g.begin(g.race, "race");
+    g.race.start();
+    const R = g.race;
+    run(() => R.phase === "go", 5);
+    g.input.press("interact");
+    g.input.hold("up", true);
+    run(() => false, 0.1);
+    const launch = R.kick > 0;
+    const arrows = R.guide.filter((m) => m.visible).length;
+    run(() => g.live.cue < 6, 20);
+    const cue = g.live.cue;
+    const before = R.perfects;
+    g.input.press("interact");
+    run(() => false, 0.1);
+    const boost = { cue, perfect: R.perfects > before, kick: R.kick > 0, call: R.call };
+    run(() => g.live.turn >= 0, 20);
+    const turn = g.live.turn;
+    g.input.hold("up", false);
+    const wrap = !!g.car.body.hull.userData.wrapPack;
+    R.quit();
+    g.stage.render = draw;
+    return { launch, arrows, boost, turn, wrap, mode: g.mode };
+  });
+  check(race.launch && race.arrows >= 6, "the race launches on GO and paints the line to follow", race);
+  check(race.boost.perfect && race.boost.kick, "hitting the button on a gate gives a boost", race.boost);
+  check(race.turn >= 0, "the next bend is called out before it arrives", race.turn);
+  check(race.wrap, "Benji's car wears the SackReligious livery", race.wrap);
+
+  // Sprites: every fit has a real back, the court poses are in, and nobody on the street is front-only.
+  const art = await page.evaluate(async () => {
+    const g = window.__GAME__;
+    const { OUTFITS, PEDS } = g.tables;
+    const fits = Object.entries(OUTFITS);
+    const urls = [];
+    for (const [, o] of fits) {
+      urls.push(o.art.front, o.art.back, o.art.left, o.art.right);
+      for (const p of Object.values(o.art.poses ?? {})) for (const u of Object.values(p)) urls.push(u);
+    }
+    for (const p of PEDS) urls.push(p.art.back, ...(p.art.walk?.back ?? []));
+    const plain = [...new Set(urls.filter(Boolean).map((u) => u.replace(/^flip:/, "")))];
+    const missing = [];
+    await Promise.all(
+      plain.map(async (u) => {
+        const r = await fetch(u, { method: "HEAD" });
+        if (!r.ok || !/image/.test(r.headers.get("content-type") ?? "")) missing.push(u);
+      }),
+    );
+    // Benji puts his arms up when he shoots.
+    g.playBall("practice");
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    for (let i = 0; i < 20; i++) g.tick(1 / 30);
+    g.input.hold("action", true);
+    for (let i = 0; i < 12; i++) g.tick(1 / 30);
+    const pose = g.benji.pose;
+    const drawing = g.benji.current;
+    g.input.hold("action", false);
+    for (let i = 0; i < 10; i++) g.tick(1 / 30);
+    g.activity?.quit();
+    g.stage.render = draw;
+    return {
+      fits: fits.length,
+      noBack: fits.filter(([, o]) => !o.art.back || /^tint:/.test(o.art.back)).map(([id]) => id),
+      noShot: fits.filter(([, o]) => !o.art.poses?.shoot).map(([id]) => id),
+      pedsNoBack: PEDS.filter((p) => !p.art.back).length,
+      checked: plain.length,
+      missing,
+      pose,
+      drawing,
+    };
+  });
+  check(art.fits === 12 && art.noBack.length === 0 && art.pedsNoBack === 0 && art.missing.length === 0, "every fit and every pedestrian has a drawn back, and all of the art loads", art);
+  check(art.pose === "shoot" && /shot-back/.test(art.drawing), "Benji uses his shooting sprite on the jumper", { pose: art.pose, drawing: art.drawing });
+
+  // People have somewhere to be: the same crowd is in different places a little later.
+  const crowd = await page.evaluate(() => {
+    const g = window.__GAME__;
+    g.enter("fun");
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    for (let i = 0; i < 45; i++) g.tick(1 / 30);
+    const t = g.troupes.fun;
+    const before = t.members.map((m) => [m.x, m.z]);
+    for (let i = 0; i < 30 * 40; i++) g.tick(1 / 30);
+    const moved = t.members.filter((m, i) => !m.posted && Math.hypot(m.x - before[i][0], m.z - before[i][1]) > 1).length;
+    const roamers = t.members.filter((m) => !m.posted).length;
+    const tramp = g.rooms.fun.tramp;
+    const onBig = t.members.filter((m) => Math.hypot(m.x - tramp.x, m.z - tramp.z) < tramp.r && m.stop.act !== "bounce").length;
+    const vendors = g.street.members.filter((m) => m.stop.act === "serve").length;
+    g.stage.render = draw;
+    return { roamers, moved, onBig, vendors, bowlers: g.laneBalls.length };
+  });
+  check(crowd.moved >= Math.ceil(crowd.roamers * 0.6) && crowd.onBig === 0, "people in the Fun House move between things to do, and nobody stands on the trampoline", crowd);
+  check(crowd.vendors === 4 && crowd.bowlers === 2, "there is a crew in every truck window and other lanes are in play at the bowl", crowd);
   check(errors.length === 0, "no page errors", errors);
   console.log("Memphis smoke passed.");
 } finally {
