@@ -23,8 +23,8 @@ export function buildStreets(ctx: BuildCtx): SignalMats {
   const Z1 = 200;
   const north = STREETS_Z[0] - ROAD_HALF;
 
-  // Base under everything, so a gap never shows sky.
-  ctx.ground.flat(1400, 1100, 0, -0.06, 60, MAT.darkConcrete());
+  // Base under the city, so a gap never shows sky. It stops at the bank: the river is water, not floor.
+  ctx.ground.flat(1400, 810, 0, -0.06, RIVER_Z + 405, MAT.darkConcrete());
 
   // East-west streets run the full width; north-south pieces fill between them.
   for (const z of STREETS_Z) {
