@@ -28,7 +28,7 @@ export type Anchor = { x: number; z: number };
 
 export type Mode = "title" | "walk" | "drive" | "race" | "hoops" | "bowl" | "fish" | "kart" | "laser" | "bounce" | "pit" | "whack";
 
-export type Overlay = null | "pause" | "map" | "shop" | "wardrobe" | "arcade" | "prizes" | "food" | "results" | "video" | "court" | "photo" | "garage";
+export type Overlay = null | "pause" | "map" | "shop" | "wardrobe" | "arcade" | "prizes" | "food" | "results" | "video" | "court" | "photo" | "garage" | "table";
 
 export type Catch = { name: string; lb: number; pay: number; rarity: string; color: string };
 
@@ -128,6 +128,8 @@ export type HudState = {
   daily: { title: string; detail: string; done: boolean; streak: number; pay: number };
   /** Postcards collected, and the next one to go and get. */
   postcards: { got: number; total: number; next: string };
+  /** The park table Benji is sat at, or null. */
+  table: TableHud | null;
   mission: MissionCard | null;
   prompt: string;
   /** Key hints for the mode, "key label" pairs. */
@@ -203,4 +205,28 @@ export type Live = {
   /** Goes up by one each time there is something to throw confetti for; `partyLevel` says how much. */
   party: number;
   partyLevel: number;
+};
+
+/** The games played at the tables in the park. */
+export type TableId = "chess" | "checkers" | "dominoes" | "spades" | "connect4" | "tictactoe";
+
+/** What the table screen shows. `view` is the game's own picture of itself. */
+export type TableHud = {
+  id: TableId;
+  name: string;
+  rivals: string[];
+  line: string;
+  how: string[];
+  stage: "pick" | "play" | "done";
+  level: number;
+  levels: { name: string; pay: number }[];
+  /** Two people sharing the device. */
+  two: boolean;
+  canTwo: boolean;
+  /** The next move is a person's. */
+  mine: boolean;
+  turn: number;
+  view: unknown;
+  result: { text: string; won: boolean | null; pay: number } | null;
+  wins: number;
 };

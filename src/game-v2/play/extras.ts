@@ -17,6 +17,7 @@ export const DAILIES: Daily[] = [
   { id: "laser", title: "Green team", detail: "Win a round of laser tag.", goal: { kind: "laser", n: 1 } },
   { id: "kart", title: "Top step", detail: "Win a go-kart race at the Fun House.", goal: { kind: "kart", max: 1 } },
   { id: "photo", title: "Postcard home", detail: "Take a picture in photo mode.", goal: { kind: "photo" } },
+  { id: "table", title: "Table talk", detail: "Win a game at a table in Orange Mound Park.", goal: { kind: "tablewin", n: 1 } },
 ];
 
 /** The date where the player is, as 2026-11-12. */

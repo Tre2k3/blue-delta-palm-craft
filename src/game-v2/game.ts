@@ -24,6 +24,7 @@ import { CABINETS, FOOD, FOOD_TRUCKS, PRIZES, type TruckId } from "./play/goods"
 import { Hoops } from "./play/hoops";
 import { PinballTable, PrizeWheel, SkeeLane } from "./play/floor";
 import { POSTCARDS, dailyFor, dailyPay, dayBefore, dayKey, meets } from "./play/extras";
+import { TableGames } from "./play/tables";
 import { RIDES, rideById } from "./play/garage";
 import { AirHockey, BagToss, BottleBash, ClownToss } from "./play/midway";
 import { PopShot, Whack } from "./play/machines";
@@ -32,7 +33,7 @@ import { BOUNTIES, CHAPTERS, RANK_PAY, STORE_REWARD, STORY, chapterOf, rankOf } 
 import { buildCity, type City } from "./world/city";
 import { pushCircle, pushOut, sight } from "./world/collide";
 import { buildFunRoom, buildLaserRoom, type FunRoom, type LaserRoom } from "./world/funhouse";
-import { BOWL, FUN, HQ, POIS, RACE_MEET, RIVER_Z, ROAD_HALF, ROOM, STREETS_X, STREETS_Z, TRUCKS, WALK, districtAt, nearestStreet } from "./world/map";
+import { BOWL, FUN, HQ, PARK, PARK_TABLES, POIS, RACE_MEET, RIVER_Z, ROAD_HALF, ROOM, STREETS_X, STREETS_Z, TRUCKS, WALK, districtAt, nearestStreet } from "./world/map";
 import { LANE, buildBowlRoom, buildHomeRoom, buildHqRoom, type BowlRoom, type HomeRoom, type HqRoom, type Room } from "./world/rooms";
 
 const SAVE_KEY = "sack-v2-save-4";
@@ -298,6 +299,8 @@ export class Game {
   private bounce: Bounce;
   private pit: BallPit;
   private whack: Whack;
+  /** The game tables in the park. */
+  readonly board: TableGames;
   private popshot: PopShot;
   private pinball: PinballTable;
   private skee: SkeeLane;
@@ -376,6 +379,7 @@ export class Game {
     this.bounce = new Bounce(this);
     this.pit = new BallPit(this);
     this.whack = new Whack(this);
+    this.board = new TableGames(this);
     this.popshot = new PopShot(this);
     this.pinball = new PinballTable(this);
     this.skee = new SkeeLane(this);
@@ -634,6 +638,36 @@ export class Game {
         st.roam(w.art, w.height, door);
       }
     }
+
+    // ---- The park. A regular at every table, people watching the games, walking the paths and sat by the fountain.
+    for (const t of PARK_TABLES) {
+      const w = who();
+      // Sat on the stool: sunk to the seat, so the table hides the rest.
+      st.post(w.art, w.height, at(t.x, t.z - 1.06, t.x, t.z, "play", { lift: -0.4 }));
+      if (t.seats === 4) {
+        for (const dx of [-1.06, 1.06]) {
+          const o = who();
+          st.post(o.art, o.height, at(t.x + dx, t.z, t.x, t.z, "play", { lift: -0.4 }));
+        }
+      }
+    }
+    const park: Stop[] = [
+      ...PARK_TABLES.map((t, i) => at(t.x + (i % 2 ? 1.5 : -1.5), t.z + 0.4, t.x, t.z, "watch", { stay: [6, 14] })),
+      at(PARK.cx - 4.6, PARK.cz + 4.6, PARK.cx, PARK.cz, "watch", { stay: [5, 12] }),
+      at(PARK.cx + 4.8, PARK.cz - 4.4, PARK.cx, PARK.cz, "watch", { stay: [5, 12] }),
+      at(PARK.cx, PARK.minZ + 4, PARK.cx, PARK.cz, "watch", { stay: [3, 6] }),
+      at(PARK.cx, PARK.maxZ - 4, PARK.cx, PARK.cz, "watch", { stay: [3, 6] }),
+      at(PARK.minX + 4, PARK.cz, PARK.cx, PARK.cz, "watch", { stay: [3, 6] }),
+      at(PARK.maxX - 4, PARK.cz, PARK.cx, PARK.cz, "watch", { stay: [3, 6] }),
+      at(-104.5, 76.2, -108, 71.5, "dance", { stay: [6, 12] }),
+      at(-108.5, 92.4, -112, 96, "cheer", { stay: [5, 10] }),
+      at(-87.6, 92, -86, 93.5, "eat", { stay: [8, 16] }),
+    ];
+    st.stops(park);
+    for (let i = 0; i < (few ? 4 : 8); i++) {
+      const w = who();
+      st.roam(w.art, w.height, park);
+    }
   }
 
   /** Everyone near a point jumps for a moment: the crowd outside, or whoever is in the room. */
@@ -836,6 +870,9 @@ export class Game {
         this.laser.start();
       });
     });
+    // The park: walk up to the open seat at any table.
+    for (const t of PARK_TABLES) this.spot("street", t.x, t.z + 1.2, 1.25, `Sit down: ${t.name}`, () => this.board.sit(t.id));
+
     this.spot("fun", fun.kartDoor.x, fun.kartDoor.z, 1.8, "Go-karts: 5 laps", () => {
       this.transition(() => {
         this.setPlace("street");
@@ -1166,6 +1203,7 @@ export class Game {
       this.camera.updateProjectionMatrix();
       this.snapCamera();
     }
+    if (was === "table") this.board.leave();
     if (was === "results") {
       const f = this.onResultsClose;
       this.results = null;
@@ -2307,6 +2345,9 @@ export class Game {
       }
     }
 
+    // The regulars at a park table take their turns while the rest of the city waits.
+    if (this.overlay === "table") this.board.update(dt);
+
     const paused = this.overlay !== null;
     if (this.fadeTo === 1 && this.live.fade >= 1 && this.afterFade) {
       const f = this.afterFade;
@@ -2564,6 +2605,7 @@ export class Game {
       ride: s.ride,
       rides: s.rides,
       daily: { title: today.title, detail: today.detail, done: s.daily.done, streak: s.daily.streak, pay: dailyPay(s.daily.streak + (s.daily.done ? 0 : 1)) },
+      table: this.overlay === "table" ? this.board.hud() : null,
       postcards: { got: POSTCARDS.filter((c) => s.flags[`card_${c.id}`]).length, total: POSTCARDS.length, next: nextCard ? `${nextCard.name}, ${nextCard.hint}` : "" },
       rank: rankOf(s.respect),
       mission: step

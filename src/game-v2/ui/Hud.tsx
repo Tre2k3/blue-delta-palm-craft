@@ -1,5 +1,6 @@
 import { Party } from "./Party";
 import { Photo } from "./Photo";
+import { TableScreen } from "./Tables";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import type { Action, Nav } from "../core/input";
 import type { HudState, Live } from "../core/types";
@@ -483,6 +484,7 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
       {hud.overlay === "video" && <VideoScreen game={game} />}
       {hud.overlay === "court" && <CourtMenu game={game} />}
       {hud.overlay === "garage" && <Garage game={game} hud={hud} />}
+      {hud.overlay === "table" && <TableScreen game={game} hud={hud} />}
       {hud.overlay === "arcade" && hud.cabinet && <Arcade game={game} id={hud.cabinet} />}
       {hud.overlay === "results" && <ResultsCard game={game} hud={hud} />}
       {hud.overlay === "photo" && <Photo game={game} hud={hud} />}

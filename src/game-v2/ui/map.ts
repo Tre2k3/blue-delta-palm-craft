@@ -1,4 +1,4 @@
-import { ARENA, BOWL, COURT, FAR_BANK_Z, FUN, HOME, HQ, KART_TRACK, PIER, POIS, RACE_LOOP, RIVER_Z, ROAD_HALF, STREETS_X, STREETS_Z, STREET_NAMES_X, STREET_NAMES_Z, TRUCKS, slab } from "../world/map";
+import { ARENA, BOWL, COURT, FAR_BANK_Z, FUN, HOME, HQ, KART_TRACK, PARK, PARK_TERRACE, PIER, POIS, RACE_LOOP, RIVER_Z, ROAD_HALF, STREETS_X, STREETS_Z, STREET_NAMES_X, STREET_NAMES_Z, TRUCKS, slab } from "../world/map";
 
 export type MapView = { cx: number; cz: number; scale: number };
 export type MapDots = { x: number; z: number; heading: number; car: { x: number; z: number }; target: { id: string; x: number; z: number } | null; time: number };
@@ -29,6 +29,15 @@ export function drawMap(g: CanvasRenderingContext2D, w: number, h: number, v: Ma
   box(PIER.x - PIER.half, PIER.z1, PIER.x + PIER.half, PIER.z0, "#6b4a2e");
   box(BOWL.minX, BOWL.minZ, BOWL.maxX, BOWL.maxZ, "#8a2a72");
   box(FUN.minX, FUN.minZ, FUN.maxX, FUN.maxZ, "#5a3a9a");
+  // The park: lawn, the two paths, the terrace with the tables and the fountain.
+  box(PARK.minX, PARK.minZ, PARK.maxX, PARK.maxZ, "#245c2e");
+  box(PARK.cx - 1.4, PARK.minZ, PARK.cx + 1.4, PARK.maxZ, "#4a4640");
+  box(PARK.minX, PARK.cz - 1.4, PARK.maxX, PARK.cz + 1.4, "#4a4640");
+  box(PARK_TERRACE.minX, PARK_TERRACE.minZ, PARK_TERRACE.maxX, PARK_TERRACE.maxZ, "#5a5148");
+  g.fillStyle = "#3aa6d0";
+  g.beginPath();
+  g.arc(X(PARK.cx), Z(PARK.cz), 3.2 * S, 0, Math.PI * 2);
+  g.fill();
   box(HOME.x - HOME.w / 2, HOME.z - HOME.d / 2, HOME.x + HOME.w / 2, HOME.z + HOME.d / 2, "#8a6a1e");
   box(TRUCKS.x - 16, TRUCKS.z - 2, TRUCKS.x + 16, TRUCKS.z + 2, "#8a7a2a");
   g.fillStyle = "#2a3038";

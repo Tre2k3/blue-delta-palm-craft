@@ -9,7 +9,7 @@ import { buyReal, openStore } from "../play/store";
 import { POIS } from "../world/map";
 import { drawMap } from "./map";
 
-function Sheet({ title, sub, onClose, children, wide }: { title: string; sub?: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
+export function Sheet({ title, sub, onClose, children, wide }: { title: string; sub?: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   return (
     <div data-menu className="pointer-events-auto absolute inset-0 z-40 flex items-center justify-center bg-black/70 p-2 sm:p-5">
       <div className={`sr-panel sr-pop flex max-h-full w-full flex-col ${wide ? "max-w-[1080px]" : "max-w-[620px]"}`}>

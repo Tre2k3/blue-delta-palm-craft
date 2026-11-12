@@ -5,6 +5,7 @@ import { MAT, Frame, YAW, addSolid, bench, bush, emissiveMat, facade, globeLamp,
 import { ARENA, BOWL, CURB, HOME, lot, rect, STREETS_X } from "./map";
 import { blockText } from "./riverfront";
 import { buildFunExterior } from "./funhouse";
+import { buildPark, resetPark, resetParkArt } from "./park";
 
 const Y0 = CURB;
 
@@ -329,6 +330,12 @@ function neighborhood(ctx: BuildCtx) {
       buildFunExterior(ctx);
       continue;
     }
+    if (c === 0) {
+      // The west block is the park. The six bungalows that stood here keep their numbers, so every other house looks as it did.
+      buildPark(ctx);
+      n += 6;
+      continue;
+    }
     lotSurface(ctx, L, "grass");
     const xs = [L.minX + 8, (L.minX + L.maxX) / 2, L.maxX - 8];
     // Park Avenue side.
@@ -339,7 +346,6 @@ function neighborhood(ctx: BuildCtx) {
     }
     ctx.solid.box(L.maxX - L.minX - 2, 1.5, 0.1, (L.minX + L.maxX) / 2, Y0 + 0.75, 84.5, MAT.wood());
     addSolid(ctx, L.minX + 1, L.maxX - 1, 84.4, 84.6);
-    if (c === 0) for (const x of xs) house(ctx, x, 70.6, YAW.north, n++);
     if (c === 1) {
       house(ctx, xs[0]!, 70.6, YAW.north, n++);
       const h = house(ctx, HOME.x, HOME.z, YAW.north, 4, { w: HOME.w, d: HOME.d, hero: true });
@@ -367,6 +373,8 @@ function lotDrive() {
 
 export function resetBlocks() {
   drive = null;
+  resetPark();
+  resetParkArt();
 }
 
 function church(ctx: BuildCtx, x: number, z: number) {

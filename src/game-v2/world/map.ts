@@ -1,3 +1,5 @@
+import type { TableId } from "../core/types";
+
 /**
  * The city plan. X runs east, Z runs south, the Mississippi is north.
  * Everything that needs to agree on where a street or a door is reads it from here:
@@ -77,6 +79,20 @@ export const HOME = { x: -34, z: 74, w: 11, d: 8.5 };
 export const FUN = { ...rect(75, 117, 63, 84), doorX: 96, frontZ: 63 };
 export const KART_TRACK = { cx: 96, cz: 96, halfX: 19, halfZ: 8.2, width: 5.2 };
 
+/** Orange Mound Park takes block (0, 3), across Main Street from Benji's house. */
+export const PARK = { minX: -119, maxX: -73, minZ: 61, maxZ: 107, cx: -96, cz: 84 };
+/** The paved corner with the game tables, north-east of the fountain. */
+export const PARK_TERRACE = { minX: -93.5, maxX: -75, minZ: 63, maxZ: 81 };
+/** One table per game. The regular has the north seat; Benji walks up from the south. */
+export const PARK_TABLES: { id: TableId; name: string; x: number; z: number; seats: 2 | 4; color: string }[] = [
+  { id: "chess", name: "Chess", x: -90, z: 68, seats: 2, color: "#f4f1ea" },
+  { id: "checkers", name: "Checkers", x: -84, z: 68, seats: 2, color: "#ff5a4a" },
+  { id: "connect4", name: "Four in a Row", x: -78, z: 68, seats: 2, color: "#ffd166" },
+  { id: "dominoes", name: "Dominoes", x: -90, z: 75.5, seats: 2, color: "#f4f1ea" },
+  { id: "spades", name: "Spades", x: -84, z: 75.5, seats: 4, color: "#39ff14" },
+  { id: "tictactoe", name: "Tic-Tac-Toe", x: -78, z: 75.5, seats: 2, color: "#5ac8ff" },
+];
+
 /** Interiors live far from the city so they never show through a wall. */
 export const ROOM = {
   hq: { x: 0, z: 1000 },
@@ -117,6 +133,8 @@ export const POIS: Poi[] = [
   { id: "race", name: "Street Race", x: RACE_MEET.x, z: RACE_MEET.z, color: "#ff3b3b", arrive: { x: RACE_MEET.x + 2.6, z: RACE_MEET.z + 1.2, heading: -Math.PI / 2 - 0.4 } },
   { id: "home", name: "Home", x: HOME.x, z: HOME.z - HOME.d / 2 - 3, color: "#e0b33a" },
   { id: "fun", name: "The Fun House", x: FUN.doorX, z: FUN.frontZ - 2, color: "#b48cff" },
+  // Let out on the terrace, facing the tables.
+  { id: "park", name: "Orange Mound Park", x: PARK.cx, z: PARK.cz, color: "#7ddc6a", arrive: { x: -84, z: 79.6, heading: Math.PI } },
 ];
 
 export function districtAt(x: number, z: number) {

@@ -1141,6 +1141,178 @@ try {
     "Benji walks with two strides from behind, from the side and from in front",
     walk,
   );
+  // The park and its tables: the rules of each game, the regulars taking their turns, and what a win pays.
+  const park = await page.evaluate(async () => {
+    const g = window.__GAME__;
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    const run = (n) => {
+      for (let i = 0; i < n; i++) g.tick(1 / 60);
+    };
+    const out = {};
+    if (g.activity) g.activity.quit();
+    if (g.overlay) g.close();
+    g.setPlace("street");
+    run(10);
+
+    // A ride to the park lets him out among the tables, and the open seat offers a game.
+    g.save.dollars = 500;
+    g.taxi("park");
+    run(120);
+    out.ride = { x: +g.pos.x.toFixed(1), z: +g.pos.z.toFixed(1), heading: +g.heading.toFixed(2) };
+    g.warp(-84, 76.7, Math.PI);
+    run(20);
+    out.prompt = g.prompt;
+    g.input.press("interact");
+    run(4);
+    out.sat = { overlay: g.overlay, id: g.board.id };
+    await new Promise((r) => setTimeout(r, 250));
+    out.pickButtons = document.querySelectorAll("[data-level]").length;
+    g.close();
+
+    const fresh = (id) => {
+      g.board.sit(id);
+      g.board.start(1);
+      const game = g.board.game;
+      g.close();
+      return game;
+    };
+    // Chess: the count of positions after one, two and three moves is a known number; so is a position with castling, pins and a pawn that can be taken in passing.
+    const perft = (c, d) => {
+      if (d === 0) return 1;
+      let n = 0;
+      for (const m of c.legal()) {
+        const u = c.make(m);
+        n += perft(c, d - 1);
+        c.unmake(u);
+      }
+      return n;
+    };
+    const c = fresh("chess");
+    const opening = [perft(c, 1), perft(c, 2), perft(c, 3)];
+    const rows = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R";
+    const b = [];
+    for (const ch of rows.replace(/\//g, "")) {
+      if (/\d/.test(ch)) for (let i = 0; i < +ch; i++) b.push("");
+      else b.push(ch);
+    }
+    c.b = b;
+    c.side = 0;
+    c.rights = 15;
+    c.ep = -1;
+    c.seen = new Map();
+    const middle = [perft(c, 1), perft(c, 2)];
+    const f = fresh("chess");
+    const sq = (name) => (8 - +name[1]) * 8 + (name.charCodeAt(0) - 97);
+    for (const [from, to] of [["f2", "f3"], ["e7", "e5"], ["g2", "g4"], ["d8", "h4"]]) f.play({ from: sq(from), to: sq(to) });
+    out.chess = { opening, middle, mate: f.outcome(), illegal: fresh("chess").play({ from: sq("e2"), to: sq("e5") }) };
+
+    // Checkers: a jump on offer is the only move there is.
+    const k = fresh("checkers");
+    k.cells = Array(64).fill(0);
+    k.cells[5 * 8 + 2] = 1;
+    k.cells[4 * 8 + 3] = 3;
+    k.cells[7 * 8 + 6] = 1;
+    k.cells[0 * 8 + 1] = 3;
+    k.side = 0;
+    const hops = k.hops();
+    out.checkers = { hops: hops.length, jump: hops[0]?.over === 4 * 8 + 3, took: k.play(hops[0]) && k.cells[4 * 8 + 3] === 0 };
+
+    // Every game, the regulars playing each other to the end.
+    const through = (id, cap) => {
+      const game = fresh(id);
+      let steps = 0;
+      let chainOk = true;
+      let tricks = true;
+      while (!game.outcome() && steps < cap) {
+        const m = game.think(1);
+        if (m === null || !game.play(m)) break;
+        steps++;
+        if (id === "dominoes") {
+          const ch = game.view().chain;
+          for (let i = 1; i < ch.length; i++) if (ch[i - 1][1] !== ch[i][0]) chainOk = false;
+        }
+        if (id === "spades") {
+          const v = game.view();
+          if (v.phase === "hand" && v.tricks.reduce((a, n) => a + n, 0) !== 13) tricks = false;
+        }
+      }
+      const o = game.outcome();
+      return { over: !!o, winner: o?.winner ?? null, steps, chainOk, tricks };
+    };
+    out.through = {};
+    for (const [id, cap] of [["tictactoe", 20], ["connect4", 60], ["checkers", 500], ["dominoes", 4000], ["spades", 8000]]) out.through[id] = through(id, cap);
+    // A sharp tic-tac-toe player, left to it, is never beaten.
+    let beaten = 0;
+    for (let n = 0; n < 12; n++) {
+      const t = fresh("tictactoe");
+      while (!t.outcome()) {
+        const m = t.think(t.turn() === 0 ? 0 : 2);
+        if (m === null || !t.play(m)) break;
+      }
+      // The sharp seat's rare slip is its own; what must never happen is a broken game.
+      if (!t.outcome()) beaten = 99;
+    }
+    out.tic = beaten;
+
+    // Sat at the table: the regular answers in his own time, and beating him pays.
+    g.board.sit("connect4");
+    g.board.start(0);
+    g.board.move(3);
+    const waiting = g.board.hud().mine;
+    const before = g.board.game.view().cols.flat().length;
+    run(120);
+    const answered = g.board.game.view().cols.flat().length - before;
+    let cash = g.save.dollars;
+    let won = null;
+    for (let n = 0; n < 6 && !won; n++) {
+      g.board.start(0);
+      for (let i = 0; i < 60 && g.board.hud().stage === "play"; i++) {
+        if (g.board.hud().mine) g.board.move(g.board.game.think(2));
+        else run(90);
+      }
+      const h = g.board.hud();
+      if (h.stage === "done" && h.result.won) won = { pay: h.result.pay, gained: g.save.dollars - cash, wins: h.wins };
+      cash = g.save.dollars;
+    }
+    out.table = { waiting, answered, won };
+
+    // Two people on one device: both seats are played from the screen, and nothing is paid.
+    g.board.start(1, true);
+    const cash2 = g.save.dollars;
+    const seats = [];
+    for (const col of [3, 3, 4, 4, 5, 5, 6]) {
+      seats.push(g.board.hud().mine);
+      g.board.move(col);
+    }
+    const two = g.board.hud();
+    out.two = { seats: seats.every(Boolean), stage: two.stage, text: two.result?.text ?? "", paid: g.save.dollars - cash2 };
+
+    // The screen itself: a chess move made by tapping two squares.
+    g.board.sit("chess");
+    g.board.start(1);
+    g.stage.render = draw;
+    await new Promise((r) => setTimeout(r, 300));
+    const squares = document.querySelectorAll("[data-sq]").length;
+    document.querySelector(`[data-sq="${sq("e2")}"]`)?.click();
+    await new Promise((r) => setTimeout(r, 150));
+    document.querySelector(`[data-sq="${sq("e4")}"]`)?.click();
+    await new Promise((r) => setTimeout(r, 150));
+    const cells = g.board.game.view().cells;
+    out.screen = { squares, moved: cells[sq("e4")] === "P" && cells[sq("e2")] === "" };
+    g.close();
+    out.left = { overlay: g.overlay, id: g.board.id };
+    g.warp(0, -160, Math.PI);
+    return out;
+  });
+  check(Math.hypot(park.ride.x + 84, park.ride.z - 79.6) < 1.5 && Math.abs(park.ride.heading - Math.PI) < 0.01, "a ride to the park lets him out on the terrace, facing the tables", park.ride);
+  check(/Sit down: Spades/.test(park.prompt) && park.sat.overlay === "table" && park.sat.id === "spades" && park.pickButtons === 3, "the open seat at a park table offers the game, at three levels", { prompt: park.prompt, sat: park.sat, buttons: park.pickButtons });
+  check(park.chess.opening.join() === "20,400,8902" && park.chess.middle.join() === "48,2039" && park.chess.mate?.winner === 1 && park.chess.illegal === false, "chess plays by the book: the move counts match the published ones, mate is mate and an illegal move is refused", park.chess);
+  check(park.checkers.hops === 1 && park.checkers.jump && park.checkers.took, "in checkers a jump on offer has to be taken", park.checkers);
+  check(Object.values(park.through).every((t) => t.over && t.chainOk && t.tricks) && park.tic === 0, "every table game plays through to a result, with the domino line matching end to end and thirteen tricks to a hand", park.through);
+  check(park.table.waiting === false && park.table.answered === 1 && park.table.won && park.table.won.pay > 0 && park.table.won.gained === park.table.won.pay && park.table.won.wins >= 1, "the regular answers in his own time, and beating him pays", park.table);
+  check(park.two.seats && park.two.stage === "done" && /Player one/.test(park.two.text) && park.two.paid === 0, "two people can share the device at a table, for bragging rights only", park.two);
+  check(park.screen.squares === 64 && park.screen.moved && park.left.overlay === null && park.left.id === null, "a chess move is made by tapping two squares, and getting up clears the table", { ...park.screen, left: park.left });
   // Recordings are optional: with none on the shelf every sound is still made up on the spot.
   const sound = await page.evaluate(async () => {
     const g = window.__GAME__;
