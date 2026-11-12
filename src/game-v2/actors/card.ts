@@ -187,7 +187,8 @@ export class Card {
     if (view !== "front" && !this.art[view]) view = "front";
 
     const moving = this.speed > 0.35;
-    if (moving) this.phase += (this.speed * dt) / 0.82;
+    // A step every 0.82 m, and never more than a runner's legs can manage.
+    if (moving) this.phase += Math.min(this.speed / 0.82, 3.4) * dt;
     this.idle += dt;
     let src = this.art[view] ?? this.art.front;
     const strides = this.art.walk?.[view];

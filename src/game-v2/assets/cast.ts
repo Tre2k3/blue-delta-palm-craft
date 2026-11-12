@@ -43,11 +43,33 @@ export type OutfitId = "starter" | "tour_white" | "tour_black" | "tour_red" | "f
 
 const starterCourt = moves((n) => `${FITS}/starter/${n}.webp`, [0.92, 0.97, 1.17, 1.17], "left");
 
+/** How tall each stride stands next to the standing drawing: back a and b, front a and b, side a and b. */
+type Strides = readonly [number, number, number, number, number, number];
+
+/**
+ * Benji walking in a fit: two strides from behind, from in front and from the side. The side
+ * strides are drawn walking left and mirrored for walking right.
+ */
+function strides(id: string, size: Strides): Pick<CardArt, "walk" | "scale"> {
+  const f = (n: string) => `${FITS}/${id}/walk-${n}.webp`;
+  const names = ["back-a", "back-b", "front-a", "front-b", "left-a", "left-b"] as const;
+  const scale: Record<string, number> = {};
+  names.forEach((n, i) => (scale[f(n)] = size[i]!));
+  scale[`flip:${f("left-a")}`] = size[4];
+  scale[`flip:${f("left-b")}`] = size[5];
+  return {
+    walk: { back: [f("back-a"), f("back-b")], front: [f("front-a"), f("front-b")], left: [f("left-a"), f("left-b")], right: [`flip:${f("left-a")}`, `flip:${f("left-b")}`] },
+    scale,
+  };
+}
+
+const starterWalk = strides("starter", [1.045, 1.028, 1.041, 1.036, 1.045, 1.003]);
+
 /** Benji in each fit he has art for, what wearing it does, and where it comes from. */
 export const OUTFITS: Record<OutfitId, { name: string; art: CardArt; perk: string; from: string }> = {
   starter: {
     name: "Starter Green Tee",
-    art: { ...turn("benji"), ...starterCourt, walk: { front: [`/game-v2/characters/benji/walk.png${V}`] } },
+    art: { ...turn("benji"), ...starterCourt, walk: starterWalk.walk, scale: { ...starterCourt.scale, ...starterWalk.scale } },
     perk: "The original. No perk, all Memphis.",
     from: "Yours",
   },

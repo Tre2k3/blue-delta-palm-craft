@@ -1097,6 +1097,50 @@ try {
   check(round.city.daily.done && round.city.daily.streak === 1 && round.city.daily.paid >= 120 && round.city.daily.twice === 0 && round.city.card.got && round.city.card.total === 6, "today's drop pays once and a photo at the pier collects a postcard", { daily: round.city.daily, card: round.city.card });
   check(round.city.drift.plain.peak === 0 && round.city.drift.handbrake.peak > 30 && /^DRIFT \d+/.test(round.city.drift.handbrake.toast), "a handbrake slide is scored and paid; an ordinary turn is not a drift", round.city.drift);
   check(round.city.show.left && round.city.show.sky && round.city.bow.left && round.city.bow.seen, "fireworks go up when night falls and a rainbow follows daytime rain", { show: round.city.show, bow: round.city.bow });
+  // Benji walks: two strides for each side he is seen from, with the standing drawing between them.
+  const walk = await page.evaluate(async () => {
+    const g = window.__GAME__;
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    const seen = {};
+    const wore = g.save.wearing;
+    g.wear("starter");
+    for (const key of ["up", "left", "down", "right"]) {
+      g.warp(0, -150, 0);
+      g.camYaw = 0;
+      g.input.hold(key, true);
+      const set = new Set();
+      for (let i = 0; i < 90; i++) {
+        g.tick(1 / 60);
+        if (i > 20) set.add((g.benji.current || "").split("/").pop().split("?")[0]);
+      }
+      g.input.hold(key, false);
+      for (let i = 0; i < 30; i++) g.tick(1 / 60);
+      seen[key] = [...set].sort();
+    }
+    g.wear(wore);
+    g.stage.render = draw;
+    // Every stride is a real picture, not a missing file.
+    const files = ["back-a", "back-b", "front-a", "front-b", "left-a", "left-b"];
+    const sizes = await Promise.all(
+      files.map(
+        (n) =>
+          new Promise((done) => {
+            const img = new Image();
+            img.onload = () => done(img.naturalHeight);
+            img.onerror = () => done(0);
+            img.src = `/game-v2/characters/benji-fits/starter/walk-${n}.webp`;
+          }),
+      ),
+    );
+    return { seen, loaded: sizes.every((h) => h > 600) };
+  });
+  const strides = (list, view) => list.includes(`walk-${view}-a.webp`) && list.includes(`walk-${view}-b.webp`);
+  check(
+    walk.loaded && strides(walk.seen.up, "back") && walk.seen.up.includes("back.png") && strides(walk.seen.left, "left") && strides(walk.seen.down, "front") && strides(walk.seen.right, "left"),
+    "Benji walks with two strides from behind, from the side and from in front",
+    walk,
+  );
   // Recordings are optional: with none on the shelf every sound is still made up on the spot.
   const sound = await page.evaluate(async () => {
     const g = window.__GAME__;
