@@ -1,3 +1,5 @@
+import { Party } from "./Party";
+import { Photo } from "./Photo";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import type { Action, Nav } from "../core/input";
 import type { HudState, Live } from "../core/types";
@@ -211,7 +213,7 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
   // Drag anywhere on the scene to look around.
   const drag = useRef<{ id: number; x: number } | null>(null);
   const title = hud.mode === "title";
-  const playing = !title && !hud.overlay;
+  const playing = !title && !hud.overlay && !hud.cinema;
   const activity = hud.hoops || hud.bowl || hud.fish || hud.race || hud.laser || hud.bounce || hud.pit || hud.whack || hud.machine;
   const showMeter = !!hud.hoops || hud.bowl?.phase === "power" || hud.fish?.phase === "charge" || !!hud.bounce || !!hud.machine?.meter;
   const call = hud.hoops?.call || hud.bowl?.call || hud.fish?.call || hud.race?.call || hud.laser?.call || hud.bounce?.call || hud.pit?.call || hud.whack?.call || hud.machine?.call || "";
@@ -456,6 +458,8 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
         </>
       )}
 
+      {hud.cinema && <Cinema card={hud.cinema} touch={touch} pad={hud.pad} />}
+      <Party game={game} />
       {title && <Title game={game} hud={hud} />}
       {hud.overlay === "pause" && <Pause game={game} hud={hud} />}
       {hud.overlay === "map" && <MapScreen game={game} hud={hud} />}
@@ -467,8 +471,28 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
       {hud.overlay === "court" && <CourtMenu game={game} />}
       {hud.overlay === "arcade" && hud.cabinet && <Arcade game={game} id={hud.cabinet} />}
       {hud.overlay === "results" && <ResultsCard game={game} hud={hud} />}
+      {hud.overlay === "photo" && <Photo game={game} hud={hud} />}
 
       <div ref={fade} className="pointer-events-none absolute inset-0 z-50 bg-black" style={{ opacity: 1 }} />
+    </div>
+  );
+}
+
+/** The opening shot: bars top and bottom, a title that comes and goes, and how to get past it. */
+function Cinema({ card, touch, pad }: { card: { title: string; sub: string }; touch: boolean; pad: boolean }) {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-30">
+      <div className="absolute inset-x-0 top-0 h-[9vh] bg-black" />
+      <div className="absolute inset-x-0 bottom-0 h-[9vh] bg-black" />
+      <div key={card.title} className="sr-cinema absolute inset-x-0 bottom-[16vh] flex flex-col items-center px-4 text-center" style={{ opacity: card.title ? 1 : 0 }}>
+        <div className="sr-title text-5xl leading-none text-white sm:text-7xl" style={{ textShadow: "0 0 34px rgba(57,255,20,0.55), 0 4px 22px rgba(0,0,0,0.85)" }}>
+          {card.title}
+        </div>
+        <div className="mt-2 text-xs font-extrabold uppercase tracking-[0.5em] text-[#39ff14] sm:text-sm" style={{ textShadow: "0 2px 10px rgba(0,0,0,0.9)" }}>
+          {card.sub}
+        </div>
+      </div>
+      <div className="absolute bottom-[2.6vh] right-4 text-[10px] font-bold uppercase tracking-[0.25em] text-white/55">{touch ? "Tap to skip" : pad ? "Press A to skip" : "Press E or Space to skip"}</div>
     </div>
   );
 }

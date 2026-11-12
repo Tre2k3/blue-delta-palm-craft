@@ -595,9 +595,10 @@ export class LaserTag implements Activity {
     const tickets = Math.min(60, Math.floor(this.score / 40)) + (won ? 15 : 0);
     const paid = tickets > 0 ? g.winTickets(tickets) : 0;
     if (paid) g.sound.cash();
-    if (won) g.sound.cheer();
+    if (won) g.moment(2);
     g.showResults(
       {
+        win: won,
         title: won ? "GREEN WINS" : this.team[0] === this.team[1] ? "DEAD EVEN" : "PINK TOOK IT",
         sub: won ? (this.baseHits ? "You went and got their base. That's the game." : "Held the floor. Their base pays 400 if you can get to it.") : "Their base is in the far corner: three hits pays 400. Grab the power-ups.",
         rows: [

@@ -77,6 +77,21 @@ try {
   await page.waitForTimeout(300);
   await ff(1);
   check((await get(() => window.__GAME__.mode)) === "walk", "A on the pad starts the day from the title");
+  // A new day opens on the flight in over the river. Nothing answers until it lands or a button skips it.
+  const opening = await page.evaluate(() => {
+    const g = window.__GAME__;
+    return { on: !!g.intro, card: !!g.cinema, locked: g.input.locked, x: g.camera.position.x, said: g.dialogue.length };
+  });
+  await ff(1.5);
+  const flown = await get(() => window.__GAME__.camera.position.x);
+  await shot("00-opening");
+  check(opening.on && opening.card && opening.locked && opening.said === 0 && flown > opening.x + 20, "a new day opens on the flight in over the river", { ...opening, flown });
+  await press(0);
+  const landed = await page.evaluate(() => {
+    const g = window.__GAME__;
+    return { on: !!g.intro, card: !!g.cinema, locked: g.input.locked, said: g.dialogue.length, behind: Math.hypot(g.camera.position.x - g.pos.x, g.camera.position.z - g.pos.z) };
+  });
+  check(!landed.on && !landed.card && !landed.locked && landed.said === 1 && landed.behind < 8, "any button lands the lens behind Benji and K Blanco calls him in", landed);
   const z0 = await get(() => window.__GAME__.pos.z);
   await page.evaluate(() => (window.__pad.axes[1] = -1));
   await ff(1.2);
@@ -660,6 +675,41 @@ try {
   });
   check(crowd.moved >= Math.ceil(crowd.roamers * 0.6) && crowd.onBig === 0, "people in the Fun House move between things to do, and nobody stands on the trampoline", crowd);
   check(crowd.vendors === 4 && crowd.bowlers === 2, "there is a crew in every truck window and other lanes are in play at the bowl", crowd);
+  // The big moments, photo mode, and the phone's home screen.
+  const wow = await page.evaluate(async () => {
+    const g = window.__GAME__;
+    g.leave(0, -160, 0);
+    await new Promise((r) => setTimeout(r, 900));
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    for (let i = 0; i < 20; i++) g.tick(1 / 30);
+    const p0 = g.live.party;
+    g.moment(3);
+    const slow = g.slowLeft > 0 && g.slowDeep < 0.5;
+    for (let i = 0; i < 20; i++) g.tick(1 / 30);
+    const sky = g.fireworks.busy;
+    const thrown = g.live.party - p0;
+    for (let i = 0; i < 120; i++) g.tick(1 / 30);
+    g.showResults({ title: "T", sub: "", rows: [], pay: 0, respect: 0, tickets: 0, record: false, again: null, win: true }, null, () => {});
+    const card = g.live.party - p0;
+    g.close();
+    g.stage.render = draw;
+    g.openPhoto();
+    const before = g.camera.position.clone();
+    g.photoOrbit(0.6, 0.1);
+    g.tick(1 / 30);
+    const moved = g.camera.position.distanceTo(before);
+    const canvas = g.shoot();
+    const photo = { overlay: g.overlay, moved, width: canvas.width, frozen: g.input.locked };
+    g.close();
+    const m = await fetch("/manifest.webmanifest");
+    const man = m.ok ? await m.json() : null;
+    const icons = man ? await Promise.all(man.icons.map((i) => fetch(i.src, { method: "HEAD" }).then((r) => r.ok))) : [];
+    return { slow, sky, thrown, card, photo, after: g.overlay, app: man && { display: man.display, icons: icons.every(Boolean) && icons.length }, linked: !!document.querySelector('link[rel="manifest"]') };
+  });
+  check(wow.slow && wow.sky && wow.thrown === 1 && wow.card === 2, "a big win slows the picture, throws confetti and lights the sky, and a winning card comes up under more", wow);
+  check(wow.photo.overlay === "photo" && wow.photo.moved > 1 && wow.photo.width > 0 && wow.photo.frozen && wow.after === null, "photo mode swings the lens round Benji and takes the picture", wow.photo);
+  check(wow.linked && wow.app?.display === "fullscreen" && wow.app.icons === 3, "the game can be added to a phone's home screen", wow.app);
   check(errors.length === 0, "no page errors", errors);
   console.log("Memphis smoke passed.");
 } finally {

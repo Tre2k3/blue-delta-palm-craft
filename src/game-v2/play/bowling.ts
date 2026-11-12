@@ -377,7 +377,7 @@ export class Bowling implements Activity {
       if (fr.length === 1 && n === 10) {
         this.strikes++;
         this.say("STRIKE!");
-        g.sound.cheer();
+        g.moment(1);
         next = "frame";
       } else if (fr.length === 2) {
         this.say(left === 0 ? "SPARE!" : n === 0 ? "Missed 'em." : `${fr[0]! + n} down.`);
@@ -389,7 +389,8 @@ export class Bowling implements Activity {
         const strike = n === 10 && this.standingAtStart === 10;
         if (strike) this.strikes++;
         this.say(strike ? "STRIKE!" : "SPARE!");
-        g.sound.cheer();
+        if (strike) g.moment(1);
+        else g.sound.cheer();
       } else this.say(`${n} down.`);
       if (fr.length === 3 || (fr.length === 2 && fr[0]! + fr[1]! < 10)) next = "done";
       else next = left === 0 ? "fresh" : "ball";

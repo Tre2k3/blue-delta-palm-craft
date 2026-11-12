@@ -538,10 +538,11 @@ export class StreetRace implements Activity {
     if (record) g.save.best.race = Math.round(this.time * 100) / 100;
     const got = g.earn([150, 60, 30, 10][place - 1]!, [12, 6, 3, 1][place - 1]!, { race: true });
     if (place === 1) g.award("blue_901");
-    if (place === 1) g.sound.cheer();
+    if (place === 1) g.moment(3);
     g.emit("race", place);
     g.showResults(
       {
+        win: place === 1,
         title: dnf ? "LEFT BEHIND" : place === 1 ? "YOU RUN THE STRIP" : `FINISHED ${["1ST", "2ND", "3RD", "4TH"][place - 1]}`,
         sub: place === 1 ? "Nitro's going to want a rematch." : "Nitro's waiting at the line. Drift for nitro, boost the straights.",
         rows: [

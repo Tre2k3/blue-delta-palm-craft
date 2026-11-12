@@ -333,6 +333,9 @@ export class Hoops implements Activity {
       if (b.hot && this.kind === "shootout") this.moveSpot();
       g.stage.setPunch(0.5);
       g.input.rumble(0.45, 120);
+      g.buzz(30);
+      // The bucket that ends a game to eleven.
+      if (this.kind === "versus" && this.score >= TO && this.score > this.rival.score) g.moment(2);
     } else {
       this.streak = 0;
       this.say(Math.abs(b.error) < 0.06 ? "Rimmed out" : b.error < 0 ? "Short. Hold it longer." : "Long. Let go sooner.", 1.4);
@@ -606,6 +609,7 @@ export class Hoops implements Activity {
     const next = RIVALS[Math.min(RIVALS.length - 1, g.save.best.versus ?? 0)]!;
     g.showResults(
       {
+        win: won,
         title: won ? "GAME. YOU RAN IT." : `${r.name.toUpperCase()} TOOK IT`,
         sub: won ? (r.tier >= RIVALS.length - 1 ? "Nobody left on this court. It's yours." : `${next.name} wants next.`) : "Shot for shot, he had one more. Run it back.",
         rows: [

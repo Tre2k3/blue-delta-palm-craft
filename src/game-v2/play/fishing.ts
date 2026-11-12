@@ -237,7 +237,10 @@ export class Fishing implements Activity {
     const best = g.save.best.fish ?? 0;
     if (f.lb > best) g.save.best.fish = f.lb;
     g.earn(0, f.rarity === "Common" ? 1 : f.rarity === "Uncommon" ? 2 : 5, { quiet: true });
-    g.sound.cheer();
+    // The ones worth telling people about.
+    if (f.rarity === "Legendary") g.moment(2);
+    else if (f.rarity === "Epic" || f.rarity === "Rare") g.moment(1);
+    else g.sound.cheer();
     this.splash(1);
     this.phase = "landed";
     this.t = 0;

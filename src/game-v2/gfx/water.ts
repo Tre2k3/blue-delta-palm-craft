@@ -84,7 +84,11 @@ void main() {
   vec3 mirror = mix(uSky * 1.08, high, smoothstep(0.1, 0.55, ry));
   mirror = mix(uFog * 0.45 + uDeep * 0.4, mirror, smoothstep(-0.06, 0.1, ry));
   float fres = 0.04 + 0.96 * pow(1.0 - max(dot(n, view), 0.0), 3.4);
-  vec3 col = mix(body, mirror, clamp(fres, 0.0, 0.9));
+  // Seen from low down a river is not one sheet of sky: long slicks of calm water mirror it and
+  // the ruffled water between them stays dark, in streaks drawn out along the current.
+  float slick = noise(q * vec2(0.011, 0.085)) * 0.6 + noise(q * vec2(0.03, 0.26) + 7.0) * 0.4;
+  mirror *= 0.52 + 0.56 * smoothstep(0.3, 0.72, slick);
+  vec3 col = mix(body, mirror, clamp(fres, 0.0, 0.84));
 
   // Sun: a glitter path broken up by the chop.
   vec3 sunDir = normalize(uSunDir);

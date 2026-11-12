@@ -4,6 +4,7 @@ import { Troupe, type Act, type Stop } from "./actors/crowd";
 import { People } from "./actors/people";
 import { Traffic } from "./actors/traffic";
 import { CarModel, Driver, STREET } from "./actors/vehicle";
+import { Fireworks } from "./gfx/fx";
 import { BALLERS, CAST, PEDS, OUTFITS, BENJI_HEIGHT, type CastId, type OutfitId, VENDORS } from "./assets/cast";
 import { Sound } from "./core/audio";
 import { Input, type Nav } from "./core/input";
@@ -149,7 +150,7 @@ export class Game {
   readonly camera: THREE.PerspectiveCamera;
   readonly sky: Sky;
   readonly rooms: { hq: HqRoom; home: HomeRoom; bowl: BowlRoom; fun: FunRoom; laser: LaserRoom };
-  readonly live: Live = { meter: 0, sweetLo: 0, sweetHi: 0, aim: 0, tension: 0, speed: 0, nitro: 0, fade: 1, radar: new Array<number>(48).fill(0), radarN: 0, cue: 999, turn: -1, markX: 0.5, markY: 0.5, markOn: false, markDist: 0, x: 0, z: 0, heading: 0, camYaw: 0 };
+  readonly live: Live = { meter: 0, sweetLo: 0, sweetHi: 0, aim: 0, tension: 0, speed: 0, nitro: 0, fade: 1, radar: new Array<number>(48).fill(0), radarN: 0, cue: 999, turn: -1, markX: 0.5, markY: 0.5, markOn: false, markDist: 0, x: 0, z: 0, heading: 0, camYaw: 0, party: 0, partyLevel: 0 };
   readonly benji: Card;
   readonly car: CarModel;
   readonly driver = new Driver();
@@ -216,6 +217,18 @@ export class Game {
   private nearSpot: Spot | null = null;
   private camPos = new THREE.Vector3();
   private titleSpin = 0;
+  /** The opening shot: seconds in, the path of the lens and the path of what it looks at. */
+  private intro: { t: number; path: THREE.CatmullRomCurve3; aim: THREE.CatmullRomCurve3; card: number } | null = null;
+  private cinema: { title: string; sub: string } | null = null;
+  /** Real seconds of slow motion left, and how slow. */
+  private slowLeft = 0;
+  private slowDeep = 1;
+  private partyAt = -10;
+  /** Photo mode: which way the lens sits from Benji, how high, how far. */
+  private photo = { yaw: 0, pitch: 0.14, dist: 5.2 };
+  private fireworks = new Fireworks();
+  /** Phones buzz on hits and wins unless this is off. */
+  buzzOn = true;
   private skip = 0;
   private padWas = false;
   /** A game is running inside a cabinet's browser. */
@@ -298,6 +311,13 @@ export class Game {
     this.beam.position.y = 35;
     this.beam.renderOrder = 4;
     this.city.exterior.add(this.beam);
+    this.city.exterior.add(this.fireworks.points);
+    this.fireworks.onBurst = () => this.sound.boom();
+    try {
+      this.buzzOn = localStorage.getItem("sack-v2-buzz") !== "0";
+    } catch {
+      // Private windows have no storage: the default stands.
+    }
 
     this.hoops = new Hoops(this);
     this.bowling = new Bowling(this);
@@ -773,7 +793,167 @@ export class Game {
     this.setPlace("street");
     this.snapCamera();
     this.sound.ui();
-    if (!resume) this.say("K Blanco", "Benji! It's Drop Day. Come inside, I got something for you.", CAST.kBlanco.portrait);
+    if (!resume) this.startIntro();
+    this.push();
+  }
+
+  /**
+   * The opening: the lens comes in low over the river, through the M bridge, swings past the
+   * Pyramid and round the boutique, and lands behind Benji where the day is played from.
+   */
+  private startIntro() {
+    if (typeof location !== "undefined" && new URLSearchParams(location.search).get("intro") === "0") return this.endIntro();
+    const end = this.camera.position.clone();
+    const fx = Math.sin(this.camYaw);
+    const fz = Math.cos(this.camYaw);
+    const eye = new THREE.Vector3(this.pos.x + fx * 1.5, this.benji.group.position.y + 1.5, this.pos.z + fz * 1.5);
+    const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+    this.intro = {
+      t: 0,
+      path: new THREE.CatmullRomCurve3([V(-275, 17, -240), V(-196, 21, -238), V(-122, 26, -226), V(-76, 15, -178), V(-45, 10, -158), V(-28, 4.4, -147), end], false, "centripetal"),
+      aim: new THREE.CatmullRomCurve3([V(-100, 24, -262), V(0, 26, -300), V(132, 30, -394), V(-18, 8, -180), V(-17, 6, -174), V(this.pos.x, 2, this.pos.z - 0.5), eye], false, "centripetal"),
+      card: -1,
+    };
+    this.cinema = { title: "", sub: "" };
+    this.input.locked = true;
+    this.runIntro(0);
+  }
+
+  private runIntro(dt: number) {
+    const it = this.intro;
+    if (!it) return;
+    const T = 11.5;
+    it.t += dt;
+    const input = this.input;
+    if (it.t >= T || (it.t > 0.6 && (input.hitRaw("interact") || input.hitRaw("action") || input.hitRaw("pause") || input.hitRaw("back")))) return this.endIntro();
+    const u = clamp(it.t / T, 0, 1);
+    // Away gently, and slower still into the landing.
+    const e = u * u * (3 - 2 * u);
+    it.path.getPoint(e, this.camera.position);
+    it.aim.getPoint(e, _look);
+    this.camera.lookAt(_look);
+    const fov = 40 + 6 * e;
+    if (Math.abs(this.camera.fov - fov) > 0.02) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
+    const card = it.t > 0.8 && it.t < 4.3 ? 0 : it.t > 5 && it.t < 9.8 ? 1 : -1;
+    if (card !== it.card) {
+      it.card = card;
+      this.cinema = card === 0 ? { title: "MEMPHIS", sub: "TENNESSEE · THE 901" } : card === 1 ? { title: "SACKRELIGIOUS", sub: "DROP DAY" } : { title: "", sub: "" };
+      this.push();
+    }
+  }
+
+  /** Any button or a tap lands the lens straight away. */
+  skipIntro() {
+    if (this.intro) this.endIntro();
+  }
+
+  private endIntro() {
+    this.intro = null;
+    this.cinema = null;
+    this.input.locked = false;
+    this.input.clear();
+    this.camera.fov = 46;
+    this.camera.updateProjectionMatrix();
+    this.snapCamera();
+    this.say("K Blanco", "Benji! It's Drop Day. Come inside, I got something for you.", CAST.kBlanco.portrait);
+    this.push();
+  }
+
+  /**
+   * Something worth a roar: 1 a strike or a big fish, 2 a win, 3 a win the whole river hears.
+   * The picture slows for a beat, paper flies, and outdoors the big ones light the sky.
+   */
+  moment(level: 1 | 2 | 3) {
+    this.slowLeft = level === 1 ? 0.5 : level === 2 ? 0.9 : 1.15;
+    this.slowDeep = level === 1 ? 0.45 : 0.3;
+    this.party(level);
+    this.sound.cheer();
+    if (level >= 2) this.sound.fanfare();
+    this.buzz(level === 1 ? 45 : [45, 60, 140]);
+    if (level === 3 && !this.room) {
+      this.camera.getWorldDirection(_v);
+      this.fireworks.show(this.camera.position, _v, this.stage.quality === "low" ? 4 : 7);
+    }
+  }
+
+  /** Photo mode: the day stops and the lens comes round in front of him. */
+  openPhoto() {
+    this.photo.yaw = this.camYaw + Math.PI + 0.55;
+    this.photo.pitch = 0.14;
+    this.photo.dist = this.room ? 3.6 : this.mode === "drive" ? 7.5 : 5.2;
+    this.open("photo");
+  }
+
+  photoOrbit(dx: number, dy: number) {
+    this.photo.yaw -= dx;
+    this.photo.pitch = clamp(this.photo.pitch + dy, -0.1, 1.25);
+  }
+
+  photoZoom(d: number) {
+    this.photo.dist = clamp(this.photo.dist + d, 1.6, this.room ? 7 : 18);
+  }
+
+  private photoCamera() {
+    const ph = this.photo;
+    const car = this.mode === "drive";
+    const tx = car ? this.driver.x : this.pos.x;
+    const tz = car ? this.driver.z : this.pos.z;
+    const room = this.room;
+    const y0 = (room ? room.floorY : this.benji.group.position.y) + (car ? 0.8 : 1.0);
+    const flat = Math.cos(ph.pitch);
+    const fx = Math.sin(ph.yaw) * flat;
+    const fz = Math.cos(ph.yaw) * flat;
+    // This side of any wall, and inside the room when there is one.
+    const d = ph.dist * clamp(sight(tx, tz, tx + fx * ph.dist, tz + fz * ph.dist, this.solids, 0.35), 0.25, 1);
+    let x = tx + fx * d;
+    let z = tz + fz * d;
+    if (room) {
+      x = clamp(x, room.bounds.minX + 0.4, room.bounds.maxX - 0.4);
+      z = clamp(z, room.bounds.minZ + 0.4, room.bounds.maxZ - 0.4);
+    }
+    this.camera.position.set(x, y0 + 0.2 + Math.sin(ph.pitch) * d, z);
+    _look.set(tx, y0, tz);
+    this.camera.lookAt(_look);
+    if (this.camera.fov !== 42) {
+      this.camera.fov = 42;
+      this.camera.updateProjectionMatrix();
+    }
+  }
+
+  /** Draws the scene as the lens has it now and hands the canvas back, to be copied at once. */
+  shoot() {
+    this.stage.render();
+    return this.stage.renderer.domElement;
+  }
+
+  /** Confetti, and nothing else. */
+  party(level: 1 | 2 | 3) {
+    this.partyAt = this.time;
+    this.live.partyLevel = level;
+    this.live.party += 1;
+  }
+
+  /** A buzz in the hand, on phones that have one. */
+  buzz(pattern: number | number[]) {
+    if (!this.buzzOn || typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
+    try {
+      navigator.vibrate(pattern);
+    } catch {
+      // Some browsers refuse until the page has been touched.
+    }
+  }
+
+  setBuzz(on: boolean) {
+    this.buzzOn = on;
+    try {
+      localStorage.setItem("sack-v2-buzz", on ? "1" : "0");
+    } catch {
+      // Not saved; it still holds for this visit.
+    }
+    if (on) this.buzz(40);
     this.push();
   }
 
@@ -810,6 +990,11 @@ export class Game {
     this.onResultsClose = close;
     this.overlay = "results";
     this.input.locked = true;
+    // A win or a record comes up under confetti, unless the moment itself just threw some.
+    if ((r.win || r.record) && this.time - this.partyAt > 2.5) {
+      this.party(2);
+      this.buzz([45, 60, 140]);
+    }
     this.push();
     if (this.input.pad) setTimeout(() => this.onNav?.("init"), 60);
   }
@@ -867,6 +1052,11 @@ export class Game {
     this.input.locked = false;
     this.input.clear();
     this.sound.duck(false);
+    if (was === "photo") {
+      this.camera.fov = this.room ? 52 : 46;
+      this.camera.updateProjectionMatrix();
+      this.snapCamera();
+    }
     if (was === "results") {
       const f = this.onResultsClose;
       this.results = null;
@@ -1021,6 +1211,7 @@ export class Game {
       const next = STORY[this.save.step];
       this.toast(`${step.title}: done${got.dollars ? `  +$${got.dollars}` : ""}  +${got.respect} Respect`, 4);
       if (!next) {
+        this.moment(3);
         this.say("K Blanco", "You ran the whole Drop Day. The city's yours now. Check the board for more work.", CAST.kBlanco.portrait);
       } else if (next.done === "bought" && this.save.owned.length > 1) this.emit("bought");
       else if (next.done === "wore" && this.save.wearing !== "starter") this.emit("wore");
@@ -1411,6 +1602,10 @@ export class Game {
 
   /** Pointer went down on the scene. */
   tap(nx: number, ny: number) {
+    if (this.intro) {
+      if (this.intro.t > 0.6) this.endIntro();
+      return;
+    }
     if (!this.overlay) this.activity?.tap?.(nx, ny);
   }
 
@@ -1690,8 +1885,14 @@ export class Game {
     // The game always runs at its true speed. A slow frame is played as several short steps
     // and only the last is drawn, so a weak machine gets a choppier picture, never slow motion.
     const span = Math.min(0.5, real);
+    // A big moment plays slow for a beat, then eases back up to speed.
+    let k = 1;
+    if (this.slowLeft > 0) {
+      k = this.slowLeft > 0.3 ? this.slowDeep : 1 + (this.slowDeep - 1) * (this.slowLeft / 0.3);
+      this.slowLeft -= real;
+    }
     const steps = Math.ceil(span / STEP);
-    for (let i = 1; i <= steps; i++) this.tick(span / steps, i === steps);
+    for (let i = 1; i <= steps; i++) this.tick((span * k) / steps, i === steps);
   };
 
   private tick(dt: number, draw = true) {
@@ -1714,7 +1915,7 @@ export class Game {
     }
 
     // Keys that work everywhere.
-    if (this.mode !== "title") {
+    if (this.mode !== "title" && !this.intro) {
       if (input.hitRaw("pause")) {
         if (this.overlay) this.close();
         else this.open("pause");
@@ -1738,7 +1939,10 @@ export class Game {
     }
     this.live.fade += clamp(this.fadeTo - this.live.fade, -dt * 3.2, dt * 4.5);
 
+    this.fireworks.update(dt);
+    if (this.overlay === "photo") this.photoCamera();
     if (this.mode === "title") this.titleCamera(dt);
+    else if (this.intro) this.runIntro(dt);
     else if (!paused) {
       if (this.activity) {
         this.activity.update(dt);
@@ -1987,7 +2191,8 @@ export class Game {
       shopFocus: this.shopFocus,
       cabinet: this.cabinet,
       foodAt: this.foodAt,
-      settings: { quality: this.stage.quality, auto: this.auto, music: this.sound.musicOn, sfx: this.sound.sfxOn, clock: this.sky.auto },
+      settings: { quality: this.stage.quality, auto: this.auto, music: this.sound.musicOn, sfx: this.sound.sfxOn, clock: this.sky.auto, buzz: this.buzzOn },
+      cinema: this.cinema,
       hasSave: this.hasSave && s.step > 0,
       storyDone: !step,
       touch: this.input.touch,

@@ -295,6 +295,27 @@ export class Sound {
       this.hiss(t + 0.1, 0.12, 0.3, 0.9, 2600, 0.7, o);
     });
   }
+  /** A camera: the curtain there and back. */
+  shutter() {
+    this.one((t, o) => {
+      this.hiss(t, 0.22, 0.001, 0.03, 5200, 0.9, o, "highpass");
+      this.hiss(t + 0.07, 0.16, 0.001, 0.04, 3800, 0.9, o, "highpass");
+    });
+  }
+  /** A shell going off over the river. */
+  boom() {
+    this.one((t, o) => {
+      this.hiss(t, 0.5, 0.004, 0.5, 150, 0.7, o, "lowpass");
+      this.hiss(t + 0.04, 0.14, 0.01, 0.9, 3200, 0.5, o, "bandpass", 0.5);
+      this.tone(74, "sine", t, 0.4, 0.005, 0.36, o, 0.5);
+    });
+  }
+  /** Four rising notes for a win. */
+  fanfare() {
+    this.one((t, o) => {
+      [0, 4, 7, 12].forEach((n, i) => this.tone(392 * Math.pow(2, n / 12), "triangle", t + i * 0.09, 0.15, 0.006, i === 3 ? 0.5 : 0.16, o));
+    });
+  }
   whoosh() {
     this.one((t, o) => this.hiss(t, 0.2, 0.08, 0.3, 600, 1.2, o, "bandpass", 5));
   }

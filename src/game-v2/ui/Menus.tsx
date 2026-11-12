@@ -104,6 +104,11 @@ export function Pause({ game, hud }: { game: Game; hud: HudState }) {
       <button data-primary className="sr-btn sr-btn-green mb-3 w-full py-3 text-lg" onClick={() => game.close()}>
         Back to Memphis
       </button>
+      {(hud.mode === "walk" || hud.mode === "drive") && (
+        <button className="sr-btn sr-btn-ghost mb-3 w-full py-2.5" onClick={() => game.openPhoto()}>
+          Photo mode
+        </button>
+      )}
       <Row label="Graphics">
         <Seg
           value={s.auto ? "auto" : s.quality}
@@ -148,6 +153,18 @@ export function Pause({ game, hud }: { game: Game; hud: HudState }) {
           onPick={(v) => game.setSfx(v === "on")}
         />
       </Row>
+      {hud.touch && (
+        <Row label="Vibration">
+          <Seg
+            value={s.buzz ? "on" : "off"}
+            options={[
+              ["on", "On"],
+              ["off", "Off"],
+            ]}
+            onPick={(v) => game.setBuzz(v === "on")}
+          />
+        </Row>
+      )}
       <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-xs text-white/70">
         {(hud.pad
           ? ([

@@ -28,7 +28,7 @@ export type Anchor = { x: number; z: number };
 
 export type Mode = "title" | "walk" | "drive" | "race" | "hoops" | "bowl" | "fish" | "kart" | "laser" | "bounce" | "pit" | "whack";
 
-export type Overlay = null | "pause" | "map" | "shop" | "wardrobe" | "arcade" | "prizes" | "food" | "results" | "video" | "court";
+export type Overlay = null | "pause" | "map" | "shop" | "wardrobe" | "arcade" | "prizes" | "food" | "results" | "video" | "court" | "photo";
 
 export type Catch = { name: string; lb: number; pay: number; rarity: string; color: string };
 
@@ -70,6 +70,8 @@ export type Results = {
   record: boolean;
   /** Label of the replay button, or null when there is nothing to replay. */
   again: string | null;
+  /** Benji came out on top: the card comes up under confetti. */
+  win?: boolean;
 };
 
 export type HoopsKind = "shootout" | "practice" | "versus";
@@ -138,7 +140,9 @@ export type HudState = {
   shopFocus: string | null;
   cabinet: string | null;
   foodAt: "catch" | "velis" | "brothers" | "pizza";
-  settings: { quality: "low" | "medium" | "high"; auto: boolean; music: boolean; sfx: boolean; clock: boolean };
+  settings: { quality: "low" | "medium" | "high"; auto: boolean; music: boolean; sfx: boolean; clock: boolean; buzz: boolean };
+  /** A shot the player only watches: the opening. The rest of the screen clears for its title card. */
+  cinema: { title: string; sub: string } | null;
   hasSave: boolean;
   storyDone: boolean;
   touch: boolean;
@@ -176,4 +180,7 @@ export type Live = {
   z: number;
   heading: number;
   camYaw: number;
+  /** Goes up by one each time there is something to throw confetti for; `partyLevel` says how much. */
+  party: number;
+  partyLevel: number;
 };
