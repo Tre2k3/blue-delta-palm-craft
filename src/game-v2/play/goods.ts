@@ -38,7 +38,7 @@ export type TruckId = "catch" | "velis" | "brothers";
  * The trucks on the riverfront lot. Two are real Memphis businesses that sponsor the game and
  * one is the house truck: names, art, menus and handles are theirs and are shown as given.
  */
-export type Truck = { id: TruckId; name: string; tag: string; blurb: string; color: string; body: number; trim: number; logo: string; social: string; video?: { src: string; artist: string; title: string } };
+export type Truck = { id: TruckId; name: string; tag: string; blurb: string; color: string; body: number; trim: number; logo: string; social: string; /** A picture of the truck at work, for the top of its menu. */ scene?: string; video?: { src: string; artist: string; title: string } };
 
 export const FOOD_TRUCKS: Truck[] = [
   {
@@ -58,9 +58,10 @@ export const FOOD_TRUCKS: Truck[] = [
     tag: "VELI'S WINGS",
     blurb: "Gold-rim plate. Lemon pepper or extra hot. Don't play about the sauce.",
     color: "#d4af37",
-    body: 0x14110b,
-    trim: 0xd4af37,
+    body: 0xe9e0cc,
+    trim: 0xc9a227,
     logo: "/game/food/velis-wings.webp",
+    scene: "/game/food/velis-scene.webp",
     social: "@yungveli",
     video: { src: "/game/food/yung-veli.mp4", artist: "Yung Veli", title: "Go Girl" },
   },
@@ -70,9 +71,10 @@ export const FOOD_TRUCKS: Truck[] = [
     tag: "WINGZ N THINGS",
     blurb: "Two kings, one window. Wingz, burger, fries. Crown included.",
     color: "#e11d48",
-    body: 0xf2efe9,
-    trim: 0xe11d48,
+    body: 0x17171b,
+    trim: 0xd1261c,
     logo: "/game/food/brothers-wingz.webp",
+    scene: "/game/food/brothers-scene.webp",
     social: "@brotherswingznthings",
   },
 ];

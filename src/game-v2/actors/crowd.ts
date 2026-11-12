@@ -49,6 +49,11 @@ type Member = {
   posted: boolean;
   order: boolean;
   at: number;
+  /** Behind a counter: seconds left holding an order out, seconds until the next one, and who they share the window with. */
+  serving: number;
+  rest: number;
+  team: string;
+  served: number;
 };
 
 const STAY: Record<Act, [number, number]> = {
@@ -103,6 +108,7 @@ export function stepClear(p: { x: number; z: number }, car: Moving, dt: number) 
 export class Troupe {
   private members: Member[] = [];
   private rand: () => number;
+  private clock = 0;
 
   constructor(
     private group: THREE.Group,
@@ -138,8 +144,29 @@ export class Troupe {
   }
 
   /** Someone who stays where they are: a cook, a clerk, a kid on a trampoline. */
-  post(art: CardArt, height: number, stop: Stop) {
-    return this.add(art, height, [stop], stop, true, false);
+  post(art: CardArt, height: number, stop: Stop, team = "") {
+    const card = this.add(art, height, [stop], stop, true, false);
+    this.members[this.members.length - 1]!.team = team;
+    return card;
+  }
+
+  /** One of the crew holds an order out. The ones who share a window take turns. */
+  private serve(m: Member, seconds: number) {
+    m.serving = seconds;
+    m.rest = 5 + this.rand() * 5;
+    m.served = this.clock;
+    if (m.team) for (const o of this.members) if (o !== m && o.team === m.team) o.rest = Math.max(o.rest, seconds + 1.5 + this.rand() * 2);
+  }
+
+  /** Benji ordered at (x, z): whoever at that window served longest ago hands it over. */
+  serveAt(x: number, z: number, seconds = 3.4) {
+    let pick: Member | null = null;
+    for (const m of this.members) {
+      if (m.stop.act !== "serve" || Math.hypot(m.x - x, m.z - z) > 7) continue;
+      if (!pick || m.served < pick.served) pick = m;
+    }
+    if (pick) this.serve(pick, seconds);
+    return !!pick;
   }
 
   private add(art: CardArt, height: number, stops: Stop[], stop: Stop, posted: boolean, order: boolean) {
@@ -148,7 +175,7 @@ export class Troupe {
     stop.taken = true;
     const seed = this.rand() * 10;
     const stay = stop.stay ?? STAY[stop.act];
-    const m: Member = { card, stops, stop, going: false, t: stay[0] + this.rand() * (stay[1] - stay[0]), x: stop.x, z: stop.z, pace: 1.25 + this.rand() * 0.5, seed, hop: 0, checkT: 0, checkX: stop.x, checkZ: stop.z, posted, order, at: Math.max(0, stops.indexOf(stop)) };
+    const m: Member = { card, stops, stop, going: false, t: stay[0] + this.rand() * (stay[1] - stay[0]), x: stop.x, z: stop.z, pace: 1.25 + this.rand() * 0.5, seed, hop: 0, checkT: 0, checkX: stop.x, checkZ: stop.z, posted, order, at: Math.max(0, stops.indexOf(stop)), serving: 0, rest: 2 + this.rand() * 4, team: "", served: -1 };
     card.heading = Math.atan2(stop.fx - stop.x, stop.fz - stop.z);
     this.members.push(m);
     return card;
@@ -187,6 +214,7 @@ export class Troupe {
    * from the camera (outdoors).
    */
   update(dt: number, camera: THREE.Vector3, tint: THREE.Color, player: { x: number; z: number } | null, time: number, beat = -1, reach = 0, car: Moving | null = null) {
+    this.clock = time;
     for (const m of this.members) {
       const c = m.card;
       // A car coming: jump clear of it, then walk back to whatever you were doing.
@@ -284,6 +312,19 @@ export class Troupe {
         else if (act === "cheer" && Math.sin(time * 0.55 + m.seed * 3) > 0.55) lift += Math.abs(Math.sin((time + m.seed) * 8)) * 0.16;
         else if (act === "dance") c.groove = beat >= 0 ? beat + m.seed * 0.05 : time + m.seed;
         if (beat >= 0 && act !== "serve" && act !== "bounce" && act !== "inside") c.groove = beat + m.seed * 0.05;
+        if (act === "serve") {
+          if (m.serving > 0) m.serving -= dt;
+          else {
+            m.rest -= dt;
+            if (m.rest <= 0) {
+              // Somebody waiting at the window gets served; with nobody there, keep an eye out.
+              const waiting = this.members.some((o) => !o.posted && !o.going && o.stop.act !== "inside" && Math.hypot(o.x - m.x, o.z - m.z) < 4.6);
+              if (waiting) this.serve(m, 2.6);
+              else m.rest = 1;
+            }
+          }
+          c.pose = m.serving > 0 ? "serve" : null;
+        }
         if (m.hop > 0) {
           m.hop = Math.max(0, m.hop - dt);
           lift += Math.abs(Math.sin((time + m.seed) * 9)) * 0.24 * Math.min(1, m.hop * 2);

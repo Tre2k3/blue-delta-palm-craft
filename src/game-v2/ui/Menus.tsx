@@ -398,6 +398,7 @@ export function FoodMenu({ game, hud }: { game: Game; hud: HudState }) {
   const truck = FOOD_TRUCKS.find((t) => t.id === hud.foodAt) ?? null;
   return (
     <Sheet title={truck ? truck.name : "Fun House Pizza"} sub="A full stomach pays: +10% SackDollars from everything while it lasts." onClose={() => game.close()}>
+      {truck?.scene && <img src={truck.scene} alt={`${truck.name} at the window`} className="mb-3 max-h-48 w-full rounded-xl border border-white/10 object-cover object-[50%_35%] sm:max-h-56" draggable={false} />}
       {truck && (
         <div className="mb-3 flex items-center gap-3 rounded-xl border p-3" style={{ borderColor: `${truck.color}66`, background: `linear-gradient(90deg, ${truck.color}22, transparent)` }}>
           <img src={truck.logo} alt={truck.name} className="h-16 w-24 shrink-0 rounded-lg bg-black/40 object-contain" />

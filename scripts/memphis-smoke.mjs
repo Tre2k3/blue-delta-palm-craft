@@ -393,10 +393,15 @@ try {
     g.foodAt = "velis";
     g.order("velis_lemon");
     const paid = before - g.save.dollars;
+    const veli = g.street.members.find((m) => m.team === "velis");
+    for (let i = 0; i < 6; i++) g.tick(1 / 30);
+    const handed = { serving: veli?.serving > 0, pose: veli?.card.pose, drawing: veli?.card.current };
     g.foodAt = "catch";
     g.order("catch_grill");
-    return { trucks: Object.keys(a.windows), prompt, paid, cooler: g.save.cooler.length, video: !!g.veli, fed: g.fedUntil > g.time };
+    return { trucks: Object.keys(a.windows), prompt, paid, cooler: g.save.cooler.length, video: !!g.veli, fed: g.fedUntil > g.time, handed, crews: g.street.members.filter((m) => m.team).map((m) => m.team).sort().join() };
   });
+  check(lot.handed.serving && lot.handed.pose === "serve" && /vendors\/veli\/serve-/.test(lot.handed.drawing), "Veli holds the order out when Benji buys", lot.handed);
+  check(lot.crews === "brothers,brothers,catch,velis", "Veli and both brothers are in their windows", lot.crews);
   check(lot.trucks.join() === "catch,velis,brothers" && /Veli's Wings/.test(lot.prompt) && lot.paid === 14 && lot.cooler === 0 && lot.video && lot.fed, "the three food trucks serve their own menus and Veli's screen is on", lot);
   // Coins: every street has some, and walking through one banks it.
   const coins = await page.evaluate(() => {

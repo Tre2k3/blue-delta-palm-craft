@@ -4,7 +4,7 @@ import { Troupe, type Act, type Stop } from "./actors/crowd";
 import { People } from "./actors/people";
 import { Traffic } from "./actors/traffic";
 import { CarModel, Driver, STREET } from "./actors/vehicle";
-import { CAST, PEDS, OUTFITS, BENJI_HEIGHT, type CastId, type OutfitId } from "./assets/cast";
+import { CAST, PEDS, OUTFITS, BENJI_HEIGHT, type CastId, type OutfitId, VENDORS } from "./assets/cast";
 import { Sound } from "./core/audio";
 import { Input, type Nav } from "./core/input";
 import type { HoopsKind, Dialogue, HudState, Live, Mode, Overlay, Place, Results, Save, Solid } from "./core/types";
@@ -480,11 +480,17 @@ export class Game {
       const wx = TRUCKS.x + offs[id] + 1.2;
       lot.push(at(wx - 1.2, TRUCKS.z - 3.5, wx, TRUCKS.z, "watch", { stay: [4, 8] }), at(wx + 1.1, TRUCKS.z - 3.8, wx, TRUCKS.z, "watch", { stay: [4, 8] }));
       // Whoever runs the truck is in the window: Veli's, the two brothers, the Catch.
-      const crew = id === "velis" ? [["local", 0]] : id === "brothers" ? [["dj", -0.7], ["baller-1", 0.7]] : [["host", 0]];
-      for (const [name, dx] of crew as [string, number][]) {
-        const v = hand(name);
-        st.post(v.art, v.height, at(wx + dx, TRUCKS.z - 1.5, wx + dx, TRUCKS.z - 8, "serve", { lift: 0.74 }));
-      }
+      // The crew stand on the truck floor, high enough that the order they hold out clears the counter.
+      const crew: [{ art: { front: string }; height: number }, number, number][] =
+        id === "velis"
+          ? [[VENDORS.veli, 0, 1.1]]
+          : id === "brothers"
+            ? [
+                [VENDORS.brotherRed, -0.78, 1.1],
+                [VENDORS.brotherBlue, 0.78, 1.1],
+              ]
+            : [[hand("host"), 0, 0.74]];
+      for (const [v, dx, floor] of crew) st.post(v.art, v.height, at(wx + dx, TRUCKS.z - 1.5, wx + dx, TRUCKS.z - 8, "serve", { lift: floor }), id);
     }
     for (const tx of [-14, -4, 6, 16]) lot.push(at(TRUCKS.x + tx - 1.75, TRUCKS.z - 9.5, TRUCKS.x + tx, TRUCKS.z - 9.5, "eat"), at(TRUCKS.x + tx + 1.75, TRUCKS.z - 9.5, TRUCKS.x + tx, TRUCKS.z - 9.5, "eat"));
     for (const [vx, vz] of [
@@ -1124,6 +1130,9 @@ export class Game {
       plate = `Blackened ${best.name}`;
     } else if (!this.spend(f.cost)) return;
     this.fedUntil = this.time + f.seconds;
+    // Whoever is in the window hands it over.
+    if (this.place === "street") this.street.serveAt(this.pos.x, this.pos.z);
+    else this.troupes[this.place]?.serveAt(this.pos.x, this.pos.z);
     if (f.respect) this.earn(0, f.respect, { quiet: true });
     this.toast(`${plate}. ${f.line}`, 4);
     this.emit("ate");

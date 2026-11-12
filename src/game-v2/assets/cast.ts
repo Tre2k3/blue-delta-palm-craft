@@ -85,18 +85,28 @@ export const CAST: Record<"kBlanco" | "courtOg" | "mamaDee" | "uncJ" | "nitro" |
 
 export type CastId = keyof typeof CAST;
 
-/**
- * People on the street were only ever drawn from the front. Their back views are made from those
- * drawings (hair over the face, a plain back to the jacket), so nobody walks away face first.
- */
+/** People on the street: drawn from the front and from behind, standing and in stride. */
 const ped = (name: string, height: number): { art: CardArt; height: number } => ({
   art: {
     front: `/game-v2/characters/pedestrians/${name}.png${V}`,
-    back: `/game-v2/characters/pedestrians/${name}-back.webp`,
-    walk: { front: [`/game-v2/characters/pedestrians/${name}-walk.png${V}`], back: [`/game-v2/characters/pedestrians/${name}-walk-back.webp`] },
+    back: `/game-v2/characters/pedestrians/${name}-back.webp?v=2`,
+    walk: { front: [`/game-v2/characters/pedestrians/${name}-walk.png${V}`], back: [`/game-v2/characters/pedestrians/${name}-walk-back.webp?v=2`] },
   },
   height,
 });
+
+/** Someone who works a window: standing easy, and holding the order out, from in front and from behind. */
+const crew = (id: string, height: number): { art: CardArt; height: number } => {
+  const f = (n: string) => `/game-v2/characters/vendors/${id}/${n}.webp`;
+  return { art: { front: f("front"), back: f("back"), poses: { serve: { front: f("serve-front"), back: f("serve-back") } } }, height };
+};
+
+/** The crews of the two sponsor trucks: Veli at Veli's Wings, the two brothers at Wingz N Things. */
+export const VENDORS = {
+  veli: crew("veli", 1.62),
+  brotherRed: crew("brother-red", 1.56),
+  brotherBlue: crew("brother-blue", 1.7),
+};
 
 export const PEDS = [
   ped("male-01", 1.78),
