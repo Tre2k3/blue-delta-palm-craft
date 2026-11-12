@@ -6,7 +6,7 @@ import type { HudState, Live } from "../core/types";
 import { formatClock } from "../core/util";
 import type { Game } from "../game";
 import { Arcade } from "./Arcade";
-import { CourtMenu, FoodMenu, MapScreen, Pause, Prizes, ResultsCard, Shop, Title, VideoScreen, Wardrobe } from "./Menus";
+import { CourtMenu, FoodMenu, Garage, MapScreen, Pause, Prizes, ResultsCard, Shop, Title, VideoScreen, Wardrobe } from "./Menus";
 import { drawMap } from "./map";
 import "./ui.css";
 
@@ -469,6 +469,7 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
       {hud.overlay === "food" && <FoodMenu game={game} hud={hud} />}
       {hud.overlay === "video" && <VideoScreen game={game} />}
       {hud.overlay === "court" && <CourtMenu game={game} />}
+      {hud.overlay === "garage" && <Garage game={game} hud={hud} />}
       {hud.overlay === "arcade" && hud.cabinet && <Arcade game={game} id={hud.cabinet} />}
       {hud.overlay === "results" && <ResultsCard game={game} hud={hud} />}
       {hud.overlay === "photo" && <Photo game={game} hud={hud} />}

@@ -677,6 +677,89 @@ try {
   });
   check(crowd.moved >= Math.ceil(crowd.roamers * 0.6) && crowd.onBig === 0, "people in the Fun House move between things to do, and nobody stands on the trampoline", crowd);
   check(crowd.vendors === 4 && crowd.bowlers === 2, "there is a crew in every truck window and other lanes are in play at the bowl", crowd);
+  // The midway stall and the air hockey table, each played through.
+  const midway = await page.evaluate(() => {
+    const g = window.__GAME__;
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    const run = (n) => {
+      for (let i = 0; i < n; i++) g.tick(1 / 60);
+    };
+    // A throw: set the aim, hold until the meter reads `power` on the way up, let go, wait for it to land.
+    const toss = (game, aim, power) => {
+      game.aim = aim;
+      game.wait = 0;
+      g.input.held.add("action");
+      let guard = 0;
+      run(1);
+      while (game.power < power && guard++ < 400) run(1);
+      g.input.held.delete("action");
+      run(1);
+      guard = 0;
+      while (game.phase !== "aim" && !g.overlay && guard++ < 400) run(1);
+      return game.call;
+    };
+    const stop = () => {
+      const card = g.results ? { title: g.results.title, tickets: g.results.tickets } : null;
+      if (g.overlay) g.close();
+      run(10);
+      if (g.activity) g.activity.quit();
+      run(5);
+      return card;
+    };
+    const before = g.save.tickets;
+    g.begin(g.bottles, "whack");
+    g.bottles.start();
+    run(30);
+    const bottles = [toss(g.bottles, 0, 0.26), toss(g.bottles, -0.433, 0.26), toss(g.bottles, 0.433, 0.26)];
+    const sweep = stop();
+    g.begin(g.clowns, "whack");
+    g.clowns.start();
+    run(30);
+    const gap = g.rooms.fun.midway.clowns.gap / 0.8;
+    const wait = (k, open) => {
+      let guard = 0;
+      while ((g.clowns.open(k, g.clowns.time + 0.62) && g.clowns.open(k, g.clowns.time + 0.75)) !== open && guard++ < 900) run(1);
+    };
+    wait(0, true);
+    const fed = toss(g.clowns, -gap, 0.5);
+    let guard = 0;
+    while ((g.clowns.open(0, g.clowns.time + 0.62) || g.clowns.open(0, g.clowns.time + 0.75)) && guard++ < 900) run(1);
+    const shut = toss(g.clowns, -gap, 0.5);
+    stop();
+    g.begin(g.bags, "whack");
+    g.bags.start();
+    run(30);
+    const bags = [toss(g.bags, 0, 0.66), toss(g.bags, 0, 0.6), toss(g.bags, 0, 0.95), toss(g.bags, 0.9, 0.5)];
+    const bagCard = stop();
+    const tickets = g.save.tickets - before;
+    // Air hockey, with a simple player on the near end: get behind the puck and push it up the table.
+    g.begin(g.hockey, "whack");
+    g.hockey.start();
+    const h = g.hockey;
+    const table = g.rooms.fun.hockey;
+    let t = 0;
+    let off = false;
+    while (!g.overlay && t < 60 * 300) {
+      for (const k of ["left", "right", "up", "down"]) g.input.held.delete(k);
+      if (h.p.x < h.me.x - 0.03) g.input.held.add("left");
+      else if (h.p.x > h.me.x + 0.03) g.input.held.add("right");
+      if (h.p.z > 0.05 && h.p.z < h.me.z) g.input.held.add("up");
+      else if (h.me.z < 0.8) g.input.held.add("down");
+      run(1);
+      t++;
+      if (!Number.isFinite(h.p.x + h.p.z) || Math.abs(h.p.x) > table.hw + 0.01 || Math.abs(h.p.z) > table.hl + 0.2) off = true;
+    }
+    for (const k of ["left", "right", "up", "down"]) g.input.held.delete(k);
+    const hockey = { seconds: Math.round(t / 60), you: h.you, them: h.them, off, card: g.results?.title ?? null };
+    stop();
+    g.stage.render = draw;
+    return { bottles, sweep, fed, shut, bags, bagCard, tickets, hockey, mode: g.mode };
+  });
+  check(midway.bottles.join() === "4 DOWN,1 DOWN,CLEAN SWEEP!" && midway.sweep?.title === "CLEAN SWEEP" && midway.sweep.tickets === 30, "three balls in the right places clear the bottle pyramid", { bottles: midway.bottles, card: midway.sweep });
+  check(/^IN! \+1/.test(midway.fed) && midway.shut === "SHUT!", "a clown takes the ball with its mouth open and not with it shut", { open: midway.fed, shut: midway.shut });
+  check(midway.bags.join() === "IN THE HOLE! +3,SLID IN! +3,LONG,OFF THE SIDE" && midway.bagCard?.tickets === 18, "bean bags drop in, slide in, go long and miss the board", { bags: midway.bags, card: midway.bagCard });
+  check((midway.hockey.you === 5 || midway.hockey.them === 5) && !midway.hockey.off && !!midway.hockey.card && midway.mode === "walk", "air hockey is played to five and the puck stays on the table", midway.hockey);
   // The big moments, photo mode, and the phone's home screen.
   const wow = await page.evaluate(async () => {
     const g = window.__GAME__;
@@ -712,6 +795,30 @@ try {
   check(wow.slow && wow.sky && wow.thrown === 1 && wow.card === 2, "a big win slows the picture, throws confetti and lights the sky, and a winning card comes up under more", wow);
   check(wow.photo.overlay === "photo" && wow.photo.moved > 1 && wow.photo.width > 0 && wow.photo.frozen && wow.after === null, "photo mode swings the lens round Benji and takes the picture", wow.photo);
   check(wow.linked && wow.app?.display === "fullscreen" && wow.app.icons === 3, "the game can be added to a phone's home screen", wow.app);
+  // The garage: a ride costs what it says, changes the car, and changes how it drives.
+  const garage = await page.evaluate(() => {
+    const g = window.__GAME__;
+    const { RIDES } = g.tables;
+    const s = g.save;
+    const was = { ride: s.ride, rides: [...s.rides], dollars: s.dollars };
+    const top0 = g.tune.top;
+    s.dollars = 10;
+    g.pickRide("van");
+    const broke = s.ride === was.ride && s.dollars === 10;
+    s.dollars = 2000;
+    g.pickRide("van");
+    const bought = { ride: s.ride, left: s.dollars, kind: g.car.kind, top: g.tune.top > top0, shown: g.car.group.parent === g.city.exterior };
+    g.pickRide("coupe");
+    const back = { ride: s.ride, left: s.dollars, kind: g.car.kind, top: g.tune.top === top0 };
+    g.openGarage();
+    const menu = g.overlay;
+    g.close();
+    s.ride = was.ride;
+    s.rides = was.rides;
+    s.dollars = was.dollars;
+    return { rides: RIDES.length, broke, bought, back, menu };
+  });
+  check(garage.rides === 6 && garage.broke && garage.bought.ride === "van" && garage.bought.left === 500 && garage.bought.kind === "van" && garage.bought.top && garage.bought.shown && garage.back.kind === "coupe" && garage.back.left === 500 && garage.back.top && garage.menu === "garage", "the garage sells six rides, and each one changes the car and how it drives", garage);
   // The story runs on past the Drop Day, and Respect has rungs.
   const story = await page.evaluate(() => {
     const g = window.__GAME__;

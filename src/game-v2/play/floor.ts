@@ -9,7 +9,7 @@ const _a = new THREE.Vector3();
 const _b = new THREE.Vector3();
 
 /** Shared by the floor machines: a line that shows for a moment, and a camera that eases between poses. */
-abstract class Machine implements Activity {
+export abstract class Machine implements Activity {
   abstract hints: [string, string][];
   protected call = "";
   private callLeft = 0;

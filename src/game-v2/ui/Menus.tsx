@@ -3,6 +3,7 @@ import { OUTFITS, type OutfitId } from "../assets/cast";
 import type { HudState } from "../core/types";
 import type { Game } from "../game";
 import { CATALOG, productById } from "../play/catalog";
+import { RIDES } from "../play/garage";
 import { FOOD, FOOD_TRUCKS, PRIZES } from "../play/goods";
 import { buyReal, openStore } from "../play/store";
 import { POIS } from "../world/map";
@@ -107,6 +108,11 @@ export function Pause({ game, hud }: { game: Game; hud: HudState }) {
       {(hud.mode === "walk" || hud.mode === "drive") && (
         <button className="sr-btn sr-btn-ghost mb-3 w-full py-2.5" onClick={() => game.openPhoto()}>
           Photo mode
+        </button>
+      )}
+      {(hud.mode === "walk" || hud.mode === "drive") && hud.place === "street" && (
+        <button className="sr-btn sr-btn-ghost mb-3 w-full py-2.5" onClick={() => game.openGarage()}>
+          Garage: pick your ride
         </button>
       )}
       <Row label="Your name in Memphis">
@@ -483,6 +489,58 @@ export function CourtMenu({ game }: { game: Game }) {
           </button>
         ))}
       </div>
+    </Sheet>
+  );
+}
+
+/** A bar for one of a ride's numbers, against the coupe's. */
+function Stat({ label, k }: { label: string; k: number }) {
+  return (
+    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-white/55">
+      <span className="w-9">{label}</span>
+      <span className="relative h-1.5 w-16 overflow-hidden rounded-full bg-white/10">
+        <span className="absolute inset-y-0 left-0 rounded-full bg-[#39ff14]" style={{ width: `${Math.max(8, Math.min(100, (k - 0.7) * 200))}%` }} />
+      </span>
+    </div>
+  );
+}
+
+/** The garage: what Benji drives. */
+export function Garage({ game, hud }: { game: Game; hud: HudState }) {
+  return (
+    <Sheet title="Garage" sub="Every one wears the brand. In the street race they all run the same engine." onClose={() => game.close()} wide>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {RIDES.map((r) => {
+          const owned = hud.rides.includes(r.id);
+          const on = hud.ride === r.id;
+          return (
+            <div key={r.id} className="flex flex-col gap-2 rounded-xl border p-3" style={{ borderColor: on ? "#39ff14" : "rgba(255,255,255,0.1)", background: on ? "rgba(57,255,20,0.08)" : "rgba(255,255,255,0.04)" }}>
+              <div className="flex items-start gap-3">
+                <img src={`/game/wraps/${r.wrap}/side.webp`} alt="" className="h-12 w-24 shrink-0 rounded-md bg-black/40 object-contain" />
+                <div className="min-w-0 flex-1">
+                  <div className="sr-title text-xl leading-none">{r.name}</div>
+                  <div className="mt-1 text-xs text-white/65">{r.line}</div>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="grid gap-1">
+                  <Stat label="Top" k={r.top} />
+                  <Stat label="Pull" k={r.accel} />
+                  <Stat label="Grip" k={r.grip} />
+                </div>
+                {on ? (
+                  <span className="rounded-full bg-[#39ff14] px-3 py-1.5 text-xs font-extrabold uppercase tracking-wider text-black">Driving it</span>
+                ) : (
+                  <button data-primary={owned ? true : undefined} className={`sr-btn px-4 py-2 ${owned ? "sr-btn-green" : "sr-btn-gold"}`} onClick={() => game.pickRide(r.id)}>
+                    {owned ? "Drive this" : `Buy · $${r.price}`}
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-3 text-center text-xs text-white/55">You have ${hud.dollars}.</div>
     </Sheet>
   );
 }

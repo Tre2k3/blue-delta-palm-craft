@@ -28,7 +28,7 @@ export type Anchor = { x: number; z: number };
 
 export type Mode = "title" | "walk" | "drive" | "race" | "hoops" | "bowl" | "fish" | "kart" | "laser" | "bounce" | "pit" | "whack";
 
-export type Overlay = null | "pause" | "map" | "shop" | "wardrobe" | "arcade" | "prizes" | "food" | "results" | "video" | "court" | "photo";
+export type Overlay = null | "pause" | "map" | "shop" | "wardrobe" | "arcade" | "prizes" | "food" | "results" | "video" | "court" | "photo" | "garage";
 
 export type Catch = { name: string; lb: number; pay: number; rarity: string; color: string };
 
@@ -50,8 +50,11 @@ export type Save = {
   x: number;
   z: number;
   heading: number;
-  /** Where the coupe was left. */
+  /** Where the car was left. */
   car: { x: number; z: number; heading: number };
+  /** The car he drives, and the ones he has paid for. */
+  ride: string;
+  rides: string[];
   bounty: number;
   played: number;
   /** How many times the thing the current step counts has happened. */
@@ -116,6 +119,9 @@ export type HudState = {
   phase: "golden" | "night" | "day";
   /** Rain is on its way or coming down. */
   rain: boolean;
+  /** The car he drives and the ones he owns, by id. */
+  ride: string;
+  rides: string[];
   mission: MissionCard | null;
   prompt: string;
   /** Key hints for the mode, "key label" pairs. */

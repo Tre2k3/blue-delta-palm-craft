@@ -3,7 +3,7 @@ import { Card } from "./actors/card";
 import { Troupe, type Act, type Stop } from "./actors/crowd";
 import { People } from "./actors/people";
 import { Traffic } from "./actors/traffic";
-import { CarModel, Driver, STREET } from "./actors/vehicle";
+import { CarModel, Driver, STREET, type DriveTune } from "./actors/vehicle";
 import { Fireworks } from "./gfx/fx";
 import { Rain } from "./gfx/rain";
 import { BALLERS, CAST, PEDS, OUTFITS, BENJI_HEIGHT, type CastId, type OutfitId, VENDORS } from "./assets/cast";
@@ -23,6 +23,8 @@ import { LaserTag } from "./play/laser";
 import { CABINETS, FOOD, FOOD_TRUCKS, PRIZES, type TruckId } from "./play/goods";
 import { Hoops } from "./play/hoops";
 import { PinballTable, PrizeWheel, SkeeLane } from "./play/floor";
+import { RIDES, rideById } from "./play/garage";
+import { AirHockey, BagToss, BottleBash, ClownToss } from "./play/midway";
 import { PopShot, Whack } from "./play/machines";
 import { StreetRace } from "./play/race";
 import { BOUNTIES, CHAPTERS, RANK_PAY, STORE_REWARD, STORY, chapterOf, rankOf } from "./play/story";
@@ -111,6 +113,8 @@ function freshSave(): Save {
     z: START.z,
     heading: START.heading,
     car: { ...CAR_START },
+    ride: "coupe",
+    rides: ["coupe"],
     bounty: 0,
     played: 0,
     count: 0,
@@ -128,6 +132,9 @@ function loadSave(): Save | null {
     if (out.owned.includes("sr-fresh-jersey") && !out.outfits.includes("fresh_black")) out.outfits.push("fresh_black");
     out.outfits = out.outfits.filter((o) => o in OUTFITS);
     if (!(out.wearing in OUTFITS)) out.wearing = "starter";
+    out.rides = out.rides.filter((id) => RIDES.some((r) => r.id === id));
+    if (!out.rides.includes("coupe")) out.rides.unshift("coupe");
+    if (!out.rides.includes(out.ride)) out.ride = "coupe";
     return out;
   } catch {
     return null;
@@ -171,7 +178,7 @@ export class Game {
   readonly rooms: { hq: HqRoom; home: HomeRoom; bowl: BowlRoom; fun: FunRoom; laser: LaserRoom };
   readonly live: Live = { meter: 0, sweetLo: 0, sweetHi: 0, aim: 0, tension: 0, speed: 0, nitro: 0, fade: 1, radar: new Array<number>(48).fill(0), radarN: 0, cue: 999, turn: -1, markX: 0.5, markY: 0.5, markOn: false, markDist: 0, x: 0, z: 0, heading: 0, camYaw: 0, party: 0, partyLevel: 0 };
   readonly benji: Card;
-  readonly car: CarModel;
+  car: CarModel;
   readonly driver = new Driver();
   readonly traffic: Traffic;
   readonly people: People;
@@ -185,7 +192,7 @@ export class Game {
   room: Room | null = null;
   activity: Activity | null = null;
   /** The art tables, where tools and tests can read them. */
-  readonly tables = { OUTFITS, PEDS, BALLERS, CAST, VENDORS, STORY, CHAPTERS };
+  readonly tables = { OUTFITS, PEDS, BALLERS, CAST, VENDORS, STORY, CHAPTERS, RIDES };
   pos = { x: START.x, z: START.z };
   vel = { x: 0, z: 0 };
   heading = 0;
@@ -293,6 +300,12 @@ export class Game {
   private pinball: PinballTable;
   private skee: SkeeLane;
   private wheel: PrizeWheel;
+  private hockey: AirHockey;
+  private bottles: BottleBash;
+  private clowns: ClownToss;
+  private bags: BagToss;
+  /** How the car he is in handles on the street. */
+  private tune: DriveTune = { ...STREET };
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -320,8 +333,7 @@ export class Game {
 
     this.benji = new Card(OUTFITS[this.save.wearing]?.art ?? OUTFITS.starter.art, BENJI_HEIGHT);
     this.scene.add(this.benji.group);
-    this.car = new CarModel("coupe", 0x14592f, "klothing-coupe");
-    this.city.exterior.add(this.car.group);
+    this.car = this.buildCar(this.save.ride);
     this.traffic = new Traffic(this.stage.quality === "high" ? 14 : this.stage.quality === "medium" ? 10 : 6);
     this.city.exterior.add(this.traffic.group);
     this.coins = new Sacks(this.save.flags);
@@ -358,6 +370,10 @@ export class Game {
     this.pinball = new PinballTable(this);
     this.skee = new SkeeLane(this);
     this.wheel = new PrizeWheel(this);
+    this.hockey = new AirHockey(this);
+    this.bottles = new BottleBash(this);
+    this.clowns = new ClownToss(this);
+    this.bags = new BagToss(this);
 
     this.cast();
     this.wire();
@@ -420,6 +436,9 @@ export class Game {
       at(fun.skee.x + 1.25, fun.skee.stand.z, fun.skee.x + 1.25, fun.skee.zRamp, "play"),
       at(fun.wheel.x - 2.3, fun.wheel.z + 3.3, fun.wheel.x, fun.wheel.z, "cheer"),
       at(fun.wheel.x + 2.7, fun.wheel.z + 3.6, fun.wheel.x, fun.wheel.z, "cheer"),
+      at(fun.hockey.x + 1.5, fun.hockey.z + 0.3, fun.hockey.x, fun.hockey.z, "cheer"),
+      at(fun.midway.bottles.stand.x - 0.95, fun.midway.bottles.stand.z + 0.5, fun.midway.bottles.x, fun.midway.bottles.z, "cheer"),
+      at(fun.midway.bags.stand.x + 0.9, fun.midway.bags.stand.z + 0.7, fun.midway.clowns.x, fun.midway.clowns.z, "watch"),
       at(fun.pizza.x - 0.3, fun.pizza.z + 1.2, fun.pizza.x + 3, fun.pizza.z + 1.2, "watch", { stay: [3, 6] }),
       at(fun.prizes.x - 0.3, fun.prizes.z - 1.5, fun.prizes.x + 3, fun.prizes.z - 1.5, "watch"),
       at(fun.pitEdge.x + 1.7, fun.pitEdge.z + 1.3, (fun.pit.minX + fun.pit.maxX) / 2, (fun.pit.minZ + fun.pit.maxZ) / 2, "cheer"),
@@ -453,6 +472,11 @@ export class Game {
     ft.post(wader.art, 1.5, at(fun.pit.minX + 2.6, fun.pit.minZ + 2.4, fun.pit.maxX, fun.pit.maxZ, "wade", { lift: -0.42 }));
     const cook = PEDS[6]!;
     ft.post(cook.art, cook.height, at(F.x + 18.5, F.z - 5.1, F.x + 14, F.z - 5.1, "serve"));
+    // Whoever has the far end of the air hockey table, and the man who runs the midway.
+    const puck = PEDS[4]!;
+    ft.post(puck.art, puck.height, at(fun.hockey.far.x, fun.hockey.far.z, fun.hockey.x, fun.hockey.z, "play"));
+    const barker = PEDS[0]!;
+    ft.post(barker.art, barker.height, at(fun.midway.keeper.x, fun.midway.keeper.z, fun.midway.keeper.x - 2, fun.midway.keeper.z + 3, "serve"));
     const clerk = PEDS[1]!;
     ft.post(clerk.art, clerk.height, at(F.x + 18.85, F.z + 8, F.x + 14, F.z + 8, "serve"));
 
@@ -639,7 +663,7 @@ export class Game {
       0,
       0,
       3.1,
-      "Drive the coupe",
+      () => `Drive the ${rideById(this.save.ride).name}`,
       () => this.drive(),
       () => this.mode === "walk",
     );
@@ -767,6 +791,21 @@ export class Game {
       this.begin(this.wheel, "whack");
       this.wheel.start();
     });
+    this.spot("fun", fun.hockey.stand.x, fun.hockey.stand.z, 1.2, "Play air hockey", () => {
+      this.begin(this.hockey, "whack");
+      this.hockey.start();
+    });
+    for (const [stall, label] of [
+      [this.bottles, "Throw at the bottles"],
+      [this.clowns, "Feed the clowns"],
+      [this.bags, "Toss the bean bags"],
+    ] as const) {
+      const st = stall === this.bottles ? fun.midway.bottles.stand : stall === this.clowns ? fun.midway.clowns.stand : fun.midway.bags.stand;
+      this.spot("fun", st.x, st.z, 0.95, label, () => {
+        this.begin(stall, "whack");
+        stall.start();
+      });
+    }
     this.spot("fun", fun.pizza.x, fun.pizza.z, 2, "Order pizza", () => {
       this.foodAt = "pizza";
       this.open("food");
@@ -1780,6 +1819,46 @@ export class Game {
 
   // ---------------------------------------------------------------- driving
 
+  /** Builds the car he drives and stands it where the last one was. */
+  private buildCar(id: string) {
+    const ride = rideById(id);
+    const old = this.car as CarModel | undefined;
+    const car = new CarModel(ride.kind, ride.paint, ride.wrap);
+    this.city.exterior.add(car.group);
+    if (old) {
+      car.group.position.copy(old.group.position);
+      car.group.rotation.copy(old.group.rotation);
+      this.city.exterior.remove(old.group);
+    }
+    if (this.lite.on) this.lite.apply(car.group, true);
+    this.tune = { top: STREET.top * ride.top, accel: STREET.accel * ride.accel, boostTop: STREET.boostTop * ride.top, grip: STREET.grip * ride.grip };
+    return car;
+  }
+
+  /** The garage: every ride, which are his, and which he is in. */
+  openGarage() {
+    if (this.mode !== "walk" && this.mode !== "drive") return;
+    this.open("garage");
+  }
+
+  /** Take a ride he owns, or pay for one he does not and take it. */
+  pickRide(id: string) {
+    const ride = rideById(id);
+    const s = this.save;
+    if (!s.rides.includes(ride.id)) {
+      if (!this.spend(ride.price)) return;
+      s.rides.push(ride.id);
+      this.toast(`${ride.name}: yours. It is parked where the last one was.`, 4);
+    }
+    if (s.ride !== ride.id) {
+      s.ride = ride.id;
+      this.car = this.buildCar(ride.id);
+      this.sound.door();
+    }
+    this.persist();
+    this.push();
+  }
+
   private placeCar() {
     this.car.place(this.driver.x, this.driver.y, this.driver.z, this.driver.heading);
   }
@@ -1830,7 +1909,7 @@ export class Game {
     const m = this.input.move();
     const gas = this.input.throttle();
     const d = this.driver;
-    d.step(dt, { throttle: gas, steer: m.x, handbrake: this.input.down("action"), boost: false }, STREET, this.city.carSolids);
+    d.step(dt, { throttle: gas, steer: m.x, handbrake: this.input.down("action"), boost: false }, this.tune, this.city.carSolids);
     for (const c of this.traffic.list()) {
       const hit = d.bump(c.x, c.z, c.radius);
       if (hit > 2.5) {
@@ -1847,7 +1926,7 @@ export class Game {
     this.car.roll(d.forward * dt, d.steer * 0.5);
     this.car.lean(-d.steer * Math.min(1, d.speed / 20) * 0.05, 0);
     this.car.lamps(this.sky.look.lights > 0.4 ? 3 : 0.2, gas < 0 && d.forward > 1 ? 3 : 0.5);
-    this.sound.setEngine(true, d.speed / STREET.top);
+    this.sound.setEngine(true, d.speed / this.tune.top);
     if (this.input.hit("horn")) {
       this.sound.horn();
       // Everybody in earshot jumps.
@@ -2320,6 +2399,8 @@ export class Game {
       street: this.room ? "" : nearestStreet(this.pos.x, this.pos.z),
       phase: this.sky.phase,
       rain: this.weather.want > 0,
+      ride: s.ride,
+      rides: s.rides,
       rank: rankOf(s.respect),
       mission: step
         ? { chapter: chapter?.name ?? "", index: chapter?.index ?? 1, total: chapter?.total ?? 1, title: step.title, detail: step.goal?.times ? `${step.detail}  ${Math.min(s.count, step.goal.times)}/${step.goal.times}` : step.detail }

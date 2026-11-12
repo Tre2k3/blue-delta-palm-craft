@@ -6,6 +6,7 @@ import { CURB, FUN, KART_TRACK, ROOM, type Rect } from "./map";
 import { finish, light, shell, type Room } from "./rooms";
 
 const Y0 = CURB;
+const lerpN = (a: number, b: number, t: number) => a + (b - a) * t;
 const hot = (r: number, g: number, b: number) => new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b), toneMapped: false });
 
 /** Speed pads, as a share of the way round the lap. */
@@ -294,6 +295,21 @@ export type FunRoom = Room & {
   skee: { x: number; y: number; z0: number; zRamp: number; board: { y: number; z: number; w: number; l: number; tilt: number }; stand: { x: number; z: number } };
   /** Spin-N-Win: the wheel that turns, its wedges in order, and where to stand. */
   wheel: { x: number; y: number; z: number; disc: THREE.Mesh; wedges: number[]; stand: { x: number; z: number } };
+  /** Air hockey: the middle of the table top, its half width and half length, and where each player stands. */
+  hockey: { x: number; y: number; z: number; hw: number; hl: number; goal: number; stand: { x: number; z: number }; far: { x: number; z: number } };
+  /** The midway stall: three tossing games side by side behind one counter. */
+  midway: {
+    /** Front edge of the counter, and the height of its top. */
+    counterZ: number;
+    top: number;
+    /** The shelf the bottles stand on. */
+    bottles: { x: number; y: number; z: number; stand: { x: number; z: number } };
+    /** The middle clown's mouth, and how far apart the three are. */
+    clowns: { x: number; y: number; z: number; gap: number; stand: { x: number; z: number } };
+    /** The bean bag board: its front and back edges, its width, and how far up it the hole is (0..1). */
+    bags: { x: number; z0: number; y0: number; z1: number; y1: number; w: number; hole: number; r: number; stand: { x: number; z: number } };
+    keeper: { x: number; z: number };
+  };
   /** Inside of the ball pit. */
   pit: Rect;
   tramp: { x: number; z: number; r: number; y: number };
@@ -695,6 +711,109 @@ export function buildFunRoom(): FunRoom {
   f.flat(5, 4.4, WH.x, 0.02, WH.z + 2.4, poolMat(ctx, 0xff3b3b, 0.36), ctx.flat);
   f.flat(9, 9, 1, 0.02, 7, poolMat(ctx, 0xffd23a, 0.3), ctx.flat);
   light(group, lights, C.x + 1, 4.6, C.z + 5, 0xfff0d0, 34, 22);
+
+  // Air hockey: a lit white table with rails, a goal slot at each end and its name hung over it.
+  const AH = { x: -6.2, z: -5.4, y: 0.86, hw: 0.6, hl: 1.15, goal: 0.44 };
+  f.box(AH.hw * 2 + 0.26, 0.46, AH.hl * 2 + 0.26, AH.x, AH.y - 0.29, AH.z, std(0x10204a, 0.5));
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) f.box(0.1, 0.34, 0.1, AH.x + sx * (AH.hw - 0.02), 0.17, AH.z + sz * (AH.hl - 0.02), chromeLeg);
+  f.box(AH.hw * 2, 0.04, AH.hl * 2, AH.x, AH.y - 0.02, AH.z, emissiveMat(ctx, 0xdff3ff, 0.6, 0.85));
+  const ice = hot(0.25, 0.75, 2.2);
+  const redLine = hot(2.2, 0.3, 0.3);
+  f.box(AH.hw * 2, 0.004, 0.022, AH.x, AH.y + 0.003, AH.z, redLine, ctx.flat);
+  f.add(new THREE.TorusGeometry(0.2, 0.008, 4, 28), redLine, AH.x, AH.y + 0.004, AH.z, ctx.flat, 0, Math.PI / 2);
+  for (const sz of [-1, 1]) {
+    f.add(new THREE.TorusGeometry(AH.goal / 2 + 0.06, 0.008, 4, 20, Math.PI), ice, AH.x, AH.y + 0.004, AH.z + sz * AH.hl, ctx.flat, sz > 0 ? Math.PI : 0, Math.PI / 2);
+    f.box(AH.hw * 2, 0.004, 0.016, AH.x, AH.y + 0.003, AH.z + sz * AH.hl * 0.45, ice, ctx.flat);
+    // The rail at each end is in two pieces, with the goal between them.
+    const piece = AH.hw - AH.goal / 2;
+    for (const sx of [-1, 1]) f.box(piece, 0.09, 0.07, AH.x + sx * (AH.goal / 2 + piece / 2), AH.y + 0.025, AH.z + sz * (AH.hl + 0.035), std(0xff5ad1, 0.4));
+    f.box(AH.goal, 0.02, 0.1, AH.x, AH.y - 0.03, AH.z + sz * (AH.hl + 0.06), sz > 0 ? green : pink, ctx.flat);
+  }
+  for (const sx of [-1, 1]) f.box(0.07, 0.09, AH.hl * 2 + 0.14, AH.x + sx * (AH.hw + 0.035), AH.y + 0.025, AH.z, std(0xff5ad1, 0.4));
+  for (const yaw of [YAW.south, YAW.north]) f.wall(2.2, 0.5, AH.x, 3.1, AH.z, neon(ctx, "AIR HOCKEY", "#35e0d0", { sub: "FIRST TO FIVE", w: 640, h: 144 }), ctx.flat, yaw);
+  for (const sx of [-1, 1]) f.box(0.03, H - 3.35, 0.03, AH.x + sx * 1, (H + 3.35) / 2, AH.z, chromeLeg);
+  f.solid(AH.x - AH.hw - 0.16, AH.x + AH.hw + 0.16, AH.z - AH.hl - 0.16, AH.z + AH.hl + 0.16);
+  f.flat(4.4, 5.4, AH.x, 0.02, AH.z, poolMat(ctx, 0x35e0d0, 0.42), ctx.flat);
+
+  // The midway: one striped stall, three games to throw at behind its counter.
+  const MW = { x: 0.6, zc: -5.2, zb: -7.9, w: 6.3, top: 1 };
+  const bays = [MW.x - 2.05, MW.x, MW.x + 2.05];
+  const stallRed = std(0xc22a22, 0.6);
+  const stallWhite = std(0xf1ede2, 0.6);
+  const stallDark = std(0x150f29, 0.85);
+  f.box(MW.w, MW.top, 0.36, MW.x, MW.top / 2, MW.zc, stallRed);
+  for (let i = 0; i < 9; i++) f.box(0.35, MW.top - 0.08, 0.02, MW.x - MW.w / 2 + 0.35 + i * 0.7, MW.top / 2, MW.zc + 0.19, stallWhite);
+  f.box(MW.w + 0.12, 0.06, 0.5, MW.x, MW.top + 0.03, MW.zc, stallWhite);
+  f.box(MW.w, 3.1, 0.12, MW.x, 1.55, MW.zb, stallDark);
+  for (const sx of [-1, 1]) {
+    f.box(0.12, 3.1, MW.zc - MW.zb, MW.x + sx * (MW.w / 2), 1.55, (MW.zc + MW.zb) / 2, stallDark);
+    f.box(0.12, 3.1, 0.12, MW.x + sx * (MW.w / 2), 1.55, MW.zc + 0.5, stallWhite);
+  }
+  for (const dx of [-1.025, 1.025]) f.box(0.06, 2.3, MW.zc - MW.zb - 0.5, MW.x + dx, 1.15, (MW.zc + MW.zb) / 2 - 0.2, stallDark);
+  f.box(MW.w + 0.3, 0.12, MW.zc - MW.zb + 0.9, MW.x, 3.16, (MW.zc + MW.zb) / 2 + 0.4, stallRed);
+  for (let i = 0; i < 12; i++) f.box(MW.w / 12 + 0.02, 0.32, 0.05, MW.x - MW.w / 2 + (MW.w / 12) * (i + 0.5), 2.95, MW.zc + 0.86, i % 2 ? stallWhite : stallRed);
+  f.wall(5.2, 0.74, MW.x, 3.66, MW.zc + 0.86, neon(ctx, "THE MIDWAY", "#ffd23a", { sub: "KNOCK IT DOWN · WIN TICKETS", w: 896, h: 128 }), ctx.flat);
+  f.box(5.4, 0.86, 0.08, MW.x, 3.66, MW.zc + 0.8, stallDark);
+  (["BOTTLE BASH", "CLOWN TOSS", "BAG TOSS"] as const).forEach((name, i) => {
+    f.wall(1.7, 0.42, bays[i]!, 2.72, MW.zb + 0.08, neon(ctx, name, ["#35e0d0", "#ff5ad1", "#39ff14"][i]!, { w: 512, h: 128 }), ctx.flat);
+  });
+  // Prizes strung along the back.
+  for (let i = 0; i < 14; i++) f.add(new THREE.SphereGeometry(0.11, 8, 6), std([0xff5ad1, 0xffd23a, 0x39ff14, 0x5ac8ff][i % 4]!, 0.9), MW.x - MW.w / 2 + 0.35 + i * 0.43, 2.38, MW.zb + 0.14);
+  f.solid(MW.x - MW.w / 2 - 0.08, MW.x + MW.w / 2 + 0.08, MW.zb - 0.1, MW.zc + 0.26);
+  f.flat(7, 3, MW.x, 0.02, MW.zc + 1.5, poolMat(ctx, 0xffd23a, 0.4), ctx.flat);
+  // Bottle Bash: a pedestal for the pyramid.
+  const shelf = { x: bays[0]!, y: 1.08, z: MW.zb + 0.5 };
+  f.box(0.64, shelf.y, 0.4, shelf.x, shelf.y / 2, shelf.z, std(0x3a1260, 0.6));
+  f.box(0.7, 0.03, 0.46, shelf.x, shelf.y - 0.015, shelf.z, stallWhite);
+  // Clown Toss: three painted faces on the back wall. Their mouths are worked by the game.
+  const clownTex = tex(256, 256, (g, w) => {
+    const c = w / 2;
+    g.clearRect(0, 0, w, w);
+    for (const [hx, col] of [
+      [0.16, "#35e0d0"],
+      [0.84, "#35e0d0"],
+      [0.3, "#ff8a1e"],
+      [0.7, "#ff8a1e"],
+    ] as const) {
+      g.fillStyle = col;
+      g.beginPath();
+      g.arc(hx * w, 0.3 * w, 0.17 * w, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.fillStyle = "#f6f1e6";
+    g.beginPath();
+    g.arc(c, c + 8, 0.37 * w, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = "#1a1a22";
+    for (const ex2 of [0.37, 0.63]) {
+      g.beginPath();
+      g.arc(ex2 * w, 0.4 * w, 0.035 * w, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.fillStyle = "#e0241c";
+    g.beginPath();
+    g.arc(c, 0.52 * w, 0.06 * w, 0, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    g.arc(c, 0.73 * w, 0.17 * w, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = "#050505";
+    g.beginPath();
+    g.arc(c, 0.73 * w, 0.125 * w, 0, Math.PI * 2);
+    g.fill();
+  });
+  const clownMat = new THREE.MeshBasicMaterial({ map: clownTex, transparent: true, alphaTest: 0.5, toneMapped: false });
+  // The mouth sits 0.23 of the face below its middle.
+  const CL = { y: 1.62, z: MW.zb + 0.07, gap: 0.62, size: 0.62 };
+  for (let i = -1; i <= 1; i++) f.wall(CL.size, CL.size, bays[1]! + i * CL.gap, CL.y + CL.size * 0.23, CL.z, clownMat, ctx.flat);
+  // Bag Toss: a board leaning away from the thrower, with a hole near the top.
+  const BG = { x: bays[2]!, z0: MW.zc - 0.75, y0: 0.22, z1: MW.zb + 0.55, y1: 0.7, w: 0.64, hole: 0.74, r: 0.085 };
+  const boardLen = Math.hypot(BG.z1 - BG.z0, BG.y1 - BG.y0);
+  const boardTilt = Math.atan2(BG.y1 - BG.y0, BG.z0 - BG.z1);
+  f.add(new THREE.BoxGeometry(BG.w, 0.04, boardLen), std(0xe9dcc0, 0.7), BG.x, (BG.y0 + BG.y1) / 2 - 0.02, (BG.z0 + BG.z1) / 2, ctx.solid, 0, boardTilt);
+  f.add(new THREE.CylinderGeometry(BG.r, BG.r, 0.012, 20), new THREE.MeshBasicMaterial({ color: 0x040404 }), BG.x, lerpN(BG.y0, BG.y1, BG.hole) + 0.008, lerpN(BG.z0, BG.z1, BG.hole), ctx.flat, 0, boardTilt);
+  f.add(new THREE.TorusGeometry(BG.r + 0.012, 0.012, 6, 22), green, BG.x, lerpN(BG.y0, BG.y1, BG.hole) + 0.01, lerpN(BG.z0, BG.z1, BG.hole), ctx.flat, 0, boardTilt + Math.PI / 2);
+  f.box(BG.w, BG.y1, 0.06, BG.x, BG.y1 / 2 - 0.03, BG.z1 - 0.02, stallRed);
   finish(ctx, group);
   return {
     id: "fun",
@@ -719,6 +838,15 @@ export function buildFunRoom(): FunRoom {
     pinball: { x: C.x + pbx, y: PB.y, z: C.z + pbz, w: PB.w, l: PB.l, tilt: PB.tilt, field, stand: { x: C.x + pbx, z: C.z + pbz - 1.25 } },
     skee: { x: C.x + skx, y: SK.y, z0: C.z + SK.z0, zRamp: C.z + SK.zRamp, board: { y: SK.board.y + 0.36, z: C.z + SK.board.z, w: SK.board.w, l: SK.board.l, tilt: SK.board.tilt }, stand: { x: C.x + skx, z: C.z + SK.z0 - 0.65 } },
     wheel: { x: C.x + WH.x, y: WH.y, z: C.z + WH.z, disc, wedges, stand: { x: C.x + WH.x, z: C.z + WH.z + 2.7 } },
+    hockey: { x: C.x + AH.x, y: AH.y, z: C.z + AH.z, hw: AH.hw, hl: AH.hl, goal: AH.goal, stand: { x: C.x + AH.x, z: C.z + AH.z + AH.hl + 0.75 }, far: { x: C.x + AH.x, z: C.z + AH.z - AH.hl - 0.6 } },
+    midway: {
+      counterZ: C.z + MW.zc,
+      top: MW.top + 0.06,
+      bottles: { x: C.x + shelf.x, y: shelf.y, z: C.z + shelf.z, stand: { x: C.x + shelf.x, z: C.z + MW.zc + 0.85 } },
+      clowns: { x: C.x + bays[1]!, y: CL.y, z: C.z + CL.z, gap: CL.gap, stand: { x: C.x + bays[1]!, z: C.z + MW.zc + 0.85 } },
+      bags: { x: C.x + BG.x, z0: C.z + BG.z0, y0: BG.y0, z1: C.z + BG.z1, y1: BG.y1, w: BG.w, hole: BG.hole, r: BG.r, stand: { x: C.x + BG.x, z: C.z + MW.zc + 0.85 } },
+      keeper: { x: C.x + MW.x + MW.w / 2 + 0.75, z: C.z + MW.zc + 0.5 },
+    },
     pit: { minX: C.x + px0 + 0.3, maxX: C.x + px1 - 0.55, minZ: C.z + pz0 + 0.3, maxZ: C.z + pz1 - 0.55 },
     tramp: { x: C.x + tx, z: C.z + tz, r: tr, y: ty },
   };
