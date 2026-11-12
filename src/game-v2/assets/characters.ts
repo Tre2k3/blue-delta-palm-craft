@@ -52,6 +52,14 @@ const turnaround = (
   right: cut(`/game-v2/characters/${folder}/right.png`, right[0], right[1]),
 });
 
+/** A character whose four sides are drawn whole, head to shoes. */
+const wholeBody = (folder: string, front: [number, number], back: [number, number], left: [number, number], right: [number, number]) => ({
+  front: cut(`/game-v2/characters/${folder}/full-front.webp`, front[0], front[1]),
+  back: cut(`/game-v2/characters/${folder}/full-back.webp`, back[0], back[1]),
+  left: cut(`/game-v2/characters/${folder}/full-left.webp`, left[0], left[1]),
+  right: cut(`/game-v2/characters/${folder}/full-right.webp`, right[0], right[1]),
+});
+
 export const characters = {
   benji: {
     id: "benji",
@@ -78,7 +86,7 @@ export const characters = {
   courtOg: {
     id: "court-og",
     height: 2.04,
-    views: turnaround("court-og", [321, 612], [294, 612], [275, 612], [269, 640]),
+    views: wholeBody("court-og", [306, 787], [299, 792], [269, 760], [254, 763]),
     bible: "02_Core_NPCs/02_Court_OG/court_og_reference_sheet.png",
   },
   mamaDee: {
@@ -90,7 +98,7 @@ export const characters = {
   uncJ: {
     id: "unc-j",
     height: 1.9,
-    views: turnaround("unc-j", [280, 631], [280, 710], [306, 633], [298, 625]),
+    views: wholeBody("unc-j", [295, 780], [288, 780], [274, 780], [282, 780]),
     bible: "02_Core_NPCs/04_Unc_J/unc_j_reference_sheet.png",
   },
   nitro: {
@@ -102,7 +110,7 @@ export const characters = {
   strike: {
     id: "strike",
     height: 1.8,
-    views: turnaround("strike", [259, 669], [283, 626], [263, 631], [234, 619]),
+    views: wholeBody("strike", [256, 763], [268, 793], [260, 748], [239, 780]),
     bible: "02_Core_NPCs/06_Strike/strike_reference_sheet.png",
   },
   pedestrian: {

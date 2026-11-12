@@ -558,6 +558,6 @@ export function buildBowlRoom(): BowlRoom {
     boom: 4.2,
     lane: { x: C.x, z: C.z },
     desk: { x: C.x + 5.4, z: C.z + 8 },
-    strikeSpot: { x: C.x + 5.4, z: C.z + 9.9, heading: Math.PI },
+    strikeSpot: { x: C.x + 2.45, z: C.z + 9.25, heading: Math.PI },
   };
 }

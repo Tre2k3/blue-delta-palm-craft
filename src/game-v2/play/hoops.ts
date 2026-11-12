@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { Card } from "../actors/card";
-import { BENJI_HEIGHT, PEDS } from "../assets/cast";
+import { BALLERS, BENJI_HEIGHT } from "../assets/cast";
 import type { Hoop, HoopsKind, HudState } from "../core/types";
 import { clamp, damp, lerp } from "../core/util";
 import type { Activity, Game } from "../game";
@@ -38,11 +38,13 @@ type Ball = {
 const TO = 11;
 /** Who Benji runs into at the court, easiest first. `skill` is how often they are in the green. */
 const RIVALS = [
-  { name: "Lil Tez", skill: 0.42, art: 2, height: 1.62, line: "First one's free." },
-  { name: "D-Mac", skill: 0.56, art: 0, height: 1.78, line: "I don't miss from here." },
-  { name: "Rico", skill: 0.68, art: 4, height: 1.82, line: "Corner pocket. Watch." },
-  { name: "Ace", skill: 0.8, art: 6, height: 1.84, line: "They call me Ace for a reason." },
+  { name: "Lil Tez", skill: 0.42, height: 1.62, line: "First one's free." },
+  { name: "D-Mac", skill: 0.56, height: 1.78, line: "I don't miss from here." },
+  { name: "Rico", skill: 0.68, height: 1.82, line: "Corner pocket. Watch." },
+  { name: "Ace", skill: 0.8, height: 1.84, line: "They call me Ace for a reason." },
 ];
+/** How fast the other player gets to a spot, m/s. */
+const RIVAL_PACE = 5.2;
 
 /**
  * Basketball on the north basket of the 901 Court, three ways: the sixty-second shootout, a
@@ -57,7 +59,8 @@ export class Hoops implements Activity {
     ["Q", "Leave"],
   ];
   kind: HoopsKind = "shootout";
-  private rival = { card: null as Card | null, tier: 0, name: "", skill: 0.5, score: 0, wait: 0 };
+  /** The other player: where he is, where he is headed, and how far into his jumper he is. */
+  private rival = { card: null as Card | null, tier: 0, name: "", skill: 0.5, score: 0, wait: 0, x: 0, z: 0, tx: 0, tz: 0, jump: 0 };
   /** Versus: whose shot it is. "air" is a ball on its way, "next" the pause between rounds. */
   private turn: "you" | "rival" | "air" | "next" = "you";
   private shotClock = 0;
@@ -156,13 +159,17 @@ export class Hoops implements Activity {
       r.name = who.name;
       r.skill = who.skill;
       r.score = 0;
-      const art = PEDS[who.art % PEDS.length]!.art;
+      const art = BALLERS[r.tier]!;
       if (!r.card) {
         r.card = new Card(art, who.height);
         g.city.exterior.add(r.card.group);
       } else r.card.setArt(art);
       r.card.height = who.height;
       r.card.visible = true;
+      // He comes off the baseline to the first spot.
+      r.x = r.tx = this.hoop.x - 3.4;
+      r.z = r.tz = this.hoop.z + 2.2;
+      r.jump = 0;
       this.started = true;
       this.round();
       this.say(`${r.name}: "${who.line}"  First to ${TO}.`, 3.2);
@@ -175,8 +182,9 @@ export class Hoops implements Activity {
     const r = this.rival;
     this.moveSpot();
     this.turn = "rival";
-    r.wait = 1.25;
-    r.card?.place(this.spot.x, this.spot.z);
+    r.wait = 0.9;
+    r.tx = this.spot.x;
+    r.tz = this.spot.z;
     this.g.pos.x = this.spot.x + 1.9;
     this.g.pos.z = this.spot.z + 1.1;
     this.g.vel.x = this.g.vel.z = 0;
@@ -278,6 +286,7 @@ export class Hoops implements Activity {
     const good = Math.random() < r.skill;
     const e = good ? (Math.random() - 0.5) * half * 1.5 : (Math.random() < 0.5 ? -1 : 1) * (half + 0.035 + Math.random() * 0.11);
     this.throwBall(1, this.spot.x, this.spot.z, e, half, 0, (r.card?.height ?? 1.78) * 0.97, false);
+    r.jump = 0.001;
     this.turn = "air";
   }
 
@@ -297,7 +306,9 @@ export class Hoops implements Activity {
       // Benji answers from the same spot.
       this.turn = "you";
       this.shotClock = 10;
-      r.card?.place(this.spot.x - 2, this.spot.z + 1.2);
+      // He steps off the spot and guards it.
+      r.tx = this.spot.x - 2;
+      r.tz = this.spot.z + 1.2;
       g.pos.x = this.spot.x;
       g.pos.z = this.spot.z;
       g.push();
@@ -492,9 +503,30 @@ export class Hoops implements Activity {
     this.dribble += dt * (6 + g.benji.speed * 0.8);
     const bounce = Math.abs(Math.sin(this.dribble));
     this.hand.visible = this.cool <= 0 && !this.over && (this.kind !== "versus" || this.turn === "you");
-    const rc = this.rival.card;
+    const r = this.rival;
+    const rc = r.card;
     if (rc && rc.visible) {
-      rc.heading = Math.atan2(h.x - rc.group.position.x, h.z - rc.group.position.z);
+      const dx = r.tx - r.x;
+      const dz = r.tz - r.z;
+      const left = Math.hypot(dx, dz);
+      const running = left > 0.04;
+      if (running) {
+        const step = Math.min(left, RIVAL_PACE * dt);
+        r.x += (dx / left) * step;
+        r.z += (dz / left) * step;
+        rc.heading = Math.atan2(dx, dz);
+      } else if (this.turn === "you") rc.heading = Math.atan2(g.pos.x - r.x, g.pos.z - r.z);
+      else rc.heading = Math.atan2(h.x - r.x, h.z - r.z);
+      rc.place(r.x, r.z);
+      rc.speed = running ? RIVAL_PACE : 0;
+      if (r.jump > 0) {
+        r.jump += dt;
+        const t = r.jump / 0.5;
+        rc.lift = t >= 1 ? 0 : Math.sin(t * Math.PI) * 0.3;
+        if (t >= 1) r.jump = 0;
+      } else rc.lift = 0;
+      // Running to the spot, arms up through his jumper, in a stance while Benji has the ball.
+      rc.pose = running ? "drive" : r.jump > 0 || (this.turn === "rival" && r.wait < 0.4) ? "shoot" : this.turn === "you" ? "ready" : null;
       rc.update(dt, g.camera.position, g.tint, FLOOR);
     }
     if (this.charging) {
@@ -536,7 +568,8 @@ export class Hoops implements Activity {
     const g = this.g;
     const r = this.rival;
     if (this.turn === "rival") {
-      r.wait -= dt;
+      // The clock on his shot starts when he has got to the spot.
+      if (Math.hypot(r.tx - r.x, r.tz - r.z) < 0.05) r.wait -= dt;
       if (r.wait <= 0) this.rivalShot();
     } else if (this.turn === "you" && !this.charging) {
       this.shotClock -= dt;

@@ -179,8 +179,9 @@ export class Card {
     const toCam = Math.atan2(camera.x - _world.x, camera.z - _world.z);
     const rel = wrapAngle(toCam - this.heading);
     const abs = Math.abs(rel);
-    let view: View = "front";
-    if (this.art.back) view = abs < 0.8 ? "front" : abs > 2.3 ? "back" : rel > 0 ? "left" : "right";
+    // The side the camera is on. A pose can have a drawing for a side the standing art has none for.
+    const seen: View = !this.art.back ? "front" : abs < 0.8 ? "front" : abs > 2.3 ? "back" : rel > 0 ? "left" : "right";
+    let view = seen;
     // No side drawing: whichever of front and back is nearer the truth.
     if ((view === "left" || view === "right") && !this.art[view]) view = this.art.back && abs > Math.PI / 2 ? "back" : "front";
     if (view !== "front" && !this.art[view]) view = "front";
@@ -192,7 +193,7 @@ export class Card {
     const strides = this.art.walk?.[view];
     const pose = this.pose ? this.art.poses?.[this.pose] : undefined;
     // A pose drawn for some sides only is not shown from the others.
-    const posed = typeof pose === "string" ? pose : pose ? (pose[view] ?? (view === "left" || view === "right" ? pose[abs > Math.PI / 2 ? "back" : "front"] : undefined)) : undefined;
+    const posed = typeof pose === "string" ? pose : pose ? (pose[seen] ?? (seen === "left" || seen === "right" ? pose[abs > Math.PI / 2 ? "back" : "front"] : undefined)) : undefined;
     if (posed) src = posed;
     else if (moving && strides?.length) {
       // Alternate the standing drawing with each stride frame: stand, step, stand, step.

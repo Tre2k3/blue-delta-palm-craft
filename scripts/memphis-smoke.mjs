@@ -169,9 +169,20 @@ try {
     const render = g.stage.render;
     g.stage.render = () => {};
     let mine = 0;
+    const seen = { shoot: "", ready: 0, ran: 0, stood: 0 };
+    let last = [h.rival.x, h.rival.z];
+    let hold = 0;
     for (let i = 0; i < 30 * 240 && !h.over; i++) {
       g.tick(1 / 30);
-      if (h.turn === "you" && !h.charging && h.cool <= 0) {
+      const c = h.rival.card;
+      if (c.pose === "shoot" && /shot-(front|back)/.test(c.current)) seen.shoot = c.current;
+      if (c.pose === "ready") seen.ready++;
+      if (c.pose === "drive") seen.ran += Math.hypot(h.rival.x - last[0], h.rival.z - last[1]);
+      if (c.pose === "shoot" && Math.hypot(h.rival.x - h.spot.x, h.rival.z - h.spot.z) < 0.1) seen.stood++;
+      last = [h.rival.x, h.rival.z];
+      // Benji takes a second over each shot, long enough for the other player to get set.
+      hold = h.turn === "you" ? hold + 1 : 0;
+      if (h.turn === "you" && !h.charging && h.cool <= 0 && hold > 30) {
         h.charge = 0.8;
         h.release();
         mine++;
@@ -179,11 +190,12 @@ try {
     }
     for (let i = 0; i < 30; i++) g.tick(1 / 30);
     g.stage.render = render;
-    const out = { kind: h.kind, over: h.over, you: h.score, them: h.rival.score, mine, title: g.results?.title, wins: g.save.best.versus };
+    const out = { kind: h.kind, over: h.over, you: h.score, them: h.rival.score, mine, title: g.results?.title, wins: g.save.best.versus, seen };
     g.close();
     return out;
   });
   check(duel.kind === "versus" && duel.over && duel.mine >= 4 && Math.max(duel.you, duel.them) >= 11 && duel.you !== duel.them, "a game to eleven is played out shot for shot", duel);
+  check(/pedestrians\/male-0\d-shot-/.test(duel.seen.shoot) && duel.seen.stood > 0 && duel.seen.ran > 10 && duel.seen.ready > 30, "the other player runs to the spot, shoots with his arms up and guards in a stance", duel.seen);
   await ff(1);
   await page.evaluate(() => window.__GAME__.playBall("shootout"));
   await ff(1.5);
@@ -396,12 +408,20 @@ try {
     const veli = g.street.members.find((m) => m.team === "velis");
     for (let i = 0; i < 6; i++) g.tick(1 / 30);
     const handed = { serving: veli?.serving > 0, pose: veli?.card.pose, drawing: veli?.card.current };
+    g.warp(a.windows.catch.x, a.windows.catch.z, 0);
+    g.stage.render = () => {};
+    for (let i = 0; i < 10; i++) g.tick(1 / 30);
     g.foodAt = "catch";
     g.order("catch_grill");
-    return { trucks: Object.keys(a.windows), prompt, paid, cooler: g.save.cooler.length, video: !!g.veli, fed: g.fedUntil > g.time, handed, crews: g.street.members.filter((m) => m.team).map((m) => m.team).sort().join() };
+    const cook = g.street.members.find((m) => m.team === "catch");
+    for (let i = 0; i < 6; i++) g.tick(1 / 30);
+    g.stage.render = render;
+    const plated = { serving: cook?.serving > 0, pose: cook?.card.pose, drawing: cook?.card.current };
+    return { trucks: Object.keys(a.windows), prompt, paid, cooler: g.save.cooler.length, video: !!g.veli, fed: g.fedUntil > g.time, handed, plated, crews: g.street.members.filter((m) => m.team).map((m) => m.team).sort().join() };
   });
   check(lot.handed.serving && lot.handed.pose === "serve" && /vendors\/veli\/serve-/.test(lot.handed.drawing), "Veli holds the order out when Benji buys", lot.handed);
   check(lot.crews === "brothers,brothers,catch,velis", "Veli and both brothers are in their windows", lot.crews);
+  check(lot.plated.serving && lot.plated.pose === "serve" && /vendors\/catch\/serve-/.test(lot.plated.drawing), "the Catch Kitchen cook holds the plate out when Benji buys", lot.plated);
   check(lot.trucks.join() === "catch,velis,brothers" && /Veli's Wings/.test(lot.prompt) && lot.paid === 14 && lot.cooler === 0 && lot.video && lot.fed, "the three food trucks serve their own menus and Veli's screen is on", lot);
   // Coins: every street has some, and walking through one banks it.
   const coins = await page.evaluate(() => {
@@ -564,7 +584,7 @@ try {
   // Sprites: every fit has a real back, the court poses are in, and nobody on the street is front-only.
   const art = await page.evaluate(async () => {
     const g = window.__GAME__;
-    const { OUTFITS, PEDS } = g.tables;
+    const { OUTFITS, PEDS, BALLERS, CAST, VENDORS } = g.tables;
     const fits = Object.entries(OUTFITS);
     const urls = [];
     for (const [, o] of fits) {
@@ -572,6 +592,10 @@ try {
       for (const p of Object.values(o.art.poses ?? {})) for (const u of Object.values(p)) urls.push(u);
     }
     for (const p of PEDS) urls.push(p.art.back, ...(p.art.walk?.back ?? []));
+    const every = (a) => [a.front, a.back, a.left, a.right, ...Object.values(a.poses ?? {}).flatMap((q) => (typeof q === "string" ? [q] : Object.values(q)))];
+    for (const a of BALLERS) urls.push(...every(a));
+    for (const c of Object.values(CAST)) urls.push(...every(c.art));
+    for (const v of Object.values(VENDORS)) urls.push(...every(v.art));
     const plain = [...new Set(urls.filter(Boolean).map((u) => u.replace(/^flip:/, "")))];
     const missing = [];
     await Promise.all(
@@ -598,6 +622,13 @@ try {
       noBack: fits.filter(([, o]) => !o.art.back || /^tint:/.test(o.art.back)).map(([id]) => id),
       noShot: fits.filter(([, o]) => !o.art.poses?.shoot).map(([id]) => id),
       pedsNoBack: PEDS.filter((p) => !p.art.back).length,
+      ballers: BALLERS.filter((a) => a.poses?.shoot?.back && a.poses?.ready?.front && a.poses?.drive?.right).length,
+      // Nobody is drawn to the shin and hung in the air behind a counter any more.
+      cutOff: Object.entries(CAST)
+        .filter(([, c]) => !c.art.back || !c.art.left || !c.art.right)
+        .map(([id]) => id),
+      hung: g.npcs.filter((n) => n.id !== "kBlanco" && n.card.lift > 0.01).map((n) => n.id),
+      whole: ["courtOg", "uncJ", "strike"].filter((id) => /\/full-front\.webp$/.test(CAST[id].art.front)).length,
       checked: plain.length,
       missing,
       pose,
@@ -606,6 +637,8 @@ try {
   });
   check(art.fits === 12 && art.noBack.length === 0 && art.pedsNoBack === 0 && art.missing.length === 0, "every fit and every pedestrian has a drawn back, and all of the art loads", art);
   check(art.pose === "shoot" && /shot-back/.test(art.drawing), "Benji uses his shooting sprite on the jumper", { pose: art.pose, drawing: art.drawing });
+  check(art.noShot.length === 0 && art.ballers === 4, "every fit and all four court players have their court moves", { noShot: art.noShot, ballers: art.ballers });
+  check(art.whole === 3 && art.cutOff.length === 0 && art.hung.length === 0, "Court OG, Unc J and Strike are drawn whole and stand on the ground", { whole: art.whole, cutOff: art.cutOff, hung: art.hung });
 
   // People have somewhere to be: the same crowd is in different places a little later.
   const crowd = await page.evaluate(() => {

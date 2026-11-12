@@ -4,7 +4,7 @@ import { Troupe, type Act, type Stop } from "./actors/crowd";
 import { People } from "./actors/people";
 import { Traffic } from "./actors/traffic";
 import { CarModel, Driver, STREET } from "./actors/vehicle";
-import { CAST, PEDS, OUTFITS, BENJI_HEIGHT, type CastId, type OutfitId, VENDORS } from "./assets/cast";
+import { BALLERS, CAST, PEDS, OUTFITS, BENJI_HEIGHT, type CastId, type OutfitId, VENDORS } from "./assets/cast";
 import { Sound } from "./core/audio";
 import { Input, type Nav } from "./core/input";
 import type { HoopsKind, Dialogue, HudState, Live, Mode, Overlay, Place, Results, Save, Solid } from "./core/types";
@@ -165,7 +165,7 @@ export class Game {
   room: Room | null = null;
   activity: Activity | null = null;
   /** The art tables, where tools and tests can read them. */
-  readonly tables = { OUTFITS, PEDS };
+  readonly tables = { OUTFITS, PEDS, BALLERS, CAST, VENDORS };
   pos = { x: START.x, z: START.z };
   vel = { x: 0, z: 0 };
   heading = 0;
@@ -333,9 +333,8 @@ export class Game {
     const a = this.city.anchors;
     const put = (id: CastId, place: Place, x: number, z: number, heading: number, rise = 0) => {
       const c = CAST[id];
-      // A drawing that stops at the shin is hung at shin height, so the head is where it should be.
-      const card = new Card(c.art, c.height * (1 - c.cut));
-      card.lift = c.height * c.cut + rise;
+      const card = new Card(c.art, c.height);
+      card.lift = rise;
       card.place(x, z);
       card.heading = heading;
       (place === "street" ? this.city.exterior : this.rooms[place].group).add(card.group);
@@ -346,8 +345,7 @@ export class Game {
     put("uncJ", "street", a.uncStand.x, a.uncStand.z, a.uncStand.heading);
     put("mamaDee", "street", a.trucks.windows.catch.x - 2.6, a.trucks.windows.catch.z + 0.6, Math.PI);
     put("nitro", "street", RACE_MEET.x, RACE_MEET.z, 0);
-    // Strike works the desk from a step behind it, like K Blanco at her till.
-    put("strike", "bowl", this.rooms.bowl.strikeSpot.x, this.rooms.bowl.strikeSpot.z - 0.1, this.rooms.bowl.strikeSpot.heading, 0.3);
+    put("strike", "bowl", this.rooms.bowl.strikeSpot.x, this.rooms.bowl.strikeSpot.z, this.rooms.bowl.strikeSpot.heading);
     this.populate();
   }
 
@@ -489,7 +487,7 @@ export class Game {
                 [VENDORS.brotherRed, -0.78, 1.1],
                 [VENDORS.brotherBlue, 0.78, 1.1],
               ]
-            : [[hand("host"), 0, 0.74]];
+            : [[VENDORS.catch, 0, 1.02]];
       for (const [v, dx, floor] of crew) st.post(v.art, v.height, at(wx + dx, TRUCKS.z - 1.5, wx + dx, TRUCKS.z - 8, "serve", { lift: floor }), id);
     }
     for (const tx of [-14, -4, 6, 16]) lot.push(at(TRUCKS.x + tx - 1.75, TRUCKS.z - 9.5, TRUCKS.x + tx, TRUCKS.z - 9.5, "eat"), at(TRUCKS.x + tx + 1.75, TRUCKS.z - 9.5, TRUCKS.x + tx, TRUCKS.z - 9.5, "eat"));

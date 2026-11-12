@@ -470,7 +470,7 @@ function buildCourt(ctx: BuildCtx) {
   addSolid(ctx, fx1 + 0.6, fx1 + 4.8, cz - 8, cz + 8);
   ctx.solid.wall(7, 1.5, cx, Y0 + 4.4, fz1 + 0.05, neon(ctx, "901 COURT", "#ff8a1e", { sub: "RIVERFRONT" }), YAW.south);
   addGround({ minX: fx0, maxX: fx1, minZ: fz0, maxZ: fz1, y: Y0 });
-  // The sign-up table by the gate, against the fence. Court OG runs the court from behind it.
+  // The sign-up table by the gate, against the fence. Court OG runs the court from the end of it.
   const ox = cx + 4.6;
   const table = std(0x121214, 0.6);
   ctx.solid.box(2.8, 1.02, 0.1, ox, Y0 + 0.51, fz1 + 1.3, table);
@@ -480,7 +480,7 @@ function buildCourt(ctx: BuildCtx) {
   for (const bx of [-0.9, -0.55, 0.85]) ctx.solid.add(new THREE.SphereGeometry(0.17, 12, 10), std(0xc8611c, 0.7), ox + bx, Y0 + 1.25, fz1 + 1.12);
   ctx.solid.box(0.34, 0.26, 0.24, ox + 0.3, Y0 + 1.21, fz1 + 1.12, std(0x1f6a3c, 0.6));
   addSolid(ctx, ox - 1.5, ox + 1.5, fz1, fz1 + 1.4);
-  return { hoops, nets, rims, ogSpot: { x: ox, z: fz1 + 2.2 }, ogStand: { x: ox, z: fz1 + 0.62 } };
+  return { hoops, nets, rims, ogSpot: { x: ox, z: fz1 + 2.2 }, ogStand: { x: ox + 2.35, z: fz1 + 1.15 } };
 }
 
 function buildPier(ctx: BuildCtx) {
@@ -534,7 +534,7 @@ function buildPier(ctx: BuildCtx) {
   f.add(new THREE.BoxGeometry(6.2, 0.14, 3), std(0x2f4a38, 0.8), 0, Y0 + 3.45, -3.3, ctx.solid, 0, -0.3);
   f.box(3.2, 1.3, 0.1, 0, Y0 + 1.9, 0.02, emissiveMat(ctx, 0xffc27a, 0.5, 2.4));
   f.box(3.6, 0.12, 0.7, 0, Y0 + 1.2, 0.3, dark);
-  // A proper counter under the shelf. Unc J serves from behind it, in the window.
+  // A proper counter under the shelf. Unc J keeps shop from the end of it, out front.
   f.box(3.6, 1.14, 0.1, 0, Y0 + 0.57, 0.6, MAT.wood());
   for (const sx of [-1.8, 1.8]) f.box(0.1, 1.14, 0.62, sx, Y0 + 0.57, 0.3, MAT.wood());
   f.wall(3.2, 0.6, 0, Y0 + 0.6, 0.66, sign("LIVE BAIT", "#35e0d0", "#17110e", { sub: "WORMS · MINNOWS · ICE", w: 512, h: 110 }), ctx.flat);
@@ -550,7 +550,7 @@ function buildPier(ctx: BuildCtx) {
     { x: x - half + 0.7, z: z1 + 7 },
     { x: x + half - 0.7, z: z1 + 12 },
   ];
-  return { baitCounter, castSpots, uncStand: { x: f.wx(0.75, 0.22), z: f.wz(0.75, 0.22), heading: Math.PI / 2 } };
+  return { baitCounter, castSpots, uncStand: { x: f.wx(-2.5, 1.05), z: f.wz(-2.5, 1.05), heading: Math.PI / 2 } };
 }
 
 /** The menu board beside a truck: its own dishes at its own prices. */
