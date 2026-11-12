@@ -115,6 +115,26 @@ export function Pause({ game, hud }: { game: Game; hud: HudState }) {
           Garage: pick your ride
         </button>
       )}
+      <Row label="Today's drop">
+        <div className="text-right">
+          <div className="text-sm font-extrabold" style={{ color: hud.daily.done ? "#39ff14" : "#f4d77a" }}>
+            {hud.daily.title}
+            {hud.daily.done ? "  ·  done" : `  ·  $${hud.daily.pay}`}
+          </div>
+          <div className="text-[11px] text-white/55">
+            {hud.daily.done ? "A new one tomorrow." : hud.daily.detail}
+            {hud.daily.streak > 0 ? `  ·  ${hud.daily.streak} ${hud.daily.streak === 1 ? "day" : "days"} running` : ""}
+          </div>
+        </div>
+      </Row>
+      <Row label="Postcards">
+        <div className="text-right">
+          <div className="text-sm font-extrabold text-[#f4d77a]">
+            {hud.postcards.got} of {hud.postcards.total}
+          </div>
+          <div className="text-[11px] text-white/55">{hud.postcards.next ? `Photo mode. Next: ${hud.postcards.next}.` : "The whole set."}</div>
+        </div>
+      </Row>
       <Row label="Your name in Memphis">
         <div className="text-right">
           <div className="text-sm font-extrabold text-[#f4d77a]">{hud.rank.name}</div>
@@ -245,7 +265,7 @@ export function MapScreen({ game, hud }: { game: Game; hud: HudState }) {
   }, [game, hud.car, hud.target]);
   const canRide = hud.mode === "walk" && hud.place === "street";
   return (
-    <Sheet title="Memphis" sub="The green arrow is you. The white square is your coupe." onClose={() => game.close()} wide>
+    <Sheet title="Memphis" sub="The green arrow is you. The white square is your car. The red dashes are the street race: meet Nitro at the red dot to run it." onClose={() => game.close()} wide>
       <div className="grid gap-4 md:grid-cols-[1fr_280px]">
         <canvas ref={ref} width={660} height={780} className="w-full rounded-xl border border-white/10" style={{ aspectRatio: "660 / 780", maxHeight: "70vh", objectFit: "contain" }} />
         <div className="flex flex-col gap-2">
@@ -260,6 +280,10 @@ export function MapScreen({ game, hud }: { game: Game; hud: HudState }) {
             </button>
           ))}
           {!canRide && <div className="text-xs text-white/50">Rides pick up on the street, on foot.</div>}
+          <div className="mt-1 rounded-xl border border-[#ff4646]/40 bg-[#ff4646]/10 p-3 text-xs text-white/80">
+            <div className="mb-1 font-extrabold uppercase tracking-widest text-[#ff8a8a]">Street race</div>
+            Nitro waits by the red dot on Riverside Drive, a block west of the boutique. Walk up to him to race three laps of the red circuit round downtown.
+          </div>
         </div>
       </div>
     </Sheet>

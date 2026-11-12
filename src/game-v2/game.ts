@@ -23,6 +23,7 @@ import { LaserTag } from "./play/laser";
 import { CABINETS, FOOD, FOOD_TRUCKS, PRIZES, type TruckId } from "./play/goods";
 import { Hoops } from "./play/hoops";
 import { PinballTable, PrizeWheel, SkeeLane } from "./play/floor";
+import { POSTCARDS, dailyFor, dailyPay, dayBefore, dayKey, meets } from "./play/extras";
 import { RIDES, rideById } from "./play/garage";
 import { AirHockey, BagToss, BottleBash, ClownToss } from "./play/midway";
 import { PopShot, Whack } from "./play/machines";
@@ -115,6 +116,7 @@ function freshSave(): Save {
     car: { ...CAR_START },
     ride: "coupe",
     rides: ["coupe"],
+    daily: { day: "", done: false, streak: 0, last: "" },
     bounty: 0,
     played: 0,
     count: 0,
@@ -176,7 +178,7 @@ export class Game {
   readonly camera: THREE.PerspectiveCamera;
   readonly sky: Sky;
   readonly rooms: { hq: HqRoom; home: HomeRoom; bowl: BowlRoom; fun: FunRoom; laser: LaserRoom };
-  readonly live: Live = { meter: 0, sweetLo: 0, sweetHi: 0, aim: 0, tension: 0, speed: 0, nitro: 0, fade: 1, radar: new Array<number>(48).fill(0), radarN: 0, cue: 999, turn: -1, markX: 0.5, markY: 0.5, markOn: false, markDist: 0, x: 0, z: 0, heading: 0, camYaw: 0, party: 0, partyLevel: 0 };
+  readonly live: Live = { meter: 0, sweetLo: 0, sweetHi: 0, aim: 0, tension: 0, speed: 0, drift: 0, nitro: 0, fade: 1, radar: new Array<number>(48).fill(0), radarN: 0, cue: 999, turn: -1, markX: 0.5, markY: 0.5, markOn: false, markDist: 0, x: 0, z: 0, heading: 0, camYaw: 0, party: 0, partyLevel: 0 };
   readonly benji: Card;
   car: CarModel;
   readonly driver = new Driver();
@@ -192,7 +194,7 @@ export class Game {
   room: Room | null = null;
   activity: Activity | null = null;
   /** The art tables, where tools and tests can read them. */
-  readonly tables = { OUTFITS, PEDS, BALLERS, CAST, VENDORS, STORY, CHAPTERS, RIDES };
+  readonly tables = { OUTFITS, PEDS, BALLERS, CAST, VENDORS, STORY, CHAPTERS, RIDES, POSTCARDS };
   pos = { x: START.x, z: START.z };
   vel = { x: 0, z: 0 };
   heading = 0;
@@ -304,6 +306,14 @@ export class Game {
   private bottles: BottleBash;
   private clowns: ClownToss;
   private bags: BagToss;
+  /** Nothing happens on its own: no daily drop, no fireworks at nightfall, no rainbow. For tests, with `?calm=1`. */
+  calm = typeof location !== "undefined" && new URLSearchParams(location.search).get("calm") === "1";
+  /** The slide he is in: points so far, and how long since the tyres last let go. */
+  private drift = { pts: 0, hold: 0 };
+  /** Fireworks over the river on the first night of a session and every night after: seconds left, and the next shell. */
+  private nightShow = { left: 0, next: 0, was: "" };
+  /** A rainbow after daytime rain: seconds left, and the arc itself. */
+  private rainbow = { left: 0, span: 80, heavy: false, mesh: null as THREE.Mesh | null };
   /** How the car he is in handles on the street. */
   private tune: DriveTune = { ...STREET };
 
@@ -846,9 +856,11 @@ export class Game {
       this.coins.reset(this.save.flags);
       this.benji.setArt(OUTFITS.starter.art);
       this.driver.reset(CAR_START.x, CAR_START.z, CAR_START.heading);
+      this.car = this.buildCar(this.save.ride);
       this.placeCar();
     }
     const s = this.save;
+    this.rollDaily();
     const resume = !fresh && this.hasSave && s.step > 0;
     this.pos.x = resume ? s.x : START.x;
     this.pos.z = resume ? s.z : START.z;
@@ -945,6 +957,13 @@ export class Game {
     }
   }
 
+  /** The picture slows for `seconds` and nothing else happens: a shot that could win it, in the air. */
+  hold(seconds: number, depth: number) {
+    if (this.slowLeft > seconds) return;
+    this.slowLeft = seconds;
+    this.slowDeep = depth;
+  }
+
   /** Photo mode: the day stops and the lens comes round in front of him. */
   openPhoto() {
     this.photo.yaw = this.camYaw + Math.PI + 0.55;
@@ -998,6 +1017,23 @@ export class Game {
   /** A picture was taken in photo mode. */
   photoTaken() {
     this.emit("photo");
+    if (this.room) return;
+    const flags = this.save.flags;
+    const card = POSTCARDS.find((c) => !flags[`card_${c.id}`] && Math.hypot(this.pos.x - c.x, this.pos.z - c.z) < c.r);
+    if (!card) return;
+    flags[`card_${card.id}`] = true;
+    const got = POSTCARDS.filter((c) => flags[`card_${c.id}`]).length;
+    if (got === POSTCARDS.length) {
+      const paid = this.earn(300, 20, { quiet: true });
+      this.moment(3);
+      this.toast(`All ${got} postcards. Memphis is yours.  +$${paid.dollars}`, 6);
+    } else {
+      const paid = this.earn(40, 4, { quiet: true });
+      this.sound.cash();
+      this.toast(`Postcard: ${card.name}  ·  ${got} of ${POSTCARDS.length}  +$${paid.dollars}`, 4.5);
+    }
+    this.persist();
+    this.push();
   }
 
   /** Confetti, and nothing else. */
@@ -1267,8 +1303,34 @@ export class Game {
     return won;
   }
 
+  /** A new day brings a new drop; a day missed ends the run. */
+  private rollDaily() {
+    const d = this.save.daily;
+    const today = dayKey();
+    if (d.day !== today) {
+      d.day = today;
+      d.done = false;
+    }
+    if (d.last !== today && d.last !== dayBefore(today)) d.streak = 0;
+    return dailyFor(today);
+  }
+
+  private checkDaily(kind: string, n: number, extra: number) {
+    const d = this.save.daily;
+    const job = this.rollDaily();
+    if (this.calm || d.done || !meets(job.goal, kind, n, extra)) return;
+    d.done = true;
+    d.streak += 1;
+    d.last = d.day;
+    const got = this.earn(dailyPay(d.streak), 6, { quiet: true });
+    this.moment(2);
+    this.toast(`Today's drop done: ${job.title}  +$${got.dollars}${d.streak > 1 ? `  ·  ${d.streak} days running` : ""}`, 5);
+    this.persist();
+  }
+
   /** Something happened. Moves the story and the bounty board along. */
   emit(kind: string, n = 0, extra = 0) {
+    this.checkDaily(kind, n, extra);
     const step = STORY[this.save.step];
     const want = step?.done;
     const hit =
@@ -1543,8 +1605,12 @@ export class Game {
     if (!this.spend(10)) return;
     this.close();
     this.transition(() => {
-      this.pos.x = p.x;
-      this.pos.z = p.z + (p.id === "fun" ? -1.5 : 2);
+      this.pos.x = p.arrive?.x ?? p.x;
+      this.pos.z = p.arrive?.z ?? p.z + (p.id === "fun" ? -1.5 : 2);
+      if (p.arrive) {
+        this.heading = p.arrive.heading;
+        this.camYaw = p.arrive.heading;
+      }
       pushOut(this.pos, 0.5, this.city.solids);
       this.vel.x = this.vel.z = 0;
       this.snapCamera();
@@ -1693,6 +1759,73 @@ export class Game {
     w.left = 80;
     w.next = 300;
     this.push();
+  }
+
+  /** Fireworks over the river when night falls, and a rainbow when daytime rain clears. */
+  private runSkyShows(dt: number, paused: boolean) {
+    const ns = this.nightShow;
+    const phase = this.sky.phase;
+    const about = !this.calm && !this.room && !this.intro && (this.mode === "walk" || this.mode === "drive");
+    if (phase !== ns.was) {
+      if (phase === "night" && ns.was !== "" && about && this.weather.rain < 0.2) {
+        ns.left = 15;
+        ns.next = 1.5;
+        this.toast("Fireworks over the river tonight.", 4);
+      }
+      ns.was = phase;
+    }
+    if (ns.left > 0 && !paused) {
+      ns.left -= dt;
+      ns.next -= dt;
+      if (ns.next <= 0 && !this.room) {
+        ns.next = 0.9 + Math.random() * 0.7;
+        // Out over the water, wherever on the bank he is standing.
+        _v.set(-70 + Math.random() * 190 - this.camera.position.x, 0, -300 - this.camera.position.z).normalize();
+        this.fireworks.show(this.camera.position, _v, this.stage.quality === "low" ? 1 : 2);
+      }
+    }
+    // The rainbow: only after real rain, only by day, and gone in a minute or so.
+    const rb = this.rainbow;
+    const w = this.weather;
+    if (w.rain > 0.5) rb.heavy = true;
+    else if (rb.heavy && w.rain < 0.1) {
+      rb.heavy = false;
+      if (phase !== "night" && !this.room && !this.calm) {
+        rb.left = rb.span;
+        this.toast("Rainbow over the river.", 4);
+      }
+    }
+    if (rb.left > 0 || rb.mesh?.visible) {
+      rb.left = Math.max(0, rb.left - dt);
+      if (!rb.mesh) {
+        // A flat arc standing over the far bank, red on the outside.
+        const inner = 150;
+        const outer = 172;
+        const geo = new THREE.RingGeometry(inner, outer, 72, 1, 0, Math.PI);
+        const pos = geo.attributes.position!;
+        const uv = geo.attributes.uv!;
+        for (let i = 0; i < pos.count; i++) uv.setXY(i, 0.5, (Math.hypot(pos.getX(i), pos.getY(i)) - inner) / (outer - inner));
+        const bands = document.createElement("canvas");
+        bands.width = 4;
+        bands.height = 64;
+        const c = bands.getContext("2d")!;
+        const grad = c.createLinearGradient(0, 64, 0, 0);
+        const cols = ["rgba(150,60,220,0)", "rgba(150,60,220,1)", "rgba(60,90,255,1)", "rgba(40,200,120,1)", "rgba(250,230,60,1)", "rgba(255,140,40,1)", "rgba(255,50,50,1)", "rgba(255,50,50,0)"];
+        cols.forEach((col, i) => grad.addColorStop(i / (cols.length - 1), col));
+        c.fillStyle = grad;
+        c.fillRect(0, 0, 4, 64);
+        const map = new THREE.CanvasTexture(bands);
+        map.colorSpace = THREE.SRGBColorSpace;
+        rb.mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map, transparent: true, opacity: 0, depthWrite: false, fog: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, toneMapped: false }));
+        rb.mesh.position.set(30, -12, -430);
+        rb.mesh.renderOrder = -5;
+        this.city.exterior.add(rb.mesh);
+      }
+      const k = Math.min(1, rb.left / 8, (rb.span - rb.left) / 6);
+      const mat = rb.mesh.material as THREE.MeshBasicMaterial;
+      mat.opacity = Math.max(0, k) * 0.42 * (1 - this.sky.look.lights * 0.8) * (1 - w.rain);
+      rb.mesh.visible = mat.opacity > 0.004;
+    }
   }
 
   /** The weather has its own clock: a shower now and then, and streets that stay wet after it. */
@@ -1872,6 +2005,8 @@ export class Game {
   }
 
   exitCar(force = false) {
+    this.drift.pts = 0;
+    this.live.drift = 0;
     if (!force && this.driver.speed > 3) {
       this.toast("Stop the car first.");
       return;
@@ -1909,7 +2044,7 @@ export class Game {
     const m = this.input.move();
     const gas = this.input.throttle();
     const d = this.driver;
-    d.step(dt, { throttle: gas, steer: m.x, handbrake: this.input.down("action"), boost: false }, this.tune, this.city.carSolids);
+    d.step(dt, { throttle: gas, steer: m.x, handbrake: this.input.down("action"), boost: false, slide: true }, this.tune, this.city.carSolids);
     for (const c of this.traffic.list()) {
       const hit = d.bump(c.x, c.z, c.radius);
       if (hit > 2.5) {
@@ -1922,6 +2057,30 @@ export class Game {
       this.input.rumble(Math.min(1, d.hit / 12), 180);
     }
     if (d.slip > 5 && d.speed > 8) this.sound.skid(Math.min(1, d.slip / 12));
+    // A long slide is worth something, as long as it does not end in a wall.
+    const dr = this.drift;
+    if (d.hit > 3) {
+      if (dr.pts > 40) this.toast("Drift lost: you hit something.", 1.6);
+      dr.pts = 0;
+    } else if (d.slip > 3 && d.speed > 8) {
+      dr.pts += d.slip * d.speed * dt * 1.2;
+      dr.hold = 0.8;
+    } else if (dr.pts > 0) {
+      dr.hold -= dt;
+      if (dr.hold <= 0) {
+        if (dr.pts >= 60) {
+          const pts = Math.round(dr.pts);
+          const best = this.save.best.drift ?? 0;
+          if (pts > best) this.save.best.drift = pts;
+          const paid = this.earn(Math.min(40, Math.round(pts / 25)), pts >= 400 ? 1 : 0, { quiet: true });
+          this.sound.cash();
+          this.buzz(25);
+          this.toast(`DRIFT ${pts}${pts > best && best > 0 ? "  ·  your longest" : ""}  +$${paid.dollars}`, 2.4);
+        }
+        dr.pts = 0;
+      }
+    }
+    this.live.drift = dr.pts >= 20 ? dr.pts : 0;
     this.car.place(d.x, d.y, d.z, d.heading);
     this.car.roll(d.forward * dt, d.steer * 0.5);
     this.car.lean(-d.steer * Math.min(1, d.speed / 20) * 0.05, 0);
@@ -2159,6 +2318,7 @@ export class Game {
 
     this.fireworks.update(dt);
     this.runWeather(dt, paused && this.overlay !== "photo");
+    this.runSkyShows(dt, paused);
     if (this.rankUp && !this.overlay) {
       this.rankUp.left -= dt;
       if (this.rankUp.left <= 0) {
@@ -2369,6 +2529,8 @@ export class Game {
     const step = STORY[s.step];
     const bounty = BOUNTIES[s.bounty % BOUNTIES.length]!;
     const chapter = chapterOf(s.step);
+    const today = dailyFor(s.daily.day || dayKey());
+    const nextCard = POSTCARDS.find((c) => !s.flags[`card_${c.id}`]);
     const t = this.target();
     const d = this.dialogue[0];
     const hints: [string, string][] =
@@ -2401,6 +2563,8 @@ export class Game {
       rain: this.weather.want > 0,
       ride: s.ride,
       rides: s.rides,
+      daily: { title: today.title, detail: today.detail, done: s.daily.done, streak: s.daily.streak, pay: dailyPay(s.daily.streak + (s.daily.done ? 0 : 1)) },
+      postcards: { got: POSTCARDS.filter((c) => s.flags[`card_${c.id}`]).length, total: POSTCARDS.length, next: nextCard ? `${nextCard.name}, ${nextCard.hint}` : "" },
       rank: rankOf(s.respect),
       mission: step
         ? { chapter: chapter?.name ?? "", index: chapter?.index ?? 1, total: chapter?.total ?? 1, title: step.title, detail: step.goal?.times ? `${step.detail}  ${Math.min(s.count, step.goal.times)}/${step.goal.times}` : step.detail }

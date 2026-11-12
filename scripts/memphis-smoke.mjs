@@ -31,7 +31,8 @@ try {
     window.__padOn = false;
     navigator.getGamepads = () => (window.__padOn ? [pad] : []);
   });
-  await page.goto(`${base}?q=low`, { waitUntil: "domcontentloaded" });
+  // `calm` holds back what the game does on its own (the daily drop, fireworks at nightfall), so every run is the same.
+  await page.goto(`${base}?q=low&calm=1`, { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => !!window.__GAME__, undefined, { timeout: 120000 });
   // The weather keeps its own clock. Hold it dry so every run sees the same city.
   await page.evaluate(() => window.__GAME__.setRain(false));
@@ -912,6 +913,190 @@ try {
   check(night.day.programme === "" && night.day.glow === 0 && night.programmes.length === 5 && night.glow > 0.5 && night.mirrored > 1, "the bridge runs five light shows after dark and the river mirrors them", { day: night.day, programmes: night.programmes, glow: night.glow, mirrored: night.mirrored });
   check(night.moved > night.signs / 2, "neon signs are never quite still at night", { signs: night.signs, moved: night.moved });
   check(night.rain.amount > 0.95 && night.rain.drawn && night.rain.wet > 0.9 && night.rain.rough < night.rough * 0.6 && night.after.amount < 0.05 && !night.after.drawn && night.after.wet > 0.5, "rain comes down, the streets shine, and they stay wet after it stops", { dry: night.rough, rain: night.rain, after: night.after });
+  // This round: easier fishing, defence and dunks at the court, laser tag's lock and dash, rides that
+  // let him out facing the right way, and the things the city does on its own.
+  const round = await page.evaluate(() => {
+    const g = window.__GAME__;
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    const tick = () => g.tick(1 / 60);
+    const run = (cond, max) => {
+      let i = 0;
+      for (; i < max * 60 && !cond(); i++) tick();
+      return i / 60;
+    };
+    const out = {};
+    if (g.activity) g.activity.quit();
+    run(() => false, 0.3);
+
+    // A ride to the food trucks lets him out on the window side, facing the counters.
+    g.save.dollars = 500;
+    g.taxi("trucks");
+    run(() => false, 2);
+    const veli = g.city.anchors.trucks.windows.velis;
+    out.ride = { front: g.pos.z < veli.z - 1, near: Math.hypot(g.pos.x - veli.x, g.pos.z - veli.z) < 6, heading: +g.heading.toFixed(2) };
+
+    // Fishing: a slow hand on the hook still hooks, a missed bite comes round again, and a small fish comes straight in.
+    const c = g.city.anchors.castSpots[0];
+    g.warp(c.x, c.z, Math.PI);
+    g.save.bait = 9;
+    const f = g.fishing;
+    g.begin(f, "fish");
+    f.start(c);
+    const cast = () => {
+      run(() => f.phase === "ready", 6);
+      g.input.hold("action", true);
+      run(() => f.phase === "charge" && f.t > 0.1 && f.power > 0.5, 3);
+      g.input.hold("action", false);
+      run(() => f.phase === "bite", 16);
+    };
+    cast();
+    run(() => f.t >= 1.5 || f.phase !== "bite", 3);
+    const late = f.phase;
+    run(() => f.phase !== "bite", 3);
+    const again = { phase: f.phase, call: f.call, bites: f.bites };
+    run(() => f.phase === "bite", 6);
+    g.input.press("action");
+    tick();
+    const hooked = f.phase;
+    f.strength = 0.56;
+    g.input.hold("action", true);
+    run(() => f.phase !== "reel", 60);
+    g.input.hold("action", false);
+    out.fish = { late, again, hooked, end: f.phase, bait: g.save.bait };
+    f.quit();
+    run(() => false, 0.3);
+
+    // The court: a jump at the top of his shot blocks it, and three in a row buys a dunk.
+    const h = g.hoops;
+    g.save.best.versus = 0;
+    g.begin(h, "hoops");
+    h.start("versus");
+    run(() => h.turn === "rival" && Math.hypot(h.rival.tx - h.rival.x, h.rival.tz - h.rival.z) < 0.05, 8);
+    h.fake = false;
+    run(() => h.rival.wait <= 0.25, 4);
+    g.input.press("action");
+    run(() => h.turn !== "rival", 2);
+    const blocked = { result: h.contest.result, call: h.call };
+    run(() => h.turn === "you", 8);
+    run(() => false, 0.6);
+    const them = h.rival.score;
+    h.streak = 3;
+    const mine = h.score;
+    g.input.press("action");
+    tick();
+    const dunking = h.dunk.on;
+    run(() => !h.dunk.on, 3);
+    run(() => false, 0.5);
+    out.court = { blocked, them, dunking, gained: h.score - mine, streak: h.streak };
+    h.quit();
+    run(() => false, 0.3);
+
+    // Laser tag: the marker is on whoever Space would hit, a dash shakes off a pink lining him up, and the end counts double.
+    const l = g.laser;
+    g.setPlace("laser");
+    g.begin(l, "laser");
+    l.start();
+    run(() => l.phase === "go", 6);
+    const pink = l.bots.find((b) => b.team === 1);
+    pink.x = g.pos.x + Math.sin(g.camYaw) * 5;
+    pink.z = g.pos.z + Math.cos(g.camYaw) * 5;
+    pink.tx = pink.x;
+    pink.tz = pink.z;
+    pink.stun = 0;
+    tick();
+    const lock = l.lock.visible && l.aimed() === pink;
+    pink.at = "benji";
+    pink.aim = 0.6;
+    const x0 = g.pos.x;
+    const z0 = g.pos.z;
+    g.input.press("interact");
+    for (let i = 0; i < 14; i++) tick();
+    const dash = { moved: +Math.hypot(g.pos.x - x0, g.pos.z - z0).toFixed(1), shook: pink.at !== "benji" };
+    l.left = 20.4;
+    run(() => l.frenzy, 2);
+    out.laser = { lock, dash, frenzy: l.frenzy, worth: l.worth() };
+    l.quit();
+    run(() => g.mode === "walk", 4);
+    g.setPlace("street");
+    g.warp(0, -160, Math.PI);
+    run(() => false, 0.3);
+
+    // What the city does on its own, switched back on for this.
+    g.calm = false;
+    const job = g.rollDaily();
+    const cash = g.save.dollars;
+    g.emit(job.goal.kind, job.goal.n ?? job.goal.max ?? 1, job.goal.extra ?? 0);
+    const daily = { done: g.save.daily.done, streak: g.save.daily.streak, paid: g.save.dollars - cash };
+    const cash2 = g.save.dollars;
+    g.emit(job.goal.kind, job.goal.n ?? job.goal.max ?? 1, job.goal.extra ?? 0);
+    daily.twice = g.save.dollars - cash2;
+    const { POSTCARDS } = g.tables;
+    g.pos.x = POSTCARDS[0].x;
+    g.pos.z = POSTCARDS[0].z + 1;
+    g.photoTaken();
+    const card = { got: !!g.save.flags[`card_${POSTCARDS[0].id}`], total: POSTCARDS.length };
+    // A handbrake slide pays; a plain turn is not one.
+    const slide = (hand) => {
+      g.driver.reset(-110, -140, Math.PI / 2);
+      if (g.mode !== "drive") g.drive();
+      g.input.hold("up", true);
+      for (let i = 0; i < 140; i++) tick();
+      let peak = 0;
+      g.input.hold("right", true);
+      if (hand) g.input.hold("action", true);
+      for (let i = 0; i < 60; i++) {
+        tick();
+        peak = Math.max(peak, g.live.drift);
+      }
+      g.input.hold("right", false);
+      g.input.hold("action", false);
+      let toast = "";
+      for (let i = 0; i < 120; i++) {
+        tick();
+        if (/^DRIFT/.test(g.toastText)) toast = g.toastText;
+      }
+      g.input.hold("up", false);
+      for (let i = 0; i < 40; i++) tick();
+      return { peak: Math.round(peak), toast };
+    };
+    const drift = { plain: slide(false), handbrake: slide(true) };
+    g.exitCar(true);
+    // Night falls: fireworks. Rain clears by day: a rainbow.
+    g.warp(-13, -185, Math.PI);
+    g.setPhase("golden");
+    g.sky.setPhase("golden", true);
+    run(() => false, 0.5);
+    g.setPhase("night");
+    g.sky.setPhase("night", true);
+    run(() => false, 3);
+    const show = { left: g.nightShow.left > 0, sky: g.fireworks.busy };
+    g.nightShow.left = 0;
+    g.setPhase("day");
+    g.sky.setPhase("day", true);
+    g.setRain(true);
+    run(() => false, 9);
+    g.setRain(false);
+    run(() => false, 14);
+    const bow = { left: g.rainbow.left > 0, seen: !!g.rainbow.mesh?.visible };
+    g.calm = true;
+    g.rainbow.left = 0;
+    g.weather.wet = 0;
+    g.setPhase("golden");
+    g.sky.setPhase("golden", true);
+    g.setPhase("auto");
+    run(() => false, 0.5);
+    out.city = { daily, card, drift, show, bow };
+    g.stage.render = draw;
+    return out;
+  });
+  check(round.ride.front && round.ride.near && round.ride.heading === 0, "a ride to the food trucks lets him out in front of the windows, facing them", round.ride);
+  check(round.fish.late === "bite" && round.fish.again.phase === "wait" && round.fish.again.bites === 1 && round.fish.hooked === "reel" && round.fish.end === "landed", "fishing forgives a slow hand: the bite waits, comes round again, and a small fish comes straight in", round.fish);
+  check(round.court.blocked.result === "block" && /BLOCKED/.test(round.court.blocked.call) && round.court.them === 0 && round.court.dunking && round.court.gained >= 2 && round.court.streak === 0, "at the court a well-timed jump blocks the shot and three in a row buys a dunk", round.court);
+  check(round.laser.lock && round.laser.dash.moved > 2 && round.laser.dash.shook && round.laser.frenzy && round.laser.worth === 2, "laser tag marks the target, a dash shakes off a pink lining him up, and the last twenty seconds count double", round.laser);
+  check(round.city.daily.done && round.city.daily.streak === 1 && round.city.daily.paid >= 120 && round.city.daily.twice === 0 && round.city.card.got && round.city.card.total === 6, "today's drop pays once and a photo at the pier collects a postcard", { daily: round.city.daily, card: round.city.card });
+  check(round.city.drift.plain.peak === 0 && round.city.drift.handbrake.peak > 30 && /^DRIFT \d+/.test(round.city.drift.handbrake.toast), "a handbrake slide is scored and paid; an ordinary turn is not a drift", round.city.drift);
+  check(round.city.show.left && round.city.show.sky && round.city.bow.left && round.city.bow.seen, "fireworks go up when night falls and a rainbow follows daytime rain", { show: round.city.show, bow: round.city.bow });
   // Recordings are optional: with none on the shelf every sound is still made up on the spot.
   const sound = await page.evaluate(async () => {
     const g = window.__GAME__;

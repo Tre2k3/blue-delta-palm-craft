@@ -1,4 +1,4 @@
-import { ARENA, BOWL, COURT, FAR_BANK_Z, FUN, HOME, HQ, KART_TRACK, PIER, POIS, RIVER_Z, ROAD_HALF, STREETS_X, STREETS_Z, STREET_NAMES_X, STREET_NAMES_Z, TRUCKS, slab } from "../world/map";
+import { ARENA, BOWL, COURT, FAR_BANK_Z, FUN, HOME, HQ, KART_TRACK, PIER, POIS, RACE_LOOP, RIVER_Z, ROAD_HALF, STREETS_X, STREETS_Z, STREET_NAMES_X, STREET_NAMES_Z, TRUCKS, slab } from "../world/map";
 
 export type MapView = { cx: number; cz: number; scale: number };
 export type MapDots = { x: number; z: number; heading: number; car: { x: number; z: number }; target: { id: string; x: number; z: number } | null; time: number };
@@ -63,6 +63,54 @@ export function drawMap(g: CanvasRenderingContext2D, w: number, h: number, v: Ma
     g.font = `italic 700 ${Math.max(11, 9 * S)}px ui-sans-serif, system-ui, sans-serif`;
     g.fillText("MISSISSIPPI RIVER", X(0), Z(-262));
   }
+
+  // The street race: the circuit it runs, which way round, and the line it starts from.
+  g.save();
+  g.strokeStyle = labels ? "rgba(255,70,70,0.95)" : "rgba(255,70,70,0.6)";
+  g.lineWidth = labels ? 3.5 : 1.5;
+  g.lineJoin = "round";
+  g.setLineDash(labels ? [11, 8] : [4, 4]);
+  // The dashes march the way the race runs.
+  g.lineDashOffset = -d.time * (labels ? 22 : 9);
+  g.beginPath();
+  RACE_LOOP.forEach((p, i) => (i ? g.lineTo(X(p.x), Z(p.z)) : g.moveTo(X(p.x), Z(p.z))));
+  g.closePath();
+  g.stroke();
+  g.setLineDash([]);
+  if (labels) {
+    // An arrowhead on every other leg, pointing the way round.
+    g.fillStyle = "#ff4646";
+    for (let i = 0; i < RACE_LOOP.length; i += 2) {
+      const a = RACE_LOOP[i]!;
+      const b = RACE_LOOP[(i + 1) % RACE_LOOP.length]!;
+      g.save();
+      g.translate(X((a.x + b.x) / 2), Z((a.z + b.z) / 2));
+      g.rotate(Math.atan2(b.z - a.z, b.x - a.x));
+      g.beginPath();
+      g.moveTo(9, 0);
+      g.lineTo(-5, -6.5);
+      g.lineTo(-5, 6.5);
+      g.closePath();
+      g.fill();
+      g.restore();
+    }
+    // The start line, chequered.
+    const s0 = RACE_LOOP[0]!;
+    const q = 4.5;
+    for (let r = 0; r < 4; r++)
+      for (let c = 0; c < 2; c++) {
+        g.fillStyle = (r + c) % 2 ? "#0b0b0d" : "#f4f1ea";
+        g.fillRect(X(s0.x) + (c - 1) * q, Z(s0.z) + (r - 2) * q, q, q);
+      }
+    g.font = "800 11px ui-sans-serif, system-ui, sans-serif";
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.fillStyle = "#06080a";
+    g.fillText("RACE CIRCUIT  ·  3 LAPS", X(0) + 1, Z(-12) - 12);
+    g.fillStyle = "#ff8a8a";
+    g.fillText("RACE CIRCUIT  ·  3 LAPS", X(0), Z(-12) - 13);
+  }
+  g.restore();
 
   for (const p of POIS) {
     const on = d.target?.id === p.id;

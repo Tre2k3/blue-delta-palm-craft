@@ -105,6 +105,7 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
   const aim = useRef<HTMLDivElement>(null);
   const tension = useRef<HTMLDivElement>(null);
   const speed = useRef<HTMLSpanElement>(null);
+  const drift = useRef<HTMLDivElement>(null);
   const nitro = useRef<HTMLDivElement>(null);
   const mini = useRef<HTMLCanvasElement>(null);
   const radar = useRef<HTMLCanvasElement>(null);
@@ -142,6 +143,10 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
       tension.current.style.background = l.tension > 0.8 ? "#ff3b3b" : l.tension > 0.55 ? "#ffd23a" : "#39ff14";
     }
     if (speed.current) speed.current.textContent = String(Math.round(l.speed));
+    if (drift.current) {
+      drift.current.style.display = l.drift > 0 ? "block" : "none";
+      if (l.drift > 0) drift.current.textContent = `DRIFT ${Math.round(l.drift)}`;
+    }
     if (nitro.current) nitro.current.style.width = `${l.nitro * 100}%`;
     if (cue.current) {
       const on = l.cue < 48 && l.cue > -18;
@@ -392,6 +397,13 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
             )}
             {hud.fish?.phase === "reel" && (
               <div className="w-72 max-w-[80vw]">
+                {/* The one thing to know while it is on the line. */}
+                <div
+                  className="mx-auto mb-2 w-fit rounded-full px-5 py-1.5 text-sm font-black uppercase tracking-[0.2em]"
+                  style={hud.fish.running ? { background: "#ff3b3b", color: "#fff" } : { background: "#39ff14", color: "#06140a" }}
+                >
+                  {hud.fish.running ? (touch ? "Let go" : "Let go of Space") : touch ? "Hold to reel" : "Hold Space: reel"}
+                </div>
                 <div className="mb-1 flex justify-between text-[10px] font-black uppercase tracking-widest text-white/70">
                   <span>Line tension</span>
                   <span>{hud.fish.distance} m out</span>
@@ -421,6 +433,7 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
                 <span ref={speed}>0</span>
                 <span className="ml-1 text-lg text-white/60">MPH</span>
               </div>
+              <div ref={drift} className="sr-title text-2xl text-[#f4d77a] drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]" style={{ display: "none" }} />
               {hud.race && !hud.race.kart && (
                 <div className="ml-auto mt-1 w-40">
                   <div className="mb-0.5 text-[10px] font-black uppercase tracking-widest text-[#5ac8ff]">Nitro</div>
@@ -537,8 +550,8 @@ function ActivityBar({ hud }: { hud: HudState }) {
               <Stat label={h.rival.name} tone="#ff5a5a">
                 {h.rival.score}
               </Stat>
-              <Stat label={h.rival.yours ? "Your shot" : "Watch"} tone={h.rival.yours && h.rival.clock <= 3 ? "#ff5a5a" : "#f4d77a"}>
-                {h.rival.yours ? h.rival.clock : `to ${h.rival.to}`}
+              <Stat label={h.rival.yours ? "Your shot" : "Block it"} tone={h.rival.yours && h.rival.clock <= 3 ? "#ff5a5a" : "#f4d77a"}>
+                {h.rival.yours ? h.rival.clock : <span className="text-base sm:text-lg">JUMP</span>}
               </Stat>
             </>
           ) : h.kind === "practice" ? (

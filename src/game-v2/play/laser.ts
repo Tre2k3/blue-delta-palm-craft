@@ -50,11 +50,16 @@ const _y = new THREE.Vector3(0, 1, 0);
  * Laser tag, green against pink. Benji and two from the neighbourhood hold the green base;
  * four pinks hold theirs. Tags score, a base that takes three hits pays big and goes dark for a
  * while, and power-ups drop on the floor. Two minutes; the team with more on the board wins.
+ *
+ * What Benji is about to hit wears a green marker, so nobody fires blind. A pink lining up on
+ * him shows a thin line first, which is the cue to dash or get behind something. Tags in a
+ * row are called out, and in the last twenty seconds every point on the floor counts double.
  */
 export class LaserTag implements Activity {
   hints: [string, string][] = [
     ["W A S D", "Move and turn"],
-    ["Space", "Fire"],
+    ["Space", "Fire at the green marker"],
+    ["E", "Dash: dodge a shot"],
     ["Shift", "Run"],
     ["Q", "Leave the arena"],
   ];
@@ -86,6 +91,17 @@ export class LaserTag implements Activity {
   private callLeft = 0;
   private leaving = false;
   private mats: [THREE.MeshBasicMaterial, THREE.MeshBasicMaterial];
+  /** The marker on whatever Space would hit right now. */
+  private lock: THREE.Group;
+  private lockRing!: THREE.Mesh;
+  private lockTip!: THREE.Mesh;
+  /** Thin lines from pinks who are lining up on Benji. */
+  private sights: THREE.Mesh[] = [];
+  /** The dash: time left in it, time until the next, and which way. */
+  private dash = { left: 0, cool: 0, x: 0, z: 0 };
+  /** The last twenty seconds count double; said once. */
+  private frenzy = false;
+  private warned = 0;
 
   constructor(private g: Game) {
     const room = g.rooms.laser;
@@ -93,6 +109,25 @@ export class LaserTag implements Activity {
     const glow = (r: number, gr: number, b: number) => new THREE.MeshBasicMaterial({ color: new THREE.Color(r, gr, b), toneMapped: false, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
     this.mats = [glow(0.4, 3, 0.3), glow(3, 0.4, 2.2)];
     this.group.add(this.gun);
+    // The lock: a circle round whoever is in line, facing the lens, and a chevron over their head.
+    // The circle is hidden by anything in front of it, Benji included; the chevron never is.
+    const lockColor = new THREE.Color(0.5, 3.2, 0.4);
+    this.lock = new THREE.Group();
+    this.lockRing = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.028, 6, 32), new THREE.MeshBasicMaterial({ color: lockColor, toneMapped: false }));
+    this.lockTip = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.3, 4), new THREE.MeshBasicMaterial({ color: lockColor, toneMapped: false, depthTest: false }));
+    this.lockTip.rotation.x = Math.PI;
+    this.lockTip.renderOrder = 9;
+    this.lock.add(this.lockRing, this.lockTip);
+    this.lock.visible = false;
+    this.group.add(this.lock);
+    const thin = new THREE.CylinderGeometry(0.014, 0.014, 1, 5);
+    const sightMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 0.5, 1.6), toneMapped: false, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false });
+    for (let i = 0; i < 4; i++) {
+      const m = new THREE.Mesh(thin, sightMat);
+      m.visible = false;
+      this.group.add(m);
+      this.sights.push(m);
+    }
     const geo = new THREE.CylinderGeometry(0.05, 0.05, 1, 8);
     for (let i = 0; i < 12; i++) {
       const mesh = new THREE.Mesh(geo, this.mats[0]);
@@ -181,6 +216,10 @@ export class LaserTag implements Activity {
     this.vest = VEST;
     this.down = 0;
     this.shield = this.rapid = this.double = 0;
+    this.dash = { left: 0, cool: 0, x: 0, z: 0 };
+    this.frenzy = false;
+    this.lock.visible = false;
+    for (const m of this.sights) m.visible = false;
     this.say("Green against pink. Hit their base for the big points.", 3.2);
     g.sound.countdown();
     g.chase(0, true);
@@ -217,19 +256,18 @@ export class LaserTag implements Activity {
     base.hp = BASE_HP;
     base.dark = 14;
     // Green is the away side at the pink base, so it pays them a little more.
-    const pay = team ? 300 : 400;
+    const pay = (team ? 300 : 400) * this.worth();
     this.team[team] += pay;
     return pay;
   }
 
-  private fire() {
+  /** What Space would hit right now: a pink in line, their base, or nothing. */
+  private aimed(): Tagger | "base" | null {
     const g = this.g;
     const room = g.rooms.laser;
-    this.cool = this.rapid > 0 ? 0.15 : 0.36;
-    g.sound.release();
-    // Aim where the camera looks, with a little help toward anyone close to the line.
+    // Where the camera looks, with a little help toward anyone close to the line.
     let best: Tagger | null = null;
-    let bestErr = 0.3;
+    let bestErr = 0.32;
     for (const b of this.bots) {
       if (b.team === 0 || b.stun > 0) continue;
       const err = Math.abs(wrapAngle(Math.atan2(b.x - g.pos.x, b.z - g.pos.z) - g.camYaw));
@@ -238,9 +276,28 @@ export class LaserTag implements Activity {
         bestErr = err;
       }
     }
+    if (best) return best;
+    const theirs = this.bases[1];
+    const toBase = Math.atan2(theirs.x - g.pos.x, theirs.z - g.pos.z);
+    if (theirs.dark <= 0 && Math.abs(wrapAngle(toBase - g.camYaw)) < 0.24 && Math.hypot(theirs.x - g.pos.x, theirs.z - g.pos.z) < 20 && sight(g.pos.x, g.pos.z, theirs.x, theirs.z, room.solids, 0.05) >= 1) return "base";
+    return null;
+  }
+
+  /** Everything is worth double at the end. */
+  private worth() {
+    return this.frenzy ? 2 : 1;
+  }
+
+  private fire() {
+    const g = this.g;
+    const room = g.rooms.laser;
+    this.cool = this.rapid > 0 ? 0.15 : 0.36;
+    g.sound.release();
+    const at = this.aimed();
+    const best = at && at !== "base" ? at : null;
     const mx = this.gun.position.x + Math.sin(this.gun.rotation.y) * 0.5;
     const mz = this.gun.position.z + Math.cos(this.gun.rotation.y) * 0.5;
-    const mult = this.double > 0 ? 2 : 1;
+    const mult = (this.double > 0 ? 2 : 1) * this.worth();
     const theirs = this.bases[1];
     if (best) {
       this.beam(mx, mz, best.x, best.z, 0);
@@ -250,22 +307,26 @@ export class LaserTag implements Activity {
       this.tags++;
       this.combo = this.comboLeft > 0 ? this.combo + 1 : 1;
       this.comboLeft = 4;
-      const pts = Math.round((100 + (this.combo - 1) * 25) * mult);
+      const pts = Math.round((100 + Math.min(4, this.combo - 1) * 25) * mult);
       this.score += pts;
       this.team[0] += pts;
       g.sound.swish();
-      this.say(this.combo > 1 ? `TAG x${this.combo}  +${pts}` : `TAG  +${pts}`, 1.1);
+      g.buzz(this.combo > 2 ? [20, 30, 40] : 25);
+      g.stage.setPunch(Math.min(0.9, 0.25 + this.combo * 0.15));
+      if (this.combo >= 3) g.sound.cheer();
+      const name = ["", "TAG", "DOUBLE TAG", "TRIPLE TAG", "ON A TEAR"][this.combo] ?? "UNSTOPPABLE";
+      this.say(`${name}  +${pts}`, this.combo > 1 ? 1.4 : 1.1);
       g.heading = Math.atan2(best.x - g.pos.x, best.z - g.pos.z);
       return;
     }
     const toBase = Math.atan2(theirs.x - g.pos.x, theirs.z - g.pos.z);
-    if (theirs.dark <= 0 && Math.abs(wrapAngle(toBase - g.camYaw)) < 0.24 && Math.hypot(theirs.x - g.pos.x, theirs.z - g.pos.z) < 20 && sight(g.pos.x, g.pos.z, theirs.x, theirs.z, room.solids, 0.05) >= 1) {
+    if (at === "base") {
       this.beam(mx, mz, theirs.x, theirs.z, 0, 2.05);
       const left = theirs.hp - 1;
       const paid = this.hitBase(theirs, 0);
       g.heading = toBase;
       if (paid) {
-        const pts = paid * mult;
+        const pts = paid * (this.double > 0 ? 2 : 1);
         this.score += pts;
         this.team[0] += pts - paid;
         this.baseHits++;
@@ -350,6 +411,34 @@ export class LaserTag implements Activity {
     const k = damp(12, dt);
     g.vel.x += ((fx * m.y - fz * m.x * 0.6) * top - g.vel.x) * k;
     g.vel.z += ((fz * m.y + fx * m.x * 0.6) * top - g.vel.z) * k;
+    // The dash: a burst the way he is going (or straight ahead), and nothing can tag him in it.
+    const d = this.dash;
+    d.cool -= dt;
+    if (live && d.cool <= 0 && d.left <= 0 && input.hit("interact")) {
+      const mv = Math.hypot(g.vel.x, g.vel.z);
+      d.x = mv > 0.6 ? g.vel.x / mv : fx;
+      d.z = mv > 0.6 ? g.vel.z / mv : fz;
+      d.left = 0.2;
+      d.cool = 2.2;
+      this.shield = Math.max(this.shield, 0.5);
+      g.sound.whoosh();
+      g.buzz(15);
+      // Anyone who had him lined up has lost him and has to start again.
+      let dodged = false;
+      for (const b of this.bots) {
+        if (b.team !== 1 || b.at !== "benji" || b.aim <= 0) continue;
+        b.aim = 0;
+        b.at = null;
+        b.cool = 0.9 + Math.random() * 0.8;
+        dodged = true;
+      }
+      if (dodged) this.say("DODGED", 0.8);
+    }
+    if (d.left > 0) {
+      d.left -= dt;
+      g.vel.x = d.x * 15;
+      g.vel.z = d.z * 15;
+    }
     g.pos.x += g.vel.x * dt;
     g.pos.z += g.vel.z * dt;
     pushOut(g.pos, 0.36, room.solids);
@@ -370,6 +459,30 @@ export class LaserTag implements Activity {
     this.gun.rotation.y = g.camYaw;
     if (live && this.cool <= 0 && input.down("action")) this.fire();
     const lv = this.level();
+    // The marker on whatever Space would hit.
+    const at = live ? this.aimed() : null;
+    this.lock.visible = !!at;
+    if (at) {
+      const lx = at === "base" ? this.bases[1].x : at.x;
+      const lz = at === "base" ? this.bases[1].z : at.z;
+      const high = at === "base" ? 2.05 : 1.15;
+      // A step toward the lens, so the circle stands in front of whoever it is round.
+      const cx = g.camera.position.x - lx;
+      const cz = g.camera.position.z - lz;
+      const cd = Math.hypot(cx, cz) || 1;
+      this.lock.position.set(lx, 0, lz);
+      this.lockRing.position.set((cx / cd) * 0.3, high, (cz / cd) * 0.3);
+      this.lockRing.lookAt(g.camera.position);
+      this.lockRing.scale.setScalar((at === "base" ? 0.75 : 1) * (1 + Math.sin(g.time * 10) * 0.05));
+      this.lockTip.position.y = high + 1.3;
+      this.lockTip.rotation.y += dt * 3;
+    }
+    if (!this.frenzy && this.phase === "go" && this.left <= 20) {
+      this.frenzy = true;
+      g.sound.fanfare();
+      g.stage.setPunch(0.6);
+      this.say("LAST 20 SECONDS: EVERYTHING COUNTS DOUBLE", 2.6);
+    }
 
     // Power-ups: they turn on the floor until someone green walks over one.
     for (const p of this.powers) {
@@ -411,6 +524,8 @@ export class LaserTag implements Activity {
 
     // Everyone else.
     const benjiUp = live && this.shield <= 0;
+    let lines = 0;
+    this.warned -= dt;
     for (const b of this.bots) {
       b.card.visible = true;
       const stunned = b.stun > 0;
@@ -482,7 +597,23 @@ export class LaserTag implements Activity {
       b.cool -= dt;
       if (seen && b.aim <= 0 && b.cool <= 0) {
         b.at = seen;
-        b.aim = seen === "base" ? (b.team ? 1.6 : 1.15) : b.team ? 0.8 - lv * 0.07 : 0.72;
+        b.aim = seen === "base" ? (b.team ? 1.6 : 1.15) : b.team ? 0.9 - lv * 0.07 : 0.72;
+        if (seen === "benji" && this.warned <= 0) {
+          // One blip when somebody starts lining him up.
+          this.warned = 0.5;
+          g.sound.ui();
+        }
+      }
+      // A pink lining up on Benji shows a line: time to dash or get behind something.
+      if (b.team === 1 && b.aim > 0 && b.at === "benji" && lines < this.sights.length) {
+        const sm = this.sights[lines++]!;
+        _a.set(b.gun.position.x, 1.06, b.gun.position.z);
+        _b.set(g.pos.x, 1.05, g.pos.z);
+        const len = _a.distanceTo(_b);
+        sm.position.copy(_a).lerp(_b, 0.5);
+        sm.scale.set(1 + (1 - b.aim) * 2, len, 1 + (1 - b.aim) * 2);
+        sm.quaternion.setFromUnitVectors(_y, _b.sub(_a).normalize());
+        sm.visible = true;
       }
       if (b.aim > 0 && b.at) {
         const tx = b.at === "benji" ? g.pos.x : b.at === "base" ? enemyBase.x : b.at.x;
@@ -516,13 +647,13 @@ export class LaserTag implements Activity {
               this.vest--;
               this.gotHit = 0.5;
               this.combo = 0;
-              this.team[1] += 75;
+              this.team[1] += 75 * this.worth();
               g.sound.bad();
               g.stage.setPunch(0.8);
               g.input.rumble(0.8, 220);
               if (this.vest <= 0) {
                 // Vest dark: out for three seconds, and pink gets paid for it.
-                this.team[1] += 125;
+                this.team[1] += 125 * this.worth();
                 this.down = 3;
                 this.shield = 3;
                 g.vel.x = g.vel.z = 0;
@@ -541,7 +672,7 @@ export class LaserTag implements Activity {
               o.stun = 2.6;
               o.aim = 0;
               o.at = null;
-              this.team[b.team] += b.team ? 50 : 100;
+              this.team[b.team] += (b.team ? 50 : 100) * this.worth();
               g.push();
             }
           }
@@ -551,6 +682,7 @@ export class LaserTag implements Activity {
       b.card.place(b.x, b.z);
       b.card.update(dt, g.camera.position, g.tint, room.floorY + 0.03);
     }
+    for (let i = lines; i < this.sights.length; i++) this.sights[i]!.visible = false;
     g.benji.mat.opacity = 1;
     g.benji.visible = this.shield <= 0 || Math.sin(g.time * 30) > 0;
 
@@ -588,6 +720,8 @@ export class LaserTag implements Activity {
     this.phase = "over";
     g.benji.visible = true;
     g.live.radarN = 0;
+    this.lock.visible = false;
+    for (const m of this.sights) m.visible = false;
     const best = g.save.best.laser ?? 0;
     const record = this.score > best;
     if (record) g.save.best.laser = this.score;

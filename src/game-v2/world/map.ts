@@ -103,15 +103,18 @@ export const RACE_LOOP: { x: number; z: number }[] = [
 ];
 export const RACE_MEET = { x: -104, z: -151 };
 
-export type Poi = { id: string; name: string; x: number; z: number; color: string };
+/** `arrive` is where a ride lets Benji out and which way he faces, when the spot itself is not the place to stand. */
+export type Poi = { id: string; name: string; x: number; z: number; color: string; arrive?: { x: number; z: number; heading: number } };
 
 export const POIS: Poi[] = [
-  { id: "hq", name: "SackReligious HQ", x: HQ.doorX, z: HQ.frontZ + 2, color: "#39ff14" },
+  { id: "hq", name: "SackReligious HQ", x: HQ.doorX, z: HQ.frontZ + 2, color: "#39ff14", arrive: { x: HQ.doorX, z: HQ.frontZ + 4.5, heading: Math.PI } },
   { id: "court", name: "901 Court", x: COURT.cx, z: COURT.cz, color: "#ff8a3c" },
-  { id: "pier", name: "Riverside Pier", x: PIER.x, z: -206, color: "#5ac8ff" },
-  { id: "trucks", name: "Food Trucks", x: TRUCKS.x, z: TRUCKS.z, color: "#ffd166" },
-  { id: "bowl", name: "901 Bowl", x: BOWL.doorX, z: BOWL.frontZ + 2, color: "#ff5ad1" },
-  { id: "race", name: "Riverside Strip", x: RACE_MEET.x, z: RACE_MEET.z, color: "#ff3b3b" },
+  { id: "pier", name: "Riverside Pier", x: PIER.x, z: -206, color: "#5ac8ff", arrive: { x: PIER.x, z: -203, heading: Math.PI } },
+  // The windows are on the river side of the trucks: a ride lets him out in front of them, facing the counters.
+  { id: "trucks", name: "Food Trucks", x: TRUCKS.x, z: TRUCKS.z, color: "#ffd166", arrive: { x: TRUCKS.x + 0.2, z: TRUCKS.z - 7, heading: 0 } },
+  { id: "bowl", name: "901 Bowl", x: BOWL.doorX, z: BOWL.frontZ + 2, color: "#ff5ad1", arrive: { x: BOWL.doorX, z: BOWL.frontZ + 3.4, heading: Math.PI } },
+  // Beside Nitro, turned to him, not on top of him.
+  { id: "race", name: "Street Race", x: RACE_MEET.x, z: RACE_MEET.z, color: "#ff3b3b", arrive: { x: RACE_MEET.x + 2.6, z: RACE_MEET.z + 1.2, heading: -Math.PI / 2 - 0.4 } },
   { id: "home", name: "Home", x: HOME.x, z: HOME.z - HOME.d / 2 - 3, color: "#e0b33a" },
   { id: "fun", name: "The Fun House", x: FUN.doorX, z: FUN.frontZ - 2, color: "#b48cff" },
 ];

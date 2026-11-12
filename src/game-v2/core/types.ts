@@ -55,6 +55,8 @@ export type Save = {
   /** The car he drives, and the ones he has paid for. */
   ride: string;
   rides: string[];
+  /** Today's drop: the day it was last looked at, whether that day's is done, the run of days, and the last day one was done. */
+  daily: { day: string; done: boolean; streak: number; last: string };
   bounty: number;
   played: number;
   /** How many times the thing the current step counts has happened. */
@@ -96,7 +98,7 @@ export type HoopsHud = {
   rival: { name: string; score: number; to: number; yours: boolean; clock: number } | null;
 };
 export type BowlHud = { phase: "position" | "aim" | "power" | "roll" | "settle" | "done"; frame: number; ball: number; marks: string[][]; totals: (number | null)[]; total: number; call: string; best: number; standing: boolean[] };
-export type FishHud = { phase: "ready" | "charge" | "flying" | "wait" | "bite" | "reel" | "landed" | "lost"; bait: number; distance: number; fish: Catch | null; call: string; cooler: number; value: number };
+export type FishHud = { phase: "ready" | "charge" | "flying" | "wait" | "bite" | "reel" | "landed" | "lost"; bait: number; distance: number; fish: Catch | null; call: string; cooler: number; value: number; running: boolean };
 export type RaceHud = { phase: "count" | "go" | "finish"; count: number; lap: number; laps: number; place: number; racers: number; time: number; best: number; call: string; wrongWay: boolean; kart: boolean };
 export type LaserHud = { phase: "count" | "go" | "over"; count: number; left: number; score: number; tags: number; hit: boolean; call: string; vest: number; level: number; down: boolean; us: number; them: number; power: string };
 export type BounceHud = { left: number; best: number; combo: number; score: number; call: string };
@@ -122,6 +124,10 @@ export type HudState = {
   /** The car he drives and the ones he owns, by id. */
   ride: string;
   rides: string[];
+  /** Today's drop. */
+  daily: { title: string; detail: string; done: boolean; streak: number; pay: number };
+  /** Postcards collected, and the next one to go and get. */
+  postcards: { got: number; total: number; next: string };
   mission: MissionCard | null;
   prompt: string;
   /** Key hints for the mode, "key label" pairs. */
@@ -173,6 +179,8 @@ export type Live = {
   aim: number;
   tension: number;
   speed: number;
+  /** Points in the drift he is holding right now, 0 when he is not in one. */
+  drift: number;
   nitro: number;
   /** Black fade between places, 0..1. */
   fade: number;

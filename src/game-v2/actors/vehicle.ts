@@ -107,7 +107,8 @@ export class CarModel {
   }
 }
 
-export type DriveInput = { throttle: number; steer: number; handbrake: boolean; boost: boolean };
+/** `slide` lets the handbrake break the tyres loose: the car keeps going the way it was while its nose comes round. */
+export type DriveInput = { throttle: number; steer: number; handbrake: boolean; boost: boolean; slide?: boolean };
 
 export type DriveTune = { top: number; accel: number; boostTop: number; grip: number };
 
@@ -171,7 +172,8 @@ export class Driver {
       fwd -= fwd * damp(0.55, dt);
       if (Math.abs(fwd) < 0.15) fwd = 0;
     }
-    if (input.handbrake) fwd -= fwd * damp(1.1, dt);
+    // With the power on, a slide scrubs speed slowly enough to be held round a corner.
+    if (input.handbrake) fwd -= fwd * damp(input.slide && input.throttle > 0 ? 0.5 : 1.1, dt);
 
     // Steering authority falls with speed; none at a standstill.
     this.steer += (input.steer - this.steer) * damp(9, dt);
@@ -179,12 +181,20 @@ export class Driver {
     const authority = clamp(speed / 5, 0, 1) * (2.5 - 1.5 * clamp(speed / tune.boostTop, 0, 1)) * (input.handbrake ? 1.35 : 1);
     this.heading = wrapAngle(this.heading - this.steer * authority * Math.sign(fwd || 1) * dt);
 
+    const nfx = Math.sin(this.heading);
+    const nfz = Math.cos(this.heading);
+    if (input.slide && input.handbrake) {
+      // A handbrake slide: what the car was doing is carried over as it was, and read again
+      // against the way the nose now points. The part of it that is sideways is the drift.
+      const wx = fx * fwd + fz * lat;
+      const wz = fz * fwd - fx * lat;
+      fwd = wx * nfx + wz * nfz;
+      lat = wx * nfz - wz * nfx;
+    }
     const grip = input.handbrake ? 1.6 : tune.grip;
     lat -= lat * damp(grip, dt);
     this.slip = Math.abs(lat);
 
-    const nfx = Math.sin(this.heading);
-    const nfz = Math.cos(this.heading);
     this.vx = nfx * fwd + nfz * lat;
     this.vz = nfz * fwd - nfx * lat;
     this.x += this.vx * dt;

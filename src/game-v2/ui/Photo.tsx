@@ -144,6 +144,11 @@ export function Photo({ game, hud }: { game: Game; hud: HudState }) {
       {flash && <div className="pointer-events-none absolute inset-0 bg-white/80" />}
 
       <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-black/60 px-4 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.22em] text-white/85">Photo mode · drag to look · {hud.touch ? "pinch" : "scroll"} to zoom</div>
+      {hud.postcards.next && (
+        <div className="pointer-events-none absolute left-1/2 top-12 -translate-x-1/2 rounded-full bg-black/55 px-3 py-1 text-[11px] font-bold text-[#f4d77a]">
+          Postcards {hud.postcards.got} of {hud.postcards.total} · next: {hud.postcards.next}
+        </div>
+      )}
 
       <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-center justify-center gap-2 bg-gradient-to-t from-black/85 to-transparent px-3 pb-4 pt-10">
         <button className="sr-btn sr-btn-ghost px-4 py-2.5" onClick={() => game.setPhase(hud.phase === "golden" ? "night" : hud.phase === "night" ? "day" : "golden")}>

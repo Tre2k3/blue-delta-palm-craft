@@ -28,14 +28,18 @@ const _dir = new THREE.Vector3();
 const _tip = new THREE.Vector3();
 
 /**
- * A line off the pier. Cast by timing the meter, hook on the dip, then fight: reel while the
- * fish rests, give line when it runs, and lean the rod against the side it pulls.
+ * A line off the pier. Cast by timing the meter, hook on the dip, then bring it in: hold to
+ * reel, let go while it runs. It is meant to be easy: the bite waits two seconds and comes
+ * round a second time, slack never loses a fish, and a fish cannot run the reel empty. Small
+ * fish come straight in. The one way to lose a fish on the line is to haul on a big one right
+ * through its runs until the line snaps.
  */
 export class Fishing implements Activity {
   hints: [string, string][] = [
-    ["Hold Space", "Charge the cast, reel"],
-    ["Space", "Set the hook on the dip"],
-    ["A D", "Lean against the fish"],
+    ["Hold Space", "Cast, then reel"],
+    ["Space", "Hook it when the float goes under"],
+    ["Let go", "While the fish runs"],
+    ["A D", "Lean against it: faster"],
     ["Q", "Pack up"],
   ];
   private group = new THREE.Group();
@@ -69,6 +73,8 @@ export class Fishing implements Activity {
   private side = 0;
   private drift = 0;
   private slack = 0;
+  /** Bites this cast has had: the fish comes back once if the first is missed. */
+  private bites = 0;
   private call = "";
   private cam = new THREE.Vector3();
   private look = new THREE.Vector3();
@@ -164,6 +170,7 @@ export class Fishing implements Activity {
     this.t = 0;
     this.tension = 0;
     this.fish = null;
+    this.bites = 0;
     this.bobber.visible = false;
     this.shadow.visible = false;
     this.line.visible = false;
@@ -312,15 +319,14 @@ export class Fishing implements Activity {
         this.nibble = 0.9 + Math.random() * 1.6;
         g.city.water.ripple(this.cast.x, this.cast.z, 0.25);
       }
-      if (input.hit("action")) {
-        this.t = Math.max(0, this.t - 2);
-        this.say("Too early. Let it take the bait.");
-      }
+      if (input.hit("action")) this.say("Not yet. Wait for the float to go under.");
       if (this.t >= this.waitFor) {
         this.phase = "bite";
         this.t = 0;
-        this.pickFish();
+        this.bites++;
+        if (!this.fish) this.pickFish();
         g.sound.bite();
+        g.buzz([40, 60, 40]);
         this.splash(0.6);
         this.say("FISH ON!  Space!");
       }
@@ -329,7 +335,7 @@ export class Fishing implements Activity {
       if (input.hit("action")) {
         this.phase = "reel";
         this.t = 0;
-        this.tension = 0.35;
+        this.tension = 0.2;
         this.running = true;
         this.mood = 1.2;
         this.side = Math.random() > 0.5 ? 1 : -1;
@@ -338,30 +344,44 @@ export class Fishing implements Activity {
         this.bobber.visible = false;
         this.shadow.visible = true;
         g.sound.reel();
-        this.say("Reel when it rests. Ease off when it runs.");
-      } else if (this.t > (g.wearing("nightmare") ? 1.3 : 0.8)) this.lose("It took your bait and left.");
+        this.say("Hooked! Hold Space to reel.");
+      } else if (this.t > (g.wearing("nightmare") ? 3 : 2)) {
+        if (this.bites >= 2) this.lose("It took your bait and left.");
+        else {
+          // Missed it: the float comes back up and the fish has another go.
+          this.phase = "wait";
+          this.t = 0;
+          this.waitFor = 1.6 + Math.random() * 1.2;
+          this.nibble = 0.6;
+          this.say("Missed it. It's coming back...");
+        }
+      }
     } else if (this.phase === "reel") {
       const reel = input.down("action");
       const lean = input.move().x;
       this.mood -= dt;
       if (this.mood <= 0) {
         this.running = !this.running;
+        g.push();
         this.mood = this.running ? 0.9 + Math.random() * 1.5 * this.strength : 0.9 + Math.random() * 1.4;
         if (this.running) {
           this.side = Math.random() > 0.5 ? 1 : -1;
-          this.strength = Math.max(0.45, this.strength - 0.06);
+          this.strength = Math.max(0.4, this.strength - 0.1);
           this.splash(0.45);
-          this.say(this.side > 0 ? "It's running right. Lean left!" : "It's running left. Lean right!");
-        } else this.say("It's resting. Reel!");
+          this.say("It's running. LET GO!");
+        } else this.say("It's tired. REEL!");
       }
       const against = this.running && Math.sign(lean) === -this.side && Math.abs(lean) > 0.3;
       if (reel) {
-        this.dist -= (this.running ? 0.9 : 3.1) * (against ? 1.5 : 1) * dt;
-        this.tension += (this.running ? 0.62 * this.strength * (against ? 0.5 : 1) : 0.16) * dt;
+        this.dist -= (this.running ? 1.4 : 3.9) * (against ? 1.5 : 1) * dt;
+        // A small fish can be hauled straight in. A big one pulls back hard enough to snap the
+        // line if it is reeled through its runs; between runs the line always eases.
+        this.tension += (this.running ? Math.min(0.7, 0.5 * this.strength ** 2.2) * (against ? 0.5 : 1) : -0.25) * dt;
         if (Math.floor(this.t * 9) !== Math.floor((this.t - dt) * 9)) g.sound.reel();
       } else {
-        this.tension -= 0.5 * dt;
-        if (this.running) this.dist += 1.7 * this.strength * dt;
+        this.tension -= 0.95 * dt;
+        // A running fish takes line, but only so much of it.
+        if (this.running) this.dist = Math.min(34, this.dist + 1.2 * this.strength * dt);
       }
       this.tension = Math.max(0, this.tension);
       if (this.running && this.tension < 0.1) this.slack += dt;
@@ -374,10 +394,9 @@ export class Fishing implements Activity {
       this.shadow.rotation.y = Math.atan2(this.dx, this.dz) + (this.running ? this.side * 0.9 : Math.PI) + Math.sin(g.time * 9) * 0.25;
       if (this.running && Math.random() < dt * 5) this.burst(this.bob.x, this.bob.z, 2, 0.5);
       if (Math.random() < dt * 1.5) g.city.water.ripple(this.bob.x, this.bob.z, 0.3);
-      if (this.tension >= 1) this.lose("Snap! Too much tension. Ease off when it runs.");
-      else if (this.slack > 2.4) this.lose("Slack line. It spat the hook.");
-      else if (this.dist > 36) this.lose("It ran all your line out.");
+      if (this.tension >= 1) this.lose("Snap! Let go of Space while it runs.");
       else if (this.dist <= 2) this.land();
+      else if (this.running && reel && this.tension > 0.7 && this.call !== "LET GO! The line is about to snap") this.say("LET GO! The line is about to snap");
     } else if (this.phase === "landed") {
       const u = Math.min(1, this.t / 0.7);
       const tx = g.pos.x + this.dx * 0.9;
@@ -467,6 +486,7 @@ export class Fishing implements Activity {
       call: this.call,
       cooler: this.g.save.cooler.length,
       value: this.g.save.cooler.reduce((s, f) => s + f.pay, 0),
+      running: this.phase === "reel" && this.running,
     };
   }
 }
