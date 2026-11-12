@@ -1,7 +1,7 @@
-import type { CardArt } from "../actors/card";
+import type { CardArt, View } from "../actors/card";
 import { characters } from "./characters";
 
-const V = "?v=7";
+const V = "?v=8";
 const turn = (folder: string): CardArt => ({
   front: `/game-v2/characters/${folder}/front.png${V}`,
   back: `/game-v2/characters/${folder}/back.png${V}`,
@@ -33,10 +33,16 @@ function moves(f: (n: string) => string, size: Sizes, stance: "left" | "right" =
   };
 }
 
-/** Benji in a fit: all four sides, and the four court drawings. */
-function fit(id: string, size: Sizes = [0.92, 0.97, 1.2, 1.2]): CardArt {
+/** Benji in a fit: all four sides, the four court drawings, and (where it has been drawn) his fist in the air, `cheer` tall. */
+function fit(id: string, size: Sizes = [0.92, 0.97, 1.2, 1.2], cheer = 0): CardArt {
   const f = (n: string) => `${FITS}/${id}/${n}.webp`;
-  return { front: f("front"), back: f("back"), left: f("left"), right: f("right"), ...moves(f, size) };
+  const m = moves(f, size);
+  const art: CardArt = { front: f("front"), back: f("back"), left: f("left"), right: f("right"), ...m };
+  if (cheer) {
+    art.poses = { ...m.poses, cheer: { front: f("cheer-front") } };
+    art.scale = { ...m.scale, [f("cheer-front")]: cheer };
+  }
+  return art;
 }
 
 export type OutfitId = "starter" | "tour_white" | "tour_black" | "tour_red" | "fresh_black" | "fresh_blue" | "jersey_224" | "sackrow_11" | "blue_901" | "doll" | "nightmare" | "claw";
@@ -65,22 +71,40 @@ function strides(id: string, size: Strides): Pick<CardArt, "walk" | "scale"> {
 
 const starterWalk = strides("starter", [1.045, 1.03, 1.0, 0.995, 1.005, 0.97]);
 
+/**
+ * What Benji does in the green tee besides walk and shoot: the dunk, reeling a fish in, the
+ * bowling release, and his fist in the air. All drawn from behind, where the lens usually is;
+ * the cheer from in front too. From in front the dunk is the top of his jumper.
+ */
+const starterMoves = ((): Required<Pick<CardArt, "poses" | "scale">> => {
+  const f = (n: string) => `${FITS}/starter/${n}.webp`;
+  return {
+    poses: {
+      dunk: { back: f("dunk-back"), front: f("shot-front") },
+      reel: { back: f("reel-back") },
+      bowl: { back: f("bowl-back") },
+      cheer: { front: f("cheer-front"), back: f("cheer-back") },
+    },
+    scale: { [f("dunk-back")]: 1.371, [f("reel-back")]: 0.98, [f("bowl-back")]: 1.064, [f("cheer-back")]: 1.199, [f("cheer-front")]: 1.143 },
+  };
+})();
+
 /** Benji in each fit he has art for, what wearing it does, and where it comes from. */
 export const OUTFITS: Record<OutfitId, { name: string; art: CardArt; perk: string; from: string }> = {
   starter: {
     name: "Starter Green Tee",
-    art: { ...turn("benji"), ...starterCourt, walk: starterWalk.walk, scale: { ...starterCourt.scale, ...starterWalk.scale } },
+    art: { ...turn("benji"), poses: { ...starterCourt.poses, ...starterMoves.poses }, walk: starterWalk.walk, scale: { ...starterCourt.scale, ...starterWalk.scale, ...starterMoves.scale } },
     perk: "The original. No perk, all Memphis.",
     from: "Yours",
   },
-  tour_white: { name: "Worldwide Tour Tee · White", art: fit("tour_white"), perk: "+10% Respect from everything.", from: "At the HQ" },
-  tour_black: { name: "Worldwide Tour Tee · Black", art: fit("tour_black"), perk: "+10% SackDollars from deliveries and races.", from: "At the HQ" },
+  tour_white: { name: "Worldwide Tour Tee · White", art: fit("tour_white", undefined, 1.105), perk: "+10% Respect from everything.", from: "At the HQ" },
+  tour_black: { name: "Worldwide Tour Tee · Black", art: fit("tour_black", undefined, 1.103), perk: "+10% SackDollars from deliveries and races.", from: "At the HQ" },
   tour_red: { name: "Worldwide Tour Tee · Red", art: fit("tour_red"), perk: "Nitro refills faster on the strip.", from: "At the HQ" },
   fresh_black: { name: "FRESH 38127 Jersey · Black", art: fit("fresh_black"), perk: "+15% SackDollars from every game at the court.", from: "At the HQ" },
   sackrow_11: { name: "Sackrow Ballers #11", art: fit("sackrow_11"), perk: "Wider green window on your jumper.", from: "Beat a player to 11 at the court" },
   blue_901: { name: "901 Day Jersey", art: fit("blue_901"), perk: "Run faster on foot.", from: "Win the street race" },
-  fresh_blue: { name: "FRESH 38127 Jersey · Blue", art: fit("fresh_blue", [0.91, 0.96, 1.27, 1.28]), perk: "Coins around town are worth double.", from: "Bank 100 coins around town" },
-  jersey_224: { name: "224 Jersey · White", art: fit("jersey_224"), perk: "Boost pads hit harder in the go-karts.", from: "Fun House prize" },
+  fresh_blue: { name: "FRESH 38127 Jersey · Blue", art: fit("fresh_blue", [0.91, 0.96, 1.27, 1.28], 1.061), perk: "Coins around town are worth double.", from: "Bank 100 coins around town" },
+  jersey_224: { name: "224 Jersey · White", art: fit("jersey_224", undefined, 1.053), perk: "Boost pads hit harder in the go-karts.", from: "Fun House prize" },
   doll: { name: "Fun House Overalls", art: fit("doll", [0.94, 0.98, 1.32, 1.32]), perk: "More tickets from every arcade game.", from: "Fun House prize" },
   nightmare: { name: "Sackrow After Dark Tee", art: fit("nightmare", [0.94, 0.99, 1.29, 1.29]), perk: "Longer bite window on the river.", from: "Fun House prize" },
   claw: { name: "Striped Sweater", art: fit("claw", [0.945, 1.015, 1.28, 1.285]), perk: "Bowling ball hooks harder.", from: "Fun House prize" },
@@ -94,27 +118,41 @@ const whole = (folder: string, size: { back?: number; left?: number; right?: num
   return { front: f("front"), back: f("back"), left: f("left"), right: f("right"), scale: { [f("back")]: size.back ?? 1, [f("left")]: size.left ?? 1, [f("right")]: size.right ?? 1 } };
 };
 
+/** Adds the drawing of someone mid-sentence, seen from in front: `size` is how tall it stands next to the standing one. */
+const talks = (art: CardArt, folder: string, size = 1): CardArt => {
+  const talk = `/game-v2/characters/${folder}/talk.webp`;
+  return { ...art, poses: { ...art.poses, talk: { front: talk } }, scale: { ...art.scale, [talk]: size } };
+};
+
 /** The people Benji deals with. Every one of them is drawn down to the shoes and stands in the open. */
 export const CAST: Record<"kBlanco" | "courtOg" | "mamaDee" | "uncJ" | "nitro" | "strike", { name: string; art: CardArt; height: number; portrait?: string }> = {
-  kBlanco: { name: "K Blanco", art: turn("k-blanco"), height: characters.kBlanco.height, portrait: characters.kBlanco.portrait },
-  courtOg: { name: "Court OG", art: whole("court-og", { back: 1.006, left: 0.966, right: 0.97 }), height: characters.courtOg.height },
-  mamaDee: { name: "Mama Dee", art: turn("mama-dee"), height: characters.mamaDee.height },
-  uncJ: { name: "Unc J", art: whole("unc-j"), height: characters.uncJ.height },
-  nitro: { name: "Nitro", art: turn("nitro"), height: characters.nitro.height },
-  strike: { name: "Strike", art: whole("strike", { back: 1.04, left: 0.98, right: 1.022 }), height: characters.strike.height },
+  kBlanco: { name: "K Blanco", art: talks(turn("k-blanco"), "k-blanco"), height: characters.kBlanco.height, portrait: characters.kBlanco.portrait },
+  courtOg: { name: "Court OG", art: talks(whole("court-og", { back: 1.006, left: 0.966, right: 0.97 }), "court-og"), height: characters.courtOg.height },
+  mamaDee: { name: "Mama Dee", art: talks(turn("mama-dee"), "mama-dee"), height: characters.mamaDee.height },
+  uncJ: { name: "Unc J", art: talks(whole("unc-j"), "unc-j", 1.04), height: characters.uncJ.height },
+  nitro: { name: "Nitro", art: talks(turn("nitro"), "nitro", 1.05), height: characters.nitro.height },
+  strike: { name: "Strike", art: talks(whole("strike", { back: 1.04, left: 0.98, right: 1.022 }), "strike"), height: characters.strike.height },
 };
 
 export type CastId = keyof typeof CAST;
 
-/** People on the street: drawn from the front and from behind, standing and in stride. */
-const ped = (name: string, height: number): { art: CardArt; height: number } => ({
-  art: {
-    front: `/game-v2/characters/pedestrians/${name}.png${V}`,
-    back: `/game-v2/characters/pedestrians/${name}-back.webp?v=2`,
-    walk: { front: [`/game-v2/characters/pedestrians/${name}-walk.png${V}`], back: [`/game-v2/characters/pedestrians/${name}-walk-back.webp?v=2`] },
-  },
-  height,
-});
+/**
+ * People on the street: drawn from the front and from behind, standing, in two strides, and
+ * jumping with both hands up. `cheer` is how tall the jump stands next to the standing drawing.
+ */
+const ped = (name: string, height: number, cheer = 1.12): { art: CardArt; height: number } => {
+  const f = (n: string) => `/game-v2/characters/pedestrians/${name}${n}`;
+  return {
+    art: {
+      front: f(`.png${V}`),
+      back: f("-back.webp?v=2"),
+      walk: { front: [f(`-walk.png${V}`), f("-walk-b.webp")], back: [f("-walk-back.webp?v=2"), f("-walk-back-b.webp")] },
+      poses: { cheer: { front: f("-cheer-front.webp"), back: f("-cheer-back.webp") } },
+      scale: { [f("-cheer-front.webp")]: cheer, [f("-cheer-back.webp")]: cheer },
+    },
+    height,
+  };
+};
 
 /** Someone who works a window: standing easy, and holding the order out, from in front and from behind. */
 const crew = (id: string, height: number): { art: CardArt; height: number } => {
@@ -134,19 +172,35 @@ export const PEDS = [
   ped("male-01", 1.78),
   ped("female-01", 1.72),
   ped("male-02", 1.7),
-  ped("female-02", 1.68),
+  ped("female-02", 1.68, 1.15),
   ped("male-03", 1.8),
-  ped("female-03", 1.66),
-  ped("male-04", 1.76),
+  ped("female-03", 1.66, 1.06),
+  ped("male-04", 1.76, 1.08),
   ped("female-04", 1.64),
 ];
 
 /** The four who run the 901 Court, easiest first: a street person, plus the court drawings only they have. */
-const baller = (index: number, name: string, size: Sizes): CardArt => ({ ...PEDS[index]!.art, ...moves((n) => `/game-v2/characters/pedestrians/${name}-${n}.webp`, size) });
+const baller = (index: number, name: string, size: Sizes, run = 0.96, dunk = 1.02): CardArt => {
+  const f = (n: string) => `/game-v2/characters/pedestrians/${name}-${n}.webp`;
+  const base = PEDS[index]!.art;
+  const m = moves(f, size);
+  const side = m.poses!.drive as Partial<Record<View, string>>;
+  return {
+    ...base,
+    poses: {
+      ...base.poses,
+      ...m.poses,
+      // The drive was only drawn from the side; running at the lens and away from it are their own drawings.
+      drive: { ...side, front: f("run-front"), back: f("run-back") },
+      dunk: { back: f("dunk-back"), front: f("shot-front") },
+    },
+    scale: { ...base.scale, ...m.scale, [f("run-front")]: run, [f("run-back")]: run, [f("dunk-back")]: dunk },
+  };
+};
 
 export const BALLERS: CardArt[] = [
   baller(2, "male-02", [0.79, 0.79, 1.11, 1.12]),
-  baller(0, "male-01", [0.76, 0.715, 1.145, 1.15]),
-  baller(4, "male-03", [0.8, 0.81, 1.165, 1.18]),
+  baller(0, "male-01", [0.76, 0.715, 1.145, 1.15], 0.96, 1.12),
+  baller(4, "male-03", [0.8, 0.81, 1.165, 1.18], 0.96, 1.12),
   baller(6, "male-04", [0.825, 0.815, 1.29, 1.29]),
 ];

@@ -492,6 +492,8 @@ export class Bowling implements Activity {
     g.pos.z = this.oz + 1.25;
     g.heading = Math.PI;
     g.benji.speed = 0;
+    // The follow-through, held while the ball is on its way.
+    g.benji.pose = this.phase === "roll" || this.phase === "settle" ? "bowl" : null;
     const holding = this.phase === "position" || this.phase === "aim" || this.phase === "power";
     if (holding) {
       this.ball.visible = true;

@@ -270,6 +270,7 @@ export class Troupe {
           const moved = Math.hypot(mx, mz);
           if (moved > 1e-4) c.heading = dampAngle(c.heading, Math.atan2(mx, mz), damp(10, dt));
           c.speed = dt > 0 ? moved / dt : 0;
+          c.pose = null;
           if (m.hop > 0) {
             m.hop = Math.max(0, m.hop - dt);
             lift = Math.abs(Math.sin(m.hop * 12)) * 0.22;
@@ -306,10 +307,14 @@ export class Troupe {
         const want = facePlayer ? Math.atan2(player.x - m.x, player.z - m.z) : Math.atan2(s.fx - m.x, s.fz - m.z);
         c.heading = dampAngle(c.heading, want, damp(5, dt));
         lift = s.lift ?? 0;
+        let up = false;
         if (act === "bounce") lift += Math.abs(Math.sin((time + m.seed) * 2.7)) * 1.15;
         else if (act === "wade") lift += Math.max(0, Math.sin((time + m.seed) * 2.1)) * 0.35;
         else if (act === "play") lift += Math.max(0, Math.sin((time + m.seed) * 7)) * 0.02;
-        else if (act === "cheer" && Math.sin(time * 0.55 + m.seed * 3) > 0.55) lift += Math.abs(Math.sin((time + m.seed) * 8)) * 0.16;
+        else if (act === "cheer" && Math.sin(time * 0.55 + m.seed * 3) > 0.55) {
+          lift += Math.abs(Math.sin((time + m.seed) * 8)) * 0.16;
+          up = true;
+        }
         else if (act === "dance") c.groove = beat >= 0 ? beat + m.seed * 0.05 : time + m.seed;
         if (beat >= 0 && act !== "serve" && act !== "bounce" && act !== "inside") c.groove = beat + m.seed * 0.05;
         if (act === "serve") {
@@ -328,7 +333,10 @@ export class Troupe {
         if (m.hop > 0) {
           m.hop = Math.max(0, m.hop - dt);
           lift += Math.abs(Math.sin((time + m.seed) * 9)) * 0.24 * Math.min(1, m.hop * 2);
+          up = m.hop > 0.15;
         }
+        // Both hands in the air while they are jumping about something.
+        if (act !== "serve") c.pose = up ? "cheer" : null;
         if (!m.posted) {
           m.t -= dt;
           // Benji wants the spot: let him have it.

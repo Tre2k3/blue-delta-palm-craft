@@ -47,6 +47,8 @@ const RIVALS = [
 ];
 /** How fast the other player gets to a spot, m/s. */
 const RIVAL_PACE = 5.2;
+/** Seconds the other player is off the floor when he takes it to the rim. */
+const DRIVE_AIR = 0.62;
 
 /**
  * Basketball on the north basket of the 901 Court, three ways: the sixty-second shootout, a
@@ -112,6 +114,8 @@ export class Hoops implements Activity {
   private armed = true;
   /** The dunk: how far into it he is, where it started from, and what it is worth. */
   private dunk = { on: false, t: 0, fx: 0, fz: 0, pts: 2, done: false };
+  /** The other player taking it to the rim: on from the moment he sets off, `t` from when he leaves the floor. */
+  private drive = { on: false, t: 0, done: false };
 
   constructor(private g: Game) {
     const hoops = g.city.hoops;
@@ -162,6 +166,7 @@ export class Hoops implements Activity {
     this.cool = 0.4;
     this.tick = 10;
     this.dunk.on = false;
+    this.drive.on = false;
     this.contest = { at: -9, cool: 0, result: "" };
     this.fake = false;
     this.armed = false;
@@ -338,6 +343,16 @@ export class Hoops implements Activity {
     // A man who went for the fake is no defence at all: the shooter has all day.
     const good = result !== "block" && Math.random() < r.skill * (result === "hand" ? 0.6 : this.bit ? 1.15 : 1);
     const e = good ? (Math.random() - 0.5) * half * 1.5 : (Math.random() < 0.5 ? -1 : 1) * (half + 0.035 + Math.random() * 0.11);
+    // An open look that was going in anyway: now and then the better players take it to the rim
+    // instead. It counts two wherever he set off from, so from outside the arc it costs him a point.
+    if (good && result === "" && r.tier >= 1 && far <= 8 && r.card?.has("dunk") && Math.random() < 0.25) {
+      this.drive = { on: true, t: 0, done: false };
+      r.tx = this.hoop.x;
+      r.tz = this.hoop.z + 0.7;
+      this.turn = "air";
+      this.say(`${r.name} takes it to the rim`, 1.2);
+      return;
+    }
     this.throwBall(1, this.spot.x, this.spot.z, e, half, 0, (r.card?.height ?? 1.78) * 0.97, false);
     if (result === "block" && this.trailBall) {
       // Swatted: it comes off his hand sideways and nowhere near the rim.
@@ -368,7 +383,7 @@ export class Hoops implements Activity {
         this.netKick = 1;
         g.sound.swish();
         const talk = ["Too easy.", "Count it.", "Net.", "All day.", "You see that?"];
-        this.say(this.contest.result === "hand" ? `${r.name} hits over you  +${b.points}` : `${r.name}: "${talk[Math.floor(Math.random() * talk.length)]}"  +${b.points}`, 1.5);
+        this.say(b.dunk ? `${r.name} THROWS IT DOWN  +${b.points}` : this.contest.result === "hand" ? `${r.name} hits over you  +${b.points}` : `${r.name}: "${talk[Math.floor(Math.random() * talk.length)]}"  +${b.points}`, 1.5);
       } else this.say(this.contest.result === "block" ? "BLOCKED!  Your ball." : this.contest.result === "hand" ? `Good D. ${r.name} misses.` : `${r.name} bricks it. Your ball.`, 1.5);
       this.contest.result = "";
       // Benji answers from the same spot.
@@ -588,6 +603,7 @@ export class Hoops implements Activity {
     g.live.meter = this.charging ? Math.min(1, this.charge) : 0;
 
     if (this.dunk.on) this.runDunk(dt);
+    if (this.drive.on) this.runDrive(dt);
     else if (this.jump > 0) {
       this.jump += dt;
       const t = this.jump / 0.5;
@@ -596,7 +612,11 @@ export class Hoops implements Activity {
       if (t >= 1) this.jump = 0;
     } else g.benji.lift = 0;
     // Arms up through the shot and the follow-through; the stance while the other player shoots.
-    g.benji.pose = this.charging || this.jump > 0 || this.dunk.on ? "shoot" : this.kind === "versus" && this.turn === "rival" && g.benji.speed < 0.5 ? "ready" : g.benji.speed > 0.8 ? "drive" : null;
+    // The dunk has its own drawing in some fits: three running steps, then up with one arm.
+    const dunking = this.dunk.on ? (!g.benji.has("dunk") ? "shoot" : this.dunk.t >= 0.3 ? "dunk" : null) : undefined;
+    // The bucket that won it: fist up until the card comes.
+    const won = this.kind === "versus" && this.turn === "next" && this.score >= TO && this.score > this.rival.score;
+    g.benji.pose = dunking !== undefined ? dunking : won ? "cheer" : this.charging || this.jump > 0 ? "shoot" : this.kind === "versus" && this.turn === "rival" && g.benji.speed < 0.5 ? "ready" : g.benji.speed > 0.8 ? "drive" : null;
 
     // Ball in hand: dribbled low, lifted to the forehead on the way up.
     const rx = -Math.cos(g.heading);
@@ -632,6 +652,13 @@ export class Hoops implements Activity {
       } else rc.lift = 0;
       // Running to the spot, arms up through his jumper, in a stance while Benji has the ball.
       rc.pose = running ? "drive" : r.jump > 0 || (this.turn === "rival" && r.wait < this.lead) ? "shoot" : this.turn === "you" ? "ready" : null;
+      if (this.drive.on && this.drive.t > 0) {
+        // Off the floor and up at the rim, one arm high.
+        const u = Math.min(1, this.drive.t / DRIVE_AIR);
+        rc.lift = Math.sin(u * Math.PI) * Math.max(0.6, h.y - FLOOR - rc.height + 0.1);
+        rc.pose = "dunk";
+        rc.heading = Math.atan2(h.x - r.x, h.z - 0.4 - r.z);
+      }
       rc.update(dt, g.camera.position, g.tint, FLOOR);
     }
     if (this.dunk.on) {
@@ -670,6 +697,39 @@ export class Hoops implements Activity {
       }
     }
     this.frame(dt, false);
+  }
+
+  /** The other player's drive: he runs in from the spot, leaves the floor a stride out and puts it through. */
+  private runDrive(dt: number) {
+    const g = this.g;
+    const h = this.hoop;
+    const r = this.rival;
+    const k = this.drive;
+    if (k.t === 0 && Math.hypot(r.tx - r.x, r.tz - r.z) > 1.7) return;
+    k.t += dt;
+    const u = k.t / DRIVE_AIR;
+    if (!k.done && u >= 0.55) {
+      k.done = true;
+      const ball = this.balls.find((b) => !b.live) ?? this.balls[0]!;
+      ball.p.set(h.x, h.y + 0.16, h.z);
+      ball.v.set(0, -6.5, 0);
+      ball.live = true;
+      ball.mesh.visible = true;
+      ball.rim = ball.board = ball.scored = ball.judged = false;
+      ball.bounces = 0;
+      ball.age = 0;
+      ball.error = 0;
+      ball.who = 1;
+      ball.hot = false;
+      ball.dunk = true;
+      ball.points = 2;
+      this.trailBall = null;
+      g.sound.rim();
+      g.sound.board();
+      g.stage.setPunch(0.8);
+      g.input.rumble(0.8, 180);
+    }
+    if (u >= 1) k.on = false;
   }
 
   /** Three steps and up: he carries it to the rim and puts it through. */

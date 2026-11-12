@@ -766,46 +766,15 @@ export function buildFunRoom(): FunRoom {
   f.box(0.64, shelf.y, 0.4, shelf.x, shelf.y / 2, shelf.z, std(0x3a1260, 0.6));
   f.box(0.7, 0.03, 0.46, shelf.x, shelf.y - 0.015, shelf.z, stallWhite);
   // Clown Toss: three painted faces on the back wall. Their mouths are worked by the game.
-  const clownTex = tex(256, 256, (g, w) => {
-    const c = w / 2;
-    g.clearRect(0, 0, w, w);
-    for (const [hx, col] of [
-      [0.16, "#35e0d0"],
-      [0.84, "#35e0d0"],
-      [0.3, "#ff8a1e"],
-      [0.7, "#ff8a1e"],
-    ] as const) {
-      g.fillStyle = col;
-      g.beginPath();
-      g.arc(hx * w, 0.3 * w, 0.17 * w, 0, Math.PI * 2);
-      g.fill();
-    }
-    g.fillStyle = "#f6f1e6";
-    g.beginPath();
-    g.arc(c, c + 8, 0.37 * w, 0, Math.PI * 2);
-    g.fill();
-    g.fillStyle = "#1a1a22";
-    for (const ex2 of [0.37, 0.63]) {
-      g.beginPath();
-      g.arc(ex2 * w, 0.4 * w, 0.035 * w, 0, Math.PI * 2);
-      g.fill();
-    }
-    g.fillStyle = "#e0241c";
-    g.beginPath();
-    g.arc(c, 0.52 * w, 0.06 * w, 0, Math.PI * 2);
-    g.fill();
-    g.beginPath();
-    g.arc(c, 0.73 * w, 0.17 * w, 0, Math.PI * 2);
-    g.fill();
-    g.fillStyle = "#050505";
-    g.beginPath();
-    g.arc(c, 0.73 * w, 0.125 * w, 0, Math.PI * 2);
-    g.fill();
-  });
-  const clownMat = new THREE.MeshBasicMaterial({ map: clownTex, transparent: true, alphaTest: 0.5, toneMapped: false });
-  // The mouth sits 0.23 of the face below its middle.
-  const CL = { y: 1.62, z: MW.zb + 0.07, gap: 0.62, size: 0.62 };
-  for (let i = -1; i <= 1; i++) f.wall(CL.size, CL.size, bays[1]! + i * CL.gap, CL.y + CL.size * 0.23, CL.z, clownMat, ctx.flat);
+  // Every face is painted with its mouth in the same place: a quarter of the picture below its
+  // middle, and a little over a quarter of the picture wide.
+  const CL = { y: 1.62, z: MW.zb + 0.07, gap: 0.62, size: 0.6, mouth: 0.249 };
+  const faces = new THREE.TextureLoader();
+  for (let i = -1; i <= 1; i++) {
+    const map = faces.load(`/game-v2/places/clowns/clown-${i + 2}.webp`);
+    map.colorSpace = THREE.SRGBColorSpace;
+    f.wall(CL.size, CL.size, bays[1]! + i * CL.gap, CL.y + CL.size * CL.mouth, CL.z, new THREE.MeshBasicMaterial({ map, transparent: true, alphaTest: 0.5, toneMapped: false }), ctx.flat);
+  }
   // Bag Toss: a board leaning away from the thrower, with a hole near the top.
   const BG = { x: bays[2]!, z0: MW.zc - 0.75, y0: 0.22, z1: MW.zb + 0.55, y1: 0.7, w: 0.64, hole: 0.74, r: 0.085 };
   const boardLen = Math.hypot(BG.z1 - BG.z0, BG.y1 - BG.y0);

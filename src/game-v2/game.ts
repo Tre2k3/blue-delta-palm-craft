@@ -9,7 +9,7 @@ import { Rain } from "./gfx/rain";
 import { BALLERS, CAST, PEDS, OUTFITS, BENJI_HEIGHT, type CastId, type OutfitId, VENDORS } from "./assets/cast";
 import { Sound } from "./core/audio";
 import { Input, type Nav } from "./core/input";
-import type { HoopsKind, Dialogue, HudState, Live, Mode, Overlay, Place, Results, Save, Solid } from "./core/types";
+import type { AlbumHud, HoopsKind, Dialogue, HudState, Live, Mode, Overlay, Place, Results, Reveal, Save, Solid } from "./core/types";
 import { clamp, damp, dampAngle, wrapAngle } from "./core/util";
 import { makeStage, pickQuality, qualityIsChosen, type Quality, type Stage } from "./gfx/render";
 import { Lite } from "./gfx/lite";
@@ -17,19 +17,19 @@ import { Sacks } from "./play/sacks";
 import { PHASES, Sky, type Phase } from "./gfx/sky";
 import { Bowling } from "./play/bowling";
 import { CATALOG, COLLECTION_BONUS, productById } from "./play/catalog";
-import { Fishing } from "./play/fishing";
+import { FISH, Fishing } from "./play/fishing";
 import { BallPit, Bounce, KartRace } from "./play/fun";
 import { LaserTag } from "./play/laser";
 import { CABINETS, FOOD, FOOD_TRUCKS, PRIZES, type TruckId } from "./play/goods";
 import { Hoops } from "./play/hoops";
 import { PinballTable, PrizeWheel, SkeeLane } from "./play/floor";
-import { POSTCARDS, dailyFor, dailyPay, dayBefore, dayKey, meets } from "./play/extras";
+import { POSTCARDS, dailyFor, dailyPay, dayBefore, dayKey, meets, postcardImg } from "./play/extras";
 import { TableGames } from "./play/tables";
 import { RIDES, rideById } from "./play/garage";
 import { AirHockey, BagToss, BottleBash, ClownToss } from "./play/midway";
 import { PopShot, Whack } from "./play/machines";
 import { StreetRace } from "./play/race";
-import { BOUNTIES, CHAPTERS, RANK_PAY, STORE_REWARD, STORY, chapterOf, rankOf } from "./play/story";
+import { BOUNTIES, CHAPTERS, RANKS, RANK_PAY, STORE_REWARD, STORY, chapterOf, rankBadge, rankOf } from "./play/story";
 import { buildCity, type City } from "./world/city";
 import { pushCircle, pushOut, sight } from "./world/collide";
 import { buildFunRoom, buildLaserRoom, type FunRoom, type LaserRoom } from "./world/funhouse";
@@ -230,6 +230,12 @@ export class Game {
   private dialogue: (Dialogue & { left: number; voice: string })[] = [];
   private toastText = "";
   private toastLeft = 0;
+  private revealNow: Reveal | null = null;
+  private revealLeft = 0;
+  /** Seconds his fist stays up after something worth it. */
+  private fistLeft = 0;
+  /** Photo mode: he holds the pose until the lens is put away. */
+  private posing = false;
   private fedUntil = 0;
   private lookIdle = 9;
   private onAgain: (() => void) | null = null;
@@ -986,6 +992,8 @@ export class Game {
     this.slowDeep = level === 1 ? 0.45 : 0.3;
     this.party(level);
     this.sound.cheer();
+    // On his own feet with nothing else in his hands, the fist goes up.
+    if (!this.activity && this.mode === "walk") this.fistLeft = level === 1 ? 1.5 : 2.4;
     if (level >= 2) this.sound.fanfare();
     this.buzz(level === 1 ? 45 : [45, 60, 140]);
     if (level === 3 && !this.room) {
@@ -1007,6 +1015,14 @@ export class Game {
     this.photo.pitch = 0.14;
     this.photo.dist = this.room ? 3.6 : this.mode === "drive" ? 7.5 : 5.2;
     this.open("photo");
+  }
+
+  /** Photo mode: fist up for the picture, or back down. */
+  photoPose() {
+    if (!this.benji.has("cheer")) return;
+    this.posing = !this.posing;
+    this.sound.ui();
+    this.push();
   }
 
   photoOrbit(dx: number, dy: number) {
@@ -1063,11 +1079,11 @@ export class Game {
     if (got === POSTCARDS.length) {
       const paid = this.earn(300, 20, { quiet: true });
       this.moment(3);
-      this.toast(`All ${got} postcards. Memphis is yours.  +$${paid.dollars}`, 6);
+      this.reveal({ img: postcardImg(card.id), kicker: `All ${got} postcards`, title: card.name, sub: `Memphis is yours.  +$${paid.dollars}`, round: false }, 7);
     } else {
       const paid = this.earn(40, 4, { quiet: true });
       this.sound.cash();
-      this.toast(`Postcard: ${card.name}  ·  ${got} of ${POSTCARDS.length}  +$${paid.dollars}`, 4.5);
+      this.reveal({ img: postcardImg(card.id), kicker: `Postcard ${got} of ${POSTCARDS.length}`, title: card.name, sub: `+$${paid.dollars}  ·  it is in your album`, round: false }, 5.5);
     }
     this.persist();
     this.push();
@@ -1199,6 +1215,7 @@ export class Game {
     this.input.clear();
     this.sound.duck(false);
     if (was === "photo") {
+      this.posing = false;
       this.camera.fov = this.room ? 52 : 46;
       this.camera.updateProjectionMatrix();
       this.snapCamera();
@@ -1972,6 +1989,28 @@ export class Game {
     this.push();
   }
 
+  /** Holds a picture up over everything for a few seconds. */
+  reveal(r: Reveal, seconds = 5) {
+    this.revealNow = r;
+    this.revealLeft = seconds;
+    this.push();
+  }
+
+  /** The album: postcards, the fish book and the names he has earned. */
+  openAlbum() {
+    this.open("album");
+  }
+
+  private albumHud(): AlbumHud {
+    const s = this.save;
+    const rung = rankOf(s.respect).index;
+    return {
+      postcards: POSTCARDS.map((c) => ({ id: c.id, name: c.name, hint: c.hint, img: postcardImg(c.id), got: !!s.flags[`card_${c.id}`] })),
+      fish: FISH.map((f) => ({ ...f, best: s.best[`fish_${f.id}`] ?? 0 })),
+      ranks: RANKS.map((r, i) => ({ name: r.name, at: r.at, badge: rankBadge(i), got: i <= rung })),
+    };
+  }
+
   persist() {
     const s = this.save;
     if (this.mode === "walk" && this.place === "street") {
@@ -2367,7 +2406,7 @@ export class Game {
         this.rankUp = null;
         this.moment(2);
         this.sound.voice("call-rank-up");
-        this.toast(`New name in Memphis: ${name}. Every job pays more.`, 5);
+        this.reveal({ img: rankBadge(RANKS.findIndex((r) => r.name === name)), kicker: "New name in Memphis", title: name, sub: "Every job pays more.", round: true }, 5.5);
       }
     }
     if (this.overlay === "photo") this.photoCamera();
@@ -2387,13 +2426,23 @@ export class Game {
     const out = !this.room;
     const target = out ? TINT[this.sky.phase] : INDOOR_TINT;
     this.tint.lerp(target, damp(2, dt));
+    // His fist: held for the camera, or up for a moment after a win while he is standing about.
+    if (this.fistLeft > 0) this.fistLeft -= dt;
+    if (!this.activity) {
+      const fist = this.overlay === "photo" ? this.posing : this.fistLeft > 0 && this.mode === "walk" && this.benji.speed < 0.6;
+      if (fist) this.benji.pose = "cheer";
+      else if (this.benji.pose === "cheer") this.benji.pose = null;
+    }
     this.benji.place(this.pos.x, this.pos.z);
     this.benji.heading = this.heading;
     this.benji.update(paused ? 0 : dt, cam, this.tint, this.floorY);
+    const speaker = this.dialogue[0]?.who;
     for (const n of this.npcs) {
       if (n.place !== this.place) continue;
       const d = Math.hypot(this.pos.x - n.x, this.pos.z - n.z);
       const want = d < 7 ? Math.atan2(this.pos.x - n.x, this.pos.z - n.z) : n.home;
+      // Whoever has the floor is drawn mid-sentence.
+      n.card.pose = speaker === CAST[n.id].name ? "talk" : null;
       n.card.heading = dampAngle(n.card.heading, want, damp(5, dt));
       n.card.update(dt, cam, this.tint, n.place === "street" ? null : this.rooms[n.place].floorY + 0.03);
     }
@@ -2490,6 +2539,13 @@ export class Game {
       this.toastLeft -= dt;
       if (this.toastLeft <= 0) {
         this.toastText = "";
+        this.push();
+      }
+    }
+    if (this.revealLeft > 0) {
+      this.revealLeft -= dt;
+      if (this.revealLeft <= 0) {
+        this.revealNow = null;
         this.push();
       }
     }
@@ -2615,6 +2671,9 @@ export class Game {
       hints,
       dialogue: d ? { who: d.who, text: d.text, portrait: d.portrait } : null,
       toast: this.toastText,
+      reveal: this.revealNow,
+      pose: { can: this.benji.has("cheer"), on: this.posing },
+      album: this.overlay === "album" ? this.albumHud() : null,
       buff: this.time < this.fedUntil ? `Well fed  +10% pay  ${Math.ceil((this.fedUntil - this.time) / 60)}m` : "",
       wearing: s.wearing,
       outfits: [...s.outfits],

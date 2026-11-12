@@ -75,6 +75,74 @@ export function Title({ game, hud }: { game: Game; hud: HudState }) {
   );
 }
 
+// ---------------------------------------------------------------- album
+
+function Shelf({ title, note, children }: { title: string; note: string; children: ReactNode }) {
+  return (
+    <div className="mb-6 last:mb-1">
+      <div className="mb-2.5 flex flex-wrap items-baseline justify-between gap-x-3 border-b border-white/10 pb-1.5">
+        <div className="sr-title text-xl text-[#f4d77a]">{title}</div>
+        <div className="text-[11px] font-semibold text-white/55">{note}</div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** Everything collected: the postcards, the fish book and the names Memphis has given him. */
+export function Album({ game, hud }: { game: Game; hud: HudState }) {
+  const a = hud.album;
+  if (!a) return null;
+  const cards = a.postcards.filter((c) => c.got).length;
+  const kinds = a.fish.filter((f) => f.best > 0).length;
+  const names = a.ranks.filter((r) => r.got).length;
+  return (
+    <Sheet title="Album" sub="Postcards, the fish book and your names in Memphis." onClose={() => game.open("pause")} wide>
+      <Shelf title="Postcards" note={`${cards} of ${a.postcards.length}  ·  take a picture in photo mode at each spot`}>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+          {a.postcards.map((c) => (
+            <div key={c.id} data-card={c.id} data-got={c.got ? "1" : "0"}>
+              <div className={`relative aspect-[3/2] overflow-hidden rounded-md border-4 ${c.got ? "border-white shadow-lg" : "border-white/15"}`}>
+                <img src={c.img} alt="" draggable={false} loading="lazy" className={`h-full w-full object-cover ${c.got ? "" : "scale-110 opacity-30 blur-[7px] grayscale"}`} />
+                {!c.got && <div className="sr-title absolute inset-0 flex items-center justify-center text-4xl text-white/70">?</div>}
+              </div>
+              <div className="mt-1.5 text-sm font-extrabold text-white">{c.name}</div>
+              <div className="text-[11px] text-white/55">{c.got ? "Collected" : `Photo mode, ${c.hint}`}</div>
+            </div>
+          ))}
+        </div>
+      </Shelf>
+      <Shelf title="Fish book" note={`${kinds} of ${a.fish.length}  ·  the heaviest you have landed of each`}>
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          {a.fish.map((f) => (
+            <div key={f.id} data-fish={f.id} data-got={f.best > 0 ? "1" : "0"} className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-center">
+              <div className="flex h-20 items-center justify-center">
+                <img src={f.img} alt="" draggable={false} loading="lazy" className={`max-h-full max-w-full object-contain ${f.best > 0 ? "drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]" : "opacity-45 brightness-0"}`} />
+              </div>
+              <div className="mt-1 text-[10px] font-black uppercase tracking-widest" style={{ color: f.best > 0 ? f.color : "rgba(255,255,255,0.4)" }}>
+                {f.rarity}
+              </div>
+              <div className="text-sm font-extrabold text-white">{f.best > 0 ? f.name : "???"}</div>
+              <div className="text-[11px] text-white/55">{f.best > 0 ? `Best ${f.best} lb` : "Not landed yet"}</div>
+            </div>
+          ))}
+        </div>
+      </Shelf>
+      <Shelf title="Your name in Memphis" note={`${names} of ${a.ranks.length}  ·  every name makes every job pay more`}>
+        <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+          {a.ranks.map((r) => (
+            <div key={r.name} data-rank={r.at} data-got={r.got ? "1" : "0"} className="text-center">
+              <img src={r.badge} alt="" draggable={false} loading="lazy" className={`mx-auto h-16 w-16 sm:h-20 sm:w-20 ${r.got ? "drop-shadow-[0_4px_10px_rgba(0,0,0,0.6)]" : "opacity-30 grayscale"}`} />
+              <div className={`mt-1 text-[11px] font-extrabold leading-tight ${r.got ? "text-white" : "text-white/45"}`}>{r.name}</div>
+              <div className="text-[10px] text-white/45">{r.got ? "Earned" : `${r.at} Respect`}</div>
+            </div>
+          ))}
+        </div>
+      </Shelf>
+    </Sheet>
+  );
+}
+
 // ---------------------------------------------------------------- pause
 
 function Seg<T extends string>({ value, options, onPick }: { value: T; options: [T, string][]; onPick: (v: T) => void }) {
@@ -128,17 +196,25 @@ export function Pause({ game, hud }: { game: Game; hud: HudState }) {
         </div>
       </Row>
       <Row label="Postcards">
-        <div className="text-right">
-          <div className="text-sm font-extrabold text-[#f4d77a]">
-            {hud.postcards.got} of {hud.postcards.total}
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <div className="text-sm font-extrabold text-[#f4d77a]">
+              {hud.postcards.got} of {hud.postcards.total}
+            </div>
+            <div className="text-[11px] text-white/55">{hud.postcards.next ? `Photo mode. Next: ${hud.postcards.next}.` : "The whole set."}</div>
           </div>
-          <div className="text-[11px] text-white/55">{hud.postcards.next ? `Photo mode. Next: ${hud.postcards.next}.` : "The whole set."}</div>
+          <button data-album className="sr-btn sr-btn-gold shrink-0 px-3 py-2 text-xs" onClick={() => game.openAlbum()}>
+            Album
+          </button>
         </div>
       </Row>
       <Row label="Your name in Memphis">
-        <div className="text-right">
-          <div className="text-sm font-extrabold text-[#f4d77a]">{hud.rank.name}</div>
-          <div className="text-[11px] text-white/55">{hud.rank.next === null ? "Top of the city." : `${hud.respect} Respect · next name at ${hud.rank.next}`}{hud.rank.index > 0 ? `  ·  jobs pay +${hud.rank.index * 4}%` : ""}</div>
+        <div className="flex items-center gap-2.5">
+          <div className="text-right">
+            <div className="text-sm font-extrabold text-[#f4d77a]">{hud.rank.name}</div>
+            <div className="text-[11px] text-white/55">{hud.rank.next === null ? "Top of the city." : `${hud.respect} Respect · next name at ${hud.rank.next}`}{hud.rank.index > 0 ? `  ·  jobs pay +${hud.rank.index * 4}%` : ""}</div>
+          </div>
+          <img src={hud.rank.badge} alt="" draggable={false} className="h-11 w-11 shrink-0" />
         </div>
       </Row>
       <Row label="Graphics">

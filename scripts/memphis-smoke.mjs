@@ -860,13 +860,13 @@ try {
     g.save.respect = 0;
     g.earn(0, 25);
     run(60);
-    const rank = { toast: g.toastText, pays: g.earn(100, 0, { quiet: true }).dollars > 100 };
+    const rank = { toast: g.revealNow?.title ?? "", badge: g.revealNow?.img ?? "", pays: g.earn(100, 0, { quiet: true }).dollars > 100 };
     g.stage.render = draw;
     return { chapters: CHAPTERS.map((c) => c.steps.length).join(), lost, sent, part, counted, refused, done, rank };
   });
   check(story.chapters === "11,8,7" && story.lost && story.sent.step === "catering" && /Mama Dee/.test(story.sent.by), "the story runs on past the Drop Day, and each errand is handed over by whoever needs it", story);
   check(story.part.step === "change" && story.part.count === 29 && story.counted === "league" && story.refused && story.done, "errands that count are counted, and the last one ends with the eleven on his back", story);
-  check(/Known on the riverfront/.test(story.rank.toast) && story.rank.pays, "Respect has rungs, and each one pays more", story.rank);
+  check(/Known on the riverfront/.test(story.rank.toast) && /rank-2\.webp$/.test(story.rank.badge) && story.rank.pays, "Respect has rungs, each with its badge, and each one pays more", story.rank);
   // After dark: the bridge runs its show, the river mirrors it, the neon moves, and it can rain.
   const night = await page.evaluate(() => {
     const g = window.__GAME__;
@@ -1340,6 +1340,170 @@ try {
     };
   });
   check(sound.loaded === sound.listed && sound.missing.length === 0 && sound.line === "k-drop-day" && sound.unknown === false && sound.tracks > 0, "recorded sound is used where it exists and made up where it doesn't", sound);
+  // The drawn pictures: fish, postcards, rank badges and clown faces; and everybody's new moves.
+  const pics = await page.evaluate(async () => {
+    const g = window.__GAME__;
+    const { OUTFITS, PEDS, BALLERS, CAST, POSTCARDS } = g.tables;
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    const run = (n) => {
+      for (let i = 0; i < n; i++) g.tick(1 / 30);
+    };
+    if (g.overlay) g.close();
+    if (g.activity) g.activity.quit();
+    run(10);
+    const size = (src) =>
+      new Promise((done) => {
+        const img = new Image();
+        img.onload = () => done(img.naturalHeight);
+        img.onerror = () => done(0);
+        img.src = src;
+      });
+    // Every drawing a character can be shown as is a real picture.
+    const every = (a) => [a.front, a.back, a.left, a.right, ...Object.values(a.walk ?? {}).flat(), ...Object.values(a.poses ?? {}).flatMap((q) => (typeof q === "string" ? [q] : Object.values(q)))].filter(Boolean).map((u) => u.replace(/^flip:/, ""));
+    const people = [...Object.values(OUTFITS).map((o) => o.art), ...PEDS.map((q) => q.art), ...BALLERS, ...Object.values(CAST).map((c) => c.art)];
+    const files = [...new Set(people.flatMap(every))];
+    const broken = [];
+    for (const f of files) if (!(await size(f))) broken.push(f);
+    // The album: what it lists, and every picture in it.
+    g.save.flags.card_bridge = true;
+    g.save.respect = Math.max(g.save.respect, 60);
+    g.openAlbum();
+    await new Promise((r) => setTimeout(r, 150));
+    const album = g.albumHud();
+    const shown = { cards: document.querySelectorAll("[data-card]").length, got: document.querySelectorAll('[data-card][data-got="1"]').length, fish: document.querySelectorAll("[data-fish]").length, ranks: document.querySelectorAll("[data-rank]").length, earned: document.querySelectorAll('[data-rank][data-got="1"]').length };
+    const pictures = [...album.postcards.map((c) => c.img), ...album.fish.map((f) => f.img), ...album.ranks.map((r) => r.badge), 1, 2, 3].map((u) => (typeof u === "number" ? `/game-v2/places/clowns/clown-${u}.webp` : u));
+    const blank = [];
+    for (const f of pictures) if (!(await size(f))) blank.push(f);
+    g.open("pause");
+    g.close();
+    // A postcard is held up when it is collected.
+    delete g.save.flags.card_pyramid;
+    g.pos.x = POSTCARDS[1].x;
+    g.pos.z = POSTCARDS[1].z + 1;
+    g.photoTaken();
+    const held = { img: g.revealNow?.img ?? "", title: g.revealNow?.title ?? "" };
+    // A fish goes in the book at its best weight, with its picture on the card.
+    const f = g.fishing;
+    g.save.bait = 5;
+    g.begin(f, "fish");
+    f.start(g.city.anchors.castSpots[0]);
+    f.dist = 9;
+    let kind = "";
+    for (let i = 0; i < 40 && !/Largemouth/.test(kind); i++) {
+      f.pickFish();
+      kind = f.fish.name;
+    }
+    const caught = { ...f.fish };
+    f.phase = "reel";
+    g.tick(1 / 60);
+    const reeling = g.benji.pose;
+    f.land();
+    g.tick(1 / 60);
+    const landed = g.benji.pose;
+    const book = g.save.best["fish_largemouth-bass"] ?? 0;
+    f.quit();
+    run(5);
+    // In the green tee the moves have their own drawings; a fit without them falls back to what it has.
+    const wore = g.save.wearing;
+    g.wear("starter");
+    const a = g.city.anchors;
+    g.warp(a.ogStand.x + 3, a.ogStand.z + 6, Math.PI);
+    run(20);
+    const drawn = {};
+    for (const pose of ["dunk", "reel", "bowl", "cheer"]) {
+      g.benji.pose = pose;
+      g.benji.update(0, g.camera.position, g.tint, g.floorY);
+      drawn[pose] = (g.benji.current || "").split("/").pop();
+    }
+    g.benji.pose = null;
+    // A win on his own feet puts his fist up for a moment, and it comes down again.
+    g.moment(1);
+    run(3);
+    const fist = g.benji.pose;
+    run(120);
+    const down = g.benji.pose;
+    // Photo mode: the pose is his to strike, and it is dropped with the lens.
+    g.openPhoto();
+    g.photoPose();
+    run(2);
+    const posed = g.benji.pose;
+    g.close();
+    run(2);
+    const dropped = g.benji.pose;
+    g.wear(wore);
+    // Whoever is talking is drawn talking.
+    g.dialogue.length = 0;
+    g.warp(a.ogStand.x, a.ogStand.z + 2.6, Math.PI);
+    run(30);
+    g.say("Court OG", "Run it back.");
+    run(10);
+    const og = g.npcs.find((n) => n.id === "courtOg").card;
+    const talking = { pose: og.pose, file: (og.current || "").split("/").pop() };
+    g.dialogue.length = 0;
+    run(3);
+    const quiet = og.pose;
+    // The crowd throws its hands up when it jumps.
+    const still = [...g.street.members, ...(g.people.members ?? [])].filter((m) => !m.going && m.stop.act !== "inside" && m.stop.act !== "serve" && m.card.has("cheer"));
+    const near = still[0];
+    g.warp(near.x + 3, near.z + 3, 0);
+    g.tick(1 / 30);
+    g.cheer(near.x, near.z, 6, 2);
+    let hands = 0;
+    for (let i = 0; i < 40; i++) {
+      g.tick(1 / 30);
+      if (near.card.pose === "cheer") hands++;
+    }
+    const after = (() => {
+      for (let i = 0; i < 90; i++) g.tick(1 / 30);
+      return near.going || near.card.pose === null || near.stop.act === "cheer";
+    })();
+    // At the court a better player sometimes takes an open two to the rim: same two points.
+    g.save.best.versus = Math.max(1, g.save.best.versus ?? 0);
+    const tier = g.save.best.versus;
+    g.begin(g.hoops, "hoops");
+    g.hoops.start("versus");
+    const h = g.hoops;
+    for (let i = 0; i < 400 && h.turn !== "rival"; i++) g.tick(1 / 30);
+    h.rival.wait = 9;
+    run(70);
+    // From the elbow, with nobody on him.
+    h.spot.x = h.hoop.x + 2.6;
+    h.spot.z = h.hoop.z + 4;
+    h.rival.x = h.rival.tx = h.spot.x;
+    h.rival.z = h.rival.tz = h.spot.z;
+    g.pos.x = h.spot.x + 5;
+    h.contest.at = -9;
+    const before = h.rival.score;
+    const random = Math.random;
+    Math.random = () => 0.01;
+    h.rivalShot();
+    Math.random = random;
+    const started = { on: h.drive.on, turn: h.turn };
+    let up = "";
+    let ran = "";
+    for (let i = 0; i < 300 && h.turn === "air"; i++) {
+      g.tick(1 / 30);
+      const cur = (h.rival.card.current || "").split("/").pop();
+      if (/dunk-back|shot-front/.test(cur) && h.rival.card.lift > 0.3) up = cur;
+      if (/run-(front|back)|drive/.test(cur)) ran = cur;
+    }
+    const drive = { tier, started, up, ran, scored: h.rival.score - before, turn: h.turn };
+    h.quit();
+    run(10);
+    g.save.best.versus = tier;
+    g.stage.render = draw;
+    return { files: files.length, broken, album: { cards: album.postcards.length, fish: album.fish.length, ranks: album.ranks.length }, shown, blank, held, caught, reeling, landed, book, drawn, fist, down, posed, dropped, talking, quiet, hands, still: still.length, after, drive };
+  });
+  check(pics.files > 150 && pics.broken.length === 0, "every drawing a character can be shown as is a real picture", { files: pics.files, broken: pics.broken });
+  check(pics.shown.cards === 6 && pics.shown.got >= 1 && pics.shown.fish === 8 && pics.shown.ranks === 7 && pics.shown.earned >= 3 && pics.blank.length === 0, "the album shows the postcards, the fish book and the names, each with its picture", { shown: pics.shown, blank: pics.blank });
+  check(/postcards\/pyramid\.webp$/.test(pics.held.img) && pics.held.title === "The Pyramid", "a postcard is held up when it is collected", pics.held);
+  check(/fish\/largemouth-bass\.webp$/.test(pics.caught.img ?? "") && pics.book === pics.caught.lb && pics.reeling === "reel" && pics.landed === "cheer", "a catch has its picture, goes in the fish book, and Benji leans on the rod and then celebrates", { caught: pics.caught, book: pics.book, reeling: pics.reeling, landed: pics.landed });
+  check(pics.drawn.dunk === "dunk-back.webp" && pics.drawn.reel === "reel-back.webp" && pics.drawn.bowl === "bowl-back.webp" && pics.drawn.cheer === "cheer-back.webp", "the green tee has its own drawings for the dunk, the reel, the bowling release and the cheer", pics.drawn);
+  check(pics.fist === "cheer" && pics.down === null && pics.posed === "cheer" && pics.dropped === null, "his fist goes up after a win and for a photo, and comes down again", { fist: pics.fist, down: pics.down, posed: pics.posed, dropped: pics.dropped });
+  check(pics.talking.pose === "talk" && pics.talking.file === "talk.webp" && pics.quiet === null, "whoever is talking is drawn talking", { talking: pics.talking, quiet: pics.quiet });
+  check(pics.still > 0 && pics.hands > 5 && pics.after, "people in the crowd throw their hands up when they jump, and put them down again", { standing: pics.still, frames: pics.hands, after: pics.after });
+  check(pics.drive.started.on && pics.drive.started.turn === "air" && /dunk-back/.test(pics.drive.up) && pics.drive.scored === 2 && pics.drive.turn === "you", "a better player can take an open look to the rim and throw it down for two", pics.drive);
   check(errors.length === 0, "no page errors", errors);
   console.log("Memphis smoke passed.");
 } finally {

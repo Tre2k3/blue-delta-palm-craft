@@ -109,10 +109,13 @@ export const RANKS = [
 /** Extra SackDollars per rung. */
 export const RANK_PAY = 0.04;
 
+/** The badge drawn for a rung, bottom rung first. */
+export const rankBadge = (index: number) => `/game-v2/ranks/rank-${index + 1}.webp`;
+
 export function rankOf(respect: number) {
   let index = 0;
   for (let i = 0; i < RANKS.length; i++) if (respect >= RANKS[i]!.at) index = i;
-  return { index, name: RANKS[index]!.name, next: RANKS[index + 1]?.at ?? null };
+  return { index, name: RANKS[index]!.name, next: RANKS[index + 1]?.at ?? null, badge: rankBadge(index) };
 }
 
 /**

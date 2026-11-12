@@ -163,6 +163,11 @@ export class Card {
     for (const src of [a.front, a.back, a.left, a.right, ...Object.values(a.walk ?? {}).flat(), ...poses]) if (src) cutout(src);
   }
 
+  /** Is there a drawing for this pose? */
+  has(pose: string) {
+    return !!this.art.poses?.[pose];
+  }
+
   place(x: number, z: number) {
     this.group.position.x = x;
     this.group.position.z = z;

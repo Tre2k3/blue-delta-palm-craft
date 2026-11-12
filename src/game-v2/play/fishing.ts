@@ -8,18 +8,23 @@ import { CURB, PIER } from "../world/map";
 const WATER = -0.55;
 const DECK = CURB;
 
-type Species = { name: string; min: number; max: number; base: number; rate: number; rarity: string; color: string; odds: number; far: number; night?: number };
+type Species = { id: string; name: string; min: number; max: number; base: number; rate: number; rarity: string; color: string; odds: number; far: number; night?: number };
 
 const SPECIES: Species[] = [
-  { name: "Bluegill", min: 0.3, max: 1.2, base: 8, rate: 6, rarity: "Common", color: "#6fa8c9", odds: 30, far: 0 },
-  { name: "White Crappie", min: 0.5, max: 2.2, base: 9, rate: 6, rarity: "Common", color: "#c9c7b0", odds: 26, far: 0 },
-  { name: "Largemouth Bass", min: 2, max: 7.5, base: 14, rate: 6, rarity: "Uncommon", color: "#5f8a3a", odds: 18, far: 8 },
-  { name: "Channel Catfish", min: 3, max: 12, base: 16, rate: 5, rarity: "Uncommon", color: "#7a7f86", odds: 14, far: 10, night: 2.2 },
-  { name: "Flathead Catfish", min: 8, max: 30, base: 30, rate: 5, rarity: "Rare", color: "#8a6a3a", odds: 6, far: 15, night: 2 },
-  { name: "Alligator Gar", min: 15, max: 60, base: 60, rate: 4, rarity: "Epic", color: "#4a6a52", odds: 2.4, far: 19 },
-  { name: "Paddlefish", min: 20, max: 70, base: 70, rate: 4, rarity: "Epic", color: "#59607a", odds: 1.8, far: 21 },
-  { name: "Golden Moneybag", min: 1, max: 1, base: 300, rate: 0, rarity: "Legendary", color: "#e0b33a", odds: 0.7, far: 12 },
+  { id: "bluegill", name: "Bluegill", min: 0.3, max: 1.2, base: 8, rate: 6, rarity: "Common", color: "#6fa8c9", odds: 30, far: 0 },
+  { id: "white-crappie", name: "White Crappie", min: 0.5, max: 2.2, base: 9, rate: 6, rarity: "Common", color: "#c9c7b0", odds: 26, far: 0 },
+  { id: "largemouth-bass", name: "Largemouth Bass", min: 2, max: 7.5, base: 14, rate: 6, rarity: "Uncommon", color: "#5f8a3a", odds: 18, far: 8 },
+  { id: "channel-catfish", name: "Channel Catfish", min: 3, max: 12, base: 16, rate: 5, rarity: "Uncommon", color: "#7a7f86", odds: 14, far: 10, night: 2.2 },
+  { id: "flathead-catfish", name: "Flathead Catfish", min: 8, max: 30, base: 30, rate: 5, rarity: "Rare", color: "#8a6a3a", odds: 6, far: 15, night: 2 },
+  { id: "alligator-gar", name: "Alligator Gar", min: 15, max: 60, base: 60, rate: 4, rarity: "Epic", color: "#4a6a52", odds: 2.4, far: 19 },
+  { id: "paddlefish", name: "Paddlefish", min: 20, max: 70, base: 70, rate: 4, rarity: "Epic", color: "#59607a", odds: 1.8, far: 21 },
+  { id: "golden-moneybag", name: "Golden Moneybag", min: 1, max: 1, base: 300, rate: 0, rarity: "Legendary", color: "#e0b33a", odds: 0.7, far: 12 },
 ];
+
+const fishImg = (id: string) => `/game-v2/fish/${id}.webp`;
+
+/** Every fish in the river, smallest first, for the fish book. `best` in the save is `fish_<id>`. */
+export const FISH = SPECIES.map((s) => ({ id: s.id, name: s.name, rarity: s.rarity, color: s.color, img: fishImg(s.id) }));
 
 type Phase = "ready" | "charge" | "flying" | "wait" | "bite" | "reel" | "landed" | "lost";
 
@@ -216,7 +221,7 @@ export class Fishing implements Activity {
     }
     const u = Math.random() ** 1.7;
     const lb = Math.round(lerp(sp.min, sp.max, u) * 10) / 10;
-    this.fish = { name: sp.name, lb, pay: Math.round(sp.base + lb * sp.rate), rarity: sp.rarity, color: sp.color };
+    this.fish = { name: sp.name, lb, pay: Math.round(sp.base + lb * sp.rate), rarity: sp.rarity, color: sp.color, img: fishImg(sp.id) };
     this.strength = 0.55 + Math.min(1.25, lb / 24);
     this.fishSkin.color.set(sp.color);
     const size = clamp(0.5 + lb / 26, 0.5, 2.4);
@@ -243,6 +248,9 @@ export class Fishing implements Activity {
     g.fishTrip++;
     const best = g.save.best.fish ?? 0;
     if (f.lb > best) g.save.best.fish = f.lb;
+    // The fish book keeps the heaviest of each kind.
+    const kind = SPECIES.find((s) => s.name === f.name);
+    if (kind && f.lb > (g.save.best[`fish_${kind.id}`] ?? 0)) g.save.best[`fish_${kind.id}`] = f.lb;
     g.earn(0, f.rarity === "Common" ? 1 : f.rarity === "Uncommon" ? 2 : 5, { quiet: true });
     // The ones worth telling people about.
     if (f.rarity === "Legendary") g.moment(2);
@@ -266,6 +274,8 @@ export class Fishing implements Activity {
     const hx = g.pos.x - this.dz * 0.3 + this.dx * 0.25;
     const hz = g.pos.z + this.dx * 0.3 + this.dz * 0.25;
     g.benji.speed = 0;
+    // Leaning back on the rod while it is on the line; fist up when it is on the deck.
+    g.benji.pose = this.phase === "bite" || this.phase === "reel" ? "reel" : this.phase === "landed" ? "cheer" : null;
 
     if (this.phase === "ready") {
       if (g.save.bait <= 0) {

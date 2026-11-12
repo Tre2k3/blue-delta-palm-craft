@@ -44,6 +44,9 @@ export function meets(goal: Goal, kind: string, n: number, extra: number) {
   return kind === goal.kind && n >= (goal.n ?? -Infinity) && n <= (goal.max ?? Infinity) && extra >= (goal.extra ?? -Infinity);
 }
 
+/** The painted card for a postcard. */
+export const postcardImg = (id: string) => `/game-v2/postcards/${id}.webp`;
+
 /** Postcards: a picture taken in photo mode within `r` of the spot collects it. */
 export const POSTCARDS: { id: string; name: string; hint: string; x: number; z: number; r: number }[] = [
   { id: "bridge", name: "The M Bridge", hint: "from the pier", x: PIER.x, z: -206, r: 26 },

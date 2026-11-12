@@ -28,9 +28,19 @@ export type Anchor = { x: number; z: number };
 
 export type Mode = "title" | "walk" | "drive" | "race" | "hoops" | "bowl" | "fish" | "kart" | "laser" | "bounce" | "pit" | "whack";
 
-export type Overlay = null | "pause" | "map" | "shop" | "wardrobe" | "arcade" | "prizes" | "food" | "results" | "video" | "court" | "photo" | "garage" | "table";
+export type Overlay = null | "pause" | "map" | "shop" | "wardrobe" | "arcade" | "prizes" | "food" | "results" | "video" | "court" | "photo" | "garage" | "table" | "album";
 
-export type Catch = { name: string; lb: number; pay: number; rarity: string; color: string };
+export type Catch = { name: string; lb: number; pay: number; rarity: string; color: string; img?: string };
+
+/** A picture held up for a few seconds: a postcard just collected, a new name just earned. */
+export type Reveal = { img: string; kicker: string; title: string; sub: string; round: boolean };
+
+/** Everything he has collected: the postcards, the fish book and the names Memphis has given him. */
+export type AlbumHud = {
+  postcards: { id: string; name: string; hint: string; img: string; got: boolean }[];
+  fish: { id: string; name: string; rarity: string; color: string; img: string; best: number }[];
+  ranks: { name: string; at: number; badge: string; got: boolean }[];
+};
 
 export type Save = {
   v: 4;
@@ -114,7 +124,7 @@ export type HudState = {
   dollars: number;
   respect: number;
   /** What Memphis calls him, and the Respect the next name comes at (null at the top). */
-  rank: { name: string; index: number; next: number | null };
+  rank: { name: string; index: number; next: number | null; badge: string };
   tickets: number;
   district: string;
   street: string;
@@ -136,6 +146,11 @@ export type HudState = {
   hints: [string, string][];
   dialogue: Dialogue | null;
   toast: string;
+  reveal: Reveal | null;
+  /** Photo mode: whether this fit has a pose to strike, and whether he is holding it. */
+  pose: { can: boolean; on: boolean };
+  /** Filled while the album is open. */
+  album: AlbumHud | null;
   buff: string;
   wearing: OutfitId;
   outfits: OutfitId[];

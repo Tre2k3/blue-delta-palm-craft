@@ -3,11 +3,11 @@ import { Photo } from "./Photo";
 import { TableScreen } from "./Tables";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import type { Action, Nav } from "../core/input";
-import type { HudState, Live } from "../core/types";
+import type { HudState, Live, Reveal } from "../core/types";
 import { formatClock } from "../core/util";
 import type { Game } from "../game";
 import { Arcade } from "./Arcade";
-import { CourtMenu, FoodMenu, Garage, MapScreen, Pause, Prizes, ResultsCard, Shop, Title, VideoScreen, Wardrobe } from "./Menus";
+import { Album, CourtMenu, FoodMenu, Garage, MapScreen, Pause, Prizes, ResultsCard, Shop, Title, VideoScreen, Wardrobe } from "./Menus";
 import { drawMap } from "./map";
 import "./ui.css";
 
@@ -262,7 +262,7 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
                 {hud.dollars.toLocaleString()}
               </span>
               <span className="sr-chip">
-                <span className="text-[#f4d77a]">★</span>
+                <img data-badge src={hud.rank.badge} alt="" draggable={false} className="-my-1.5 -ml-1.5 h-7 w-7" />
                 {hud.respect}
                 <span className="hidden text-[10px] font-bold uppercase text-white/50 sm:inline">{hud.rank.name}</span>
               </span>
@@ -416,6 +416,7 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
             )}
             {hud.fish?.fish && (
               <div className="sr-panel sr-pop px-5 py-3 text-center">
+                {hud.fish.fish.img && <img data-catch src={hud.fish.fish.img} alt="" draggable={false} className="mx-auto mb-1.5 h-24 max-w-[250px] object-contain drop-shadow-[0_5px_10px_rgba(0,0,0,0.6)] [@media(max-height:520px)]:h-14" />}
                 <div className="text-[10px] font-black uppercase tracking-widest" style={{ color: hud.fish.fish.color }}>
                   {hud.fish.fish.rarity}
                 </div>
@@ -488,6 +489,8 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
       {hud.overlay === "arcade" && hud.cabinet && <Arcade game={game} id={hud.cabinet} />}
       {hud.overlay === "results" && <ResultsCard game={game} hud={hud} />}
       {hud.overlay === "photo" && <Photo game={game} hud={hud} />}
+      {hud.overlay === "album" && <Album game={game} hud={hud} />}
+      {hud.reveal && !title && <RevealCard key={hud.reveal.img} r={hud.reveal} />}
 
       <div ref={fade} className="pointer-events-none absolute inset-0 z-50 bg-black" style={{ opacity: 1 }} />
     </div>
@@ -495,6 +498,31 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
 }
 
 /** The opening shot: bars top and bottom, a title that comes and goes, and how to get past it. */
+/** A postcard just collected or a badge just earned, held up over whatever is on screen. */
+function RevealCard({ r }: { r: Reveal }) {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-[13%] z-[45] flex justify-center px-4 [@media(max-height:520px)]:top-2">
+      <div data-reveal className="sr-panel sr-pop flex max-w-[94vw] flex-col items-center px-5 py-4 text-center [@media(max-height:520px)]:flex-row [@media(max-height:520px)]:gap-4 [@media(max-height:520px)]:px-4 [@media(max-height:520px)]:py-2.5 [@media(max-height:520px)]:text-left">
+        <img
+          src={r.img}
+          alt=""
+          draggable={false}
+          className={
+            r.round
+              ? "h-32 w-32 drop-shadow-[0_6px_16px_rgba(0,0,0,0.7)] sm:h-40 sm:w-40 [@media(max-height:520px)]:h-20 [@media(max-height:520px)]:w-20"
+              : "w-[300px] max-w-full -rotate-2 rounded-md border-[5px] border-white shadow-[0_10px_26px_rgba(0,0,0,0.7)] sm:w-[400px] [@media(max-height:520px)]:w-[190px]"
+          }
+        />
+        <div className="mt-3 [@media(max-height:520px)]:mt-0">
+          <div className="text-[10px] font-black uppercase tracking-[0.22em] text-[#39ff14]">{r.kicker}</div>
+          <div className="sr-title text-2xl text-white sm:text-3xl">{r.title}</div>
+          <div className="text-xs font-bold text-[#f4d77a] sm:text-sm">{r.sub}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Cinema({ card, touch, pad }: { card: { title: string; sub: string }; touch: boolean; pad: boolean }) {
   return (
     <div className="pointer-events-none absolute inset-0 z-30">
