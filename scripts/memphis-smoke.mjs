@@ -710,6 +710,80 @@ try {
   check(wow.slow && wow.sky && wow.thrown === 1 && wow.card === 2, "a big win slows the picture, throws confetti and lights the sky, and a winning card comes up under more", wow);
   check(wow.photo.overlay === "photo" && wow.photo.moved > 1 && wow.photo.width > 0 && wow.photo.frozen && wow.after === null, "photo mode swings the lens round Benji and takes the picture", wow.photo);
   check(wow.linked && wow.app?.display === "fullscreen" && wow.app.icons === 3, "the game can be added to a phone's home screen", wow.app);
+  // The story runs on past the Drop Day, and Respect has rungs.
+  const story = await page.evaluate(() => {
+    const g = window.__GAME__;
+    const { STORY, CHAPTERS } = g.tables;
+    const at = (id) => STORY.findIndex((s) => s.id === id);
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    const run = (n) => {
+      for (let i = 0; i < n; i++) g.tick(1 / 30);
+    };
+    // A win at the court opens chapter two's second errand, and whoever sends him on it says so.
+    g.save.step = at("tez");
+    g.save.count = 0;
+    g.dialogue.length = 0;
+    g.emit("versus", 0, 0);
+    const lost = g.save.step === at("tez");
+    g.emit("versus", 1, 0);
+    const sent = { step: STORY[g.save.step]?.id, by: g.dialogue.map((d) => d.who).join() };
+    // An errand that counts.
+    g.save.step = at("change");
+    g.save.count = 0;
+    for (let i = 0; i < 29; i++) g.emit("coin", 1);
+    const part = { step: STORY[g.save.step]?.id, count: g.save.count };
+    g.emit("coin", 1);
+    const counted = STORY[g.save.step]?.id;
+    // The last one: K Blanco wants to see the eleven on him.
+    g.save.step = at("crown");
+    if (!g.save.outfits.includes("sackrow_11")) g.save.outfits.push("sackrow_11");
+    g.wear("starter");
+    g.talkK();
+    const refused = g.save.step === at("crown");
+    g.wear("sackrow_11");
+    g.dialogue.length = 0;
+    g.talkK();
+    const done = g.save.step === STORY.length;
+    run(60);
+    // A rung of Respect.
+    g.save.respect = 0;
+    g.earn(0, 25);
+    run(60);
+    const rank = { toast: g.toastText, pays: g.earn(100, 0, { quiet: true }).dollars > 100 };
+    g.stage.render = draw;
+    return { chapters: CHAPTERS.map((c) => c.steps.length).join(), lost, sent, part, counted, refused, done, rank };
+  });
+  check(story.chapters === "11,8,7" && story.lost && story.sent.step === "catering" && /Mama Dee/.test(story.sent.by), "the story runs on past the Drop Day, and each errand is handed over by whoever needs it", story);
+  check(story.part.step === "change" && story.part.count === 29 && story.counted === "league" && story.refused && story.done, "errands that count are counted, and the last one ends with the eleven on his back", story);
+  check(/Known on the riverfront/.test(story.rank.toast) && story.rank.pays, "Respect has rungs, and each one pays more", story.rank);
+  // Recordings are optional: with none on the shelf every sound is still made up on the spot.
+  const sound = await page.evaluate(async () => {
+    const g = window.__GAME__;
+    const list = await fetch("/game-v2/audio/manifest.json").then((r) => r.json());
+    const have = g.sound.recorded;
+    const every = [...list.voice, ...list.sfx, ...list.music];
+    const missing = [];
+    for (const kind of ["voice", "sfx", "music"]) {
+      for (const id of list[kind]) {
+        const r = await fetch(`/game-v2/audio/${kind}/${id}.mp3`, { method: "HEAD" });
+        if (!r.ok) missing.push(`${kind}/${id}`);
+      }
+    }
+    g.dialogue.length = 0;
+    g.say("K Blanco", "Testing.", null, "k-drop-day");
+    const line = g.dialogue[0]?.voice ?? "";
+    g.dialogue.length = 0;
+    return {
+      listed: every.length,
+      loaded: have.voice.length + have.sfx.length + have.music.length,
+      missing,
+      line,
+      unknown: g.sound.sample("not-a-sound") || g.sound.voice("not-a-line"),
+      tracks: g.tracks().length,
+    };
+  });
+  check(sound.loaded === sound.listed && sound.missing.length === 0 && sound.line === "k-drop-day" && sound.unknown === false && sound.tracks > 0, "recorded sound is used where it exists and made up where it doesn't", sound);
   check(errors.length === 0, "no page errors", errors);
   console.log("Memphis smoke passed.");
 } finally {

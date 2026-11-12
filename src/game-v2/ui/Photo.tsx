@@ -82,6 +82,7 @@ export function Photo({ game, hud }: { game: Game; hud: HudState }) {
     setTimeout(() => setFlash(false), 180);
     game.sound.shutter();
     game.buzz(25);
+    game.photoTaken();
     out.toBlob(
       (blob) => {
         if (!blob) return;

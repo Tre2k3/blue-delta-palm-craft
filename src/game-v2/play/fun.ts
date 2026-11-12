@@ -325,6 +325,7 @@ export class KartRace implements Activity {
     const record = !best || this.time < best;
     if (record) g.save.best.kart = Math.round(this.time * 100) / 100;
     if (place === 1) g.moment(2);
+    g.emit("kart", place);
     payTickets(
       g,
       place === 1 ? "CHECKERED FLAG" : `FINISHED ${["1ST", "2ND", "3RD", "4TH", "5TH", "6TH"][place - 1]}`,

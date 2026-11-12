@@ -596,6 +596,7 @@ export class LaserTag implements Activity {
     const paid = tickets > 0 ? g.winTickets(tickets) : 0;
     if (paid) g.sound.cash();
     if (won) g.moment(2);
+    g.emit("laser", won ? 1 : 0);
     g.showResults(
       {
         win: won,

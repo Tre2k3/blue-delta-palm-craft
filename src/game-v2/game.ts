@@ -24,7 +24,7 @@ import { Hoops } from "./play/hoops";
 import { PinballTable, PrizeWheel, SkeeLane } from "./play/floor";
 import { PopShot, Whack } from "./play/machines";
 import { StreetRace } from "./play/race";
-import { BOUNTIES, CHAPTER, STORY } from "./play/story";
+import { BOUNTIES, CHAPTERS, RANK_PAY, STORE_REWARD, STORY, chapterOf, rankOf } from "./play/story";
 import { buildCity, type City } from "./world/city";
 import { pushCircle, pushOut, sight } from "./world/collide";
 import { buildFunRoom, buildLaserRoom, type FunRoom, type LaserRoom } from "./world/funhouse";
@@ -112,6 +112,7 @@ function freshSave(): Save {
     car: { ...CAR_START },
     bounty: 0,
     played: 0,
+    count: 0,
   };
 }
 
@@ -131,6 +132,23 @@ function loadSave(): Save | null {
     return null;
   }
 }
+
+/** What the announcer calls out, by what comes up on screen. The first that fits wins. */
+const CALLS: [RegExp, string][] = [
+  [/ON FIRE/, "call-on-fire"],
+  [/^STRIKE!/, "call-strike"],
+  [/^SPARE!/, "call-spare"],
+  [/^Gutter ball/, "call-gutter"],
+  [/^PERFECT (RELEASE|BOOST|LAUNCH)/, "call-perfect"],
+  [/^SWISH/, "call-swish"],
+  [/^(BUCKET|OFF THE GLASS)/, "call-bucket"],
+  [/^GO!$/, "call-go"],
+  [/^FISH ON/, "call-fish-on"],
+  [/New record/, "call-new-record"],
+  [/(BASE IS DOWN|TOOK THEIR BASE)/, "call-base-down"],
+  [/^(TAGGED|VEST DOWN)/, "call-tagged"],
+  [/^YOU LEAD/, "call-you-lead"],
+];
 
 const TINT: Record<Phase, THREE.Color> = {
   golden: new THREE.Color(1, 0.84, 0.7),
@@ -166,7 +184,7 @@ export class Game {
   room: Room | null = null;
   activity: Activity | null = null;
   /** The art tables, where tools and tests can read them. */
-  readonly tables = { OUTFITS, PEDS, BALLERS, CAST, VENDORS };
+  readonly tables = { OUTFITS, PEDS, BALLERS, CAST, VENDORS, STORY, CHAPTERS };
   pos = { x: START.x, z: START.z };
   vel = { x: 0, z: 0 };
   heading = 0;
@@ -198,7 +216,7 @@ export class Game {
   private boom = 6.2;
   private fadeTo = 0;
   private afterFade: (() => void) | null = null;
-  private dialogue: (Dialogue & { left: number })[] = [];
+  private dialogue: (Dialogue & { left: number; voice: string })[] = [];
   private toastText = "";
   private toastLeft = 0;
   private fedUntil = 0;
@@ -224,6 +242,9 @@ export class Game {
   private slowLeft = 0;
   private slowDeep = 1;
   private partyAt = -10;
+  private lastCall = "";
+  /** A rank just earned, held a beat so it lands after whatever paid for it. */
+  private rankUp: { name: string; left: number } | null = null;
   /** Photo mode: which way the lens sits from Benji, how high, how far. */
   private photo = { yaw: 0, pitch: 0.14, dist: 5.2 };
   private fireworks = new Fireworks();
@@ -654,7 +675,7 @@ export class Game {
       () => {
         if (this.save.flags.carrying) {
           this.save.flags.carrying = false;
-          this.say("Court OG", "That's the new drop? Lil' man came through. Now let me see that jumper.");
+          this.say("Court OG", "That's the new drop? Lil' man came through. Now let me see that jumper.", null, "og-new-drop");
           this.emit("delivered");
           return;
         }
@@ -678,7 +699,7 @@ export class Game {
     a.castSpots.forEach((c) =>
       this.spot("street", c.x, c.z, 1.5, "Cast a line", () => {
         if (this.save.bait <= 0) {
-          this.say("Unc J", "No bait, no fish. The shack's right there, nephew.");
+          this.say("Unc J", "No bait, no fish. The shack's right there, nephew.", null, "unc-no-bait");
           this.sound.bad();
           return;
         }
@@ -840,6 +861,7 @@ export class Game {
     const card = it.t > 0.8 && it.t < 4.3 ? 0 : it.t > 5 && it.t < 9.8 ? 1 : -1;
     if (card !== it.card) {
       it.card = card;
+      if (card === 0) this.sound.voice("call-welcome");
       this.cinema = card === 0 ? { title: "MEMPHIS", sub: "TENNESSEE · THE 901" } : card === 1 ? { title: "SACKRELIGIOUS", sub: "DROP DAY" } : { title: "", sub: "" };
       this.push();
     }
@@ -858,7 +880,7 @@ export class Game {
     this.camera.fov = 46;
     this.camera.updateProjectionMatrix();
     this.snapCamera();
-    this.say("K Blanco", "Benji! It's Drop Day. Come inside, I got something for you.", CAST.kBlanco.portrait);
+    this.say("K Blanco", "Benji! It's Drop Day. Come inside, I got something for you.", CAST.kBlanco.portrait, "k-drop-day");
     this.push();
   }
 
@@ -929,6 +951,11 @@ export class Game {
     return this.stage.renderer.domElement;
   }
 
+  /** A picture was taken in photo mode. */
+  photoTaken() {
+    this.emit("photo");
+  }
+
   /** Confetti, and nothing else. */
   party(level: 1 | 2 | 3) {
     this.partyAt = this.time;
@@ -995,6 +1022,8 @@ export class Game {
       this.party(2);
       this.buzz([45, 60, 140]);
     }
+    if (r.win) this.sound.voice("call-win");
+    else if (r.record) this.sound.voice("call-new-record");
     this.push();
     if (this.input.pad) setTimeout(() => this.onNav?.("init"), 60);
   }
@@ -1155,7 +1184,8 @@ export class Game {
 
   /** Pay out with every bonus applied. Returns what was actually paid. */
   earn(dollars: number, respect: number, opts: { quiet?: boolean; race?: boolean } = {}) {
-    let d = dollars * (1 + (this.save.owned.length - 1) * COLLECTION_BONUS);
+    const was = rankOf(this.save.respect);
+    let d = dollars * (1 + (this.save.owned.length - 1) * COLLECTION_BONUS) * (1 + was.index * RANK_PAY);
     if (this.time < this.fedUntil) d *= 1.1;
     if (opts.race && this.wearing("tour_black")) d *= 1.1;
     let r = respect;
@@ -1165,6 +1195,11 @@ export class Game {
     this.save.dollars += dd;
     this.save.respect += rr;
     if (dd > 0 && !opts.quiet) this.sound.cash();
+    // A new name in the city's mouth.
+    const now = rankOf(this.save.respect);
+    if (now.index > was.index) {
+      this.rankUp = { name: now.name, left: 0.9 };
+    }
     return { dollars: dd, respect: rr };
   }
 
@@ -1204,17 +1239,38 @@ export class Game {
       (want === "fun_tickets" && kind === "tickets" && n >= 40) ||
       (want === "bought" && kind === "bought") ||
       (want === "wore" && kind === "wore");
-    if (step && hit) {
+    // After the Drop Day a step names what has to happen, how big, and how many times.
+    const goal = step?.goal;
+    let met = false;
+    if (goal && kind === goal.kind && n >= (goal.n ?? -Infinity) && n <= (goal.max ?? Infinity) && extra >= (goal.extra ?? -Infinity)) {
+      this.save.count += 1;
+      met = this.save.count >= (goal.times ?? 1);
+    }
+    // Nothing left on the streets to pick up: the errand is done.
+    if (goal?.kind === "coin" && kind === "coin" && this.coins.left === 0) met = true;
+    if (step && (hit || met)) {
       const got = this.earn(step.pay, step.respect, { quiet: true });
+      const from = chapterOf(this.save.step);
       this.save.step++;
+      this.save.count = 0;
       this.sound.cheer();
       const next = STORY[this.save.step];
+      const to = chapterOf(this.save.step);
       this.toast(`${step.title}: done${got.dollars ? `  +$${got.dollars}` : ""}  +${got.respect} Respect`, 4);
       if (!next) {
         this.moment(3);
-        this.say("K Blanco", "You ran the whole Drop Day. The city's yours now. Check the board for more work.", CAST.kBlanco.portrait);
-      } else if (next.done === "bought" && this.save.owned.length > 1) this.emit("bought");
-      else if (next.done === "wore" && this.save.wearing !== "starter") this.emit("wore");
+        this.say("K Blanco", "Look at you. Drop Day was the audition. This city has your name on it now.", CAST.kBlanco.portrait, "k-finale");
+        this.say("K Blanco", STORE_REWARD.code ? `One more thing. ${STORE_REWARD.note || "Take this to the real store."}  Code: ${STORE_REWARD.code}` : "The board is yours from here. There is always work in Memphis.", CAST.kBlanco.portrait, STORE_REWARD.code ? "" : "k-board-is-yours");
+      } else {
+        if (to && from && to.name !== from.name) {
+          // A chapter closed.
+          this.moment(3);
+          this.say("K Blanco", from.name === "THE DROP DAY" ? "You ran the whole Drop Day. Now the city knows your face. Keep your phone on." : "Half of Memphis is wearing the brand because of you. The other half is about to.", CAST.kBlanco.portrait, from.name === "THE DROP DAY" ? "k-chapter-one" : "k-chapter-two");
+        }
+        if (next.who && next.line) this.say(next.who, next.line, next.who === "K Blanco" ? CAST.kBlanco.portrait : null, `step-${next.id}`);
+        if (next.done === "bought" && this.save.owned.length > 1) this.emit("bought");
+        else if (next.done === "wore" && this.save.wearing !== "starter") this.emit("wore");
+      }
       this.persist();
     } else if (!step) {
       const b = BOUNTIES[this.save.bounty % BOUNTIES.length]!;
@@ -1239,10 +1295,15 @@ export class Game {
   }
 
   private talkK() {
+    if (this.stepId() === "crown") {
+      if (this.wearing("sackrow_11")) return this.emit("crown");
+      this.say("K Blanco", "Where is the eleven? The fitting room is right there. I'll wait.", CAST.kBlanco.portrait, "k-where-is-the-eleven");
+      return;
+    }
     if (this.stepId() === "meet") {
       this.save.flags.carrying = true;
-      this.say("K Blanco", "Fresh off the press. Run this box to Court OG at the 901 Court, east on the river.", CAST.kBlanco.portrait);
-      this.say("K Blanco", "And Benji, everything on these walls is real. Pick a piece, wear it out.", CAST.kBlanco.portrait);
+      this.say("K Blanco", "Fresh off the press. Run this box to Court OG at the 901 Court, east on the river.", CAST.kBlanco.portrait, "k-fresh-off-the-press");
+      this.say("K Blanco", "And Benji, everything on these walls is real. Pick a piece, wear it out.", CAST.kBlanco.portrait, "k-on-these-walls");
       this.emit("met_k");
       return;
     }
@@ -1340,6 +1401,7 @@ export class Game {
     for (let i = 0; i < got; i++) {
       this.coinRun++;
       this.earn((5 + Math.min(10, this.coinRun - 1)) * (this.wearing("fresh_blue") ? 2 : 1), 0, { quiet: true });
+      if (STORY[this.save.step]?.goal?.kind === "coin") this.emit("coin", 1);
     }
     this.coinRunLeft = 4;
     this.sound.cash();
@@ -1609,8 +1671,32 @@ export class Game {
     if (!this.overlay) this.activity?.tap?.(nx, ny);
   }
 
-  say(who: string, text: string, portrait: string | null = null) {
-    this.dialogue.push({ who, text, portrait, left: 2.6 + text.length * 0.05 });
+  /** The music for where he is, most wanted first: whichever of these has been recorded plays. */
+  private tracks(): string[] {
+    const city = this.sky.phase === "night" ? ["city-night", "city-day"] : ["city-day", "city-night"];
+    if (this.mode === "title" || this.intro) return ["title", ...city];
+    if (this.mode === "race") return ["race", "radio", ...city];
+    if (this.mode === "hoops") return ["court", ...city];
+    if (this.mode === "bowl" || this.place === "bowl") return ["bowl", ...city];
+    if (this.place === "fun" || this.place === "laser") return ["funhouse", ...city];
+    if (this.place === "hq") return ["hq", ...city];
+    if (this.mode === "fish") return ["river", ...city];
+    if (this.mode === "drive") return ["radio", ...city];
+    if (!this.room && districtAt(this.pos.x, this.pos.z) === "Beale Street") return ["beale", ...city];
+    return city;
+  }
+
+  private nextLine() {
+    this.dialogue.shift();
+    const d = this.dialogue[0];
+    if (d?.voice) this.sound.voice(d.voice);
+    this.push();
+  }
+
+  /** A line of dialogue. `voice` is the id of its recording, which plays as the line comes up. */
+  say(who: string, text: string, portrait: string | null = null, voice = "") {
+    this.dialogue.push({ who, text, portrait, left: 2.6 + text.length * 0.05, voice });
+    if (this.dialogue.length === 1 && voice) this.sound.voice(voice);
     this.push();
   }
 
@@ -1823,10 +1909,7 @@ export class Game {
       if (best && !this.afterFade) {
         this.dialogue.length = 0;
         best.act();
-      } else if (this.dialogue.length) {
-        this.dialogue.shift();
-        this.push();
-      }
+      } else if (this.dialogue.length) this.nextLine();
     }
     this.chase(dt);
   }
@@ -1940,6 +2023,16 @@ export class Game {
     this.live.fade += clamp(this.fadeTo - this.live.fade, -dt * 3.2, dt * 4.5);
 
     this.fireworks.update(dt);
+    if (this.rankUp && !this.overlay) {
+      this.rankUp.left -= dt;
+      if (this.rankUp.left <= 0) {
+        const name = this.rankUp.name;
+        this.rankUp = null;
+        this.moment(2);
+        this.sound.voice("call-rank-up");
+        this.toast(`New name in Memphis: ${name}. Every job pays more.`, 5);
+      }
+    }
     if (this.overlay === "photo") this.photoCamera();
     if (this.mode === "title") this.titleCamera(dt);
     else if (this.intro) this.runIntro(dt);
@@ -2044,10 +2137,7 @@ export class Game {
     if (this.dialogue.length) {
       const d = this.dialogue[0]!;
       d.left -= dt;
-      if (d.left <= 0) {
-        this.dialogue.shift();
-        this.push();
-      }
+      if (d.left <= 0) this.nextLine();
     }
     if (this.toastLeft > 0) {
       this.toastLeft -= dt;
@@ -2132,6 +2222,7 @@ export class Game {
     const s = this.save;
     const step = STORY[s.step];
     const bounty = BOUNTIES[s.bounty % BOUNTIES.length]!;
+    const chapter = chapterOf(s.step);
     const t = this.target();
     const d = this.dialogue[0];
     const hints: [string, string][] =
@@ -2161,8 +2252,9 @@ export class Game {
       district: this.room ? { hq: "SackReligious HQ", home: "Home", bowl: "901 Bowl", fun: "The Fun House", laser: "Laser Arena" }[this.room.id as Exclude<Place, "street">] : districtAt(this.pos.x, this.pos.z),
       street: this.room ? "" : nearestStreet(this.pos.x, this.pos.z),
       phase: this.sky.phase,
+      rank: rankOf(s.respect),
       mission: step
-        ? { chapter: CHAPTER, index: s.step + 1, total: STORY.length, title: step.title, detail: step.detail }
+        ? { chapter: chapter?.name ?? "", index: chapter?.index ?? 1, total: chapter?.total ?? 1, title: step.title, detail: step.goal?.times ? `${step.detail}  ${Math.min(s.count, step.goal.times)}/${step.goal.times}` : step.detail }
         : { chapter: "BOUNTY BOARD", index: (s.bounty % BOUNTIES.length) + 1, total: BOUNTIES.length, title: bounty.title, detail: `${bounty.detail}  $${bounty.pay}` },
       prompt: this.overlay ? "" : this.mode === "walk" ? this.prompt : this.mode === "drive" ? this.drivePrompt : "",
       hints,
@@ -2199,6 +2291,14 @@ export class Game {
       pad: this.input.pad,
     };
     this.activity?.hud(h);
+    // The announcer reads the big calls out as they come up.
+    const call = h.hoops?.call || h.bowl?.call || h.fish?.call || h.race?.call || h.laser?.call || h.machine?.call || "";
+    if (call !== this.lastCall) {
+      this.lastCall = call;
+      const hit = call ? CALLS.find(([re]) => re.test(call)) : undefined;
+      if (hit) this.sound.voice(hit[1]);
+    }
+    this.sound.setTrack(this.tracks());
     this.onHud(h);
   }
 

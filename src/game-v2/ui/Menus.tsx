@@ -109,6 +109,12 @@ export function Pause({ game, hud }: { game: Game; hud: HudState }) {
           Photo mode
         </button>
       )}
+      <Row label="Your name in Memphis">
+        <div className="text-right">
+          <div className="text-sm font-extrabold text-[#f4d77a]">{hud.rank.name}</div>
+          <div className="text-[11px] text-white/55">{hud.rank.next === null ? "Top of the city." : `${hud.respect} Respect · next name at ${hud.rank.next}`}{hud.rank.index > 0 ? `  ·  jobs pay +${hud.rank.index * 4}%` : ""}</div>
+        </div>
+      </Row>
       <Row label="Graphics">
         <Seg
           value={s.auto ? "auto" : s.quality}

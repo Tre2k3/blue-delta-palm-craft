@@ -258,7 +258,7 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
               <span className="sr-chip">
                 <span className="text-[#f4d77a]">★</span>
                 {hud.respect}
-                <span className="hidden text-[10px] font-bold text-white/50 sm:inline">RESPECT</span>
+                <span className="hidden text-[10px] font-bold uppercase text-white/50 sm:inline">{hud.rank.name}</span>
               </span>
               {(hud.tickets > 0 || hud.place === "fun") && (
                 <span className="sr-chip">

@@ -173,6 +173,7 @@ export class Hoops implements Activity {
       this.started = true;
       this.round();
       this.say(`${r.name}: "${who.line}"  First to ${TO}.`, 3.2);
+      g.sound.voice(`rival-${r.name.toLowerCase().replace(/[^a-z]+/g, "-")}`);
     } else this.say(kind === "practice" ? "Practice. No clock, no pressure." : "Shoot to start the clock", 6);
     this.frame(0, true);
   }

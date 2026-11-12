@@ -1,8 +1,14 @@
 /**
- * All sound is synthesised: no audio files to ship or fail to load.
- * A slow blues shuffle under the city, an engine that follows the car, and one-shots for play.
+ * Sound. Everything can be synthesised, so the game is never silent and nothing can fail to
+ * load: a slow blues shuffle under the city, an engine that follows the car, one-shots for play.
+ *
+ * Recordings take over wherever one has been supplied. `public/game-v2/audio/manifest.json`
+ * lists what there is (voices, effects, music tracks, each an mp3 named by its id); anything
+ * not listed is made up as before.
  */
 type Ctx = AudioContext;
+type Kind = "voice" | "sfx" | "music";
+const BANK = "/game-v2/audio";
 
 const E2 = 82.41;
 const semi = (n: number) => E2 * Math.pow(2, n / 12);
@@ -21,6 +27,17 @@ export class Sound {
   musicOn = true;
   sfxOn = true;
   private volume = 0.8;
+  /** What there are recordings of. */
+  private bank: Record<Kind, Set<string>> = { voice: new Set(), sfx: new Set(), music: new Set() };
+  /** Decoded clips by "kind/id"; null while one is on its way or could not be had. */
+  private clips = new Map<string, AudioBuffer | null>();
+  private asked = false;
+  private voiceGain: GainNode | null = null;
+  private speaking: AudioBufferSourceNode | null = null;
+  /** The recorded track that is playing, the ones fading out under it, and what was last asked for. */
+  private track: { id: string; el: HTMLAudioElement } | null = null;
+  private fading: HTMLAudioElement[] = [];
+  private wanted: string[] = [];
 
   constructor() {
     try {
@@ -56,6 +73,10 @@ export class Sound {
       this.sfxGain = ctx.createGain();
       this.sfxGain.gain.value = this.sfxOn ? 0.9 : 0;
       this.sfxGain.connect(this.master);
+      this.voiceGain = ctx.createGain();
+      this.voiceGain.gain.value = this.sfxOn ? 1 : 0;
+      this.voiceGain.connect(this.master);
+      void this.loadBank();
       const len = ctx.sampleRate * 1.5;
       this.noise = ctx.createBuffer(1, len, ctx.sampleRate);
       const data = this.noise.getChannelData(0);
@@ -78,14 +99,140 @@ export class Sound {
 
   setMusic(on: boolean) {
     this.musicOn = on;
-    if (this.musicGain && this.ctx) this.musicGain.gain.setTargetAtTime(on ? 0.22 * this.bedLevel : 0, this.ctx.currentTime, 0.2);
+    this.setBed(0.2);
     this.save();
   }
 
   setSfx(on: boolean) {
     this.sfxOn = on;
     if (this.sfxGain && this.ctx) this.sfxGain.gain.setTargetAtTime(on ? 0.9 : 0, this.ctx.currentTime, 0.05);
+    if (this.voiceGain && this.ctx) this.voiceGain.gain.setTargetAtTime(on ? 1 : 0, this.ctx.currentTime, 0.05);
     this.save();
+  }
+
+  /** The made-up shuffle plays only while no recorded track does. */
+  private setBed(ease: number) {
+    if (this.musicGain && this.ctx) this.musicGain.gain.setTargetAtTime(this.musicOn && !this.track ? 0.22 * this.bedLevel : 0, this.ctx.currentTime, ease);
+  }
+
+  // ---------------------------------------------------------------- recordings
+
+  private async loadBank() {
+    if (this.asked) return;
+    this.asked = true;
+    try {
+      const r = await fetch(`${BANK}/manifest.json`, { cache: "no-cache" });
+      if (!r.ok) return;
+      const m = (await r.json()) as Partial<Record<Kind, string[]>>;
+      for (const k of ["voice", "sfx", "music"] as const) for (const id of m[k] ?? []) this.bank[k].add(id);
+      // Effects and the announcer are short and wanted on the instant: have them ready.
+      for (const id of this.bank.sfx) void this.clip("sfx", id);
+      for (const id of this.bank.voice) if (id.startsWith("call-")) void this.clip("voice", id);
+      if (this.wanted.length) this.setTrack(this.wanted);
+    } catch {
+      // No recordings: everything is made up, as it always could be.
+    }
+  }
+
+  private async clip(kind: "voice" | "sfx", id: string) {
+    const key = `${kind}/${id}`;
+    const have = this.clips.get(key);
+    if (have !== undefined) return have;
+    this.clips.set(key, null);
+    try {
+      const r = await fetch(`${BANK}/${key}.mp3`);
+      if (!r.ok || !this.ctx) return null;
+      const buf = await this.ctx.decodeAudioData(await r.arrayBuffer());
+      this.clips.set(key, buf);
+      return buf;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Plays a recorded effect if one is ready. False means: make the sound up. */
+  private sample(id: string, gain = 1) {
+    if (!this.ctx || !this.sfxGain || !this.bank.sfx.has(id)) return false;
+    const buf = this.clips.get(`sfx/${id}`);
+    if (!buf) return false;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    const g = this.ctx.createGain();
+    g.gain.value = Math.max(0, Math.min(1.5, gain));
+    src.connect(g).connect(this.sfxGain);
+    src.start();
+    return true;
+  }
+
+  /**
+   * A recorded line, by id. A character's line cuts off whoever was speaking; an announcer's
+   * call (`call-…`) plays over the top. Returns whether there is a recording of it.
+   */
+  voice(id: string) {
+    if (!this.ctx || !this.voiceGain || !this.bank.voice.has(id)) return false;
+    const call = id.startsWith("call-");
+    void this.clip("voice", id).then((buf) => {
+      if (!buf || !this.ctx || !this.voiceGain) return;
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(this.voiceGain);
+      if (!call) {
+        try {
+          this.speaking?.stop();
+        } catch {
+          // Already finished.
+        }
+        this.speaking = src;
+        src.onended = () => {
+          if (this.speaking === src) this.speaking = null;
+        };
+      }
+      src.start();
+    });
+    return true;
+  }
+
+  /** What there are recordings of, for tools and tests. */
+  get recorded() {
+    return { voice: [...this.bank.voice], sfx: [...this.bank.sfx], music: [...this.bank.music], playing: this.track?.id ?? null };
+  }
+
+  /**
+   * The music for where Benji is: the first of these tracks there is a recording of plays on
+   * a loop, and the made-up shuffle stands down. With none of them recorded the shuffle plays.
+   */
+  setTrack(wanted: string[]) {
+    this.wanted = wanted;
+    const id = wanted.find((w) => this.bank.music.has(w)) ?? null;
+    if (id === (this.track?.id ?? null)) return;
+    if (this.track) this.fading.push(this.track.el);
+    this.track = null;
+    if (id && typeof Audio !== "undefined") {
+      const el = new Audio(`${BANK}/music/${id}.mp3`);
+      el.loop = true;
+      el.volume = 0;
+      void el.play().catch(() => undefined);
+      this.track = { id, el };
+    }
+    this.setBed(0.4);
+  }
+
+  /** Recorded tracks ease to their level, and the ones on the way out ease to nothing. */
+  private easeTracks() {
+    if (this.track) {
+      const want = (this.musicOn ? 0.5 : 0) * this.bedLevel * (this.hushed ? 0 : this.ducked ? 0.35 : 1) * this.volume;
+      const el = this.track.el;
+      el.volume = Math.max(0, Math.min(1, el.volume + (want - el.volume) * 0.2));
+    }
+    for (let i = this.fading.length - 1; i >= 0; i--) {
+      const el = this.fading[i]!;
+      el.volume = Math.max(0, el.volume * 0.78 - 0.004);
+      if (el.volume <= 0.005) {
+        el.pause();
+        el.src = "";
+        this.fading.splice(i, 1);
+      }
+    }
   }
 
   private bedLevel = 1;
@@ -95,7 +242,7 @@ export class Sound {
     const next = Math.max(0, Math.min(1, k));
     if (Math.abs(next - this.bedLevel) < 0.01) return;
     this.bedLevel = next;
-    if (this.musicGain && this.ctx) this.musicGain.gain.setTargetAtTime(this.musicOn ? 0.22 * next : 0, this.ctx.currentTime, 0.12);
+    this.setBed(0.12);
   }
 
   private ducked = false;
@@ -160,6 +307,7 @@ export class Sound {
   /** Twelve-bar shuffle in E: walking bass, a soft chord stab, brushed hats. */
   private schedule() {
     const ctx = this.ctx;
+    this.easeTracks();
     if (!ctx || !this.musicGain) return;
     const step = 60 / 92 / 3;
     while (this.nextBeat < ctx.currentTime + 0.3) {
@@ -242,69 +390,71 @@ export class Sound {
     this.engine.gain.gain.setTargetAtTime(0.05 + rev * 0.07, t, 0.08);
   }
 
-  private one(fn: (t: number, out: AudioNode) => void) {
+  /** One effect, by name: the recording if there is one, made up if not. */
+  private one(name: string, fn: (t: number, out: AudioNode) => void, gain = 1) {
     if (!this.ctx || !this.sfxGain || !this.sfxOn) return;
+    if (this.sample(name, gain)) return;
     fn(this.ctx.currentTime + 0.005, this.sfxGain);
   }
 
   ui() {
-    this.one((t, o) => this.tone(880, "sine", t, 0.12, 0.004, 0.07, o));
+    this.one("ui", (t, o) => this.tone(880, "sine", t, 0.12, 0.004, 0.07, o));
   }
   step() {
-    this.one((t, o) => this.hiss(t, 0.035, 0.002, 0.04, 900, 1.5, o));
+    this.one("step", (t, o) => this.hiss(t, 0.035, 0.002, 0.04, 900, 1.5, o));
   }
   cash() {
-    this.one((t, o) => {
+    this.one("cash", (t, o) => {
       this.tone(1318, "triangle", t, 0.2, 0.004, 0.12, o);
       this.tone(1760, "triangle", t + 0.08, 0.22, 0.004, 0.22, o);
     });
   }
   bad() {
-    this.one((t, o) => this.tone(196, "sawtooth", t, 0.14, 0.01, 0.22, o, 0.6));
+    this.one("bad", (t, o) => this.tone(196, "sawtooth", t, 0.14, 0.01, 0.22, o, 0.6));
   }
   door() {
-    this.one((t, o) => {
+    this.one("door", (t, o) => {
       this.tone(140, "sine", t, 0.3, 0.005, 0.14, o, 0.6);
       this.hiss(t, 0.08, 0.004, 0.1, 500, 1, o);
     });
   }
   bounce(power = 1) {
-    this.one((t, o) => {
+    this.one("bounce", (t, o) => {
       this.tone(118, "sine", t, 0.42 * power, 0.003, 0.11, o, 0.55);
       this.hiss(t, 0.06 * power, 0.002, 0.03, 1400, 1, o);
     });
   }
   rim() {
-    this.one((t, o) => {
+    this.one("rim", (t, o) => {
       this.tone(740, "square", t, 0.07, 0.002, 0.16, o);
       this.tone(1110, "triangle", t, 0.09, 0.002, 0.22, o);
     });
   }
   board() {
-    this.one((t, o) => this.tone(210, "triangle", t, 0.3, 0.002, 0.1, o, 0.7));
+    this.one("board", (t, o) => this.tone(210, "triangle", t, 0.3, 0.002, 0.1, o, 0.7));
   }
   swish() {
-    this.one((t, o) => this.hiss(t, 0.3, 0.02, 0.26, 4200, 0.8, o, "bandpass", 0.4));
+    this.one("swish", (t, o) => this.hiss(t, 0.3, 0.02, 0.26, 4200, 0.8, o, "bandpass", 0.4));
   }
   release() {
-    this.one((t, o) => this.hiss(t, 0.1, 0.01, 0.09, 2400, 1, o, "bandpass", 1.8));
+    this.one("release", (t, o) => this.hiss(t, 0.1, 0.01, 0.09, 2400, 1, o, "bandpass", 1.8));
   }
   cheer() {
-    this.one((t, o) => {
+    this.one("cheer", (t, o) => {
       this.hiss(t, 0.2, 0.2, 1.1, 1500, 0.6, o);
       this.hiss(t + 0.1, 0.12, 0.3, 0.9, 2600, 0.7, o);
     });
   }
   /** A camera: the curtain there and back. */
   shutter() {
-    this.one((t, o) => {
+    this.one("shutter", (t, o) => {
       this.hiss(t, 0.22, 0.001, 0.03, 5200, 0.9, o, "highpass");
       this.hiss(t + 0.07, 0.16, 0.001, 0.04, 3800, 0.9, o, "highpass");
     });
   }
   /** A shell going off over the river. */
   boom() {
-    this.one((t, o) => {
+    this.one("boom", (t, o) => {
       this.hiss(t, 0.5, 0.004, 0.5, 150, 0.7, o, "lowpass");
       this.hiss(t + 0.04, 0.14, 0.01, 0.9, 3200, 0.5, o, "bandpass", 0.5);
       this.tone(74, "sine", t, 0.4, 0.005, 0.36, o, 0.5);
@@ -312,33 +462,33 @@ export class Sound {
   }
   /** Four rising notes for a win. */
   fanfare() {
-    this.one((t, o) => {
+    this.one("fanfare", (t, o) => {
       [0, 4, 7, 12].forEach((n, i) => this.tone(392 * Math.pow(2, n / 12), "triangle", t + i * 0.09, 0.15, 0.006, i === 3 ? 0.5 : 0.16, o));
     });
   }
   whoosh() {
-    this.one((t, o) => this.hiss(t, 0.2, 0.08, 0.3, 600, 1.2, o, "bandpass", 5));
+    this.one("whoosh", (t, o) => this.hiss(t, 0.2, 0.08, 0.3, 600, 1.2, o, "bandpass", 5));
   }
   splash(power = 1) {
-    this.one((t, o) => {
+    this.one("splash", (t, o) => {
       this.hiss(t, 0.3 * power, 0.01, 0.34, 2600, 0.7, o, "bandpass", 0.3);
       this.tone(160, "sine", t, 0.18 * power, 0.004, 0.16, o, 0.5);
     });
   }
   reel() {
-    this.one((t, o) => this.tone(1200 + Math.random() * 200, "square", t, 0.018, 0.001, 0.025, o));
+    this.one("reel", (t, o) => this.tone(1200 + Math.random() * 200, "square", t, 0.018, 0.001, 0.025, o));
   }
   bite() {
-    this.one((t, o) => {
+    this.one("bite", (t, o) => {
       this.tone(660, "triangle", t, 0.2, 0.004, 0.09, o);
       this.tone(990, "triangle", t + 0.09, 0.22, 0.004, 0.14, o);
     });
   }
   roll() {
-    this.one((t, o) => this.hiss(t, 0.16, 0.2, 1.6, 180, 0.8, o, "lowpass"));
+    this.one("roll", (t, o) => this.hiss(t, 0.16, 0.2, 1.6, 180, 0.8, o, "lowpass"));
   }
   pins(count: number) {
-    this.one((t, o) => {
+    this.one("pins", (t, o) => {
       const n = Math.max(1, Math.min(10, count));
       for (let i = 0; i < n + 2; i++) {
         const at = t + Math.random() * 0.28;
@@ -348,28 +498,28 @@ export class Sound {
     });
   }
   countdown(go = false) {
-    this.one((t, o) => this.tone(go ? 880 : 440, "square", t, 0.14, 0.005, go ? 0.5 : 0.16, o));
+    this.one(go ? "go" : "countdown", (t, o) => this.tone(go ? 880 : 440, "square", t, 0.14, 0.005, go ? 0.5 : 0.16, o));
   }
   skid(power = 1) {
-    this.one((t, o) => this.hiss(t, 0.1 * power, 0.02, 0.2, 1800, 4, o));
+    this.one("skid", (t, o) => this.hiss(t, 0.1 * power, 0.02, 0.2, 1800, 4, o));
   }
   crash(power = 1) {
-    this.one((t, o) => {
+    this.one("crash", (t, o) => {
       this.hiss(t, 0.4 * power, 0.003, 0.24, 800, 0.6, o, "lowpass");
       this.tone(70, "sine", t, 0.4 * power, 0.003, 0.2, o, 0.5);
     });
   }
   horn() {
-    this.one((t, o) => {
+    this.one("horn", (t, o) => {
       this.tone(392, "square", t, 0.09, 0.01, 0.3, o);
       this.tone(494, "square", t, 0.09, 0.01, 0.3, o);
     });
   }
   nitro() {
-    this.one((t, o) => this.hiss(t, 0.3, 0.05, 0.7, 500, 0.8, o, "bandpass", 6));
+    this.one("nitro", (t, o) => this.hiss(t, 0.3, 0.05, 0.7, 500, 0.8, o, "bandpass", 6));
   }
   spook() {
-    this.one((t, o) => {
+    this.one("spook", (t, o) => {
       this.tone(98, "sawtooth", t, 0.16, 0.3, 1.1, o, 0.7);
       this.tone(104, "sawtooth", t, 0.14, 0.3, 1.1, o, 0.7);
     });

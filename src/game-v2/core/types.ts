@@ -54,6 +54,8 @@ export type Save = {
   car: { x: number; z: number; heading: number };
   bounty: number;
   played: number;
+  /** How many times the thing the current step counts has happened. */
+  count: number;
 };
 
 export type MissionCard = { chapter: string; index: number; total: number; title: string; detail: string };
@@ -106,6 +108,8 @@ export type HudState = {
   place: Place;
   dollars: number;
   respect: number;
+  /** What Memphis calls him, and the Respect the next name comes at (null at the top). */
+  rank: { name: string; index: number; next: number | null };
   tickets: number;
   district: string;
   street: string;
