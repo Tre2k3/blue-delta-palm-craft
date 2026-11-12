@@ -67,10 +67,10 @@ export const characters = {
     // Canonical identity PNGs. Screen-left is the three-quarter file;
     // the file named "left" actually faces screen-right.
     views: {
-      front: cut("/game-v2/characters/benji/front.png", 200, 535, 1),
-      back: cut("/game-v2/characters/benji/back.png", 197, 515, 1),
-      left: cut("/game-v2/characters/benji/left.png", 216, 530, 1),
-      right: cut("/game-v2/characters/benji/right.png", 227, 538, 1),
+      front: cut("/game-v2/characters/benji/front.png", 196, 530, 0),
+      back: cut("/game-v2/characters/benji/back.png", 193, 511, 0),
+      left: cut("/game-v2/characters/benji/left.png", 212, 526, 0),
+      right: cut("/game-v2/characters/benji/right.png", 223, 534, 0),
       walk: cut("/game-v2/characters/benji/walk.png", 672, 1649, 0),
     },
     bible: "01_Benji/00_Canonical_Identity/",

@@ -1,7 +1,7 @@
 import type { CardArt } from "../actors/card";
 import { characters } from "./characters";
 
-const V = "?v=6";
+const V = "?v=7";
 const turn = (folder: string): CardArt => ({
   front: `/game-v2/characters/${folder}/front.png${V}`,
   back: `/game-v2/characters/${folder}/back.png${V}`,
@@ -63,7 +63,7 @@ function strides(id: string, size: Strides): Pick<CardArt, "walk" | "scale"> {
   };
 }
 
-const starterWalk = strides("starter", [1.045, 1.028, 1.041, 1.036, 1.045, 1.003]);
+const starterWalk = strides("starter", [1.045, 1.03, 1.0, 0.995, 1.005, 0.97]);
 
 /** Benji in each fit he has art for, what wearing it does, and where it comes from. */
 export const OUTFITS: Record<OutfitId, { name: string; art: CardArt; perk: string; from: string }> = {
