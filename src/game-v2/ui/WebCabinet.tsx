@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeft, ExternalLink, Lock, Maximize2, Minimize2, RotateCw, TriangleAlert } from "lucide-react";
+import { ArrowLeft, ExternalLink, Lock, Maximize2, Minimize2, RotateCw, Smartphone, TriangleAlert } from "lucide-react";
 import type { Game } from "../game";
 import { CABINETS, type Cabinet } from "../play/goods";
 
@@ -39,6 +39,8 @@ export function WebCabinet({ game, cab }: { game: Game; cab: Cabinet }) {
   const [scale, setScale] = useState(1);
   const [full, setFull] = useState(false);
   const [slow, setSlow] = useState(false);
+  /** A phone or tablet held upright. These games are made for a wide screen, so the cabinet asks for the turn. */
+  const [upright, setUpright] = useState(false);
   const tabs = CABINETS.filter((c) => c.link);
   const url = new URL(cab.link!);
   const fw = embed?.ok ? embed.width : 1280;
@@ -82,6 +84,23 @@ export function WebCabinet({ game, cab }: { game: Game; cab: Cabinet }) {
     return () => ro.disconnect();
   }, [fw, fh, full]);
 
+  // Only a touch screen is asked to turn: a tall browser window on a desk is nobody's phone.
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const tall = window.matchMedia("(orientation: portrait)");
+    const touch = window.matchMedia("(pointer: coarse)");
+    const on = () => setUpright(tall.matches && touch.matches);
+    on();
+    tall.addEventListener("change", on);
+    touch.addEventListener("change", on);
+    window.addEventListener("resize", on);
+    return () => {
+      tall.removeEventListener("change", on);
+      touch.removeEventListener("change", on);
+      window.removeEventListener("resize", on);
+    };
+  }, []);
+
   useEffect(() => {
     const on = () => setFull(document.fullscreenElement === win.current);
     document.addEventListener("fullscreenchange", on);
@@ -117,10 +136,24 @@ export function WebCabinet({ game, cab }: { game: Game; cab: Cabinet }) {
     return () => clearTimeout(t);
   }, [phase, load]);
 
+  /**
+   * Where the phone allows it (Android does, once the page is full screen; an iPhone never does),
+   * turn the screen for the player. Everywhere else the cabinet asks them to turn it themselves.
+   */
+  const turn = () => {
+    const el = win.current;
+    const so = typeof screen !== "undefined" ? (screen.orientation as (ScreenOrientation & { lock?: (o: string) => Promise<void> }) | undefined) : undefined;
+    if (!el || !so?.lock || !el.requestFullscreen) return;
+    void el
+      .requestFullscreen()
+      .then(() => so.lock!("landscape"))
+      .catch(() => undefined);
+  };
   const start = () => {
     setSlow(false);
     setLoad((n) => n + 1);
     setPhase(embed && !embed.ok ? "failed" : "loading");
+    if (upright) turn();
   };
   const retry = () => {
     known.delete(cab.id);
@@ -245,6 +278,23 @@ export function WebCabinet({ game, cab }: { game: Game; cab: Cabinet }) {
           </div>
         )}
       </div>
+      {/* Held upright, the phone is asked to turn before anything else: the whole screen, not the little page. */}
+      {upright && (
+        <div data-turn className="fixed inset-0 z-[70] flex flex-col items-center justify-center gap-4 bg-[#06050b]/[0.97] p-6 text-center">
+          <Smartphone size={72} className="sr-turn text-[#39ff14]" />
+          <div className="sr-title text-3xl text-white">Turn your phone sideways</div>
+          <p className="max-w-xs text-base text-white/80">{cab.name} is made for a wide screen. Hold the phone on its side to play.</p>
+          <p className="max-w-xs text-[13px] leading-snug text-white/60">
+            Picture not turning? Switch <span className="font-bold text-white/85">Auto-rotate</span> on. Android: swipe down from the top and tap Auto-rotate. iPhone: open Control Centre and tap the rotation lock so it is off.
+          </p>
+          <button className="sr-btn sr-btn-green px-7 py-3" onClick={turn}>
+            Turn it for me
+          </button>
+          <button className="sr-btn sr-btn-ghost px-6 py-2.5" onClick={() => game.close()}>
+            Back to the floor
+          </button>
+        </div>
+      )}
       {/* Status bar. */}
       <div className="flex items-center justify-between gap-3 bg-[#0c0d10] px-3 py-1 text-[11px] text-white/55">
         <span className="truncate">{status}</span>

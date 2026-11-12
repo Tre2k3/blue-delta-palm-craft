@@ -18,6 +18,9 @@ export const DAILIES: Daily[] = [
   { id: "kart", title: "Top step", detail: "Win a go-kart race at the Fun House.", goal: { kind: "kart", max: 1 } },
   { id: "photo", title: "Postcard home", detail: "Take a picture in photo mode.", goal: { kind: "photo" } },
   { id: "table", title: "Table talk", detail: "Win a game at a table in Orange Mound Park.", goal: { kind: "tablewin", n: 1 } },
+  { id: "putt", title: "Short game", detail: "Finish nine holes at Sack Putt in 23 strokes or fewer.", goal: { kind: "putt", max: 23 } },
+  { id: "tennis", title: "Break point", detail: "Beat Coach Renee at the Park Avenue Courts.", goal: { kind: "tennis", n: 1 } },
+  { id: "cornhole", title: "Bags", detail: "Beat Mr. Willie at cornhole, first to 21.", goal: { kind: "cornhole", n: 1 } },
 ];
 
 /** The date where the player is, as 2026-11-12. */

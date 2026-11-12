@@ -1,3 +1,4 @@
+import { COURTS_LOT, HOLES, PUTT_LOT, TENNIS, TENNIS_FENCE } from "../world/rec-map";
 import { ARENA, BOWL, COURT, FAR_BANK_Z, FUN, HOME, HQ, KART_TRACK, PARK, PARK_TERRACE, PIER, POIS, RACE_LOOP, RIVER_Z, ROAD_HALF, STREETS_X, STREETS_Z, STREET_NAMES_X, STREET_NAMES_Z, TRUCKS, slab } from "../world/map";
 
 export type MapView = { cx: number; cz: number; scale: number };
@@ -34,6 +35,17 @@ export function drawMap(g: CanvasRenderingContext2D, w: number, h: number, v: Ma
   box(PARK.cx - 1.4, PARK.minZ, PARK.cx + 1.4, PARK.maxZ, "#4a4640");
   box(PARK.minX, PARK.cz - 1.4, PARK.maxX, PARK.cz + 1.4, "#4a4640");
   box(PARK_TERRACE.minX, PARK_TERRACE.minZ, PARK_TERRACE.maxX, PARK_TERRACE.maxZ, "#5a5148");
+  // The rec grounds on Park Avenue: nine strips of felt, and the court with its net.
+  box(PUTT_LOT.minX, PUTT_LOT.minZ, PUTT_LOT.maxX, PUTT_LOT.maxZ, "#245c2e");
+  for (const h of HOLES) {
+    const xs = h.outline.map((q) => q[0]);
+    const zs = h.outline.map((q) => q[1]);
+    box(h.at[0] + Math.min(...xs), h.at[1] + Math.min(...zs), h.at[0] + Math.max(...xs), h.at[1] + Math.max(...zs), "#2fae5c");
+  }
+  box(COURTS_LOT.minX, COURTS_LOT.minZ, COURTS_LOT.maxX, COURTS_LOT.maxZ, "#245c2e");
+  box(TENNIS_FENCE.minX, TENNIS_FENCE.minZ, TENNIS_FENCE.maxX, TENNIS_FENCE.maxZ, "#2f7d52");
+  box(TENNIS.cx - TENNIS.half, TENNIS.cz - TENNIS.wide - TENNIS.alley, TENNIS.cx + TENNIS.half, TENNIS.cz + TENNIS.wide + TENNIS.alley, "#2a5ea8");
+  box(TENNIS.cx - 0.25, TENNIS.cz - TENNIS.wide - TENNIS.alley - 0.6, TENNIS.cx + 0.25, TENNIS.cz + TENNIS.wide + TENNIS.alley + 0.6, "#f4f1ea");
   g.fillStyle = "#3aa6d0";
   g.beginPath();
   g.arc(X(PARK.cx), Z(PARK.cz), 3.2 * S, 0, Math.PI * 2);

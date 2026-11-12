@@ -17,7 +17,10 @@ import { Sacks } from "./play/sacks";
 import { PHASES, Sky, type Phase } from "./gfx/sky";
 import { Bowling } from "./play/bowling";
 import { CATALOG, COLLECTION_BONUS, productById } from "./play/catalog";
+import { Cornhole } from "./play/cornhole";
 import { FISH, Fishing } from "./play/fishing";
+import { Putt } from "./play/putt";
+import { Tennis } from "./play/tennis";
 import { BallPit, Bounce, KartRace } from "./play/fun";
 import { LaserTag } from "./play/laser";
 import { CABINETS, FOOD, FOOD_TRUCKS, PRIZES, type TruckId } from "./play/goods";
@@ -31,8 +34,10 @@ import { PopShot, Whack } from "./play/machines";
 import { StreetRace } from "./play/race";
 import { BOUNTIES, CHAPTERS, RANKS, RANK_PAY, STORE_REWARD, STORY, chapterOf, rankBadge, rankOf } from "./play/story";
 import { buildCity, type City } from "./world/city";
+import { buildSkyShow, type SkyShow } from "./world/skyshow";
 import { pushCircle, pushOut, sight } from "./world/collide";
 import { buildFunRoom, buildLaserRoom, type FunRoom, type LaserRoom } from "./world/funhouse";
+import { CORNHOLE, CORNHOLE_STAND, HOLES, PUTT_PAR, PUTT_STAND, TENNIS_GATE } from "./world/rec-map";
 import { BOWL, FUN, HQ, PARK, PARK_TABLES, POIS, RACE_MEET, RIVER_Z, ROAD_HALF, ROOM, STREETS_X, STREETS_Z, TRUCKS, WALK, districtAt, nearestStreet } from "./world/map";
 import { LANE, buildBowlRoom, buildHomeRoom, buildHqRoom, type BowlRoom, type HomeRoom, type HqRoom, type Room } from "./world/rooms";
 
@@ -195,7 +200,7 @@ export class Game {
   room: Room | null = null;
   activity: Activity | null = null;
   /** The art tables, where tools and tests can read them. */
-  readonly tables = { OUTFITS, PEDS, BALLERS, CAST, VENDORS, STORY, CHAPTERS, RIDES, POSTCARDS };
+  readonly tables = { OUTFITS, PEDS, BALLERS, CAST, VENDORS, STORY, CHAPTERS, RIDES, POSTCARDS, POIS, HOLES, PUTT_PAR };
   pos = { x: START.x, z: START.z };
   vel = { x: 0, z: 0 };
   heading = 0;
@@ -299,6 +304,11 @@ export class Game {
   private hoops: Hoops;
   private bowling: Bowling;
   private fishing: Fishing;
+  /** The blimp and the searchlights. */
+  readonly skyShow: SkyShow;
+  private cornhole: Cornhole;
+  private putt: Putt;
+  private tennis: Tennis;
   private race: StreetRace;
   private kart: KartRace;
   private laser: LaserTag;
@@ -334,6 +344,8 @@ export class Game {
     this.hasSave = !!saved;
     this.save = saved ?? freshSave();
     this.city = buildCity();
+    this.skyShow = buildSkyShow();
+    this.city.exterior.add(this.skyShow.group);
     this.scene = this.city.scene;
     this.auto = !qualityIsChosen();
     this.stage = makeStage(canvas, this.scene, pickQuality());
@@ -379,6 +391,9 @@ export class Game {
     this.hoops = new Hoops(this);
     this.bowling = new Bowling(this);
     this.fishing = new Fishing(this);
+    this.cornhole = new Cornhole(this);
+    this.putt = new Putt(this);
+    this.tennis = new Tennis(this);
     this.race = new StreetRace(this);
     this.kart = new KartRace(this);
     this.laser = new LaserTag(this);
@@ -878,6 +893,25 @@ export class Game {
     });
     // The park: walk up to the open seat at any table.
     for (const t of PARK_TABLES) this.spot("street", t.x, t.z + 1.2, 1.25, `Sit down: ${t.name}`, () => this.board.sit(t.id));
+    // The rec grounds on Park Avenue.
+    this.spot("street", PUTT_STAND.x, PUTT_STAND.z, 2, "Putt-putt: nine holes", () => {
+      this.transition(() => {
+        this.begin(this.putt, "whack");
+        this.putt.start();
+      });
+    });
+    this.spot("street", TENNIS_GATE.x, TENNIS_GATE.z, 2, "Tennis: first to three games", () => {
+      this.transition(() => {
+        this.begin(this.tennis, "whack");
+        this.tennis.start();
+      });
+    });
+    this.spot("street", CORNHOLE_STAND.x - 0.4, CORNHOLE.nearZ + 1.9, 1.7, "Cornhole: first to 21", () => {
+      this.transition(() => {
+        this.begin(this.cornhole, "whack");
+        this.cornhole.start();
+      });
+    });
 
     this.spot("fun", fun.kartDoor.x, fun.kartDoor.z, 1.8, "Go-karts: 5 laps", () => {
       this.transition(() => {
@@ -2437,6 +2471,12 @@ export class Game {
     this.benji.heading = this.heading;
     this.benji.update(paused ? 0 : dt, cam, this.tint, this.floorY);
     const speaker = this.dialogue[0]?.who;
+    // The regulars on the rec grounds, and the paddle wheel on the sixth, whether or not anyone is playing.
+    if (!this.room) {
+      if (this.activity !== this.cornhole) this.cornhole.idle(dt);
+      if (this.activity !== this.tennis) this.tennis.idle(dt);
+      if (this.activity !== this.putt) this.putt.idle(paused ? 0 : dt);
+    }
     for (const n of this.npcs) {
       if (n.place !== this.place) continue;
       const d = Math.hypot(this.pos.x - n.x, this.pos.z - n.z);
@@ -2478,6 +2518,7 @@ export class Game {
     this.sound.setRain(this.mode === "title" ? 0 : wx.rain, !out);
     if (out) {
       this.city.update(dt, this.time);
+      this.skyShow.update(paused ? 0 : dt, this.time, look.lights);
       if (!paused) {
         const blockers = this.mode === "walk" ? [{ x: this.pos.x, z: this.pos.z, radius: 0.5, speed: 0 }] : [];
         blockers.push({ x: this.driver.x, z: this.driver.z, radius: 1.4, speed: this.driver.speed });

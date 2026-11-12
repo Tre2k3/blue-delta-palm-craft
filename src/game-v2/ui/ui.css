@@ -176,3 +176,21 @@
   outline: 2px solid var(--sr-green);
   outline-offset: 2px;
 }
+
+/* The phone on the turn-your-phone card: tips over onto its side, waits, and stands back up. */
+.sr-turn {
+  animation: sr-turn 2.4s ease-in-out infinite;
+}
+@keyframes sr-turn {
+  0%,
+  18% {
+    transform: rotate(0deg);
+  }
+  42%,
+  78% {
+    transform: rotate(-90deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}

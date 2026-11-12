@@ -1,11 +1,12 @@
 import * as THREE from "three";
 import { paintMat, tex } from "../gfx/tex";
 import { garage, house, lotSurface, midrise, mural, shopRow, tower } from "./buildings";
-import { MAT, Frame, YAW, addSolid, bench, bush, emissiveMat, facade, globeLamp, neon, poolMat, sign, std, storefront, tree, type BuildCtx } from "./kit";
+import { MAT, Frame, YAW, addSolid, bench, bush, emissiveMat, facade, globeLamp, neon, poolMat, sign, std, storefront, tree, type BuildCtx, makeCtx } from "./kit";
 import { ARENA, BOWL, CURB, HOME, lot, rect, STREETS_X } from "./map";
 import { blockText } from "./riverfront";
 import { buildFunExterior } from "./funhouse";
 import { buildPark, resetPark, resetParkArt } from "./park";
+import { buildRec, resetRec } from "./rec";
 
 const Y0 = CURB;
 
@@ -338,8 +339,11 @@ function neighborhood(ctx: BuildCtx) {
     }
     lotSurface(ctx, L, "grass");
     const xs = [L.minX + 8, (L.minX + L.maxX) / 2, L.maxX - 8];
-    // Park Avenue side.
-    for (const x of xs) house(ctx, x, 97.4, YAW.south, n++);
+    // Park Avenue side. On the two middle blocks this is the rec grounds now: the three bungalows
+    // are still dreamt up, in their old order, so every other house and tree in the city is where
+    // it was. They are just not built.
+    const south = c === 1 || c === 2 ? { ...makeCtx(0), rand: ctx.rand } : ctx;
+    for (const x of xs) house(south, x, 97.4, YAW.south, n++);
     // Back fences and yard trees.
     for (let x = L.minX + 3; x < L.maxX - 2; x += 7) {
       if (ctx.rand() > 0.35) tree(ctx, x + ctx.rand() * 3, 83 + ctx.rand() * 3, 1.1 + ctx.rand() * 0.4, Y0, c === 1);
@@ -360,6 +364,7 @@ function neighborhood(ctx: BuildCtx) {
       church(ctx, 42, 72);
     }
   }
+  buildRec(ctx);
   return { homeDoor, homeWalk };
 }
 
@@ -372,6 +377,7 @@ function lotDrive() {
 }
 
 export function resetBlocks() {
+  resetRec();
   drive = null;
   resetPark();
   resetParkArt();

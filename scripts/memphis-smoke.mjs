@@ -1504,6 +1504,189 @@ try {
   check(pics.talking.pose === "talk" && pics.talking.file === "talk.webp" && pics.quiet === null, "whoever is talking is drawn talking", { talking: pics.talking, quiet: pics.quiet });
   check(pics.still > 0 && pics.hands > 5 && pics.after, "people in the crowd throw their hands up when they jump, and put them down again", { standing: pics.still, frames: pics.hands, after: pics.after });
   check(pics.drive.started.on && pics.drive.started.turn === "air" && /dunk-back/.test(pics.drive.up) && pics.drive.scored === 2 && pics.drive.turn === "you", "a better player can take an open look to the rim and throw it down for two", pics.drive);
+  // The rec grounds on Park Avenue: putt-putt, cornhole and tennis; and what flies over the city.
+  const rec = await page.evaluate(() => {
+    const g = window.__GAME__;
+    const { POIS, HOLES, PUTT_PAR } = g.tables;
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    const run = (n, dt = 1 / 30) => {
+      for (let i = 0; i < n; i++) g.tick(dt);
+    };
+    const settle = () => {
+      if (g.overlay) g.close();
+      run(4);
+      if (g.activity) g.activity.quit();
+      run(6);
+    };
+    settle();
+    const quiet = new Proxy({}, { get: () => () => {} });
+    const sound = g.sound;
+    // The spots are there to walk up to, and the map knows both places.
+    const stops = { putt: POIS.find((q) => q.id === "putt"), courts: POIS.find((q) => q.id === "courts") };
+    const spots = ["Putt-putt", "Tennis", "Cornhole"].map((w) => g.spots.some((q) => q.label().startsWith(w)));
+
+    // ---- putt-putt
+    g.begin(g.putt, "whack");
+    g.putt.start();
+    const p = g.putt;
+    const rollOut = () => {
+      for (let i = 0; i < 1500 && p.state.phase === "roll"; i++) g.tick(1 / 60);
+    };
+    const aimed = { x: p.x, z: p.z };
+    p.putt(Math.PI, (p.sweet[0] + p.sweet[1]) / 2);
+    rollOut();
+    const ace = { strokes: p.strokes, phase: p.state.phase, from: aimed };
+    run(90);
+    const second = p.state.hole;
+    // The hill: a soft putt comes back down, a firm one stays up.
+    const hill = HOLES.findIndex((h) => h.ramp);
+    p.tee(hill);
+    const top = HOLES[hill].ramp.h;
+    p.putt(p.aim, 0.2);
+    rollOut();
+    const soft = { z: +p.z.toFixed(2), up: Math.abs(p.z - HOLES[hill].tee[1]) > 5.5, strokes: p.strokes };
+    p.tee(hill);
+    p.putt(p.aim, (p.sweet[0] + p.sweet[1]) / 2);
+    rollOut();
+    const firm = { over: p.state.phase === "sunk" || Math.abs(p.z - HOLES[hill].ramp.z1) < 3 === (Math.sign(p.z - HOLES[hill].ramp.z1) === Math.sign(HOLES[hill].ramp.z1 - HOLES[hill].ramp.z0) || p.state.phase === "sunk"), phase: p.state.phase };
+    // The paddle wheel: shut, the ball stays this side of it; open, it goes through.
+    const wh = HOLES.findIndex((h) => h.wheel);
+    const gateZ = HOLES[wh].wheel.gap[1];
+    const side = Math.sign(HOLES[wh].tee[1] - gateZ);
+    p.tee(wh);
+    for (let i = 0; i < 400 && !p.state.shut; i++) g.tick(1 / 120);
+    // Hard enough to be there before the paddle has moved on.
+    const hold = p.turn;
+    const keep = p.idle.bind(p);
+    p.idle = () => {};
+    p.turn = hold;
+    p.putt(p.aim, 0.5);
+    rollOut();
+    const blocked = Math.sign(p.z - gateZ) === side && p.state.phase !== "sunk";
+    p.tee(wh);
+    const arc = (Math.PI * 2) / HOLES[wh].wheel.paddles;
+    p.turn = arc / 2;
+    p.putt(p.aim, 0.5);
+    rollOut();
+    const through = Math.sign(p.z - gateZ) === -side || p.state.phase === "sunk";
+    p.idle = keep;
+    // The last hole down the funnel ends the round with a card.
+    p.card = HOLES.slice(0, -1).map((h) => h.par);
+    p.tee(HOLES.length - 1);
+    p.putt(p.aim, (p.sweet[0] + p.sweet[1]) / 2);
+    rollOut();
+    run(120);
+    const round = { title: g.results?.title ?? "", card: p.card.slice(), pay: g.results?.pay ?? 0, best: g.save.best.putt ?? 0 };
+    settle();
+
+    // ---- cornhole
+    const c = g.cornhole;
+    const wins = g.save.best.cornhole ?? 0;
+    g.begin(c, "whack");
+    c.start();
+    run(12);
+    c.toss(0, 0, 0.655, 0, 0);
+    for (let i = 0; i < 200 && (c.phase === "fly" || c.phase === "settle"); i++) g.tick(1 / 30);
+    const first = { state: c.bags.find((b) => b.who === 0 && b.state !== "hand").state, next: c.phase };
+    for (let i = 0; i < 300 && c.phase !== "aim"; i++) g.tick(1 / 30);
+    run(12);
+    c.toss(0, 0, 0.3, 0, 0);
+    for (let i = 0; i < 200 && (c.phase === "fly" || c.phase === "settle"); i++) g.tick(1 / 30);
+    const short = c.bags.filter((b) => b.who === 0 && b.state !== "hand").map((b) => b.state);
+    // One bag shoves another: put a bag below the hole and slide a second into the back of it.
+    const a = c.bags.find((b) => b.who === 1 && b.state === "hand") ?? c.bags.find((b) => b.who === 1);
+    a.state = "board";
+    a.u = 0;
+    a.v = 0.8;
+    a.su = a.sv = 0;
+    a.mesh.visible = true;
+    const b2 = c.bags.find((b) => b.who === 0 && b.state === "hand");
+    b2.state = "board";
+    b2.u = 0;
+    b2.v = 0.45;
+    b2.su = 0;
+    b2.sv = 1.6;
+    b2.mesh.visible = true;
+    for (let i = 0; i < 120; i++) c.slide(1 / 60);
+    const shoved = { pushed: a.state, v: +a.v.toFixed(2) };
+    // Played out with good throws, it ends on a card and counts as a win.
+    c.start();
+    run(12);
+    g.sound = quiet;
+    let guard = 0;
+    while (guard++ < 40000 && !g.overlay) {
+      g.tick(1 / 30);
+      if (c.phase === "aim" && c.t > 0.3) c.toss(0, (Math.random() - 0.5) * 0.2, 0.62 + Math.random() * 0.07, 0, 0);
+    }
+    g.sound = sound;
+    const bags = { title: g.results?.title ?? "", score: c.score.slice(), wins: (g.save.best.cornhole ?? 0) - wins, rounds: c.round };
+    settle();
+
+    // ---- tennis
+    const t = g.tennis;
+    g.save.best.tennis = 0;
+    g.begin(t, "whack");
+    t.start();
+    run(40, 1 / 60);
+    const opening = { phase: t.state.phase, server: t.state.server };
+    // Too hard is long: a fault, and a second serve.
+    t.serve(0, 0.97, 0);
+    for (let i = 0; i < 400 && t.state.phase === "rally"; i++) g.tick(1 / 60);
+    const fault = { call: t.call, pts: t.state.pts.join() };
+    for (let i = 0; i < 300 && t.state.phase !== "serve"; i++) g.tick(1 / 60);
+    // A good one comes down in the box across the net.
+    t.serve(0, 0.72, 0);
+    const box = { x: +(t.state.land.x - 38.1).toFixed(1), live: t.state.live };
+    // Played out: he runs to the ball, swings when it is on him, and somebody wins three games.
+    g.sound = quiet;
+    let hits = 0;
+    let longest = 0;
+    guard = 0;
+    while (guard++ < 60 * 60 * 14 && !g.overlay) {
+      if (t.phase === "serve" && t.server === 0 && t.t > 0.6) t.serve(0, 0.7 + Math.random() * 0.1, Math.random() - 0.5);
+      if (t.phase === "rally" && t.live && t.last === 1) {
+        const dx = Math.max(38.1 - 12.9, Math.min(38.1 - 1.5, t.meet.x)) - g.pos.x;
+        const dz = t.meet.z - g.pos.z;
+        const d = Math.hypot(dx, dz);
+        g.input.setStick(d > 0.3 ? dz / d : 0, d > 0.3 ? dx / d : 0);
+        const near = Math.hypot(t.p.x - g.pos.x, t.p.z - g.pos.z);
+        if (t.bounces === 1 && near < 0.95 && t.p.y < 2.5 && t.swingCool <= 0) {
+          g.input.setStick(g.pos.z > 96 ? -0.9 : 0.9, 0.5);
+          g.input.press("action");
+          hits++;
+        }
+      } else g.input.setStick(0, 0);
+      g.tick(1 / 60);
+      longest = Math.max(longest, t.rallies);
+    }
+    g.input.setStick(0, 0);
+    g.sound = sound;
+    const match = { title: g.results?.title ?? "", games: t.games.slice(), hits, longest, wins: g.save.best.tennis ?? 0 };
+    settle();
+
+    // ---- over the city
+    const sky = g.skyShow;
+    const was = sky.blimp.position.clone();
+    sky.update(10, g.time, 0);
+    const flew = +was.distanceTo(sky.blimp.position).toFixed(1);
+    const beam = sky.group.children.find((o) => o !== sky.blimp).children[0].material;
+    const day = beam.opacity;
+    sky.update(0.1, g.time, 1);
+    const night = beam.opacity;
+    g.stage.render = draw;
+    return { stops, spots, holes: HOLES.length, par: PUTT_PAR, ace, second, soft, top, firm, blocked, through, round, first, short, shoved, bags, opening, fault, box, match, sky: { flew, y: Math.round(sky.blimp.position.y), day, night } };
+  });
+  check(rec.stops.putt && rec.stops.courts && rec.spots.every(Boolean), "the rec grounds are on the map, with a spot to walk up to for each game", { stops: rec.stops, spots: rec.spots });
+  check(rec.holes === 9 && rec.par === 23 && rec.ace.strokes === 1 && rec.ace.phase === "sunk" && rec.second === 1, "putt-putt: a straight putt at the right weight drops, and the next hole comes up", { ace: rec.ace, second: rec.second });
+  check(!rec.soft.up && rec.soft.strokes === 1 && rec.firm.phase !== "roll", "putt-putt: a putt too soft for the hill rolls back down it", { soft: rec.soft, firm: rec.firm });
+  check(rec.blocked && rec.through, "putt-putt: the paddle wheel stops a ball when a paddle is down and lets it through when it is not", { blocked: rec.blocked, through: rec.through });
+  check(/PAR/.test(rec.round.title) && rec.round.card.length === 9 && rec.round.pay > 0 && rec.round.best > 0, "putt-putt: the ninth hole ends the round with a card and a best score", rec.round);
+  check(rec.first.state === "in" && rec.short.includes("grass") && rec.shoved.pushed !== "hand" && (rec.shoved.pushed === "in" || rec.shoved.v > 0.85), "cornhole: a bag slides up into the hole, a short one lands on the grass, and one bag shoves another", { first: rec.first, short: rec.short, shoved: rec.shoved });
+  check(/BAGS/.test(rec.bags.title) && rec.bags.score[0] >= 21 && rec.bags.wins === 1, "cornhole: a match is played out to 21 and counts as a win", rec.bags);
+  check(rec.opening.phase === "serve" && rec.opening.server === 0 && /FAULT/.test(rec.fault.call) && rec.fault.pts === "0,0" && rec.box.live && rec.box.x > 0 && rec.box.x < 6.5, "tennis: a serve hit too hard is a fault, and a good one comes down in the box", { opening: rec.opening, fault: rec.fault, box: rec.box });
+  check(rec.match.title.length > 0 && Math.max(...rec.match.games) === 3 && rec.match.hits > 5 && rec.match.longest >= 3, "tennis: a match is rallied out to three games", rec.match);
+  check(rec.sky.flew > 20 && rec.sky.y > 60 && rec.sky.day === 0 && rec.sky.night > 0.03, "a blimp circles over the city, and searchlights come on over the boutique after dark", rec.sky);
   check(errors.length === 0, "no page errors", errors);
   console.log("Memphis smoke passed.");
 } finally {

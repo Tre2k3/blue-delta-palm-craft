@@ -135,6 +135,9 @@ export const POIS: Poi[] = [
   { id: "fun", name: "The Fun House", x: FUN.doorX, z: FUN.frontZ - 2, color: "#b48cff" },
   // Let out on the terrace, facing the tables.
   { id: "park", name: "Orange Mound Park", x: PARK.cx, z: PARK.cz, color: "#7ddc6a", arrive: { x: -84, z: 79.6, heading: Math.PI } },
+  // The rec grounds on Park Avenue: let out at the hut, and at the gate between the court and the cornhole boards.
+  { id: "putt", name: "Sack Putt", x: -32, z: 96, color: "#39ff14", arrive: { x: -32, z: 105.8, heading: Math.PI } },
+  { id: "courts", name: "Park Avenue Courts", x: 32, z: 96, color: "#5ac8ff", arrive: { x: 17.9, z: 104.6, heading: Math.PI } },
 ];
 
 export function districtAt(x: number, z: number) {
