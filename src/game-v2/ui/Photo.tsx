@@ -149,6 +149,9 @@ export function Photo({ game, hud }: { game: Game; hud: HudState }) {
         <button className="sr-btn sr-btn-ghost px-4 py-2.5" onClick={() => game.setPhase(hud.phase === "golden" ? "night" : hud.phase === "night" ? "day" : "golden")}>
           Light: {hud.phase === "golden" ? "sunset" : hud.phase === "night" ? "night" : "day"}
         </button>
+        <button className="sr-btn sr-btn-ghost px-4 py-2.5" onClick={() => game.orderRain(!hud.rain)}>
+          Rain: {hud.rain ? "on" : "off"}
+        </button>
         <button className="sr-btn sr-btn-ghost px-4 py-2.5" onClick={() => game.photoZoom(-0.8)}>
           Closer
         </button>

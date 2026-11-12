@@ -5,6 +5,7 @@ import { People } from "./actors/people";
 import { Traffic } from "./actors/traffic";
 import { CarModel, Driver, STREET } from "./actors/vehicle";
 import { Fireworks } from "./gfx/fx";
+import { Rain } from "./gfx/rain";
 import { BALLERS, CAST, PEDS, OUTFITS, BENJI_HEIGHT, type CastId, type OutfitId, VENDORS } from "./assets/cast";
 import { Sound } from "./core/audio";
 import { Input, type Nav } from "./core/input";
@@ -248,6 +249,9 @@ export class Game {
   /** Photo mode: which way the lens sits from Benji, how high, how far. */
   private photo = { yaw: 0, pitch: 0.14, dist: 5.2 };
   private fireworks = new Fireworks();
+  private rain = new Rain(RIVER_Z);
+  /** How hard it is raining now and is going to, how wet the ground is, and when the sky next turns. */
+  private weather = { rain: 0, want: 0, wet: 0, next: 210 + Math.random() * 150, left: 0, pinned: false, flash: 0, thunder: 9 };
   /** Phones buzz on hits and wins unless this is off. */
   buzzOn = true;
   private skip = 0;
@@ -333,6 +337,7 @@ export class Game {
     this.beam.renderOrder = 4;
     this.city.exterior.add(this.beam);
     this.city.exterior.add(this.fireworks.points);
+    this.scene.add(this.rain.group);
     this.fireworks.onBurst = () => this.sound.boom();
     try {
       this.buzzOn = localStorage.getItem("sack-v2-buzz") !== "0";
@@ -1632,6 +1637,57 @@ export class Game {
     }
   }
 
+  /** Rain on, rain off, or back to whatever the sky decides. */
+  setRain(on: boolean | "auto") {
+    const w = this.weather;
+    w.pinned = on !== "auto";
+    if (on === true) w.want = 1;
+    else if (on === false) w.want = 0;
+    this.push();
+  }
+
+  /** Asked for in photo mode: it rains, or stops, as if the sky had decided to. */
+  orderRain(on: boolean) {
+    const w = this.weather;
+    if (w.pinned) return this.setRain(on);
+    w.want = on ? 1 : 0;
+    w.left = 80;
+    w.next = 300;
+    this.push();
+  }
+
+  /** The weather has its own clock: a shower now and then, and streets that stay wet after it. */
+  private runWeather(dt: number, paused: boolean) {
+    const w = this.weather;
+    if (!w.pinned && !paused && this.mode !== "title" && !this.intro) {
+      if (w.want > 0) {
+        w.left -= dt;
+        if (w.left <= 0) {
+          w.want = 0;
+          w.next = 260 + Math.random() * 240;
+        }
+      } else {
+        w.next -= dt;
+        if (w.next <= 0) {
+          w.want = 0.6 + Math.random() * 0.4;
+          w.left = 70 + Math.random() * 50;
+          if (!this.room && !this.activity) this.toast("Rain coming in off the river.", 3.5);
+        }
+      }
+    }
+    w.rain += clamp(w.want - w.rain, -dt / 9, dt / 6);
+    w.wet += clamp((w.rain > 0.06 ? 1 : 0) - w.wet, -dt / 80, dt / 9);
+    w.flash = Math.max(0, w.flash - dt * 2.4);
+    if (w.rain > 0.55 && !paused) {
+      w.thunder -= dt;
+      if (w.thunder <= 0) {
+        w.thunder = 24 + Math.random() * 30;
+        w.flash = 1;
+        this.sound.thunder();
+      }
+    }
+  }
+
   setPhase(p: Phase | "auto") {
     if (p === "auto") this.sky.auto = true;
     else {
@@ -2023,6 +2079,7 @@ export class Game {
     this.live.fade += clamp(this.fadeTo - this.live.fade, -dt * 3.2, dt * 4.5);
 
     this.fireworks.update(dt);
+    this.runWeather(dt, paused && this.overlay !== "photo");
     if (this.rankUp && !this.overlay) {
       this.rankUp.left -= dt;
       if (this.rankUp.left <= 0) {
@@ -2083,8 +2140,13 @@ export class Game {
 
     // The city.
     const look = this.sky.look;
+    const wx = this.weather;
+    this.sky.rain = out ? wx.rain : 0;
+    this.sky.flash = out ? wx.flash : 0;
     _v.set(this.pos.x, 0, this.pos.z);
     this.sky.update(paused ? dt * 0.2 : dt, _v, this.camera);
+    this.rain.update(dt, this.camera, out ? wx.rain : 0, this.stage.quality === "high" ? 1 : this.stage.quality === "medium" ? 0.65 : 0.36, look.lights, this.stage.renderer.domElement.width, this.stage.renderer.domElement.height);
+    this.sound.setRain(this.mode === "title" ? 0 : wx.rain, !out);
     if (out) {
       this.city.update(dt, this.time);
       if (!paused) {
@@ -2106,11 +2168,16 @@ export class Game {
         // The song only reaches the lot, so only the lot moves to it.
         this.street.update(dt, cam, this.tint, afoot, this.time, Math.hypot(this.pos.x - TRUCKS.x, this.pos.z - TRUCKS.z) < 40 ? beat : -1, this.stage.quality === "low" ? 115 : 150, wheels);
       }
-      this.city.glow.apply(look.lights, look.roadRough);
+      this.city.glow.apply(look.lights, look.roadRough * (1 - 0.66 * wx.wet), wx.wet);
+      this.city.glow.tick(this.time, look.lights);
+      this.city.bridge.update(dt, look.lights);
+      this.city.water.bridge.copy(this.city.bridge.glow);
+      this.city.water.strip.set(this.city.bridge.strip);
+      this.city.water.rain = wx.rain;
       this.city.water.update(dt, look);
       if (this.mode !== "drive" && this.mode !== "race") this.car.lamps(0.1, 0.3);
       this.stage.renderer.toneMappingExposure = look.exposure;
-      this.stage.setBloom(look.bloom);
+      this.stage.setBloom(look.bloom + wx.wet * 0.1);
     } else {
       const r = this.room!;
       this.sky.hemi.color.setHex(r.ambient.sky);
@@ -2252,6 +2319,7 @@ export class Game {
       district: this.room ? { hq: "SackReligious HQ", home: "Home", bowl: "901 Bowl", fun: "The Fun House", laser: "Laser Arena" }[this.room.id as Exclude<Place, "street">] : districtAt(this.pos.x, this.pos.z),
       street: this.room ? "" : nearestStreet(this.pos.x, this.pos.z),
       phase: this.sky.phase,
+      rain: this.weather.want > 0,
       rank: rankOf(s.respect),
       mission: step
         ? { chapter: chapter?.name ?? "", index: chapter?.index ?? 1, total: chapter?.total ?? 1, title: step.title, detail: step.goal?.times ? `${step.detail}  ${Math.min(s.count, step.goal.times)}/${step.goal.times}` : step.detail }

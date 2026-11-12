@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { tex } from "../gfx/tex";
 import { MAT, emissiveMat, facade, lambert, std, type BuildCtx } from "./kit";
-import { FAR_BANK_Z, RIVER_Z } from "./map";
+import { BRIDGE } from "./bridgelights";
+import { FAR_BANK_Z } from "./map";
 
 /**
  * The far bank: the skyline, the Pyramid and the bridge that say Memphis from anywhere on the river.
@@ -48,7 +49,7 @@ export function buildFarBank(ctx: BuildCtx) {
   });
 
   buildPyramid(ctx, 132, z0 - 62);
-  buildBridge(ctx, -196);
+  buildBridge(ctx);
 }
 
 /** The glass pyramid on the river. */
@@ -85,29 +86,25 @@ function buildPyramid(ctx: BuildCtx, x: number, z: number) {
   ctx.solid.box(base + 6, 3, base + 6, x, 1, z, lambert(0x2a2c30));
 }
 
-/** The M bridge: two steel arches over the river, lit along the top chord after dark. */
-function buildBridge(ctx: BuildCtx, x: number) {
-  const z0 = RIVER_Z - 4;
-  const z1 = FAR_BANK_Z + 6;
-  const deckY = 13;
+/** The M bridge: two steel arches over the river. Its lights are in `bridgelights.ts`. */
+function buildBridge(ctx: BuildCtx) {
+  const { x, z0, z1, deckY } = BRIDGE;
   const steel = lambert(0x3c4046);
   const span = (z1 - z0) / 2;
   ctx.solid.box(15, 1.5, Math.abs(z1 - z0) + 80, x, deckY, (z0 + z1) / 2 - 30, steel);
-  const lights = emissiveMat(ctx, 0xbfe0ff, 0.12, 1.5);
-  for (const side of [-7.6, 7.6]) {
+  for (const side of [-BRIDGE.side, BRIDGE.side]) {
     for (let k = 0; k < 2; k++) {
       const a = z0 + span * k;
       const pts: THREE.Vector3[] = [];
       for (let i = 0; i <= 16; i++) {
         const t = i / 16;
-        pts.push(new THREE.Vector3(x + side, deckY + Math.sin(t * Math.PI) * 30, a + span * t));
+        pts.push(new THREE.Vector3(x + side, deckY + Math.sin(t * Math.PI) * BRIDGE.rise, a + span * t));
       }
       const curve = new THREE.CatmullRomCurve3(pts);
       ctx.solid.add(new THREE.TubeGeometry(curve, 28, 1.05, 5, false), steel);
-      ctx.solid.add(new THREE.TubeGeometry(curve, 28, 0.2, 4, false), lights, 0, 1.25, 0);
       for (let i = 2; i <= 14; i += 2) {
         const t = i / 16;
-        const top = deckY + Math.sin(t * Math.PI) * 30;
+        const top = deckY + Math.sin(t * Math.PI) * BRIDGE.rise;
         ctx.solid.box(0.3, top - deckY, 0.3, x + side, (top + deckY) / 2, a + span * t, steel);
       }
     }

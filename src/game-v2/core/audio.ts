@@ -21,6 +21,7 @@ export class Sound {
   private noise: AudioBuffer | null = null;
   private engine: { osc: OscillatorNode; osc2: OscillatorNode; gain: GainNode; filter: BiquadFilterNode } | null = null;
   private ambience: GainNode | null = null;
+  private rain: { hiss: GainNode; body: GainNode } | null = null;
   private nextBeat = 0;
   private beat = 0;
   private timer: number | null = null;
@@ -352,6 +353,33 @@ export class Sound {
     this.ambience = g;
   }
 
+  /** Rain coming down: 0 dry, 1 pouring. Indoors it is a murmur on the roof. */
+  setRain(k: number, inside = false) {
+    const ctx = this.ctx;
+    if (!ctx || !this.noise || !this.master) return;
+    if (!this.rain) {
+      if (k < 0.01) return;
+      const make = (type: BiquadFilterType, freq: number, q: number) => {
+        const src = ctx.createBufferSource();
+        src.buffer = this.noise;
+        src.loop = true;
+        const f = ctx.createBiquadFilter();
+        f.type = type;
+        f.frequency.value = freq;
+        f.Q.value = q;
+        const g = ctx.createGain();
+        g.gain.value = 0;
+        src.connect(f).connect(g).connect(this.master!);
+        src.start();
+        return g;
+      };
+      this.rain = { hiss: make("highpass", 3800, 0.4), body: make("bandpass", 900, 0.5) };
+    }
+    const level = this.sfxOn ? Math.max(0, Math.min(1, k)) : 0;
+    this.rain.hiss.gain.setTargetAtTime(level * (inside ? 0.008 : 0.05), ctx.currentTime, 0.5);
+    this.rain.body.gain.setTargetAtTime(level * (inside ? 0.03 : 0.045), ctx.currentTime, 0.5);
+  }
+
   /** Engine drone for whatever Benji is driving. `rev` 0..1, `on` false cuts it. */
   setEngine(on: boolean, rev = 0, boost = false) {
     const ctx = this.ctx;
@@ -422,7 +450,7 @@ export class Sound {
     this.one("bounce", (t, o) => {
       this.tone(118, "sine", t, 0.42 * power, 0.003, 0.11, o, 0.55);
       this.hiss(t, 0.06 * power, 0.002, 0.03, 1400, 1, o);
-    });
+    }, power);
   }
   rim() {
     this.one("rim", (t, o) => {
@@ -473,7 +501,7 @@ export class Sound {
     this.one("splash", (t, o) => {
       this.hiss(t, 0.3 * power, 0.01, 0.34, 2600, 0.7, o, "bandpass", 0.3);
       this.tone(160, "sine", t, 0.18 * power, 0.004, 0.16, o, 0.5);
-    });
+    }, power);
   }
   reel() {
     this.one("reel", (t, o) => this.tone(1200 + Math.random() * 200, "square", t, 0.018, 0.001, 0.025, o));
@@ -495,19 +523,19 @@ export class Sound {
         this.tone(520 + Math.random() * 520, "triangle", at, 0.12, 0.002, 0.07 + Math.random() * 0.08, o, 0.8);
         this.hiss(at, 0.1, 0.002, 0.06, 2200, 1.2, o);
       }
-    });
+    }, 0.4 + 0.06 * Math.max(1, Math.min(10, count)));
   }
   countdown(go = false) {
     this.one(go ? "go" : "countdown", (t, o) => this.tone(go ? 880 : 440, "square", t, 0.14, 0.005, go ? 0.5 : 0.16, o));
   }
   skid(power = 1) {
-    this.one("skid", (t, o) => this.hiss(t, 0.1 * power, 0.02, 0.2, 1800, 4, o));
+    this.one("skid", (t, o) => this.hiss(t, 0.1 * power, 0.02, 0.2, 1800, 4, o), power);
   }
   crash(power = 1) {
     this.one("crash", (t, o) => {
       this.hiss(t, 0.4 * power, 0.003, 0.24, 800, 0.6, o, "lowpass");
       this.tone(70, "sine", t, 0.4 * power, 0.003, 0.2, o, 0.5);
-    });
+    }, power);
   }
   horn() {
     this.one("horn", (t, o) => {
@@ -517,6 +545,13 @@ export class Sound {
   }
   nitro() {
     this.one("nitro", (t, o) => this.hiss(t, 0.3, 0.05, 0.7, 500, 0.8, o, "bandpass", 6));
+  }
+  /** Thunder a long way up the river. */
+  thunder() {
+    this.one("thunder", (t, o) => {
+      this.hiss(t, 0.5, 0.06, 2.8, 120, 0.7, o, "lowpass");
+      this.tone(46, "sine", t + 0.05, 0.3, 0.03, 2, o, 0.6);
+    });
   }
   spook() {
     this.one("spook", (t, o) => {

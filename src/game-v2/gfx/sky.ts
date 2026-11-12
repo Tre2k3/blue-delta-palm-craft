@@ -34,6 +34,8 @@ export type Look = {
 };
 
 const c = (hex: number) => new THREE.Color(hex);
+const _wash = new THREE.Color();
+const _white = new THREE.Color(0.8, 0.85, 1);
 const dir = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z).normalize();
 
 export const LOOKS: Record<Phase, Look> = {
@@ -157,6 +159,7 @@ uniform vec3 uCloudLit;
 uniform float uStars;
 uniform float uTime;
 uniform float uDisc;
+uniform float uCover;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p) {
@@ -182,10 +185,10 @@ void main() {
   if (d.y > 0.015) {
     vec2 uv = d.xz / (d.y + 0.16) * 1.15 + vec2(uTime * 0.004, uTime * 0.0015);
     float n = fbm(uv);
-    float cover = smoothstep(0.44, 0.7, n) * smoothstep(0.015, 0.16, d.y);
-    float edge = smoothstep(0.44, 0.56, n) - smoothstep(0.56, 0.84, n);
+    float cover = smoothstep(0.44 - uCover * 0.36, 0.7 - uCover * 0.34, n) * smoothstep(0.015, 0.16, d.y);
+    float edge = (smoothstep(0.44, 0.56, n) - smoothstep(0.56, 0.84, n)) * (1.0 - uCover * 0.7);
     vec3 cl = mix(uCloud, uCloudLit, clamp(pow(sd, 2.0) * 1.1 + edge * 0.5, 0.0, 1.0));
-    col = mix(col, cl, cover * 0.86);
+    col = mix(col, cl, cover * (0.86 + uCover * 0.1));
   }
   col += uSun * smoothstep(1.0 - uDisc, 1.0 - uDisc * 0.55, sd) * 3.0;
   if (uStars > 0.01) {
@@ -207,6 +210,10 @@ export class Sky {
   phase: Phase = "golden";
   /** Auto cycle on. Off pins the current phase. */
   auto = true;
+  /** How hard it is raining, 0..1: the sky closes over, the sun goes, the far end of the street fades. */
+  rain = 0;
+  /** Sheet lightning somewhere in the cloud, 1 fading to 0. */
+  flash = 0;
   private from: Look = cloneLook(LOOKS.golden);
   private blend = 1;
   private clock = 0;
@@ -229,6 +236,7 @@ export class Sky {
       uStars: { value: 0 },
       uTime: { value: 0 },
       uDisc: { value: 0.0016 },
+      uCover: { value: 0 },
     };
     this.dome = new THREE.Mesh(
       new THREE.SphereGeometry(1, 32, 16),
@@ -276,6 +284,7 @@ export class Sky {
         uStars: { value: 0 },
         uTime: { value: 0 },
         uDisc: { value: 0.004 },
+        uCover: { value: 0 },
       };
       probeMat.needsUpdate = true;
       this.envs[phase] = pmrem.fromScene(probe, 0.02, 1, 120).texture;
@@ -310,6 +319,31 @@ export class Sky {
     const t = smooth(this.blend);
     mixLook(this.from, LOOKS[this.phase], t, this.look);
     const l = this.look;
+    const r = this.rain;
+    if (r > 0.001) {
+      // `look` is worked out afresh every frame, so the weather is laid over it here.
+      const grey = (l.fog.r + l.fog.g + l.fog.b) / 3;
+      _wash.setRGB(grey * 0.9, grey * 0.95, grey * 1.05);
+      l.fog.lerp(_wash, 0.45 * r);
+      l.horizon.lerp(l.fog, 0.6 * r);
+      l.zenith.lerp(l.fog, 0.35 * r);
+      l.halo.multiplyScalar(1 - 0.7 * r);
+      l.cloud.lerp(l.fog, 0.5 * r);
+      l.cloudLit.lerp(l.fog, 0.6 * r);
+      l.sunPower *= 1 - 0.6 * r;
+      l.hemiPower *= 1 - 0.15 * r;
+      l.fogNear *= 1 - 0.5 * r;
+      l.fogFar *= 1 - 0.42 * r;
+      l.stars *= 1 - r;
+      l.waterSky.lerp(l.fog, 0.4 * r);
+    }
+    if (this.flash > 0.001) {
+      const f = this.flash * this.flash;
+      l.cloud.lerp(_white, 0.35 * f);
+      l.cloudLit.lerp(_white, 0.6 * f);
+      l.hemiPower += 0.3 * f;
+    }
+    this.uniforms.uCover!.value = r;
     this.uniforms.uStars!.value = l.stars;
     this.uniforms.uTime!.value = this.time;
     this.dome.position.copy(camera.position);

@@ -114,6 +114,8 @@ export type HudState = {
   district: string;
   street: string;
   phase: "golden" | "night" | "day";
+  /** Rain is on its way or coming down. */
+  rain: boolean;
   mission: MissionCard | null;
   prompt: string;
   /** Key hints for the mode, "key label" pairs. */

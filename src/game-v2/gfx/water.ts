@@ -24,6 +24,12 @@ uniform float uLights;
 uniform vec4 uRipple[6];
 uniform float uFarZ;
 uniform float uNearZ;
+uniform vec3 uBridge;
+uniform vec3 uBridgeCol[8];
+// x of the plane the arches stand in, z at the near bank, z at the far bank, height of the deck.
+uniform vec4 uBridgeGeo;
+uniform float uBridgeRise;
+uniform float uRain;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p) {
@@ -41,6 +47,8 @@ float height(vec2 p, float drift) {
   h += noise(q * vec2(1.5, 3.2) + vec2(0.0, uTime * 0.32)) * 0.36;
   h += noise(q * vec2(3.6, 6.4) - vec2(uTime * 0.45, uTime * 0.18)) * 0.2;
   h += noise(q * vec2(8.0, 13.0) + vec2(uTime * 0.3, -uTime * 0.5)) * 0.035;
+  // Rain pocks the whole surface.
+  if (uRain > 0.01) h += noise(p * 31.0 + vec2(uTime * 6.0, -uTime * 5.0)) * 0.07 * uRain;
   for (int i = 0; i < 6; i++) {
     vec4 r = uRipple[i];
     if (r.w > 0.0) {
@@ -107,6 +115,26 @@ void main() {
   float toBank = clamp((vWorld.z - uFarZ) / 70.0, 0.0, 1.0);
   float band = noise(vec2(p.x * 0.42, 3.0)) * noise(vec2(p.x * 0.11 + 9.0, 1.0));
   col += vec3(1.0, 0.72, 0.36) * uLights * (1.0 - toBank) * smoothstep(0.22, 0.5, band) * (0.5 + 0.5 * noise(vec2(p.x * 3.0, p.y * 0.4 - uTime * 0.6))) * 0.5;
+  // The bridge's lights, mirrored: follow the ray the water throws back to the plane the arches
+  // stand in, and see whether it lands on an arch, on the rail of the deck, or between them.
+  if (uBridge.r + uBridge.g + uBridge.b > 0.01) {
+    float tx = (uBridgeGeo.x - vWorld.x) / (abs(refl.x) > 0.0001 ? refl.x : 0.0001);
+    if (tx > 0.0 && tx < 900.0) {
+      vec3 hit = vWorld + refl * tx;
+      float u = (uBridgeGeo.y - hit.z) / (uBridgeGeo.y - uBridgeGeo.z);
+      if (u > -0.03 && u < 1.03) {
+        float arch = uBridgeGeo.w + 1.3 + sin(fract(clamp(u, 0.0, 0.999) * 2.0) * 3.14159) * uBridgeRise;
+        float line = exp(-abs(hit.y - arch) * 0.2) + 0.7 * exp(-abs(hit.y - uBridgeGeo.w - 1.0) * 0.4);
+        float curtain = step(uBridgeGeo.w, hit.y) * step(hit.y, arch) * 0.14;
+        float fi = clamp(u, 0.0, 1.0) * 7.0;
+        int i0 = int(floor(fi));
+        vec3 bc = mix(uBridgeCol[i0], uBridgeCol[min(i0 + 1, 7)], fract(fi));
+        col += bc * (line + curtain) * 0.5 * clamp(fres * 3.0, 0.2, 1.0);
+      }
+    }
+    // And a little of it hangs in the water right under the span.
+    col += uBridge * exp(-abs(vWorld.x - uBridgeGeo.x) * 0.07) * 0.1;
+  }
   float fog = smoothstep(uFogNear, uFogFar, dist);
   col = mix(col, uFog, fog);
   gl_FragColor = vec4(col, 1.0);
@@ -116,12 +144,17 @@ void main() {
 
 export type Water = {
   mesh: THREE.Mesh;
+  /** The lights on the bridge for the water to mirror: their colour evened out, and eight colours along the span. */
+  bridge: THREE.Color;
+  strip: Float32Array;
+  /** How hard it is raining, 0..1. */
+  rain: number;
   update(dt: number, look: Look): void;
   /** Rings where a bobber lands or a fish breaks the surface. */
   ripple(x: number, z: number, strength?: number): void;
 };
 
-export function makeWater(minX: number, maxX: number, minZ: number, maxZ: number, farZ: number): Water {
+export function makeWater(minX: number, maxX: number, minZ: number, maxZ: number, farZ: number, bridge = { x: 0, z0: 0, z1: -1, deckY: 10, rise: 30 }): Water {
   const ripples = Array.from({ length: 6 }, () => new THREE.Vector4(0, 0, 0, 0));
   const uniforms = {
     uTime: { value: 0 },
@@ -136,6 +169,11 @@ export function makeWater(minX: number, maxX: number, minZ: number, maxZ: number
     uRipple: { value: ripples },
     uFarZ: { value: farZ },
     uNearZ: { value: maxZ },
+    uBridge: { value: new THREE.Color(0, 0, 0) },
+    uBridgeCol: { value: new Float32Array(24) },
+    uBridgeGeo: { value: new THREE.Vector4(bridge.x, bridge.z0, bridge.z1, bridge.deckY) },
+    uBridgeRise: { value: bridge.rise },
+    uRain: { value: 0 },
   };
   const geo = new THREE.PlaneGeometry(maxX - minX, maxZ - minZ, 1, 1);
   geo.rotateX(-Math.PI / 2);
@@ -144,10 +182,14 @@ export function makeWater(minX: number, maxX: number, minZ: number, maxZ: number
   mesh.matrixAutoUpdate = false;
   mesh.updateMatrix();
   let next = 0;
-  return {
+  const water: Water = {
     mesh,
+    bridge: uniforms.uBridge.value,
+    strip: uniforms.uBridgeCol.value,
+    rain: 0,
     update(dt, look) {
       uniforms.uTime.value += dt;
+      uniforms.uRain.value = water.rain;
       uniforms.uDeep.value.copy(look.waterDeep);
       uniforms.uSky.value.copy(look.waterSky);
       uniforms.uSunDir.value.copy(look.sunDir);
@@ -167,4 +209,5 @@ export function makeWater(minX: number, maxX: number, minZ: number, maxZ: number
       next = (next + 1) % ripples.length;
     },
   };
+  return water;
 }

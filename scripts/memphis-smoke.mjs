@@ -33,6 +33,8 @@ try {
   });
   await page.goto(`${base}?q=low`, { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => !!window.__GAME__, undefined, { timeout: 120000 });
+  // The weather keeps its own clock. Hold it dry so every run sees the same city.
+  await page.evaluate(() => window.__GAME__.setRain(false));
 
   // Run the simulation at a fixed step without drawing, then draw one frame.
   const ff = (seconds) =>
@@ -757,6 +759,52 @@ try {
   check(story.chapters === "11,8,7" && story.lost && story.sent.step === "catering" && /Mama Dee/.test(story.sent.by), "the story runs on past the Drop Day, and each errand is handed over by whoever needs it", story);
   check(story.part.step === "change" && story.part.count === 29 && story.counted === "league" && story.refused && story.done, "errands that count are counted, and the last one ends with the eleven on his back", story);
   check(/Known on the riverfront/.test(story.rank.toast) && story.rank.pays, "Respect has rungs, and each one pays more", story.rank);
+  // After dark: the bridge runs its show, the river mirrors it, the neon moves, and it can rain.
+  const night = await page.evaluate(() => {
+    const g = window.__GAME__;
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    const run = (n) => {
+      for (let i = 0; i < n; i++) g.tick(1 / 30);
+    };
+    const sum = (c) => c.r + c.g + c.b;
+    g.setPhase("day");
+    g.sky.setPhase("day", true);
+    run(20);
+    const day = { programme: g.city.bridge.programme, glow: sum(g.city.bridge.glow) };
+    g.setPhase("night");
+    g.sky.setPhase("night", true);
+    run(20);
+    const seen = new Set();
+    for (let i = 0; i < 5; i++) {
+      seen.add(g.city.bridge.programme);
+      for (let k = 0; k < 540; k++) g.city.bridge.update(1 / 30, 1);
+    }
+    run(2);
+    const glow = sum(g.city.bridge.glow);
+    const mirrored = Array.from(g.city.water.strip).reduce((a, b) => a + b, 0);
+    const neon = g.city.glow.neon;
+    const was = neon.map((n) => n.mat.color.r);
+    run(7);
+    const moved = neon.filter((n, i) => Math.abs(n.mat.color.r - was[i]) > 0.002).length;
+    const rough = g.city.glow.wet[0].roughness;
+    g.setRain(true);
+    run(360);
+    const rain = { amount: g.weather.rain, wet: g.weather.wet, drawn: g.rain.group.visible, rough: g.city.glow.wet[0].roughness };
+    g.setRain(false);
+    run(330);
+    const after = { amount: g.weather.rain, drawn: g.rain.group.visible, wet: g.weather.wet };
+    g.weather.wet = 0;
+    g.setPhase("golden");
+    g.sky.setPhase("golden", true);
+    g.setPhase("auto");
+    run(10);
+    g.stage.render = draw;
+    return { day, programmes: [...seen], glow, mirrored, signs: neon.length, moved, rough, rain, after };
+  });
+  check(night.day.programme === "" && night.day.glow === 0 && night.programmes.length === 5 && night.glow > 0.5 && night.mirrored > 1, "the bridge runs five light shows after dark and the river mirrors them", { day: night.day, programmes: night.programmes, glow: night.glow, mirrored: night.mirrored });
+  check(night.moved > night.signs / 2, "neon signs are never quite still at night", { signs: night.signs, moved: night.moved });
+  check(night.rain.amount > 0.95 && night.rain.drawn && night.rain.wet > 0.9 && night.rain.rough < night.rough * 0.6 && night.after.amount < 0.05 && !night.after.drawn && night.after.wet > 0.5, "rain comes down, the streets shine, and they stay wet after it stops", { dry: night.rough, rain: night.rain, after: night.after });
   // Recordings are optional: with none on the shelf every sound is still made up on the spot.
   const sound = await page.evaluate(async () => {
     const g = window.__GAME__;

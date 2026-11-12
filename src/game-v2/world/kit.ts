@@ -15,6 +15,8 @@ export class Glow {
   private wet: THREE.MeshStandardMaterial[] = [];
   private last = -1;
   private lastRough = -1;
+  private lastWet = -1;
+  private humming = false;
 
   emissive(mat: THREE.MeshStandardMaterial, lo = 0.03, hi = 1.2) {
     this.windows.push({ mat, lo, hi });
@@ -36,7 +38,34 @@ export class Glow {
     return mat;
   }
 
-  apply(lights: number, roadRough: number) {
+  /**
+   * Neon is never quite still. Most tubes hum, some breathe, a few keep time, and one in
+   * five stutters now and then the way a tired sign does. Only after the lights are on.
+   */
+  tick(time: number, lights: number) {
+    if (lights < 0.3) {
+      // Back to the plain daytime level on the next `apply`.
+      if (this.humming) this.last = -1;
+      this.humming = false;
+      return;
+    }
+    this.humming = true;
+    for (let i = 0; i < this.neon.length; i++) {
+      const n = this.neon[i]!;
+      const ph = i * 1.7;
+      const kind = i % 5;
+      let w = 1;
+      if (kind === 0) w = 0.92 + 0.08 * Math.sin(time * 9 + ph);
+      else if (kind === 1) w = 0.7 + 0.3 * (0.5 + 0.5 * Math.sin(time * 1.5 + ph));
+      else if (kind === 2) w = (time * 0.16 + ph) % 1 > 0.93 ? 0.45 + 0.55 * Math.abs(Math.sin(time * 12)) : 1;
+      else if (kind === 3) w = 0.78 + 0.22 * Math.pow(Math.max(0, Math.sin(time * 3.6 + ph)), 2);
+      else w = 0.95 + 0.05 * Math.sin(time * 13 + ph);
+      n.mat.color.copy(n.base).multiplyScalar((n.lo + (n.hi - n.lo) * lights) * w);
+    }
+  }
+
+  /** `wet` 0..1 is rain on the ground: darker stone, and more of the sky and the lamps in it. */
+  apply(lights: number, roadRough: number, wet = 0) {
     if (Math.abs(lights - this.last) > 0.004) {
       this.last = lights;
       for (const w of this.windows) w.mat.emissiveIntensity = w.lo + (w.hi - w.lo) * lights;
@@ -51,6 +80,13 @@ export class Glow {
     if (Math.abs(roadRough - this.lastRough) > 0.004) {
       this.lastRough = roadRough;
       for (const m of this.wet) m.roughness = Math.min(1, roadRough * (m.userData.roughScale ?? 1));
+    }
+    if (Math.abs(wet - this.lastWet) > 0.004) {
+      this.lastWet = wet;
+      for (const m of this.wet) {
+        m.color.setScalar(1 - 0.24 * wet);
+        m.envMapIntensity = 1 + 0.9 * wet;
+      }
     }
   }
 }
