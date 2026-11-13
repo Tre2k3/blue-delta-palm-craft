@@ -2449,17 +2449,21 @@ try {
     const j = g.jook;
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const C = g.tables.CYPHER;
+    // The screen is placed frame by frame. Without a graphics card a drawn frame takes seconds here, so nothing
+    // is drawn while it is watched, and whatever frame was already on its way is let through first.
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    const frame = () => Promise.race([new Promise((r) => requestAnimationFrame(r)), wait(60000)]);
+    await frame();
+    await frame();
     g.warp(C.x + 0.4, C.z + 2.2, Math.PI);
     g.tick(1 / 30);
     g.begin(j, "whack");
     j.start();
     for (let i = 0; i < 100; i++) g.tick(1 / 30);
-    // The screen is placed frame by frame. Without a graphics card a drawn frame takes seconds here, so nothing is drawn while it is watched.
-    const draw = g.stage.render;
-    g.stage.render = () => {};
     let root = null;
     let falling = 0;
-    for (let i = 0; i < 120 && !falling; i++) {
+    for (let i = 0; i < 200 && !falling; i++) {
       await wait(150);
       root = document.querySelector("[data-jook]");
       falling = root ? [...root.querySelectorAll("div")].filter((d) => d.style.display === "flex" && d.style.transform.includes("translate3d")).length : 0;
