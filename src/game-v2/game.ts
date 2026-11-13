@@ -24,7 +24,7 @@ import { BOARD, BoatRide } from "./play/boat";
 import { Slide, Swing } from "./play/playground";
 import { Tennis } from "./play/tennis";
 import { BallPit, Bounce, KartRace } from "./play/fun";
-import { LaserTag } from "./play/laser";
+import { BLASTERS, LaserTag, RANKS as TAG_RANKS } from "./play/lasertag";
 import { CABINETS, FOOD, FOOD_TRUCKS, PRIZES, type TruckId } from "./play/goods";
 import { Hoops } from "./play/hoops";
 import { PinballTable, PrizeWheel, SkeeLane } from "./play/floor";
@@ -188,7 +188,7 @@ export class Game {
   readonly camera: THREE.PerspectiveCamera;
   readonly sky: Sky;
   readonly rooms: { hq: HqRoom; home: HomeRoom; bowl: BowlRoom; fun: FunRoom; laser: LaserRoom };
-  readonly live: Live = { meter: 0, sweetLo: 0, sweetHi: 0, aim: 0, tension: 0, speed: 0, drift: 0, nitro: 0, fade: 1, radar: new Array<number>(48).fill(0), radarN: 0, cue: 999, turn: -1, markX: 0.5, markY: 0.5, markOn: false, markDist: 0, x: 0, z: 0, heading: 0, camYaw: 0, party: 0, partyLevel: 0 };
+  readonly live: Live = { fp: { on: false, gun: 0, ads: 0, bob: 0, move: 0, kick: 0, flash: 0, reload: -1, sprint: 0, gap: 0, target: 0, hit: 0, hitKind: 0, hurt: 0, hurtAngle: 0, swayX: 0, swayY: 0, down: 0, fov: 72 }, meter: 0, sweetLo: 0, sweetHi: 0, aim: 0, tension: 0, speed: 0, drift: 0, nitro: 0, fade: 1, radar: new Array<number>(48).fill(0), radarN: 0, cue: 999, turn: -1, markX: 0.5, markY: 0.5, markOn: false, markDist: 0, x: 0, z: 0, heading: 0, camYaw: 0, party: 0, partyLevel: 0 };
   readonly benji: Card;
   car: CarModel;
   readonly driver = new Driver();
@@ -204,7 +204,7 @@ export class Game {
   room: Room | null = null;
   activity: Activity | null = null;
   /** The art tables, where tools and tests can read them. */
-  readonly tables = { OUTFITS, PEDS, BALLERS, CAST, VENDORS, STORY, CHAPTERS, RIDES, POSTCARDS, POIS, HOLES, PUTT_PAR, CHATTER: ALL_LINES, TAGGERS, COACH, BAND };
+  readonly tables = { OUTFITS, PEDS, BALLERS, CAST, VENDORS, STORY, CHAPTERS, RIDES, POSTCARDS, POIS, HOLES, PUTT_PAR, CHATTER: ALL_LINES, TAGGERS, COACH, BAND, BLASTERS, TAG_RANKS };
   pos = { x: START.x, z: START.z };
   vel = { x: 0, z: 0 };
   heading = 0;
@@ -904,13 +904,8 @@ export class Game {
       this.begin(this.bounce, "bounce");
       this.bounce.start();
     });
-    this.spot("fun", fun.laserDoor.x, fun.laserDoor.z, 1.8, "Laser tag: green against pink", () => {
-      this.transition(() => {
-        this.setPlace("laser");
-        this.begin(this.laser, "laser");
-        this.laser.start();
-      });
-    });
+    // The arena door: his rank, his record and the choice of blaster, then in.
+    this.spot("fun", fun.laserDoor.x, fun.laserDoor.z, 1.8, "Laser tag: green against pink", () => this.open("loadout"));
     // The park: walk up to the open seat at any table.
     for (const t of PARK_TABLES) this.spot("street", t.x, t.z + 1.2, 1.25, `Sit down: ${t.name}`, () => this.board.sit(t.id));
     // The rec grounds on Park Avenue.
@@ -1205,6 +1200,32 @@ export class Game {
     this.vel.z = 0;
     this.benji.speed = 0;
     this.push();
+  }
+
+  /** Take a blaster off the rack at the arena door. */
+  pickBlaster(id: string) {
+    if (this.laser.choose(id)) this.sound.ui();
+    else this.sound.bad();
+    this.persist();
+    this.push();
+  }
+
+  /** Whether the blaster fires by itself on a touch screen. */
+  toggleAutoFire() {
+    this.laser.toggleAuto();
+    this.sound.ui();
+    this.persist();
+    this.push();
+  }
+
+  /** Through the arena door and into a match. */
+  deploy() {
+    if (this.overlay === "loadout") this.close();
+    this.transition(() => {
+      this.setPlace("laser");
+      this.begin(this.laser, "laser");
+      this.laser.start();
+    });
   }
 
   /** Activity is over: hand the controls back. */
@@ -2506,7 +2527,8 @@ export class Game {
   private tick(dt: number, draw = true) {
     const input = this.input;
     input.driving = this.mode === "drive" || this.mode === "race" || this.mode === "kart";
-    input.actionOnA = !!this.activity && !input.driving;
+    input.fps = this.mode === "laser";
+    input.actionOnA = !!this.activity && !input.driving && !input.fps;
     input.begin();
     this.stage.resize();
     this.time += dt;
@@ -2856,6 +2878,7 @@ export class Game {
       fish: null,
       race: null,
       laser: null,
+      loadout: this.overlay === "loadout" ? this.laser.loadout() : null,
       bounce: null,
       pit: null,
       whack: null,

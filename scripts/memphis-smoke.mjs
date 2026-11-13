@@ -527,13 +527,15 @@ try {
     g.laser.start();
     run(() => g.laser.phase === "go", 5);
     const L = g.laser;
-    const sides = [L.bots.filter((b) => b.team === 0).length, L.bots.filter((b) => b.team === 1).length];
+    const sides = [L.bots.filter((b) => b.playing && b.team === 0).length, L.bots.filter((b) => b.playing && b.team === 1).length];
     // Stand in front of the pink base with a clear line and put three into it.
     const base = L.bases[1];
     g.pos.x = base.x - 3;
     g.pos.z = base.z + 1.5;
     g.camYaw = Math.atan2(base.x - g.pos.x, base.z - g.pos.z);
-    for (const b of L.bots) b.stun = 30;
+    L.pitch = 0;
+    L.steady = true;
+    for (const b of L.bots) b.out = 30;
     let hits = 0;
     for (let i = 0; i < 3; i++) {
       const before = base.hp + (base.dark > 0 ? -99 : 0);
@@ -557,7 +559,7 @@ try {
     g.stage.render = draw;
     return { sides, scored, power, radar, place: g.place };
   });
-  check(tag.sides.join() === "2,4" && tag.scored.hits === 3 && tag.scored.dark && tag.scored.score >= 400, "laser tag has teams and a base that pays when it goes down", tag);
+  check(tag.sides.join() === "3,4" && tag.scored.hits === 3 && tag.scored.dark && tag.scored.score >= 400, "laser tag has teams and a base that pays when it goes down", tag);
   check(!!tag.power && tag.radar >= 8, "power-ups drop and the radar tracks the arena", { power: tag.power, radar: tag.radar });
 
   // The street race: arrows on the road, a launch on GO, and a boost for hitting a gate on time.
@@ -998,14 +1000,15 @@ try {
     g.begin(l, "laser");
     l.start();
     run(() => l.phase === "go", 6);
-    const pink = l.bots.find((b) => b.team === 1);
+    const pink = l.bots.find((b) => b.team === 1 && b.playing);
+    l.pitch = 0;
     pink.x = g.pos.x + Math.sin(g.camYaw) * 5;
     pink.z = g.pos.z + Math.cos(g.camYaw) * 5;
     pink.tx = pink.x;
     pink.tz = pink.z;
-    pink.stun = 0;
+    pink.cool = 99;
     tick();
-    const lock = l.lock.visible && l.aimed() === pink;
+    const lock = l.target === pink && g.live.fp.target === 1 && pink.plate.visible;
     pink.at = "benji";
     pink.aim = 0.6;
     const x0 = g.pos.x;
@@ -1093,7 +1096,7 @@ try {
   check(round.ride.front && round.ride.near && round.ride.heading === 0, "a ride to the food trucks lets him out in front of the windows, facing them", round.ride);
   check(round.fish.late === "bite" && round.fish.again.phase === "wait" && round.fish.again.bites === 1 && round.fish.hooked === "reel" && round.fish.end === "landed", "fishing forgives a slow hand: the bite waits, comes round again, and a small fish comes straight in", round.fish);
   check(round.court.blocked.result === "block" && /BLOCKED/.test(round.court.blocked.call) && round.court.them === 0 && round.court.dunking && round.court.gained >= 2 && round.court.streak === 0, "at the court a well-timed jump blocks the shot and three in a row buys a dunk", round.court);
-  check(round.laser.lock && round.laser.dash.moved > 2 && round.laser.dash.shook && round.laser.frenzy && round.laser.worth === 2, "laser tag marks the target, a dash shakes off a pink lining him up, and the last twenty seconds count double", round.laser);
+  check(round.laser.lock && round.laser.dash.moved > 2 && round.laser.dash.shook && round.laser.frenzy && round.laser.worth === 2, "laser tag turns the crosshair on whoever is in it, a dash shakes off a pink lining him up, and the last twenty seconds count double", round.laser);
   check(round.city.daily.done && round.city.daily.streak === 1 && round.city.daily.paid >= 120 && round.city.daily.twice === 0 && round.city.card.got && round.city.card.total === 6, "today's drop pays once and a photo at the pier collects a postcard", { daily: round.city.daily, card: round.city.card });
   check(round.city.drift.plain.peak === 0 && round.city.drift.handbrake.peak > 30 && /^DRIFT \d+/.test(round.city.drift.handbrake.toast), "a handbrake slide is scored and paid; an ordinary turn is not a drift", round.city.drift);
   check(round.city.show.left && round.city.show.sky && round.city.bow.left && round.city.bow.seen, "fireworks go up when night falls and a rainbow follows daytime rain", { show: round.city.show, bow: round.city.bow });
@@ -1873,6 +1876,287 @@ try {
   check(play.struck.phase === "roll" && play.struck.ticks >= 2 && play.struck.ticks <= 9 && play.struck.strokes === 1 && play.struck.through < 0 && play.struck.drift < 0.01 && play.struck.rolled > 0.6, "putting: the ball leaves when the club reaches it, the club follows through, and Benji stays where he stood", play.struck);
   check(play.ready.benji === "tennis" && play.ready.coach === "tennis" && play.serving === "serve", "tennis: both players hold a racket, and Benji lifts his to serve", { ...play.ready, serving: play.serving });
   check(play.sat.n === 8 && play.sat.posed === 8 && play.sat.sunk === 0 && play.faces.kinds === 16 && play.faces.walking + play.faces.about > 3, "the regulars are sat at their tables, and eight new people are out in the city", { ...play.sat, ...play.faces });
+
+  // ---- laser tag through his own eyes
+  const fps = await page.evaluate(async () => {
+    const g = window.__GAME__;
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    const run = (n, dt = 1 / 30) => {
+      for (let i = 0; i < n; i++) g.tick(dt);
+    };
+    const settle = () => new Promise((r) => setTimeout(r, 120));
+    if (g.overlay) g.close();
+    if (g.activity) g.activity.quit();
+    run(6);
+    for (let i = 0; i < 200 && (g.mode !== "walk" || g.live.fade > 0.05); i++) g.tick(1 / 30);
+    const { BLASTERS, TAG_RANKS } = g.tables;
+    const L = g.laser;
+    // The door: a new player is a Recruit with one blaster; rank opens the other two.
+    for (const k of Object.keys(g.save.best)) if (k.startsWith("lt_")) delete g.save.best[k];
+    g.enter("fun");
+    for (let i = 0; i < 200 && (g.place !== "fun" || g.live.fade > 0.05); i++) g.tick(1 / 30);
+    const door = g.rooms.fun.laserDoor;
+    g.pos.x = door.x;
+    g.pos.z = door.z + 0.5;
+    run(4);
+    const ask = g.prompt;
+    g.input.press("interact");
+    run(2);
+    await settle();
+    const fresh = { overlay: g.overlay, rank: document.querySelector("[data-rank]")?.textContent ?? "", racks: document.querySelectorAll("[data-blaster]").length, locked: [...document.querySelectorAll("[data-blaster]")].filter((b) => b.disabled).length, deploy: !!document.querySelector("[data-deploy]") };
+    g.pickBlaster("marksman");
+    const refused = L.loadout().guns.find((q) => q.picked).id;
+    g.save.best.lt_xp = TAG_RANKS[4][0] + 10;
+    g.pickBlaster("marksman");
+    g.push();
+    await settle();
+    const ranked = { rank: document.querySelector("[data-rank]")?.textContent ?? "", locked: [...document.querySelectorAll("[data-blaster]")].filter((b) => b.disabled).length, picked: L.loadout().guns.find((q) => q.picked).id };
+    document.querySelector("[data-deploy]").click();
+    for (let i = 0; i < 240 && !(g.mode === "laser" && L.phase === "go"); i++) g.tick(1 / 30);
+    for (let i = 0; i < 60 && g.live.fade > 0.05; i++) g.tick(1 / 30);
+    await settle();
+    await settle();
+    const hip = document.querySelector("[data-fp-hip]");
+    const view = {
+      mode: g.mode,
+      phase: L.phase,
+      gun: L.gun.id,
+      eye: +(g.camera.position.y - g.rooms.laser.floorY).toFixed(2),
+      at: +Math.hypot(g.camera.position.x - g.pos.x, g.camera.position.z - g.pos.z).toFixed(3),
+      benji: g.benji.visible,
+      hands: !!hip && hip.naturalWidth > 0 && hip.src.includes("marksman-hip"),
+      cross: !!document.querySelector("[data-crosshair]"),
+      ammo: document.querySelector("[data-ammo]")?.textContent ?? "",
+      on: g.live.fp.on,
+    };
+    // Everybody else stands still for the rest of this.
+    const hush = () => {
+      L.hold = true;
+      for (const b of L.bots) {
+        b.cool = 999;
+        b.aim = 0;
+        b.at = null;
+      }
+    };
+    const pinks = L.bots.filter((b) => b.playing && b.team === 1);
+    const park = () => pinks.forEach((b, i) => ((b.x = b.tx = 786 + i), (b.z = b.tz = 990.6)));
+    hush();
+    park();
+    L.steady = true;
+    // Looking and strafing: a drag turns him and tilts his view, and after it A and D step sideways without turning.
+    g.pos.x = 800;
+    g.pos.z = 1003.5;
+    g.camYaw = Math.PI;
+    L.pitch = 0;
+    run(2);
+    const yaw0 = g.camYaw;
+    g.input.look(0.2, 0.1);
+    run(1);
+    const looked = { yaw: +Math.atan2(Math.sin(g.camYaw - yaw0), Math.cos(g.camYaw - yaw0)).toFixed(2), pitch: +L.pitch.toFixed(2) };
+    g.camYaw = Math.PI;
+    L.pitch = 0;
+    const x0 = g.pos.x;
+    g.input.hold("right", true);
+    run(20);
+    g.input.hold("right", false);
+    run(10);
+    const strafe = { dx: +(g.pos.x - x0).toFixed(1), yaw: +Math.abs(Math.atan2(Math.sin(g.camYaw - Math.PI), Math.cos(g.camYaw - Math.PI))).toFixed(3) };
+    g.input.touch = false;
+    // Down the sights: the view closes in. One beam from the Marksman, from the scope, tags from across the room.
+    g.pos.x = 804;
+    g.pos.z = 1003.5;
+    g.vel.x = g.vel.z = 0;
+    g.camYaw = Math.PI;
+    hush();
+    const far = pinks[0];
+    far.x = far.tx = 804;
+    far.z = far.tz = 1003.5 - 11;
+    far.hp = 100;
+    const fov0 = g.camera.fov;
+    g.input.key("aim", true);
+    run(20);
+    const aimed = { ads: +g.live.fp.ads.toFixed(2), fov: Math.round(g.camera.fov), wide: Math.round(fov0), target: g.live.fp.target, plate: far.plate.visible };
+    const score0 = L.score;
+    L.cool = 0;
+    const shot = L.fire();
+    run(1);
+    const tagged = { shot, tags: L.tags, out: far.out > 0, pose: far.card.pose, ammo: L.ammo, mark: g.live.fp.hitKind, points: L.score - score0, feed: L.feed[0] ? `${L.feed[0].a}>${L.feed[0].b}` : "" };
+    g.input.key("aim", false);
+    run(10);
+    // A wall is a wall: somebody behind cover cannot be hit, and the crosshair does not light on them.
+    const hid = pinks[1];
+    hid.x = hid.tx = 800;
+    hid.z = hid.tz = 1000 - 2.2;
+    hid.hp = 100;
+    g.pos.x = 800;
+    g.pos.z = 1003.5;
+    g.camYaw = Math.PI;
+    L.pitch = 0;
+    run(2);
+    const lit = g.live.fp.target;
+    L.cool = 0;
+    L.fire();
+    const cover = { lit, hp: hid.hp };
+    // The Pulse Rifle: three to the body or two to the head, and a magazine that runs dry and has to be changed.
+    L.gun = BLASTERS[0];
+    L.ammo = L.gun.mag;
+    L.reloading = 0;
+    const near = pinks[2];
+    near.x = near.tx = 806;
+    near.z = near.tz = 1003.5;
+    near.hp = 100;
+    g.pos.x = 800;
+    g.pos.z = 1003.5;
+    g.camYaw = Math.PI / 2;
+    L.pitch = 0;
+    run(2);
+    const body = [];
+    for (let i = 0; i < 3; i++) {
+      L.cool = 0;
+      L.fire();
+      body.push(Math.round(near.hp));
+    }
+    near.out = 0;
+    near.hp = 100;
+    near.card.pose = null;
+    L.pitch = Math.atan2(near.height * 0.9 - 1.32, 6);
+    run(1);
+    const head = [];
+    for (let i = 0; i < 2; i++) {
+      L.cool = 0;
+      L.fire();
+      head.push(Math.round(near.hp));
+    }
+    const heads = L.heads;
+    L.pitch = 0.6;
+    L.ammo = 2;
+    L.cool = 0;
+    L.fire();
+    L.cool = 0;
+    L.fire();
+    const dry = { ammo: L.ammo, reloading: L.reloading > 0, fires: (L.cool = 0, L.fire()) };
+    run(Math.ceil(L.gun.reload * 30) + 3);
+    const full = { ammo: L.ammo, reloading: L.reloading > 0 };
+    // The vest: a hit takes a third, keeping out of the light brings it back, and the third hit puts him out and back at his base.
+    L.pitch = 0;
+    L.shield = 0;
+    L.down = 0;
+    L.vest = 100;
+    park();
+    hush();
+    L.tagged(pinks[3]);
+    run(1);
+    const hurt = { vest: Math.round(L.vest), from: +g.live.fp.hurt.toFixed(1) };
+    L.shield = 0;
+    run(30 * 8);
+    const healed = Math.round(L.vest);
+    L.streak = 2;
+    for (let i = 0; i < 3; i++) {
+      L.shield = 0;
+      L.tagged(pinks[3]);
+    }
+    await settle();
+    const out = { down: L.down > 0, outs: L.outs, streak: L.streak, card: !!document.querySelector("[data-fp]")?.textContent.includes("Tagged out") };
+    run(30 * 4);
+    const back = { down: L.down > 0, vest: Math.round(L.vest), x: +g.pos.x.toFixed(1), z: +g.pos.z.toFixed(1), start: [g.rooms.laser.start.x, g.rooms.laser.start.z] };
+    // Runs: three tags sweep the radar, five overcharge the blaster, seven black out every pink vest.
+    hush();
+    const runOf = (n) => {
+      L.streak = n - 1;
+      const b = pinks[0];
+      b.out = 0;
+      b.hp = 1;
+      b.card.pose = null;
+      L.strike(b, 50, false, 5);
+    };
+    park();
+    L.sweep = 0;
+    run(2);
+    const unseen = () => {
+      let n = 0;
+      for (let i = 0; i < g.live.radarN; i++) if (g.live.radar[i * 3 + 2] === 1) n++;
+      return n;
+    };
+    for (const b of pinks) {
+      b.out = 0;
+      b.hp = 100;
+      b.shot = -99;
+    }
+    g.pos.x = 800;
+    g.pos.z = 1009;
+    g.camYaw = Math.PI;
+    run(2);
+    const dark = unseen();
+    runOf(3);
+    run(2);
+    const swept = { sweep: L.sweep > 0, blips: unseen(), dark };
+    runOf(5);
+    const overcharged = L.over > 0;
+    for (const b of pinks) {
+      b.out = 0;
+      b.hp = 100;
+    }
+    runOf(7);
+    const blackout = pinks.filter((b) => b.out > 0).length;
+    // On a touch screen the blaster fires by itself once the crosshair has settled on somebody, and there are buttons for the rest.
+    for (const b of pinks) {
+      b.out = 0;
+      b.hp = 100;
+      b.card.pose = null;
+    }
+    park();
+    hush();
+    L.over = 0;
+    L.gun = BLASTERS[0];
+    L.ammo = L.gun.mag;
+    L.reloading = 0;
+    g.pos.x = 800;
+    g.pos.z = 1003.5;
+    g.vel.x = g.vel.z = 0;
+    g.camYaw = Math.PI / 2;
+    L.pitch = 0;
+    const mark = pinks[1];
+    mark.x = mark.tx = 806;
+    mark.z = mark.tz = 1003.5;
+    g.input.hold("run", false);
+    const shots0 = L.shots;
+    run(20);
+    await settle();
+    const thumbs = { fired: L.shots - shots0, pad: !!document.querySelector("[data-fp-pad]"), aim: !!document.querySelector("[data-aim]") };
+    g.input.touch = false;
+    g.push();
+    // The whistle: the match goes on his record.
+    const before = { xp: g.save.best.lt_xp ?? 0, games: g.save.best.lt_games ?? 0 };
+    L.left = 0.05;
+    run(4);
+    await settle();
+    const done = { phase: L.phase, overlay: g.overlay, xp: (g.save.best.lt_xp ?? 0) - before.xp, games: (g.save.best.lt_games ?? 0) - before.games, rank: (g.results?.rows ?? []).some((r) => r[0] === "Rank"), on: g.live.fp.on };
+    g.closeResults?.();
+    if (g.overlay) g.close();
+    L.quit();
+    for (let i = 0; i < 240 && !(g.place === "fun" && g.mode === "walk"); i++) g.tick(1 / 30);
+    for (let i = 0; i < 60 && g.live.fade > 0.05; i++) g.tick(1 / 30);
+    const after = { place: g.place, mode: g.mode, benji: g.benji.visible, roll: +Math.abs(g.camera.rotation.z).toFixed(3) };
+    // Back out on the street for whatever comes next.
+    g.leave(0, -150, 0);
+    for (let i = 0; i < 200 && (g.place !== "street" || g.live.fade > 0.05); i++) g.tick(1 / 30);
+    g.stage.render = draw;
+    return { ask, fresh, refused, ranked, view, looked, strafe, aimed, tagged, cover, body, head, heads, dry, full, hurt, healed, out, back, swept, overcharged, blackout, thumbs, done, after };
+  });
+  check(/^Laser tag/.test(fps.ask) && fps.fresh.overlay === "loadout" && fps.fresh.rank === "Recruit" && fps.fresh.racks === 3 && fps.fresh.locked === 2 && fps.refused === "pulse", "laser tag: the door shows his rank and three blasters, and a Recruit carries only the first", { ask: fps.ask, ...fps.fresh, refused: fps.refused });
+  check(fps.ranked.rank === "Lieutenant" && fps.ranked.locked === 0 && fps.ranked.picked === "marksman", "laser tag: rank issues the other blasters", fps.ranked);
+  check(fps.view.mode === "laser" && fps.view.phase === "go" && fps.view.gun === "marksman" && Math.abs(fps.view.eye - 1.32) < 0.06 && fps.view.at < 0.01 && !fps.view.benji && fps.view.hands && fps.view.cross && fps.view.on, "laser tag: Deploy puts the lens in his eyes with the chosen blaster drawn in his hands and a crosshair", fps.view);
+  check(fps.looked.yaw < -0.15 && fps.looked.pitch < -0.07 && Math.abs(fps.strafe.dx) > 1.2 && fps.strafe.yaw < 0.01, "laser tag: a drag looks about, and after it A and D step sideways without turning him", { ...fps.looked, strafe: fps.strafe });
+  check(fps.aimed.ads > 0.95 && fps.aimed.fov < 30 && fps.aimed.wide > 65 && fps.aimed.target === 1 && fps.aimed.plate, "laser tag: aiming brings the scope up, closes the view in, and names whoever is in it", fps.aimed);
+  check(fps.tagged.shot && fps.tagged.tags === 1 && fps.tagged.out && fps.tagged.pose === "out" && fps.tagged.ammo === 4 && fps.tagged.mark === 2 && fps.tagged.points >= 100 && /^Benji>/.test(fps.tagged.feed), "laser tag: one beam from the Marksman tags from across the room, and it is marked, scored and reported", fps.tagged);
+  check(fps.cover.lit === 0 && fps.cover.hp === 100, "laser tag: nobody is hit through cover", fps.cover);
+  check(fps.body.join() === "66,32,0" && fps.head[0] === 32 && fps.head[1] === 0 && fps.heads >= 1, "laser tag: the Pulse Rifle takes three to the body or two to the head", { body: fps.body, head: fps.head, heads: fps.heads });
+  check(fps.dry.ammo === 0 && fps.dry.reloading && fps.dry.fires === false && fps.full.ammo === 24 && !fps.full.reloading, "laser tag: an empty blaster reloads itself and cannot fire until it has", { dry: fps.dry, full: fps.full });
+  check(fps.hurt.vest === 66 && fps.hurt.from > 0.5 && fps.healed === 100 && fps.out.down && fps.out.outs === 1 && fps.out.streak === 0 && fps.out.card && !fps.back.down && fps.back.vest === 100 && Math.hypot(fps.back.x - fps.back.start[0], fps.back.z - fps.back.start[1]) < 0.5, "laser tag: the vest takes three hits, recharges out of the light, and a dark vest sends him back to his base", { hurt: fps.hurt, healed: fps.healed, out: fps.out, back: fps.back });
+  check(fps.swept.dark === 0 && fps.swept.sweep && fps.swept.blips >= 3 && fps.overcharged && fps.blackout === 4, "laser tag: three in a row sweeps the radar, five overcharges the blaster, seven blacks out the pinks", { swept: fps.swept, overcharged: fps.overcharged, blackout: fps.blackout });
+  check(fps.thumbs.fired >= 2 && fps.thumbs.pad && fps.thumbs.aim, "laser tag: on a touch screen it fires by itself on a target, with buttons to aim, reload, dash and sprint", fps.thumbs);
+  check(fps.done.phase === "over" && fps.done.overlay === "results" && fps.done.xp > 0 && fps.done.games === 1 && fps.done.rank && !fps.done.on && fps.after.place === "fun" && fps.after.mode === "walk" && fps.after.benji && fps.after.roll < 0.01, "laser tag: the match goes on his record, and leaving puts him back in the Fun House as himself", { done: fps.done, after: fps.after });
 
   // ---- the people of the city
   const folk = await page.evaluate(async () => {

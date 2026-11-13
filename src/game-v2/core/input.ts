@@ -1,7 +1,7 @@
 import { clamp } from "./util";
 
 /** What the game asks for. Keys, touch buttons and pads all land on these. */
-export type Action = "interact" | "action" | "run" | "map" | "pause" | "time" | "back" | "brake" | "left" | "right" | "up" | "down" | "horn" | "camera";
+export type Action = "interact" | "action" | "run" | "map" | "pause" | "time" | "back" | "brake" | "left" | "right" | "up" | "down" | "horn" | "camera" | "aim" | "reload";
 
 const KEYMAP: Record<string, Action> = {
   KeyE: "interact",
@@ -26,6 +26,8 @@ const KEYMAP: Record<string, Action> = {
   ArrowDown: "down",
   KeyH: "horn",
   KeyC: "camera",
+  KeyF: "aim",
+  KeyR: "reload",
 };
 
 /**
@@ -43,6 +45,18 @@ const PAD_FOOT: Partial<Record<number, Action>> = {
   8: "time",
   9: "pause",
   10: "horn",
+};
+/** In first person the left trigger raises the sights, the right one fires, and X reloads. */
+const PAD_FPS: Partial<Record<number, Action>> = {
+  0: "interact",
+  1: "back",
+  2: "reload",
+  3: "map",
+  5: "run",
+  6: "aim",
+  7: "action",
+  9: "pause",
+  10: "run",
 };
 const PAD_CAR: Partial<Record<number, Action>> = {
   0: "interact",
@@ -73,6 +87,7 @@ export class Input {
   private padX = 0;
   private padY = 0;
   private lookDX = 0;
+  private lookDY = 0;
   private gas = 0;
   private brakeAmt = 0;
   private nav: Nav[] = [];
@@ -80,6 +95,8 @@ export class Input {
   private aWas = false;
   /** Set by the game: in a car the triggers are pedals. */
   driving = false;
+  /** Set by the game: he is looking through his own eyes, so the pad's right stick looks up and down too. */
+  fps = false;
   /** Set by the game: in an activity the A button is also the action button. */
   actionOnA = false;
   /** True while the last thing touched was a gamepad. The HUD shows pad buttons. */
@@ -199,6 +216,13 @@ export class Input {
     return v;
   }
 
+  /** The same, up and down: positive is a drag down the screen. */
+  takeLookY() {
+    const v = this.lookDY;
+    this.lookDY = 0;
+    return v;
+  }
+
   // Touch and UI entry points.
   setStick(x: number, y: number) {
     this.touch = true;
@@ -218,8 +242,18 @@ export class Input {
     } else this.held.delete(a);
   }
 
-  look(dx: number) {
+  /** A mouse button held or let go: the same as a key, and says nothing about touch. */
+  key(a: Action, on: boolean) {
+    if (on) {
+      if (!this.held.has(a)) this.queued.add(a);
+      this.held.add(a);
+      this.pad = false;
+    } else this.held.delete(a);
+  }
+
+  look(dx: number, dy = 0) {
     this.lookDX += dx;
+    this.lookDY += dy;
   }
 
   private pollPad() {
@@ -248,8 +282,9 @@ export class Input {
       this.padY = -dead(pad.axes[1] ?? 0);
       const look = dead(pad.axes[2] ?? 0);
       this.lookDX += look * 0.045;
+      if (this.fps) this.lookDY += dead(pad.axes[3] ?? 0) * 0.032;
       let used = this.padX !== 0 || this.padY !== 0 || look !== 0;
-      const map = this.driving ? PAD_CAR : PAD_FOOT;
+      const map = this.driving ? PAD_CAR : this.fps ? PAD_FPS : PAD_FOOT;
       pad.buttons.forEach((b, i) => {
         if (!b.pressed) return;
         used = true;

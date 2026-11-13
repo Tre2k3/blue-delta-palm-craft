@@ -28,7 +28,7 @@ export type Anchor = { x: number; z: number };
 
 export type Mode = "title" | "walk" | "drive" | "race" | "hoops" | "bowl" | "fish" | "kart" | "laser" | "bounce" | "pit" | "whack";
 
-export type Overlay = null | "pause" | "map" | "shop" | "wardrobe" | "arcade" | "prizes" | "food" | "results" | "video" | "court" | "photo" | "garage" | "table" | "album" | "online";
+export type Overlay = null | "pause" | "map" | "shop" | "wardrobe" | "arcade" | "prizes" | "food" | "results" | "video" | "court" | "photo" | "garage" | "table" | "album" | "online" | "loadout";
 
 export type Catch = { name: string; lb: number; pay: number; rarity: string; color: string; img?: string };
 
@@ -133,7 +133,81 @@ export type HoopsHud = {
 export type BowlHud = { phase: "position" | "aim" | "power" | "roll" | "settle" | "done"; frame: number; ball: number; marks: string[][]; totals: (number | null)[]; total: number; call: string; best: number; standing: boolean[] };
 export type FishHud = { phase: "ready" | "charge" | "flying" | "wait" | "bite" | "reel" | "landed" | "lost"; bait: number; distance: number; fish: Catch | null; call: string; cooler: number; value: number; running: boolean };
 export type RaceHud = { phase: "count" | "go" | "finish"; count: number; lap: number; laps: number; place: number; racers: number; time: number; best: number; call: string; wrongWay: boolean; kart: boolean };
-export type LaserHud = { phase: "count" | "go" | "over"; count: number; left: number; score: number; tags: number; hit: boolean; call: string; vest: number; level: number; down: boolean; us: number; them: number; power: string };
+export type LaserHud = {
+  phase: "count" | "go" | "over";
+  count: number;
+  left: number;
+  score: number;
+  tags: number;
+  hit: boolean;
+  call: string;
+  /** Charge left in his vest, 0 to 100. */
+  vest: number;
+  level: number;
+  down: boolean;
+  us: number;
+  them: number;
+  power: string;
+  /** The blaster in his hands and what is left in it. */
+  gun: string;
+  ammo: number;
+  mag: number;
+  reloading: boolean;
+  /** Tags in a row without going down, and what the run earns next. */
+  streak: number;
+  reward: string;
+  /** Who tagged whom, newest first. */
+  feed: { a: string; b: string; team: 0 | 1; head: boolean }[];
+  /** While he is out: who did it, and the seconds until he is back in. */
+  by: string;
+  back: number;
+  /** On a touch screen the blaster fires by itself when the crosshair is on somebody. */
+  auto: boolean;
+  /** Down the sights of this one is a scope. */
+  scope: boolean;
+};
+/** The screen at the arena door: his rank, his record and the blasters. */
+export type LoadoutHud = {
+  xp: number;
+  rank: string;
+  level: number;
+  floor: number;
+  next: number;
+  share: number;
+  top: boolean;
+  stats: [string, string][];
+  guns: { id: string; name: string; note: string; mag: number; locked: string; picked: boolean; img: string }[];
+  auto: boolean;
+};
+/** What the HUD needs every frame to draw the blaster in his hands and the crosshair. */
+export type FirstPerson = {
+  on: boolean;
+  gun: number;
+  /** 0 from the hip, 1 down the sights. */
+  ads: number;
+  bob: number;
+  move: number;
+  kick: number;
+  /** Seconds of muzzle flash left. */
+  flash: number;
+  /** 0..1 through a reload, -1 when he is not reloading. */
+  reload: number;
+  sprint: number;
+  /** How far a beam may stray, radians. */
+  gap: number;
+  /** 0 nothing, 1 somebody he can tag, 2 one of his own. */
+  target: number;
+  hit: number;
+  /** 1 a hit, 2 a tag, 3 a hit to the head. */
+  hitKind: number;
+  /** 0..1 how fresh the last hit he took is, and where it came from relative to where he is looking. */
+  hurt: number;
+  hurtAngle: number;
+  swayX: number;
+  swayY: number;
+  down: number;
+  fov: number;
+};
 export type BounceHud = { left: number; best: number; combo: number; score: number; call: string };
 export type PitHud = { left: number; found: number; total: number; call: string };
 export type WhackHud = { left: number; score: number; hits: number; call: string };
@@ -191,6 +265,8 @@ export type HudState = {
   fish: FishHud | null;
   race: RaceHud | null;
   laser: LaserHud | null;
+  /** The arena door screen, while it is open. */
+  loadout: LoadoutHud | null;
   bounce: BounceHud | null;
   pit: PitHud | null;
   whack: WhackHud | null;
@@ -227,6 +303,8 @@ export type Live = {
   nitro: number;
   /** Black fade between places, 0..1. */
   fade: number;
+  /** Laser tag, through his own eyes. */
+  fp: FirstPerson;
   /** Laser tag radar: `radarN` blips, three numbers each (across, ahead, kind), in units of its radius. */
   radar: number[];
   radarN: number;

@@ -1,13 +1,14 @@
 import { Party } from "./Party";
 import { Photo } from "./Photo";
 import { TableScreen } from "./Tables";
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Action, Nav } from "../core/input";
 import type { HudState, Live, Reveal } from "../core/types";
 import { formatClock } from "../core/util";
 import type { Game } from "../game";
 import { Arcade } from "./Arcade";
 import { Album, CourtMenu, CrewScreen, FoodMenu, Garage, MapScreen, Pause, Prizes, ResultsCard, Shop, Title, VideoScreen, Wardrobe } from "./Menus";
+import { FirstPersonView, Loadout } from "./LaserView";
 import { drawMap } from "./map";
 import "./ui.css";
 
@@ -217,7 +218,7 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
   });
 
   // Drag anywhere on the scene to look around.
-  const drag = useRef<{ id: number; x: number } | null>(null);
+  const drag = useRef<{ id: number; x: number; y: number } | null>(null);
   const title = hud.mode === "title";
   const playing = !title && !hud.overlay && !hud.cinema;
   const activity = hud.hoops || hud.bowl || hud.fish || hud.race || hud.laser || hud.bounce || hud.pit || hud.whack || hud.machine;
@@ -233,14 +234,15 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
         onPointerDown={(e) => {
           game.sound.unlock();
           game.tap((e.clientX / window.innerWidth) * 2 - 1, 1 - (e.clientY / window.innerHeight) * 2);
-          drag.current = { id: e.pointerId, x: e.clientX };
+          drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
           (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
         }}
         onPointerMove={(e) => {
           const d = drag.current;
           if (!d || d.id !== e.pointerId) return;
-          game.input.look((e.clientX - d.x) * 0.0055);
+          game.input.look((e.clientX - d.x) * 0.0055, (e.clientY - d.y) * 0.0042);
           d.x = e.clientX;
+          d.y = e.clientY;
         }}
         onPointerUp={() => (drag.current = null)}
         onPointerCancel={() => (drag.current = null)}
@@ -347,6 +349,7 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
             </>
           )}
           {hud.race?.wrongWay && <div className="sr-title sr-pulse absolute inset-x-0 top-[40%] z-20 text-center text-4xl text-[#ff3b3b] drop-shadow-lg">Wrong way</div>}
+          {hud.laser && <FirstPersonView game={game} hud={hud} touch={touch} />}
           {hud.laser?.hit && <div className="absolute inset-0 z-10 bg-[#ff2aa0]/25" />}
           {hud.laser && <canvas ref={radar} width={132} height={132} className="absolute left-3 top-20 z-20 h-[104px] w-[104px] sm:top-24 sm:h-[132px] sm:w-[132px]" />}
 
@@ -492,6 +495,7 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
       {hud.overlay === "photo" && <Photo game={game} hud={hud} />}
       {hud.overlay === "album" && <Album game={game} hud={hud} />}
       {hud.overlay === "online" && <CrewScreen game={game} hud={hud} />}
+      {hud.overlay === "loadout" && <Loadout game={game} hud={hud} touch={touch} />}
       {hud.invite && !title && (
         <div className="pointer-events-none absolute inset-x-0 top-3 z-[45] flex justify-center px-3">
           <div data-invite className="sr-panel sr-pop pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-3 !border-[#39ff14]/60 !bg-[#070a09] px-4 py-3">
@@ -677,16 +681,13 @@ function ActivityBar({ hud }: { hud: HudState }) {
           <Stat label="Green" tone="#39ff14">
             {l.us}
           </Stat>
+          <Stat label="Time" tone={l.left <= 20 ? "#ff5a5a" : undefined}>
+            {Math.floor(l.left / 60)}:{String(l.left % 60).padStart(2, "0")}
+          </Stat>
           <Stat label="Pink" tone="#ff5ad1">
             {l.them}
           </Stat>
-          <Stat label="Time" tone={l.left <= 10 ? "#ff5a5a" : undefined}>
-            {l.left}
-          </Stat>
           <Stat label="You">{l.score}</Stat>
-          <Stat label="Vest" tone={l.vest <= 1 ? "#ff5a5a" : "#35e0d0"}>
-            <span className="text-base tracking-widest sm:text-lg">{l.down ? "OUT" : "●".repeat(l.vest) + "○".repeat(Math.max(0, 3 - l.vest))}</span>
-          </Stat>
           {l.power && (
             <Stat label="Power" tone="#ffd23a">
               <span className="text-base sm:text-lg">{l.power}</span>
@@ -779,6 +780,15 @@ function Touch({ game, hud }: { game: Game; hud: HudState }) {
     game.input.setStick(0, 0);
     if (nub.current) nub.current.style.transform = "translate(0px, 0px)";
   };
+  // The sights stay up until the button is pressed again; they come down when the match is over.
+  const [aimed, setAimed] = useState(false);
+  const fp = !!hud.laser;
+  useEffect(() => {
+    if (!fp) {
+      game.input.key("aim", false);
+      setAimed(false);
+    }
+  }, [fp, game]);
   const act = hud.hoops ? "Shoot" : hud.fish ? "Reel" : hud.bowl ? "Go" : hud.race ? "Drift" : hud.driving ? "Brake" : hud.laser ? "Fire" : hud.bounce ? "Jump" : hud.whack ? "Whack" : hud.machine ? hud.machine.act : "Act";
   const run = hud.race && !hud.race.kart ? "Nitro" : "Run";
   const activity = hud.mode !== "walk" && hud.mode !== "drive";
@@ -816,16 +826,45 @@ function Touch({ game, hud }: { game: Game; hud: HudState }) {
       >
         <div ref={nub} className="h-14 w-14 rounded-full border border-white/50 bg-white/30" />
       </div>
-      <div className="pointer-events-auto absolute bottom-6 right-4 z-30 flex items-end gap-2">
-        <div className="flex flex-col gap-2">
-          {activity && <Hold a="back" label="Quit" />}
-          <Hold a="run" label={run} />
+      {hud.laser ? (
+        // First person: fire under the thumb, sights and reload beside it, sprint and dash above.
+        <div data-fp-pad className="pointer-events-auto absolute bottom-6 right-4 z-30 flex items-end gap-2">
+          <div className="flex flex-col gap-2">
+            <Hold a="back" label="Quit" />
+            <Hold a="reload" label="Reload" />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Hold a="interact" label="Dash" />
+            <button
+              data-aim
+              className={`sr-touch flex h-14 w-14 items-center justify-center rounded-full border-2 text-[11px] font-black uppercase text-white ${aimed ? "border-[#39ff14] bg-[#39ff14]/45" : "border-white/40 bg-black/55"}`}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                game.sound.unlock();
+                game.input.hold("aim", !aimed);
+                setAimed(!aimed);
+              }}
+            >
+              Aim
+            </button>
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <Hold a="run" label="Sprint" />
+            <Hold a="action" label="Fire" big />
+          </div>
         </div>
-        <div className="flex flex-col items-center gap-2">
-          <Hold a="interact" label="E" />
-          <Hold a="action" label={act} big />
+      ) : (
+        <div className="pointer-events-auto absolute bottom-6 right-4 z-30 flex items-end gap-2">
+          <div className="flex flex-col gap-2">
+            {activity && <Hold a="back" label="Quit" />}
+            <Hold a="run" label={run} />
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <Hold a="interact" label="E" />
+            <Hold a="action" label={act} big />
+          </div>
         </div>
-      </div>
+      )}
     </>
   );
 }

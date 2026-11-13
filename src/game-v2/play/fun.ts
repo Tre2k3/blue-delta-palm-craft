@@ -390,26 +390,6 @@ export class KartRace implements Activity {
 // ------------------------------------------------------------------ laser tag (the game itself is in laser.ts)
 
 /** A laser tag blaster: chunky body, a lit barrel, a sight on top. Held at the hip, pointing where its owner aims. */
-export function makeBlaster(glow: THREE.Color) {
-  const g = new THREE.Group();
-  const shell = new THREE.MeshStandardMaterial({ color: 0x1a1c22, roughness: 0.45, metalness: 0.4 });
-  const lit = new THREE.MeshBasicMaterial({ color: glow, toneMapped: false });
-  const part = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number) => {
-    const m = new THREE.Mesh(geo, mat);
-    m.position.set(x, y, z);
-    g.add(m);
-    return m;
-  };
-  part(new THREE.BoxGeometry(0.11, 0.15, 0.44), shell, 0, 0, 0.1);
-  part(new THREE.BoxGeometry(0.08, 0.2, 0.1), shell, 0, -0.15, -0.04);
-  part(new THREE.BoxGeometry(0.06, 0.06, 0.2), shell, 0, 0.1, 0.02);
-  const barrel = part(new THREE.CylinderGeometry(0.035, 0.035, 0.26, 10), lit, 0, 0.01, 0.42);
-  barrel.rotation.x = Math.PI / 2;
-  part(new THREE.BoxGeometry(0.125, 0.03, 0.3), lit, 0, 0.06, 0.1);
-  part(new THREE.SphereGeometry(0.05, 10, 8), lit, 0, 0.01, 0.56);
-  return g;
-}
-
 // ------------------------------------------------------------------ trampoline
 
 /** Thirty seconds on the big trampoline. Press on the landing to go higher; spin in the air for points. */
