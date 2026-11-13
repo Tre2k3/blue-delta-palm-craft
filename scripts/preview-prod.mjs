@@ -69,10 +69,15 @@ const server = createServer(async (req, res) => {
       if (Array.isArray(value)) for (const item of value) headers.append(key, item);
       else headers.set(key, value);
     }
-    const request = new Request(`http://${hostHdr}${req.url || "/"}`, {
-      method: req.method || "GET",
-      headers,
-    });
+    // A POST carries a body; pass it on as it came.
+    const method = req.method || "GET";
+    let body;
+    if (method !== "GET" && method !== "HEAD") {
+      const chunks = [];
+      for await (const chunk of req) chunks.push(chunk);
+      if (chunks.length) body = Buffer.concat(chunks);
+    }
+    const request = new Request(`http://${hostHdr}${req.url || "/"}`, { method, headers, body });
     const response = await fetchHandler(request);
     res.statusCode = response.status;
     response.headers.forEach((value, key) => {

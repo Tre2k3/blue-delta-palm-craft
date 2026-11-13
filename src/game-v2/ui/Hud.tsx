@@ -7,7 +7,7 @@ import type { HudState, Live, Reveal } from "../core/types";
 import { formatClock } from "../core/util";
 import type { Game } from "../game";
 import { Arcade } from "./Arcade";
-import { Album, CourtMenu, FoodMenu, Garage, MapScreen, Pause, Prizes, ResultsCard, Shop, Title, VideoScreen, Wardrobe } from "./Menus";
+import { Album, CourtMenu, CrewScreen, FoodMenu, Garage, MapScreen, Pause, Prizes, ResultsCard, Shop, Title, VideoScreen, Wardrobe } from "./Menus";
 import { drawMap } from "./map";
 import "./ui.css";
 
@@ -213,7 +213,7 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
     const el = mini.current;
     const g = el?.getContext("2d");
     const h = hudRef.current;
-    if (el && g) drawMap(g, el.width, el.height, { cx: l.x, cz: l.z, scale: 0.62 }, { x: l.x, z: l.z, heading: l.heading, car: h.car, target: h.target, time: performance.now() / 1000 }, false);
+    if (el && g) drawMap(g, el.width, el.height, { cx: l.x, cz: l.z, scale: 0.62 }, { x: l.x, z: l.z, heading: l.heading, car: h.car, target: h.target, time: performance.now() / 1000, friends: h.crew.friends }, false);
   });
 
   // Drag anywhere on the scene to look around.
@@ -464,10 +464,11 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
           )}
 
           {touch && <Touch game={game} hud={hud} />}
-          {touch && (
+          {(touch || !activity) && (
             <div className={`pointer-events-auto absolute right-3 z-20 flex gap-1.5 ${activity ? "top-[84px]" : "top-[128px]"}`}>
-              {!activity && <IconBtn label="Map" onClick={() => game.open("map")} />}
-              <IconBtn label="Pause" onClick={() => game.open("pause")} />
+              {!activity && <CrewChip game={game} hud={hud} />}
+              {touch && !activity && <IconBtn label="Map" onClick={() => game.open("map")} />}
+              {touch && <IconBtn label="Pause" onClick={() => game.open("pause")} />}
             </div>
           )}
         </>
@@ -490,6 +491,27 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
       {hud.overlay === "results" && <ResultsCard game={game} hud={hud} />}
       {hud.overlay === "photo" && <Photo game={game} hud={hud} />}
       {hud.overlay === "album" && <Album game={game} hud={hud} />}
+      {hud.overlay === "online" && <CrewScreen game={game} hud={hud} />}
+      {hud.invite && !title && (
+        <div className="pointer-events-none absolute inset-x-0 top-3 z-[45] flex justify-center px-3">
+          <div data-invite className="sr-panel sr-pop pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-3 !border-[#39ff14]/60 !bg-[#070a09] px-4 py-3">
+            <div className="min-w-0">
+              <div className="text-[10px] font-black uppercase tracking-widest text-[#39ff14]">Your crew  ·  {hud.invite.left}s</div>
+              <div className="text-sm font-extrabold text-white">
+                {hud.invite.name} wants a game of {hud.invite.game}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button data-invite-yes className="sr-btn sr-btn-green px-4 py-2" onClick={() => game.board.accept()}>
+                Play
+              </button>
+              <button data-invite-no className="sr-btn sr-btn-ghost px-3 py-2" onClick={() => game.board.decline()}>
+                Not now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {hud.reveal && !title && <RevealCard key={hud.reveal.img} r={hud.reveal} />}
 
       <div ref={fade} className="pointer-events-none absolute inset-0 z-50 bg-black" style={{ opacity: 1 }} />
@@ -538,6 +560,18 @@ function Cinema({ card, touch, pad }: { card: { title: string; sub: string }; to
       </div>
       <div className="absolute bottom-[2.6vh] right-4 text-[10px] font-bold uppercase tracking-[0.25em] text-white/55">{touch ? "Tap to skip" : pad ? "Press A to skip" : "Press E or Space to skip"}</div>
     </div>
+  );
+}
+
+/** The way into playing with friends, and at a glance how many of the crew are on the line. */
+function CrewChip({ game, hud }: { game: Game; hud: HudState }) {
+  const c = hud.crew;
+  const on = c.friends.filter((f) => f.link === "connected").length;
+  return (
+    <button data-crew-chip className="sr-chip !px-3 !py-2 !text-[11px] uppercase" onClick={() => game.open("online")}>
+      <span className={`h-2 w-2 rounded-full ${c.status === "waiting" ? "sr-pulse" : ""}`} style={{ background: c.status === "linked" ? "#39ff14" : c.status === "waiting" ? "#f4d77a" : "#ffffff55" }} />
+      {c.code ? (on ? `Crew  ·  ${on + 1}` : `Crew ${c.code}`) : "Friends"}
+    </button>
   );
 }
 

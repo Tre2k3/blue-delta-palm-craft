@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { OUTFITS, type OutfitId } from "../assets/cast";
-import type { HudState } from "../core/types";
+import type { HudState, TableId } from "../core/types";
 import type { Game } from "../game";
+import { REACTIONS } from "../net/crew";
+import { TABLES } from "../play/tables";
 import { CATALOG, productById } from "../play/catalog";
 import { RIDES } from "../play/garage";
 import { FOOD, FOOD_TRUCKS, PRIZES } from "../play/goods";
@@ -49,6 +51,13 @@ export function Title({ game, hud }: { game: Game; hud: HudState }) {
           <p className="mt-3 max-w-md text-sm font-semibold text-white/85 drop-shadow sm:text-base">
             Run the Drop Day. Hoop on the river, bowl, fish the Mississippi, race downtown, and win big at the Fun House. Every piece in the boutique is real.
           </p>
+          {hud.crew.waiting && (
+            <div data-crew-waiting className="sr-pop mt-4 inline-flex items-center gap-2.5 rounded-xl border border-[#39ff14]/50 bg-black/70 px-3.5 py-2 text-sm font-extrabold text-white">
+              <span className="sr-pulse h-2.5 w-2.5 rounded-full bg-[#39ff14]" />
+              Your crew is waiting
+              <span className="sr-title text-lg tracking-[0.2em] text-[#39ff14]">{hud.crew.waiting}</span>
+            </div>
+          )}
           <div className="mt-5 flex flex-wrap gap-3">
             {hud.hasSave && (
               <button data-primary className="sr-btn sr-btn-green px-8 py-3 text-lg" onClick={() => game.play(false)}>
@@ -181,6 +190,11 @@ export function Pause({ game, hud }: { game: Game; hud: HudState }) {
       {(hud.mode === "walk" || hud.mode === "drive") && hud.place === "street" && (
         <button className="sr-btn sr-btn-ghost mb-3 w-full py-2.5" onClick={() => game.openGarage()}>
           Garage: pick your ride
+        </button>
+      )}
+      {hud.mode !== "title" && (
+        <button data-crew-open className="sr-btn sr-btn-ghost mb-3 w-full py-2.5" onClick={() => game.open("online")}>
+          {hud.crew.code ? `Your crew  ·  ${hud.crew.code}` : "Play with friends"}
         </button>
       )}
       <Row label="Today's drop">
@@ -322,6 +336,174 @@ export function Pause({ game, hud }: { game: Game; hud: HudState }) {
   );
 }
 
+// ---------------------------------------------------------------- crew
+
+const LINK_TONE = { connected: "#39ff14", connecting: "#f4d77a", failed: "#ff6b6b" } as const;
+const CREW_GAMES: TableId[] = ["chess", "checkers", "connect4", "tictactoe"];
+
+/** Playing with friends: start a crew or join one, see who is in it and where, and ask them for a game. */
+export function CrewScreen({ game, hud }: { game: Game; hud: HudState }) {
+  const c = hud.crew;
+  const [name, setName] = useState(c.name);
+  const [code, setCode] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [asking, setAsking] = useState("");
+  useEffect(() => setName(c.name), [c.name]);
+  const saveName = () => game.crew.rename(name);
+  const share = () => {
+    const done = () => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2200);
+    };
+    const text = `Come play SackReligious Memphis with me. Crew code ${c.code}.`;
+    // A phone hands the link to whatever it shares with; anything else puts it on the clipboard.
+    if (hud.touch && navigator.share) void navigator.share({ title: "SackReligious Memphis", text, url: c.invite }).catch(() => {});
+    else void navigator.clipboard?.writeText(c.invite).then(done, () => {});
+  };
+  const nameRow = (
+    <Row label="Your name">
+      <input
+        data-crew-name
+        value={name}
+        maxLength={14}
+        onChange={(e) => setName(e.target.value)}
+        onBlur={saveName}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === "Enter") e.currentTarget.blur();
+        }}
+        onKeyUp={(e) => e.stopPropagation()}
+        className="w-40 rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-right text-sm font-extrabold text-white outline-none focus:border-[#39ff14]"
+      />
+    </Row>
+  );
+  if (!c.code)
+    return (
+      <Sheet title="Play with friends" sub="Start a crew, send your friends the four letters, and they show up in your Memphis." onClose={() => game.close()}>
+        {nameRow}
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-xl border border-[#39ff14]/35 bg-[#39ff14]/5 p-4">
+            <div className="sr-title text-xl text-[#39ff14]">Start a crew</div>
+            <div className="mt-1 text-xs text-white/70">You get a code to hand out. Up to {c.max} of you.</div>
+            <button data-primary data-crew-host className="sr-btn sr-btn-green mt-3 w-full py-2.5" onClick={() => game.crew.host()}>
+              Start a crew
+            </button>
+          </div>
+          <div className="rounded-xl border border-white/15 bg-white/5 p-4">
+            <div className="sr-title text-xl text-white">Join a crew</div>
+            <div className="mt-1 text-xs text-white/70">Type the four letters a friend sent you.</div>
+            <div className="mt-3 flex gap-2">
+              <input
+                data-crew-code
+                value={code}
+                maxLength={4}
+                placeholder="ABCD"
+                autoCapitalize="characters"
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, ""))}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === "Enter") game.crew.join(code);
+                }}
+                onKeyUp={(e) => e.stopPropagation()}
+                className="sr-title w-full min-w-0 rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-center text-2xl tracking-[0.35em] text-white outline-none placeholder:text-white/20 focus:border-[#39ff14]"
+              />
+              <button data-crew-join disabled={code.length !== 4} className="sr-btn sr-btn-gold shrink-0 px-4 disabled:opacity-40" onClick={() => game.crew.join(code)}>
+                Join
+              </button>
+            </div>
+          </div>
+        </div>
+        {c.error && <div className="mt-3 text-center text-sm font-bold text-[#ff8a8a]">{c.error}</div>}
+        <ul className="mt-4 grid gap-1.5 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/75">
+          {[
+            "Everybody keeps their own game: their money, their story, their fits and their rides.",
+            "You see each other walk, drive and play, in whatever you are wearing and driving.",
+            "Sit down to chess, checkers, four in a row or tic-tac-toe against each other, each on your own device.",
+            "Your devices talk straight to each other, so only share a code with people you know.",
+          ].map((t) => (
+            <li key={t} className="flex gap-2">
+              <span className="text-[#39ff14]">•</span>
+              <span>{t}</span>
+            </li>
+          ))}
+        </ul>
+      </Sheet>
+    );
+  const linked = c.friends.filter((f) => f.link === "connected").length;
+  return (
+    <Sheet title="Your crew" sub={linked ? `${linked + 1} of you in Memphis right now.` : c.ready ? "The line is open. Send the code or the link to a friend." : "Opening the crew line…"} onClose={() => game.close()}>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#39ff14]/35 bg-[#39ff14]/5 p-3 sm:p-4">
+        <div>
+          <div className="text-[10px] font-black uppercase tracking-widest text-[#39ff14]">Crew code</div>
+          <div data-crew-shown className="mt-1 flex gap-1.5">
+            {c.code.split("").map((ch, i) => (
+              <span key={i} className="sr-title flex h-12 w-10 items-center justify-center rounded-lg border border-white/20 bg-black/60 text-3xl text-white sm:h-14 sm:w-12 sm:text-4xl">
+                {ch}
+              </span>
+            ))}
+          </div>
+        </div>
+        <button data-primary data-crew-share className="sr-btn sr-btn-green px-4 py-2.5" onClick={share}>
+          {copied ? "Link copied" : hud.touch ? "Send the link" : "Copy the link"}
+        </button>
+      </div>
+      {c.error && <div className="mt-3 text-center text-sm font-bold text-[#ff8a8a]">{c.error}</div>}
+      <div className="mt-4 grid gap-2">
+        {c.friends.length === 0 && <div className="rounded-xl border border-dashed border-white/15 p-4 text-center text-sm text-white/60">Nobody else here yet. Anyone who opens the link or types the code lands in your Memphis.</div>}
+        {c.friends.map((f) => (
+          <div key={f.id} data-crew-friend={f.name} className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="flex items-center gap-3">
+              <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${f.link === "connecting" ? "sr-pulse" : ""}`} style={{ background: LINK_TONE[f.link], boxShadow: `0 0 8px ${LINK_TONE[f.link]}` }} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-extrabold text-white">{f.name}</div>
+                <div className="truncate text-[11px] text-white/55">
+                  {f.link === "connected" ? [f.doing, f.where].filter(Boolean).join("  ·  ") || "Getting their bearings" : f.link === "connecting" ? "Linking up…" : "Could not link directly. One of you may be on a network that blocks it: try other Wi-Fi, or mobile data."}
+                </div>
+              </div>
+              {f.link === "connected" && f.rtt !== null && <span className="shrink-0 text-[11px] font-bold text-white/45">{Math.round(f.rtt)} ms</span>}
+              {f.link === "connected" && (
+                <button data-crew-ask={f.name} className={`sr-btn shrink-0 px-3 py-2 text-xs ${asking === f.id ? "sr-btn-gold" : "sr-btn-ghost"}`} onClick={() => setAsking(asking === f.id ? "" : f.id)}>
+                  Play
+                </button>
+              )}
+            </div>
+            {asking === f.id && f.link === "connected" && (
+              <div className="mt-2.5 flex flex-wrap gap-2 border-t border-white/10 pt-2.5">
+                {CREW_GAMES.map((id) => (
+                  <button key={id} data-crew-game={id} className="sr-btn sr-btn-green px-3 py-2 text-xs" onClick={() => game.board.invite(f.id, id)}>
+                    {TABLES[id].name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {linked > 0 && (
+        <div className="mt-4">
+          <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-white/50">Throw one up over your head</div>
+          <div className="flex flex-wrap gap-2">
+            {REACTIONS.map((e) => (
+              <button key={e} data-react={e} className="sr-btn sr-btn-ghost !px-4 !py-2 text-xl" onClick={() => game.crew.react(e)}>
+                {e}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="mt-4">{nameRow}</div>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="max-w-[340px] text-[11px] text-white/45">Your devices talk straight to each other. Only share the code with people you know.</div>
+        <button data-crew-leave className="sr-btn sr-btn-ghost" onClick={() => game.crew.leave()}>
+          Leave the crew
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
 // ---------------------------------------------------------------- map
 
 export function MapScreen({ game, hud }: { game: Game; hud: HudState }) {
@@ -334,7 +516,7 @@ export function MapScreen({ game, hud }: { game: Game; hud: HudState }) {
       const g = el?.getContext("2d");
       if (!el || !g) return;
       const l = game.live;
-      drawMap(g, el.width, el.height, { cx: 0, cz: -48, scale: el.width / 330 }, { x: l.x, z: l.z, heading: l.heading, car: hud.car, target: hud.target, time: performance.now() / 1000 }, true);
+      drawMap(g, el.width, el.height, { cx: 0, cz: -48, scale: el.width / 330 }, { x: l.x, z: l.z, heading: l.heading, car: hud.car, target: hud.target, time: performance.now() / 1000, friends: game.crew.hud().friends }, true);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);

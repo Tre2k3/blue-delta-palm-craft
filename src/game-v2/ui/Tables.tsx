@@ -6,6 +6,7 @@ import type { ChessView } from "../play/tables/chess";
 import type { DominoView, Tile } from "../play/tables/dominoes";
 import type { FourView, TicView } from "../play/tables/grids";
 import type { SpadesView } from "../play/tables/spades";
+import { SIDES } from "../play/tables";
 import { Sheet } from "./Menus";
 
 type Send = (move: unknown) => void;
@@ -17,11 +18,21 @@ export function TableScreen({ game, hud }: { game: Game; hud: HudState }) {
   const send: Send = (m) => game.board.move(m);
   // The card and tile games need the full width of the sheet.
   const wide = t.id === "spades" || t.id === "dominoes";
-  const sub = t.stage === "pick" ? t.line : t.two ? "Two players, one device. Pass it across after each move." : `Against ${t.id === "spades" ? `${t.rivals[1]} and ${t.rivals[2]}, with ${t.rivals[0]}` : t.rivals[0]}  ·  ${t.levels[t.level]!.name}`;
+  const on = t.online;
+  const sub = t.stage === "pick" ? t.line : on ? (t.stage === "wait" ? `Asking ${on.name} for a game.` : `Against ${on.name}, each on your own device  ·  You are ${SIDES[t.id]?.[on.seat] ?? "up"}${on.seat === 0 ? " and move first" : ""}`) : t.two ? "Two players, one device. Pass it across after each move." : `Against ${t.id === "spades" ? `${t.rivals[1]} and ${t.rivals[2]}, with ${t.rivals[0]}` : t.rivals[0]}  ·  ${t.levels[t.level]!.name}`;
   return (
     <Sheet title={t.name} sub={sub} onClose={() => game.close()} wide={wide}>
       {t.stage === "pick" ? (
         <Pick game={game} t={t} />
+      ) : t.stage === "wait" ? (
+        <div data-waiting className="flex flex-col items-center gap-4 py-8 text-center">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/15 border-t-[#39ff14]" />
+          <div className="sr-title text-2xl text-white">Waiting for {on?.name}</div>
+          <div className="max-w-[360px] text-sm text-white/65">They have half a minute to sit down. You get the first move.</div>
+          <button className="sr-btn sr-btn-ghost px-5 py-2" onClick={() => game.board.sit(t.id)}>
+            Never mind
+          </button>
+        </div>
       ) : (
         <div className={`flex flex-col items-center gap-3 ${wide ? "" : "[@media(max-height:520px)]:flex-row [@media(max-height:520px)]:items-start [@media(max-height:520px)]:justify-center"}`}>
           <div className={`flex flex-col items-center gap-3 ${wide ? "w-full" : "[@media(max-height:520px)]:w-[42%]"}`}>
@@ -29,14 +40,22 @@ export function TableScreen({ game, hud }: { game: Game; hud: HudState }) {
           {t.stage === "done" && t.result && (
               <div className="sr-pop w-full max-w-[520px] rounded-xl border border-white/15 bg-black/60 p-4 text-center">
                 <div className="sr-title text-2xl" style={{ color: t.result.won === true ? "#39ff14" : t.result.won === false ? "#ff6b6b" : "#f4d77a" }}>
-                  {t.two ? "Game over" : t.result.won === true ? "You win" : t.result.won === false ? `${t.id === "spades" ? "They take it" : `${t.rivals[0]} wins`}` : "A draw"}
+                  {on ? (t.result.won === true ? "You win" : t.result.won === false ? `${on.name} wins` : on.gone ? "Game off" : "A draw") : t.two ? "Game over" : t.result.won === true ? "You win" : t.result.won === false ? `${t.id === "spades" ? "They take it" : `${t.rivals[0]} wins`}` : "A draw"}
                 </div>
                 <div className="mt-1 text-sm text-white/75">{t.result.text}</div>
                 {t.result.pay > 0 && <div className="mt-1 text-sm font-extrabold text-[#39ff14]">+${t.result.pay}</div>}
                 <div className="mt-3 flex flex-wrap justify-center gap-2">
-                  <button data-primary className="sr-btn sr-btn-green px-5 py-2" onClick={() => game.board.start(t.level, t.two)}>
-                    Play again
-                  </button>
+                  {on ? (
+                    !on.gone && (
+                      <button data-primary data-rematch disabled={on.again} className={`sr-btn px-5 py-2 disabled:opacity-60 ${on.theirs ? "sr-btn-gold" : "sr-btn-green"}`} onClick={() => game.board.again()}>
+                        {on.again ? `Waiting for ${on.name}…` : on.theirs ? `${on.name} wants a rematch: play` : "Rematch"}
+                      </button>
+                    )
+                  ) : (
+                    <button data-primary className="sr-btn sr-btn-green px-5 py-2" onClick={() => game.board.start(t.level, t.two)}>
+                      Play again
+                    </button>
+                  )}
                   <button className="sr-btn sr-btn-ghost px-4 py-2" onClick={() => game.board.sit(t.id)}>
                     Change the game
                   </button>
@@ -47,8 +66,8 @@ export function TableScreen({ game, hud }: { game: Game; hud: HudState }) {
               </div>
             )}
           </div>
-          {t.id === "chess" && <ChessBoard v={t.view as ChessView} mine={t.mine} send={send} />}
-          {t.id === "checkers" && <CheckersBoard v={t.view as CheckersView} mine={t.mine} send={send} />}
+          {t.id === "chess" && <ChessBoard v={t.view as ChessView} mine={t.mine} send={send} flip={on?.seat === 1} />}
+          {t.id === "checkers" && <CheckersBoard v={t.view as CheckersView} mine={t.mine} send={send} flip={on?.seat === 1} />}
           {t.id === "connect4" && <FourBoard v={t.view as FourView} mine={t.mine} send={send} />}
           {t.id === "tictactoe" && <TicBoard v={t.view as TicView} mine={t.mine} send={send} />}
           {t.id === "dominoes" && <DominoTable v={t.view as DominoView} mine={t.mine} send={send} rival={t.rivals[0]!} />}
@@ -95,6 +114,27 @@ function Pick({ game, t }: { game: Game; t: TableHud }) {
           </button>
         )}
       </div>
+      {t.canTwo && (
+        <div data-online className="rounded-xl border border-[#39ff14]/30 bg-[#39ff14]/5 p-3">
+          <div className="mb-2 text-[11px] font-black uppercase tracking-widest text-[#39ff14]">Play a friend, each on your own device</div>
+          {t.friends.length ? (
+            <div className="flex flex-wrap gap-2">
+              {t.friends.map((f) => (
+                <button key={f.id} data-friend={f.name} className="sr-btn sr-btn-green px-4 py-2" onClick={() => game.board.invite(f.id)}>
+                  Ask {f.name}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0 flex-1 text-xs text-white/70">{t.crewed ? "Nobody else is in your crew yet. Send them your code." : "Start a crew, send a friend the four letters, and ask them for a game from here."}</div>
+              <button data-crew-open className="sr-btn sr-btn-ghost shrink-0 px-4 py-2" onClick={() => game.open("online")}>
+                {t.crewed ? "Your crew" : "Play with friends"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       {t.wins > 0 && <div className="text-center text-xs text-white/50">You have won here {t.wins} time{t.wins === 1 ? "" : "s"}.</div>}
     </div>
   );
@@ -108,7 +148,8 @@ function Status({ t, spare }: { t: TableHud; spare?: boolean }) {
     const v = t.view as SpadesView;
     const who = ["You", t.rivals[1]!, t.rivals[0]!, t.rivals[2]!][v.turn]!;
     text = v.phase === "hand" ? "Hand over" : v.phase === "trick" ? v.last : v.phase === "bid" ? (t.mine ? "Your bid" : `${who} is bidding`) : t.mine ? "Your card" : `${who} to play`;
-  } else if (t.two) text = `Player ${t.turn + 1} to move`;
+  } else if (t.online) text = t.mine ? "Your move" : `${t.online.name} to move`;
+  else if (t.two) text = `Player ${t.turn + 1} to move`;
   else if (t.id === "dominoes" && (t.view as DominoView).round) text = "Round over";
   else text = t.mine ? "Your move" : `${t.rivals[0]} is thinking`;
   if (t.id === "chess" && (t.view as ChessView).check) text += "  ·  Check";
@@ -137,7 +178,10 @@ function Square({ children, cells }: { children: ReactNode; cells: number }) {
 
 const GLYPH: Record<string, string> = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
 
-function ChessBoard({ v, mine, send }: { v: ChessView; mine: boolean; send: Send }) {
+/** The squares in the order they are drawn: turned round for whoever has the far side. */
+const order = (flip: boolean | undefined) => Array.from({ length: 64 }, (_, i) => (flip ? 63 - i : i));
+
+function ChessBoard({ v, mine, send, flip }: { v: ChessView; mine: boolean; send: Send; flip?: boolean }) {
   const [sel, setSel] = useState(-1);
   useEffect(() => setSel(-1), [v.turn]);
   const targets = sel >= 0 ? v.moves.filter((m) => m.from === sel).map((m) => m.to) : [];
@@ -158,9 +202,10 @@ function ChessBoard({ v, mine, send }: { v: ChessView; mine: boolean; send: Send
   );
   return (
     <div className="flex w-full flex-col items-center gap-1">
-      <div className={`w-full max-w-[62vh] ${ROOMY}`}>{lost(v.taken[1], true)}</div>
+      <div className={`w-full max-w-[62vh] ${ROOMY}`}>{flip ? lost(v.taken[0], false) : lost(v.taken[1], true)}</div>
       <Square cells={8}>
-        {v.cells.map((p, i) => {
+        {order(flip).map((i) => {
+          const p = v.cells[i]!;
           const dark = ((i >> 3) + (i & 7)) % 2 === 1;
           const isLast = v.last && (v.last.from === i || v.last.to === i);
           const light = p !== "" && p === p.toUpperCase();
@@ -176,14 +221,14 @@ function ChessBoard({ v, mine, send }: { v: ChessView; mine: boolean; send: Send
           );
         })}
       </Square>
-      <div className={`w-full max-w-[62vh] ${ROOMY}`}>{lost(v.taken[0], false)}</div>
+      <div className={`w-full max-w-[62vh] ${ROOMY}`}>{flip ? lost(v.taken[1], true) : lost(v.taken[0], false)}</div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------- checkers
 
-function CheckersBoard({ v, mine, send }: { v: CheckersView; mine: boolean; send: Send }) {
+function CheckersBoard({ v, mine, send, flip }: { v: CheckersView; mine: boolean; send: Send; flip?: boolean }) {
   const [picked, setPicked] = useState(-1);
   useEffect(() => setPicked(-1), [v.turn]);
   const sel = v.chain >= 0 ? v.chain : picked;
@@ -202,7 +247,8 @@ function CheckersBoard({ v, mine, send }: { v: CheckersView; mine: boolean; send
         Red {v.count[0]} · Black {v.count[1]}
       </div>
       <Square cells={8}>
-        {v.cells.map((p, i) => {
+        {order(flip).map((i) => {
+          const p = v.cells[i]!;
           const dark = ((i >> 3) + (i & 7)) % 2 === 1;
           const isLast = v.last && (v.last.from === i || v.last.to === i);
           const red = p === 1 || p === 2;

@@ -28,6 +28,7 @@ import { Hoops } from "./play/hoops";
 import { PinballTable, PrizeWheel, SkeeLane } from "./play/floor";
 import { POSTCARDS, dailyFor, dailyPay, dayBefore, dayKey, meets, postcardImg } from "./play/extras";
 import { TableGames } from "./play/tables";
+import { Crew } from "./net/crew";
 import { RIDES, rideById } from "./play/garage";
 import { AirHockey, BagToss, BottleBash, ClownToss } from "./play/midway";
 import { PopShot, Whack } from "./play/machines";
@@ -317,6 +318,8 @@ export class Game {
   private whack: Whack;
   /** The game tables in the park. */
   readonly board: TableGames;
+  /** Friends on other devices, walking round the same city. */
+  readonly crew: Crew;
   private popshot: PopShot;
   private pinball: PinballTable;
   private skee: SkeeLane;
@@ -401,6 +404,9 @@ export class Game {
     this.pit = new BallPit(this);
     this.whack = new Whack(this);
     this.board = new TableGames(this);
+    this.crew = new Crew(this);
+    this.crew.onTable = (from, msg) => this.board.onNet(from, msg);
+    this.crew.onGone = (id) => this.board.gone(id);
     this.popshot = new PopShot(this);
     this.pinball = new PinballTable(this);
     this.skee = new SkeeLane(this);
@@ -948,6 +954,8 @@ export class Game {
     this.snapCamera();
     this.sound.ui();
     if (!resume) this.startIntro();
+    // A link from a friend, or a crew a refresh cut off: straight back in.
+    this.crew.resume();
     this.push();
   }
 
@@ -1215,6 +1223,11 @@ export class Game {
     this.sound.hush(o === "video");
     this.push();
     if (this.input.pad) setTimeout(() => this.onNav?.("init"), 60);
+  }
+
+  /** His fist in the air for a moment, if he is standing about on foot. */
+  fistUp(seconds: number) {
+    if (!this.activity && this.mode === "walk") this.fistLeft = Math.max(this.fistLeft, seconds);
   }
 
   /** Court OG's table: which game to run. */
@@ -2420,6 +2433,7 @@ export class Game {
 
     // The regulars at a park table take their turns while the rest of the city waits.
     if (this.overlay === "table") this.board.update(dt);
+    this.board.idle(dt);
 
     const paused = this.overlay !== null;
     if (this.fadeTo === 1 && this.live.fade >= 1 && this.afterFade) {
@@ -2486,6 +2500,8 @@ export class Game {
       n.card.heading = dampAngle(n.card.heading, want, damp(5, dt));
       n.card.update(dt, cam, this.tint, n.place === "street" ? null : this.rooms[n.place].floorY + 0.03);
     }
+    // Friends keep moving whatever is open on this screen.
+    this.crew.update(dt);
 
     // Benji only counts as someone to walk round and talk to while he is on foot.
     const afoot = this.mode === "walk" ? this.pos : null;
@@ -2703,6 +2719,8 @@ export class Game {
       rides: s.rides,
       daily: { title: today.title, detail: today.detail, done: s.daily.done, streak: s.daily.streak, pay: dailyPay(s.daily.streak + (s.daily.done ? 0 : 1)) },
       table: this.overlay === "table" ? this.board.hud() : null,
+      crew: this.crew.hud(),
+      invite: this.board.inviteHud(),
       postcards: { got: POSTCARDS.filter((c) => s.flags[`card_${c.id}`]).length, total: POSTCARDS.length, next: nextCard ? `${nextCard.name}, ${nextCard.hint}` : "" },
       rank: rankOf(s.respect),
       mission: step
@@ -2773,6 +2791,7 @@ export class Game {
       this.veli = null;
     }
     this.persist();
+    this.crew.shutdown();
     this.input.dispose();
     this.sound.dispose();
     this.stage.dispose();

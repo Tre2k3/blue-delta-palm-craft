@@ -1395,6 +1395,8 @@ try {
       kind = f.fish.name;
     }
     const caught = { ...f.fish };
+    // An earlier cast in this run may already have put a bigger one in the book.
+    const heaviest = g.save.best["fish_largemouth-bass"] ?? 0;
     f.phase = "reel";
     g.tick(1 / 60);
     const reeling = g.benji.pose;
@@ -1493,12 +1495,12 @@ try {
     run(10);
     g.save.best.versus = tier;
     g.stage.render = draw;
-    return { files: files.length, broken, album: { cards: album.postcards.length, fish: album.fish.length, ranks: album.ranks.length }, shown, blank, held, caught, reeling, landed, book, drawn, fist, down, posed, dropped, talking, quiet, hands, still: still.length, after, drive };
+    return { files: files.length, broken, album: { cards: album.postcards.length, fish: album.fish.length, ranks: album.ranks.length }, shown, blank, held, caught, reeling, landed, book, heaviest, drawn, fist, down, posed, dropped, talking, quiet, hands, still: still.length, after, drive };
   });
   check(pics.files > 150 && pics.broken.length === 0, "every drawing a character can be shown as is a real picture", { files: pics.files, broken: pics.broken });
   check(pics.shown.cards === 6 && pics.shown.got >= 1 && pics.shown.fish === 8 && pics.shown.ranks === 7 && pics.shown.earned >= 3 && pics.blank.length === 0, "the album shows the postcards, the fish book and the names, each with its picture", { shown: pics.shown, blank: pics.blank });
   check(/postcards\/pyramid\.webp$/.test(pics.held.img) && pics.held.title === "The Pyramid", "a postcard is held up when it is collected", pics.held);
-  check(/fish\/largemouth-bass\.webp$/.test(pics.caught.img ?? "") && pics.book === pics.caught.lb && pics.reeling === "reel" && pics.landed === "cheer", "a catch has its picture, goes in the fish book, and Benji leans on the rod and then celebrates", { caught: pics.caught, book: pics.book, reeling: pics.reeling, landed: pics.landed });
+  check(/fish\/largemouth-bass\.webp$/.test(pics.caught.img ?? "") && pics.book === Math.max(pics.heaviest, pics.caught.lb) && pics.reeling === "reel" && pics.landed === "cheer", "a catch has its picture, goes in the fish book, and Benji leans on the rod and then celebrates", { caught: pics.caught, heaviest: pics.heaviest, book: pics.book, reeling: pics.reeling, landed: pics.landed });
   check(pics.drawn.dunk === "dunk-back.webp" && pics.drawn.reel === "reel-back.webp" && pics.drawn.bowl === "bowl-back.webp" && pics.drawn.cheer === "cheer-back.webp", "the green tee has its own drawings for the dunk, the reel, the bowling release and the cheer", pics.drawn);
   check(pics.fist === "cheer" && pics.down === null && pics.posed === "cheer" && pics.dropped === null, "his fist goes up after a win and for a photo, and comes down again", { fist: pics.fist, down: pics.down, posed: pics.posed, dropped: pics.dropped });
   check(pics.talking.pose === "talk" && pics.talking.file === "talk.webp" && pics.quiet === null, "whoever is talking is drawn talking", { talking: pics.talking, quiet: pics.quiet });
@@ -1687,6 +1689,217 @@ try {
   check(rec.opening.phase === "serve" && rec.opening.server === 0 && /FAULT/.test(rec.fault.call) && rec.fault.pts === "0,0" && rec.box.live && rec.box.x > 0 && rec.box.x < 6.5, "tennis: a serve hit too hard is a fault, and a good one comes down in the box", { opening: rec.opening, fault: rec.fault, box: rec.box });
   check(rec.match.title.length > 0 && Math.max(...rec.match.games) === 3 && rec.match.hits > 5 && rec.match.longest >= 3, "tennis: a match is rallied out to three games", rec.match);
   check(rec.sky.flew > 20 && rec.sky.y > 60 && rec.sky.day === 0 && rec.sky.night > 0.03, "a blimp circles over the city, and searchlights come on over the boutique after dark", rec.sky);
+  // ---- playing with friends
+  // The line two devices find each other over: who is in a crew, and the handshake passed between them.
+  const relay = await page.evaluate(async () => {
+    const room = `sack-T${Date.now().toString(36)}`;
+    const poll = async (peer, name, since = 0) => (await fetch(`/api/rtc?room=${room}&peer=${peer}&name=${name}&since=${since}`)).json();
+    const post = async (body) => (await fetch("/api/rtc", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })).status;
+    const one = await poll("tre", "Tre");
+    const two = await poll("kay", "Kay");
+    const sent = await post({ op: "signal", room, from: "tre", to: "kay", kind: "offer", payload: { sdp: "hello" } });
+    const hers = await poll("kay", "Kay");
+    const his = await poll("tre", "Tre");
+    const again = await poll("kay", "Kay", hers.signals[0]?.id ?? 0);
+    const left = await post({ op: "leave", room, peer: "tre" });
+    const after = await poll("kay", "Kay", hers.signals[0]?.id ?? 0);
+    const bad = (await fetch("/api/rtc?room=not%20a%20room&peer=kay")).status;
+    const junk = await post({ op: "signal", room, from: "tre", to: "kay", kind: "nonsense", payload: 1 });
+    return { one: one.peers.length, two: two.peers.map((q) => q.name).join(), sent, hers: hers.signals.map((q) => `${q.from}:${q.kind}:${q.payload.sdp}`), his: his.signals.length, again: again.signals.length, left, after: after.peers.map((q) => q.id).join(), bad, junk };
+  });
+  check(relay.one === 1 && relay.two === "Kay,Tre" && relay.sent === 200 && relay.hers.join() === "tre:offer:hello" && relay.his === 0 && relay.again === 0 && relay.left === 200 && relay.after === "kay" && relay.bad === 400 && relay.junk === 400, "online: the crew line lists who is in a crew, passes a handshake only to the one it is for, and forgets whoever leaves", relay);
+
+  // A second device, with its own save. The two are wired through this script, so the test needs no network.
+  const friend = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  friend.on("pageerror", (e) => errors.push(`second device: ${e.message}`));
+  await friend.goto(`${base}?q=low&calm=1&intro=0`, { waitUntil: "domcontentloaded" });
+  await friend.waitForFunction(() => !!window.__GAME__, undefined, { timeout: 120000 });
+  const devices = [page, friend];
+  for (const d of devices) {
+    await d.exposeFunction("__crewOut", (m) => {
+      for (const other of devices) if (other !== d) other.evaluate((msg) => window.__crewIn?.(msg), m).catch(() => {});
+    });
+    await d.evaluate(() => {
+      const g = window.__GAME__;
+      g.crew.make = (room, selfId, name, hooks) => {
+        const known = new Map();
+        const tell = () => hooks.peers([...known].map(([id, n]) => ({ id, name: n, connectionState: "connected", candidateType: "host", rttMs: 12 })));
+        window.__crewIn = (m) => {
+          if (m.room !== room || m.from === selfId) return;
+          if (m.t === "hi" || m.t === "hey") {
+            known.set(m.from, m.name);
+            tell();
+            if (m.t === "hi") window.__crewOut({ t: "hey", room, from: selfId, name });
+          } else if (m.t === "bye") {
+            known.delete(m.from);
+            tell();
+          } else if (m.t === "d" && (!m.to || m.to === selfId)) hooks.message(m.from, m.d);
+        };
+        return {
+          join: async () => void window.__crewOut({ t: "hi", room, from: selfId, name }),
+          send: (data, to) => void window.__crewOut({ t: "d", room, from: selfId, to, d: data }),
+          broadcast: (data) => void window.__crewOut({ t: "d", room, from: selfId, d: data }),
+          close: () => void window.__crewOut({ t: "bye", room, from: selfId }),
+        };
+      };
+    });
+  }
+  await friend.evaluate(() => {
+    const g = window.__GAME__;
+    g.setRain(false);
+    g.play(true);
+    g.skipIntro?.();
+    g.dialogue.length = 0;
+    g.crew.rename("Kay");
+    g.warp(2, -76, 0);
+  });
+  await page.evaluate(() => {
+    const g = window.__GAME__;
+    if (g.overlay) g.close();
+    if (g.activity) g.activity.quit();
+    g.dialogue.length = 0;
+    g.crew.rename("Tre");
+    g.warp(2, -70, 0);
+  });
+  await ff(0.5);
+  // Checked on a timer, not on the page's own frames: a page that has just been loaded is not drawing yet.
+  const on = (d, fn, arg) => d.waitForFunction(fn, arg, { timeout: 30000, polling: 100 });
+  const table = (d) => d.evaluate(() => window.__GAME__.board.hud());
+
+  // One starts a crew from the screen and reads the code off it; the other types it in.
+  await page.click("[data-crew-chip]");
+  await page.click("[data-crew-host]");
+  await on(page, () => !!window.__GAME__.crew.code);
+  const code = (await page.textContent("[data-crew-shown]")).replace(/\s/g, "");
+  await friend.click("[data-crew-chip]");
+  await friend.fill("[data-crew-code]", code.toLowerCase());
+  await friend.click("[data-crew-join]");
+  await on(page, () => window.__GAME__.crew.linked().length === 1);
+  await on(friend, () => window.__GAME__.crew.linked().length === 1);
+  await page.waitForTimeout(300);
+  const crewed = { code, link: await page.evaluate(() => window.__GAME__.crew.invite), mine: await page.evaluate(() => window.__GAME__.crew.hud()), theirs: await friend.evaluate(() => window.__GAME__.crew.hud()), listed: await page.textContent("[data-crew-friend]") };
+  check(/^[A-Z]{4}$/.test(code) && crewed.link.endsWith(`/?crew=${code}`) && crewed.mine.status === "linked" && crewed.mine.friends[0].name === "Kay" && crewed.theirs.code === code && crewed.theirs.friends[0].name === "Tre" && /Kay/.test(crewed.listed), "online: one starts a crew, the other types the four letters, and each has the other on the line", { code, link: crewed.link, mine: crewed.mine.friends, theirs: crewed.theirs.friends });
+
+  // Each sees the other where they really are, in what they are really wearing.
+  const fit = await page.evaluate(() => {
+    const g = window.__GAME__;
+    g.close();
+    const id = Object.keys(g.tables.OUTFITS).find((o) => o !== g.save.wearing);
+    if (!g.save.outfits.includes(id)) g.save.outfits.push(id);
+    g.wear(id);
+    g.warp(2, -70, 0);
+    return g.save.wearing;
+  });
+  await friend.evaluate(() => window.__GAME__.close());
+  await on(friend, (o) => {
+    const f = window.__GAME__.crew.shown[0];
+    return f && f.visible && f.tag && f.outfit === o && Math.hypot(f.x - 2, f.z + 70) < 0.6;
+  }, fit);
+  await page.evaluate(() => window.__GAME__.crew.react("🔥"));
+  await on(friend, () => window.__GAME__.crew.shown[0].say);
+  await friend.waitForTimeout(400);
+  await friend.screenshot({ path: `${out}/20-crew-friend.png` });
+  const seen = await friend.evaluate(() => ({ shown: window.__GAME__.crew.shown[0], dot: window.__GAME__.crew.hud().friends[0] }));
+  check(seen.shown.visible && seen.shown.outfit === fit && seen.shown.say && seen.dot.street && seen.dot.where.length > 0 && seen.dot.doing === "Walking", "online: a friend stands in your city where they stood in theirs, in their own fit, with a name over their head, a reaction over that, and a dot on the map", seen);
+
+  // A game at a table, each on their own device: asked from the table, answered from the street.
+  await page.evaluate(() => window.__GAME__.board.sit("connect4"));
+  await page.click('[data-friend="Kay"]');
+  await on(friend, () => !!window.__GAME__.board.inviteHud());
+  const asking = { stage: (await table(page)).stage, ask: await friend.textContent("[data-invite]") };
+  await friend.click("[data-invite-yes]");
+  await on(page, () => window.__GAME__.board.hud()?.stage === "play");
+  const seats = [(await table(page)).online.seat, (await table(friend)).online.seat];
+  const early = await friend.evaluate(() => window.__GAME__.board.move(0));
+  // Seven discs: his four go up column three, hers stop at three in column four.
+  for (let i = 0; i < 7; i++) {
+    const [d, other, col] = i % 2 === 0 ? [page, friend, 3] : [friend, page, 4];
+    await d.click(`[data-col="${col}"]:not([disabled])`);
+    await on(other, ([c, n]) => window.__GAME__.board.hud().view.cols[c].length === n, [col, Math.floor(i / 2) + 1]);
+  }
+  await on(friend, () => window.__GAME__.board.hud().stage === "done");
+  const ended = { his: await table(page), hers: await table(friend) };
+  await friend.screenshot({ path: `${out}/21-crew-table.png` });
+  check(asking.stage === "wait" && /Tre wants a game of Four in a Row/.test(asking.ask) && seats.join() === "0,1" && early === false && ended.his.result.won === true && ended.hers.result.won === false && JSON.stringify(ended.his.view.cols) === JSON.stringify(ended.hers.view.cols) && ended.his.result.pay > 0 && ended.hers.result.pay === 0, "online: a friend is asked for a game, sits down, and the two play it out move for move on their own screens", { asking, seats, early, his: ended.his.result, hers: ended.hers.result });
+
+  // Both want another: same two, the other one goes first. Then she gets up in the middle of it.
+  await friend.click("[data-rematch]");
+  await on(page, () => window.__GAME__.board.hud().online.theirs);
+  await page.click("[data-rematch]");
+  await on(friend, () => window.__GAME__.board.hud().stage === "play");
+  await on(page, () => window.__GAME__.board.hud().stage === "play");
+  const swapped = [(await table(page)).online.seat, (await table(friend)).online.seat, (await table(page)).mine, (await table(friend)).mine];
+  await friend.evaluate(() => window.__GAME__.close());
+  await on(page, () => window.__GAME__.board.hud()?.online?.gone === true);
+  const walked = (await table(page)).result;
+  check(swapped.join() === "1,0,false,true" && /Kay got up/.test(walked.text) && walked.won === null, "online: a rematch swaps who goes first, and a friend getting up ends the game without a winner", { swapped, walked });
+
+  // She says not now; then she asks him for chess, and he sees the board from the far side.
+  await page.evaluate(() => window.__GAME__.board.sit("chess"));
+  await page.click('[data-friend="Kay"]');
+  await on(friend, () => !!window.__GAME__.board.inviteHud());
+  await friend.click("[data-invite-no]");
+  await on(page, () => window.__GAME__.board.hud().stage === "pick");
+  const passed = await page.evaluate(() => window.__GAME__.board.hud().online);
+  await page.evaluate(() => window.__GAME__.close());
+  const tre = await friend.evaluate(() => window.__GAME__.crew.linked()[0].id);
+  await friend.evaluate((id) => window.__GAME__.board.invite(id, "chess"), tre);
+  await on(page, () => !!window.__GAME__.board.inviteHud());
+  await page.click("[data-invite-yes]");
+  await on(friend, () => window.__GAME__.board.hud()?.stage === "play");
+  await friend.click('[data-sq="52"]');
+  await friend.click('[data-sq="36"]');
+  await on(page, () => window.__GAME__.board.hud().view.cells[36] === "P");
+  const far = { first: await page.getAttribute("[data-sq]", "data-sq"), hers: await friend.getAttribute("[data-sq]", "data-sq"), mine: (await table(page)).mine, seat: (await table(page)).online.seat };
+  await page.click('[data-sq="12"]');
+  await page.click('[data-sq="28"]');
+  await on(friend, () => window.__GAME__.board.hud().view.cells[28] === "p");
+  check(passed === null && far.first === "63" && far.hers === "0" && far.mine && far.seat === 1 && (await table(friend)).mine, "online: a friend can say not now; and whoever has black sees the chess board from black's side", { passed, far });
+
+  // He gets in his car: she sees the car he owns, not a man running at forty miles an hour.
+  await page.evaluate(() => {
+    const g = window.__GAME__;
+    g.close();
+    g.warp(g.driver.x + 2.2, g.driver.z, 0);
+  });
+  await ff(0.3);
+  await tap("interact");
+  await page.evaluate(() => window.__GAME__.input.hold("up", true));
+  await ff(1.5);
+  await page.evaluate(() => window.__GAME__.input.hold("up", false));
+  await on(friend, () => window.__GAME__.crew.shown[0].car);
+  const wheels = { mode: await get(() => window.__GAME__.mode), shown: await friend.evaluate(() => window.__GAME__.crew.shown[0]), doing: await friend.evaluate(() => window.__GAME__.crew.hud().friends[0].doing), off: await friend.evaluate(() => window.__GAME__.board.hud()) };
+  check(wheels.mode === "drive" && wheels.shown.car && !wheels.shown.visible && wheels.shown.tag && wheels.doing === "Driving", "online: a friend at the wheel is seen as their car, with their name over it", wheels);
+
+  // Leaving the crew takes her off his screen; a link with the code in it puts her straight back in one.
+  await friend.evaluate(() => window.__GAME__.open("online"));
+  await friend.click("[data-crew-leave]");
+  await on(page, () => window.__GAME__.crew.hud().friends.length === 0);
+  const alone = { his: await page.evaluate(() => window.__GAME__.crew.hud().status), hers: await friend.evaluate(() => window.__GAME__.crew.hud().status) };
+  await friend.goto(`${base}?q=low&calm=1&intro=0&crew=${code}`, { waitUntil: "domcontentloaded" });
+  await friend.waitForFunction(() => !!window.__GAME__, undefined, { timeout: 120000 });
+  // The title screen says the crew is waiting; pressing play is what joins it.
+  await on(friend, () => !!document.querySelector("[data-crew-waiting]"));
+  const titled = { note: await friend.textContent("[data-crew-waiting]"), code: await friend.evaluate(() => window.__GAME__.crew.code) };
+  await friend.evaluate(() => {
+    const g = window.__GAME__;
+    g.play(true);
+    g.skipIntro?.();
+  });
+  await on(friend, () => window.__GAME__.crew.hud().ready);
+  const linkIn = await friend.evaluate(async () => {
+    const g = window.__GAME__;
+    const roster = await (await fetch(`/api/rtc?room=sack-${g.crew.code}&peer=smoke&since=1`)).json();
+    return { code: g.crew.code, listed: roster.peers.some((q) => q.id === g.crew.selfId), status: g.crew.hud().status };
+  });
+  check(alone.his === "waiting" && alone.hers === "off" && titled.note.includes(code) && titled.code === null && linkIn.code === code && linkIn.listed && linkIn.status === "waiting", "online: leaving takes you off your friends' screens, and a link with the code in it joins the crew when the day starts", { alone, titled, linkIn });
+  await friend.close();
+  await page.evaluate(() => {
+    const g = window.__GAME__;
+    g.crew.leave();
+    if (g.mode === "drive") g.input.press("interact");
+  });
+  await ff(0.3);
   check(errors.length === 0, "no page errors", errors);
   console.log("Memphis smoke passed.");
 } finally {

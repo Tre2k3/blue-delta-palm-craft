@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiItchRouteImport } from './routes/api/itch'
+import { Route as ApiRtcRouteImport } from './routes/api/rtc'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +23,40 @@ const ApiItchRoute = ApiItchRouteImport.update({
   path: '/api/itch',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiRtcRoute = ApiRtcRouteImport.update({
+  id: '/api/rtc',
+  path: '/api/rtc',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/itch': typeof ApiItchRoute
+  '/api/rtc': typeof ApiRtcRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/itch': typeof ApiItchRoute
+  '/api/rtc': typeof ApiRtcRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/itch': typeof ApiItchRoute
+  '/api/rtc': typeof ApiRtcRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/itch'
+  fullPaths: '/' | '/api/itch' | '/api/rtc'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/itch'
-  id: '__root__' | '/' | '/api/itch'
+  to: '/' | '/api/itch' | '/api/rtc'
+  id: '__root__' | '/' | '/api/itch' | '/api/rtc'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiItchRoute: typeof ApiItchRoute
+  ApiRtcRoute: typeof ApiRtcRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +75,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiItchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/rtc': {
+      id: '/api/rtc'
+      path: '/api/rtc'
+      fullPath: '/api/rtc'
+      preLoaderRoute: typeof ApiRtcRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiItchRoute: ApiItchRoute,
+  ApiRtcRoute: ApiRtcRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

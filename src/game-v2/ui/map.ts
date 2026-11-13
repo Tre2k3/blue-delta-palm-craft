@@ -2,7 +2,7 @@ import { COURTS_LOT, HOLES, PUTT_LOT, TENNIS, TENNIS_FENCE } from "../world/rec-
 import { ARENA, BOWL, COURT, FAR_BANK_Z, FUN, HOME, HQ, KART_TRACK, PARK, PARK_TERRACE, PIER, POIS, RACE_LOOP, RIVER_Z, ROAD_HALF, STREETS_X, STREETS_Z, STREET_NAMES_X, STREET_NAMES_Z, TRUCKS, slab } from "../world/map";
 
 export type MapView = { cx: number; cz: number; scale: number };
-export type MapDots = { x: number; z: number; heading: number; car: { x: number; z: number }; target: { id: string; x: number; z: number } | null; time: number };
+export type MapDots = { x: number; z: number; heading: number; car: { x: number; z: number }; target: { id: string; x: number; z: number } | null; time: number; friends?: { name: string; x: number; z: number; street: boolean; link: string }[] };
 
 /** North-up plan of the city. Used small in the corner and large on the map screen. */
 export function drawMap(g: CanvasRenderingContext2D, w: number, h: number, v: MapView, d: MapDots, labels: boolean) {
@@ -183,6 +183,37 @@ export function drawMap(g: CanvasRenderingContext2D, w: number, h: number, v: Ma
   g.strokeStyle = "#06080a";
   g.lineWidth = 1;
   g.strokeRect(X(d.car.x) - 3, Z(d.car.z) - 3, 6, 6);
+
+  // The crew: a blue dot each, named on the big map, pinned to the rim of the small one when they are far off.
+  for (const f of d.friends ?? []) {
+    if (!f.street || f.link !== "connected") continue;
+    let fx = X(f.x);
+    let fz = Z(f.z);
+    if (!labels) {
+      const m = Math.max(Math.abs(fx - w / 2), Math.abs(fz - h / 2));
+      if (m > w / 2 - 8) {
+        const k = (w / 2 - 9) / m;
+        fx = w / 2 + (fx - w / 2) * k;
+        fz = h / 2 + (fz - h / 2) * k;
+      }
+    }
+    g.fillStyle = "#5ac8ff";
+    g.strokeStyle = "#06080a";
+    g.lineWidth = 2;
+    g.beginPath();
+    g.arc(fx, fz, labels ? 6 : 5, 0, Math.PI * 2);
+    g.fill();
+    g.stroke();
+    if (labels) {
+      g.font = "800 12px ui-sans-serif, system-ui, sans-serif";
+      g.textAlign = "left";
+      g.textBaseline = "middle";
+      g.fillStyle = "#06080a";
+      g.fillText(f.name, fx + 10, fz + 1);
+      g.fillStyle = "#bfe8ff";
+      g.fillText(f.name, fx + 9, fz);
+    }
+  }
 
   g.save();
   g.translate(X(d.x), Z(d.z));

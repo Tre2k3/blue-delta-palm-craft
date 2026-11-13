@@ -28,7 +28,7 @@ export type Anchor = { x: number; z: number };
 
 export type Mode = "title" | "walk" | "drive" | "race" | "hoops" | "bowl" | "fish" | "kart" | "laser" | "bounce" | "pit" | "whack";
 
-export type Overlay = null | "pause" | "map" | "shop" | "wardrobe" | "arcade" | "prizes" | "food" | "results" | "video" | "court" | "photo" | "garage" | "table" | "album";
+export type Overlay = null | "pause" | "map" | "shop" | "wardrobe" | "arcade" | "prizes" | "food" | "results" | "video" | "court" | "photo" | "garage" | "table" | "album" | "online";
 
 export type Catch = { name: string; lb: number; pay: number; rarity: string; color: string; img?: string };
 
@@ -41,6 +41,29 @@ export type AlbumHud = {
   fish: { id: string; name: string; rarity: string; color: string; img: string; best: number }[];
   ranks: { name: string; at: number; badge: string; got: boolean }[];
 };
+
+/** A friend in the crew: who they are, how good the line to them is, and where in Memphis they have got to. */
+export type CrewFriend = { id: string; name: string; link: "connecting" | "connected" | "failed"; rtt: number | null; x: number; z: number; street: boolean; where: string; doing: string };
+
+/** Playing with friends: the crew he is in, if any, and everybody else in it. */
+export type CrewHud = {
+  code: string | null;
+  name: string;
+  /** No crew; in one with nobody linked yet; or with at least one friend on the line. */
+  status: "off" | "waiting" | "linked";
+  /** The crew line itself answered. */
+  ready: boolean;
+  error: string;
+  /** The link that drops whoever opens it into this crew. */
+  invite: string;
+  /** A crew he will join as soon as the day starts: he came in on a friend's link. */
+  waiting: string;
+  friends: CrewFriend[];
+  max: number;
+};
+
+/** A friend asking for a game at a table. */
+export type TableInvite = { from: string; name: string; id: TableId; game: string; left: number };
 
 export type Save = {
   v: 4;
@@ -140,6 +163,9 @@ export type HudState = {
   postcards: { got: number; total: number; next: string };
   /** The park table Benji is sat at, or null. */
   table: TableHud | null;
+  crew: CrewHud;
+  /** A friend is asking for a game. */
+  invite: TableInvite | null;
   mission: MissionCard | null;
   prompt: string;
   /** Key hints for the mode, "key label" pairs. */
@@ -232,7 +258,8 @@ export type TableHud = {
   rivals: string[];
   line: string;
   how: string[];
-  stage: "pick" | "play" | "done";
+  /** `wait`: a friend has been asked and has not answered yet. */
+  stage: "pick" | "wait" | "play" | "done";
   level: number;
   levels: { name: string; pay: number }[];
   /** Two people sharing the device. */
@@ -244,4 +271,10 @@ export type TableHud = {
   view: unknown;
   result: { text: string; won: boolean | null; pay: number } | null;
   wins: number;
+  /** Friends on the line who could be asked for a game here. */
+  friends: { id: string; name: string }[];
+  /** He is in a crew at all. */
+  crewed: boolean;
+  /** A game against a friend on another device: who, which side is his, and where the rematch stands. */
+  online: { name: string; seat: number; gone: boolean; again: boolean; theirs: boolean } | null;
 };
