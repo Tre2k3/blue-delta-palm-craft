@@ -199,6 +199,12 @@ export type LoadoutHud = {
   top: boolean;
   stats: [string, string][];
   guns: { id: string; name: string; note: string; mag: number; locked: string; picked: boolean; img: string }[];
+  /**
+   * The ways the hall can be laid out: how many floors each has, which is picked, and its floor
+   * plan (cover, upstairs floors and ramps as x0, x1, z0, z1 from the middle of a hall `wide` by `deep`).
+   */
+  maps: { id: string; name: string; note: string; floors: number; picked: boolean; plan: { covers: number[][]; decks: number[][]; ramps: number[][] } }[];
+  hall: { wide: number; deep: number };
   auto: boolean;
 };
 /** What the HUD needs every frame to draw the blaster in his hands and the crosshair. */

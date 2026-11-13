@@ -376,9 +376,12 @@ const baller = (index: number, name: string, size: Sizes, run = 0.96, dunk = 1.0
   };
 };
 
+// The stance and the drive were drawn with bigger heads than the standing drawings. Sized to make
+// the heads agree they came out with shrunken bodies: a short, wide man where a player should be.
+// They are sized by the body now: a crouch a little under standing height, a sprint nearly all of it.
 export const BALLERS: CardArt[] = [
-  baller(2, "male-02", [0.79, 0.79, 1.11, 1.12]),
-  baller(0, "male-01", [0.76, 0.715, 1.145, 1.15], 0.96, 1.12),
-  baller(4, "male-03", [0.8, 0.81, 1.165, 1.18], 0.96, 1.12),
-  baller(6, "male-04", [0.825, 0.815, 1.29, 1.29]),
+  baller(2, "male-02", [0.89, 0.94, 1.11, 1.12]),
+  baller(0, "male-01", [0.87, 0.92, 1.145, 1.15], 0.96, 1.12),
+  baller(4, "male-03", [0.89, 0.94, 1.165, 1.18], 0.96, 1.12),
+  baller(6, "male-04", [0.9, 0.94, 1.29, 1.29]),
 ];

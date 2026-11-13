@@ -1320,6 +1320,14 @@ export class Game {
     this.push();
   }
 
+  /** Choose how the arena is laid out for the next match. */
+  pickArena(id: string) {
+    if (this.laser.chooseMap(id)) this.sound.ui();
+    else this.sound.bad();
+    this.persist();
+    this.push();
+  }
+
   /** Whether the blaster fires by itself on a touch screen. */
   toggleAutoFire() {
     this.laser.toggleAuto();

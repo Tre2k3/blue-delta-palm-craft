@@ -2533,6 +2533,167 @@ try {
     { ...views, padView, phase0, phase1 },
   );
 
+  // ---- laser tag: three ways to lay the hall out, two of them with an upstairs
+  const halls = await page.evaluate(async () => {
+    const g = window.__GAME__;
+    const L = g.laser;
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    const run = (n) => {
+      for (let i = 0; i < n; i++) g.tick(1 / 30);
+    };
+    if (g.overlay) g.close();
+    if (g.activity) g.activity.quit();
+    run(6);
+    for (let i = 0; i < 200 && (g.mode !== "walk" || g.live.fade > 0.05); i++) g.tick(1 / 30);
+    const R = g.rooms.laser;
+    const plans = R.arenas.map((a) => ({ id: a.id, floors: a.storeys, joined: a.joined, nodes: a.nodes.length, upstairs: a.upper.length }));
+    // At the door: a card for each, and the one picked is the one the hall is set out as.
+    g.save.best.lt_map = 0;
+    g.open("loadout");
+    g.push();
+    await wait(400);
+    const cards = [...document.querySelectorAll("[data-arena]")].map((b) => b.getAttribute("data-arena"));
+    const drawn = document.querySelectorAll("[data-arena] svg rect").length;
+    document.querySelector('[data-arena="catwalk"]')?.click();
+    await wait(300);
+    const picked = { map: L.map, kept: g.save.best.lt_map, shown: L.loadout().maps.find((m) => m.picked)?.id };
+    document.querySelector("[data-deploy]").click();
+    for (let i = 0; i < 240 && !(g.mode === "laser" && L.phase === "go"); i++) g.tick(1 / 30);
+    for (let i = 0; i < 60 && g.live.fade > 0.05; i++) g.tick(1 / 30);
+    const A = R.arena;
+    const C = { x: (R.bounds.minX + R.bounds.maxX) / 2, z: (R.bounds.minZ + R.bounds.maxZ) / 2 };
+    const hall = { id: A.id, shown: R.arenas.filter((a) => a.group.visible).map((a) => a.id), at: [+(g.pos.x - C.x).toFixed(1), +(g.pos.z - C.z).toFixed(1)] };
+    // Everybody else stands still while he tries the place out.
+    const pinks = L.bots.filter((b) => b.playing && b.team === 1);
+    const hush = () => {
+      L.hold = true;
+      for (const b of L.bots) {
+        b.cool = 999;
+        b.aim = 0;
+        b.at = null;
+      }
+    };
+    const park = () => pinks.forEach((b, i) => ((b.x = b.tx = C.x - 14 + i), (b.z = b.tz = C.z - 9.4), (b.y = 0)));
+    hush();
+    park();
+    L.steady = true;
+    L.looked = true;
+    const stand = (x, z, y, yaw, pitch = 0) => {
+      g.vel.x = g.vel.z = 0;
+      g.pos.x = C.x + x;
+      g.pos.z = C.z + z;
+      L.y = y;
+      g.camYaw = yaw;
+      L.pitch = pitch;
+    };
+    const walk = (seconds) => {
+      g.input.key("up", true);
+      run(Math.round(seconds * 30));
+      g.input.key("up", false);
+      g.vel.x = g.vel.z = 0;
+    };
+    // Up the west ramp on foot, and along the bridge.
+    stand(-15, 0, 0, Math.PI / 2);
+    walk(0.9);
+    const half = +L.y.toFixed(2);
+    walk(2.6);
+    const up = { half, y: +L.y.toFixed(2), x: +(g.pos.x - C.x).toFixed(1), eye: +(g.camera.position.y - R.floorY).toFixed(2) };
+    // A rail stops him; the gap in it lets him drop.
+    stand(1, -0.5, 2.7, Math.PI);
+    walk(1.2);
+    const rail = { z: +(g.pos.z - C.z).toFixed(2), y: +L.y.toFixed(2) };
+    stand(4, -0.5, 2.7, Math.PI);
+    walk(1.6);
+    run(10);
+    const drop = { z: +(g.pos.z - C.z).toFixed(2), y: +L.y.toFixed(2) };
+    // Beams between the floors: down over the rail, up through it, level underneath, and never through the floor itself.
+    const p = pinks[0];
+    const put = (x, z, y) => ((p.x = p.tx = C.x + x), (p.z = p.tz = C.z + z), (p.y = y));
+    const aim = (far, rise) => Math.atan2(rise, far);
+    stand(-2, -1.2, 2.7, Math.PI);
+    put(-2, -7, 0);
+    L.pitch = aim(5.8, p.height * 0.6 - (2.7 + 1.32));
+    run(1);
+    const down = L.trace(g.camYaw, L.pitch, 60);
+    stand(-2, -7, 0, 0);
+    put(-2, -1, 2.7);
+    L.pitch = aim(6, 2.7 + p.height * 0.6 - 1.32);
+    run(1);
+    const upward = L.trace(g.camYaw, L.pitch, 60);
+    stand(-2, 6, 0, Math.PI);
+    put(-2, -5, 0);
+    run(1);
+    const under = L.trace(g.camYaw, 0, 60);
+    const floor = { down: A.clear(C.x - 2, 2.7 + 1.32, C.z, C.x - 2, 1.1, C.z + 0.1), up: A.clear(C.x - 2, 1.2, C.z + 0.1, C.x - 2, 2.7 + 1, C.z) };
+    const beams = { down: down.kind, upward: upward.kind, under: under.kind, floor };
+    // Let them go: in a minute of play somebody takes the high ground, and nobody is stuck in or against anything.
+    const roam = (seconds) => {
+      L.hold = false;
+      for (const b of L.bots) b.cool = 1;
+      stand(-15, 9.5, 0, 0);
+      const arena = R.arena;
+      const bots = L.bots.filter((b) => b.playing);
+      let high = 0;
+      let stuck = 0;
+      let inside = 0;
+      const was = bots.map(() => 0);
+      const upstairs = new Set();
+      for (let i = 0; i < seconds * 30 && L.phase === "go"; i++) {
+        g.tick(1 / 30);
+        bots.forEach((b, k) => {
+          high = Math.max(high, b.y);
+          if (b.y > 2.5) upstairs.add(k);
+          if (b.stuck > 1.15 && was[k] <= 1.15) stuck++;
+          was[k] = b.stuck;
+          for (const q of arena.solidsAt(b.y)) if (b.x > q.minX + 0.05 && b.x < q.maxX - 0.05 && b.z > q.minZ + 0.05 && b.z < q.maxZ - 0.05) inside++;
+        });
+      }
+      return { high: +high.toFixed(1), upstairs: upstairs.size, stuck, inside };
+    };
+    const catwalk = roam(60);
+    // The other two-storey hall, straight from a fresh match in it.
+    L.leaving = false;
+    g.save.best.lt_map = 2;
+    L.start();
+    for (let i = 0; i < 240 && L.phase !== "go"; i++) g.tick(1 / 30);
+    const towersId = R.arena.id;
+    hush();
+    stand(-14.2, 1.6, 0, Math.PI);
+    L.looked = true;
+    walk(2.6);
+    const tower = { y: +L.y.toFixed(2), z: +(g.pos.z - C.z).toFixed(1) };
+    const towers = roam(60);
+    // Back to the hall everybody starts in, and out of the door.
+    g.save.best.lt_map = 0;
+    L.hold = true;
+    L.quit();
+    for (let i = 0; i < 240 && (g.mode !== "walk" || g.live.fade > 0.05); i++) g.tick(1 / 30);
+    const after = { mode: g.mode, place: g.place };
+    // And back out on the street, where the rest of the walk carries on from.
+    g.setPlace("street");
+    run(8);
+    g.stage.render = draw;
+    return { plans, cards, drawn, picked, hall, up, rail, drop, beams, catwalk, towersId, tower, towers, after };
+  });
+  check(
+    halls.plans.map((q) => q.floors).join() === "1,2,2" && halls.plans.every((q) => q.joined && q.nodes >= 14) && halls.plans[1].upstairs >= 4 && halls.plans[2].upstairs >= 12 && halls.cards.join() === "yard,catwalk,towers" && halls.drawn > 30 && halls.picked.map === 1 && halls.picked.kept === 1 && halls.picked.shown === "catwalk" && halls.hall.id === "catwalk" && halls.hall.shown.join() === "catwalk",
+    "laser tag: the door offers three halls with their floor plans, two of them with an upstairs, every corner of each can be walked to, and the one picked is the one he is sent into",
+    { plans: halls.plans, cards: halls.cards, picked: halls.picked, hall: halls.hall },
+  );
+  check(
+    halls.up.half > 0.4 && halls.up.half < 2.6 && halls.up.y === 2.7 && halls.up.x > -4 && Math.abs(halls.up.eye - 4.02) < 0.08 && halls.rail.y === 2.7 && halls.rail.z > -1.3 && halls.drop.y === 0 && halls.drop.z < -2 && halls.tower.y === 2.7 && halls.towersId === "towers",
+    "laser tag: a ramp carries him upstairs on foot and his eyes go up with him, a rail stops him at the edge, a gap in it drops him to the floor, and the towers have a ramp of their own",
+    { up: halls.up, rail: halls.rail, drop: halls.drop, tower: halls.tower },
+  );
+  check(halls.beams.down === "bot" && halls.beams.upward === "bot" && halls.beams.under === "bot" && !halls.beams.floor.down && !halls.beams.floor.up, "laser tag: he can tag down over a rail and up through one, and under the bridge, but nothing goes through the floor of it", halls.beams);
+  check(
+    halls.catwalk.upstairs >= 1 && halls.catwalk.stuck <= 2 && halls.catwalk.inside === 0 && halls.towers.upstairs >= 1 && halls.towers.stuck <= 2 && halls.towers.inside === 0 && halls.after.mode === "walk" && halls.after.place === "fun",
+    "laser tag: in both two-storey halls the others take the high ground by the ramps without getting stuck or walking into anything",
+    { catwalk: halls.catwalk, towers: halls.towers, after: halls.after },
+  );
+
   // ---- the people of the city
   const folk = await page.evaluate(async () => {
     const g = window.__GAME__;

@@ -4,6 +4,7 @@ import { CABINETS, type Cabinet } from "../play/goods";
 import { Frame, MAT, YAW, addSolid, emissiveMat, makeCtx, neon, poolMat, sign, std, type BuildCtx } from "./kit";
 import { CURB, FUN, KART_TRACK, ROOM, type Rect } from "./map";
 import { finish, light, shell, type Room } from "./rooms";
+import { ARENA_D, ARENA_H, ARENA_W, buildArenas, type Arena } from "./arena";
 
 const Y0 = CURB;
 const lerpN = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -827,15 +828,19 @@ export type LaserRoom = Room & {
   start: { x: number; z: number; heading: number };
   bots: { x: number; z: number }[];
   nodes: { x: number; z: number }[];
+  /** Every way the hall can be laid out, the one it is laid out in now, and how to change it. */
+  arenas: Arena[];
+  arena: Arena;
+  use(index: number): void;
 };
 
 export function buildLaserRoom(): LaserRoom {
   const group = new THREE.Group();
   const ctx = makeCtx(404);
   const C = ROOM.laser;
-  const W = 32;
-  const D = 22;
-  const H = 5;
+  const W = ARENA_W;
+  const D = ARENA_D;
+  const H = ARENA_H;
   const floor = new THREE.MeshStandardMaterial({
     map: tex(128, 128, (g, w, h) => {
       g.fillStyle = "#07060d";
@@ -857,53 +862,46 @@ export function buildLaserRoom(): LaserRoom {
   for (const [y, k] of [
     [0.9, 0],
     [3.2, 1],
+    [5.4, 0],
   ] as const) {
     f.box(W - 0.4, 0.07, 0.05, 0, y, -D / 2 + 0.05, glows[k]!, ctx.flat);
     f.box(W - 0.4, 0.07, 0.05, 0, y, D / 2 - 0.05, glows[k + 2]!, ctx.flat);
     f.box(0.05, 0.07, D - 0.4, -W / 2 + 0.05, y, 0, glows[k + 1]!, ctx.flat);
     f.box(0.05, 0.07, D - 0.4, W / 2 - 0.05, y, 0, glows[k]!, ctx.flat);
   }
-  const covers: [number, number, number, number][] = [
-    [0, 0, 4.2, 1.2],
-    [-7, -4, 1.2, 4],
-    [7, 4, 1.2, 4],
-    [-7, 5.4, 3.2, 1.2],
-    [7, -5.4, 3.2, 1.2],
-    [-12, 0, 1.2, 3.2],
-    [12, 0, 1.2, 3.2],
-    [0, -7, 1.2, 2.6],
-    [0, 7, 1.2, 2.6],
-  ];
-  const body = std(0x16132a, 0.6, 0.2);
-  covers.forEach(([lx, lz, w, d], i) => {
-    const h = 2;
-    const g = glows[i % 4]!;
-    f.box(w, h, d, lx, h / 2, lz, body);
-    for (const s of [-1, 1]) {
-      f.box(w + 0.04, 0.06, 0.06, lx, h, lz + (s * d) / 2, g, ctx.flat);
-      f.box(0.06, 0.06, d + 0.04, lx + (s * w) / 2, h, lz, g, ctx.flat);
-      f.box(0.06, h, 0.06, lx + (s * w) / 2, h / 2, lz + (s * d) / 2, g, ctx.flat);
-      f.box(0.06, h, 0.06, lx + (s * w) / 2, h / 2, lz - (s * d) / 2, g, ctx.flat);
-    }
-    f.solid(lx - w / 2, lx + w / 2, lz - d / 2, lz + d / 2);
-  });
   light(group, lights, C.x - 8, 4, C.z - 3, 0x8a4cff, 46, 24);
   light(group, lights, C.x + 8, 4, C.z + 3, 0x2ae0d0, 46, 24);
   finish(ctx, group);
-  const at = (lx: number, lz: number) => ({ x: C.x + lx, z: C.z + lz });
-  return {
+  // What stands in the hall is built once for each way of laying it out, and only one of them is shown.
+  const arenas = buildArenas();
+  for (const a of arenas) group.add(a.group);
+  const first = arenas[0]!;
+  const room: LaserRoom = {
     id: "laser",
     group,
     bounds: { minX: C.x - W / 2, maxX: C.x + W / 2, minZ: C.z - D / 2, maxZ: C.z + D / 2 },
-    solids: ctx.solids,
+    solids: first.solids,
     floorY: 0,
-    spawn: { x: C.x - 4, z: C.z + D / 2 - 2, heading: Math.PI },
+    spawn: { x: first.start.x, z: first.start.z, heading: Math.PI },
     exit: { x: C.x, z: C.z + D / 2 - 1 },
     lights,
     ambient: { sky: 0x5a48c8, ground: 0x0a0618, power: 0.5 },
     boom: 5.4,
-    start: { x: C.x - 4, z: C.z + D / 2 - 2, heading: Math.PI },
-    bots: [at(-13, -9), at(13, -9), at(0, -9.6), at(-13, 3), at(13, 3)],
-    nodes: [at(-14, -8.5), at(-4, -8.5), at(4, -8.5), at(14, -8.5), at(-14, 8.5), at(-4, 8.5), at(4, 8.5), at(14, 8.5), at(-9.6, 0), at(9.6, 0), at(-3.4, -3.4), at(3.4, 3.4), at(-3.4, 3.4), at(3.4, -3.4)],
+    start: first.start,
+    bots: first.pinks,
+    nodes: first.nodes,
+    arenas,
+    arena: first,
+    use(index: number) {
+      const a = arenas[index] ?? first;
+      for (const q of arenas) q.group.visible = q === a;
+      room.arena = a;
+      room.solids = a.solids;
+      room.start = a.start;
+      room.bots = a.pinks;
+      room.nodes = a.nodes;
+    },
   };
+  room.use(0);
+  return room;
 }

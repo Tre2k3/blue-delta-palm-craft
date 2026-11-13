@@ -298,6 +298,44 @@ export function Loadout({ game, hud, touch }: { game: Game; hud: HudState; touch
           ))}
         </div>
       </div>
+      {/* The arena: each layout with its floor plan. Upstairs floors are the bright panels, ramps the striped ones. */}
+      <div className="mt-3">
+        <div className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-white/55">Arena</div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {d.maps.map((m) => (
+            <button
+              key={m.id}
+              data-arena={m.id}
+              onClick={() => game.pickArena(m.id)}
+              className={`flex items-center gap-2.5 rounded-xl border p-2 text-left transition ${m.picked ? "border-[#39ff14] bg-[#39ff14]/10" : "border-white/10 bg-white/5 hover:bg-white/10"}`}
+            >
+              <svg viewBox={`${-d.hall.wide / 2} ${-d.hall.deep / 2} ${d.hall.wide} ${d.hall.deep}`} className="h-[66px] w-[96px] shrink-0 rounded-md border border-white/15 bg-[#07060d]" aria-hidden>
+                {m.plan.covers.map(([x0, x1, z0, z1], i) => (
+                  <rect key={`c${i}`} x={x0} y={z0} width={x1! - x0!} height={z1! - z0!} fill="#4b3fa8" />
+                ))}
+                {m.plan.ramps.map(([x0, x1, z0, z1], i) => (
+                  <rect key={`r${i}`} x={x0} y={z0} width={x1! - x0!} height={z1! - z0!} fill="#39ff14" fillOpacity={0.45} stroke="#39ff14" strokeWidth={0.18} strokeDasharray="0.5 0.4" />
+                ))}
+                {m.plan.decks.map(([x0, x1, z0, z1], i) => (
+                  <rect key={`d${i}`} x={x0} y={z0} width={x1! - x0!} height={z1! - z0!} fill="#2ae0d0" fillOpacity={0.55} stroke="#9ff5ec" strokeWidth={0.16} />
+                ))}
+                {/* The two bases: green in his corner, pink in theirs. */}
+                <circle cx={-14.6} cy={9.7} r={0.75} fill="#39ff14" />
+                <circle cx={14.6} cy={-9.7} r={0.75} fill="#ff4fd8" />
+              </svg>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center justify-between gap-x-2">
+                  <span className="sr-title text-lg leading-tight text-white">{m.name}</span>
+                  <span className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider" style={m.floors > 1 ? { background: "#2ae0d0", color: "#04201d" } : { background: "rgba(255,255,255,0.14)", color: "#fff" }}>
+                    {m.floors > 1 ? "2 floors" : "1 floor"}
+                  </span>
+                </div>
+                <div className="text-[11px] leading-snug text-white/65">{m.note}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         {touch ? (
           <button data-autofire className="sr-btn sr-btn-ghost" onClick={() => game.toggleAutoFire()}>

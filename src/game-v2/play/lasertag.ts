@@ -4,7 +4,8 @@ import { TAGGERS } from "../assets/cast";
 import type { HudState, LoadoutHud } from "../core/types";
 import { clamp, damp, wrapAngle } from "../core/util";
 import type { Activity, Game } from "../game";
-import { pushOut, sight } from "../world/collide";
+import { ARENA_D, ARENA_W } from "../world/arena";
+import { pushOut } from "../world/collide";
 import { ROOM } from "../world/map";
 
 /** Seconds in a match. */
@@ -92,6 +93,12 @@ type Tagger = {
   playing: boolean;
   x: number;
   z: number;
+  /** How high their feet are: the floor, the upstairs, or part way up a ramp. And the node they are walking to. */
+  y: number;
+  node: number;
+  /** The node they are making for (-1 when they have nowhere in mind), and why. */
+  goal: number;
+  want: "benji" | "base" | "post";
   tx: number;
   tz: number;
   home: { x: number; z: number };
@@ -110,7 +117,7 @@ type Tagger = {
 };
 type Base = { x: number; z: number; hp: number; dark: number; core: THREE.Mesh; ring: THREE.Mesh };
 type PowerKind = "rapid" | "shield" | "double";
-type Power = { mesh: THREE.Mesh; kind: PowerKind; x: number; z: number; wait: number };
+type Power = { mesh: THREE.Mesh; kind: PowerKind; x: number; y: number; z: number; wait: number };
 type Beam = { mesh: THREE.Mesh; left: number };
 type Hit = { kind: "wall" | "bot" | "base"; s: number; x: number; y: number; z: number; bot: Tagger | null; head: boolean };
 
@@ -197,6 +204,9 @@ export class LaserTag implements Activity {
   private reloading = 0;
   private ads = 0;
   private pitch = 0;
+  /** How high his feet are, and how fast he is falling when he has stepped off something. */
+  private y = 0;
+  private vy = 0;
   private kick = 0;
   private bloom = 0;
   private flash = 0;
@@ -276,7 +286,7 @@ export class LaserTag implements Activity {
       const mesh = new THREE.Mesh(gem, new THREE.MeshBasicMaterial({ color: new THREE.Color(...POWER[kind].color), toneMapped: false }));
       mesh.visible = false;
       this.group.add(mesh);
-      this.powers.push({ mesh, kind, x: 0, z: 0, wait: 3 });
+      this.powers.push({ mesh, kind, x: 0, y: 0, z: 0, wait: 3 });
     }
     room.group.add(this.group);
   }
@@ -294,7 +304,7 @@ export class LaserTag implements Activity {
       // A team mate's name shows through the walls, so he always knows where his side is.
       (p.material as THREE.SpriteMaterial).depthTest = t.team === 1;
       this.group.add(card.group, p);
-      this.bots.push({ card, plate: p, name, team: t.team, height: t.height, playing: false, x: 0, z: 0, tx: 0, tz: 0, home: { x: 0, z: 0 }, hp: VEST, out: 0, aim: 0, cool: 1, stuck: 0, at: null, shot: -9, alert: 0 });
+      this.bots.push({ card, plate: p, name, team: t.team, height: t.height, playing: false, x: 0, z: 0, y: 0, node: 0, goal: -1, want: "post", tx: 0, tz: 0, home: { x: 0, z: 0 }, hp: VEST, out: 0, aim: 0, cool: 1, stuck: 0, at: null, shot: -9, alert: 0 });
     }
   }
 
@@ -329,6 +339,8 @@ export class LaserTag implements Activity {
         ["Best score", String(this.g.save.best.laser ?? 0)],
       ],
       guns: BLASTERS.map((b) => ({ id: b.id, name: b.name, note: b.note, mag: b.mag, locked: r.index < b.rank ? `Issued at ${RANKS[b.rank]![1]}` : "", picked: b.id === picked.id, img: `/game-v2/kit/blasters/${b.id}-hip.webp` })),
+      maps: this.g.rooms.laser.arenas.map((a, i) => ({ id: a.id, name: a.name, note: a.note, floors: a.storeys, picked: i === this.map, plan: a.plan })),
+      hall: { wide: ARENA_W, deep: ARENA_D },
       auto: this.auto(),
     };
   }
@@ -346,6 +358,23 @@ export class LaserTag implements Activity {
     return true;
   }
 
+  /** The hall as it is laid out for this match. */
+  private get arena() {
+    return this.g.rooms.laser.arena;
+  }
+
+  /** Which layout he has picked at the door. */
+  get map() {
+    return clamp(Math.floor(this.stat("map")), 0, this.g.rooms.laser.arenas.length - 1);
+  }
+
+  chooseMap(id: string) {
+    const i = this.g.rooms.laser.arenas.findIndex((a) => a.id === id);
+    if (i < 0) return false;
+    this.g.save.best.lt_map = i;
+    return true;
+  }
+
   /** On a touch screen the blaster fires by itself when the crosshair is on somebody, unless that is turned off. */
   private auto() {
     return this.stat("manual") !== 1;
@@ -360,21 +389,20 @@ export class LaserTag implements Activity {
   start() {
     const g = this.g;
     const room = g.rooms.laser;
-    const C = ROOM.laser;
     this.build();
     this.leaving = false;
+    // The hall is set out the way he asked for at the door.
+    room.use(this.map);
+    const A = this.arena;
     g.pos.x = room.start.x;
     g.pos.z = room.start.z;
     g.heading = room.start.heading;
     g.camYaw = room.start.heading;
     g.vel.x = g.vel.z = 0;
     this.pitch = 0;
+    this.y = this.vy = 0;
     // Three in green with Benji; four of the five pinks, a different one sat out each match.
-    const greens = [
-      { x: C.x - 9, z: C.z + 9 },
-      { x: C.x - 13.5, z: C.z + 5.5 },
-      { x: C.x - 11.6, z: C.z + 7.6 },
-    ];
+    const greens = A.greens;
     const bench = this.bots.filter((b) => b.team === 1)[this.matches++ % 5];
     let gi = 0;
     let pi = 0;
@@ -387,6 +415,9 @@ export class LaserTag implements Activity {
       b.home = { x: p.x, z: p.z };
       b.x = b.tx = p.x;
       b.z = b.tz = p.z;
+      b.y = 0;
+      b.node = A.near(p.x, p.z, 0, true);
+      b.goal = -1;
       b.hp = VEST;
       b.out = 0;
       b.aim = 0;
@@ -498,17 +529,15 @@ export class LaserTag implements Activity {
   /** What a beam from his eye meets first, along a heading and a tilt. `wide` lets a near miss count, for thumbs. */
   private trace(yaw: number, pitch: number, reach: number, wide = 0): Hit {
     const g = this.g;
-    const room = g.rooms.laser;
     const hx = Math.sin(yaw);
     const hz = Math.cos(yaw);
     const rise = Math.tan(pitch);
     const ox = g.pos.x;
     const oz = g.pos.z;
-    // Walls and cover stand taller than anyone; the floor and the roof stop a beam too.
-    let far = sight(ox, oz, ox + hx * reach, oz + hz * reach, room.solids, 0.02) * reach;
-    if (rise < -1e-4) far = Math.min(far, EYE / -rise);
-    else if (rise > 1e-4) far = Math.min(far, (4.9 - EYE) / rise);
-    let best: Hit = { kind: "wall", s: far, x: ox + hx * far, y: EYE + rise * far, z: oz + hz * far, bot: null, head: false };
+    const eye = this.y + EYE;
+    // Walls, cover, the floors above and below, the ramps and the roof all stop a beam.
+    const far = this.arena.beam(ox, eye, oz, hx, hz, rise, reach);
+    let best: Hit = { kind: "wall", s: far, x: ox + hx * far, y: eye + rise * far, z: oz + hz * far, bot: null, head: false };
     for (const b of this.bots) {
       if (!b.playing || b.team === 0 || b.out > 0) continue;
       const dx = b.x - ox;
@@ -516,10 +545,11 @@ export class LaserTag implements Activity {
       const s = dx * hx + dz * hz;
       if (s < 0.4 || s > best.s) continue;
       const off = Math.abs(dx * hz - dz * hx);
-      const y = EYE + rise * s;
+      // How high up them the beam is: they may be a floor above him, or below.
+      const y = eye + rise * s - b.y;
       const slack = wide * s;
       if (off > 0.3 + slack || y < 0.04 - slack || y > b.height + 0.04 + slack) continue;
-      best = { kind: "bot", s, x: ox + hx * s, y: clamp(y, 0.1, b.height), z: oz + hz * s, bot: b, head: y > b.height * 0.8 && off < 0.3 };
+      best = { kind: "bot", s, x: ox + hx * s, y: b.y + clamp(y, 0.1, b.height), z: oz + hz * s, bot: b, head: y > b.height * 0.8 && off < 0.3 };
     }
     const base = this.bases[1];
     if (base.dark <= 0) {
@@ -527,7 +557,7 @@ export class LaserTag implements Activity {
       const dz = base.z - oz;
       const s = dx * hx + dz * hz;
       const off = Math.abs(dx * hz - dz * hx);
-      const y = EYE + rise * s;
+      const y = eye + rise * s;
       if (s > 0.4 && s < best.s && off < 0.46 + wide * s && y > 0.05 && y < 2.5 + wide * s) best = { kind: "base", s, x: base.x, y: 2.05, z: base.z, bot: null, head: false };
     }
     return best;
@@ -551,7 +581,7 @@ export class LaserTag implements Activity {
     const g = this.g;
     const yaw = g.camYaw;
     const side = 0.2 * (1 - this.ads);
-    _a.set(g.pos.x + Math.sin(yaw) * 0.55 - Math.cos(yaw) * side, EYE - 0.16 + this.ads * 0.08, g.pos.z + Math.cos(yaw) * 0.55 + Math.sin(yaw) * side);
+    _a.set(g.pos.x + Math.sin(yaw) * 0.55 - Math.cos(yaw) * side, this.y + EYE - 0.16 + this.ads * 0.08, g.pos.z + Math.cos(yaw) * 0.55 + Math.sin(yaw) * side);
     return _a;
   }
 
@@ -752,13 +782,14 @@ export class LaserTag implements Activity {
 
   private dropPower(p: Power) {
     const g = this.g;
-    const nodes = g.rooms.laser.nodes.filter((n) => Math.hypot(n.x - g.pos.x, n.z - g.pos.z) > 5 && !this.powers.some((q) => q !== p && q.mesh.visible && Math.hypot(q.x - n.x, q.z - n.z) < 2));
+    const nodes = this.arena.nodes.filter((n) => Math.hypot(n.x - g.pos.x, n.z - g.pos.z) > 5 && !this.powers.some((q) => q !== p && q.mesh.visible && Math.hypot(q.x - n.x, q.z - n.z) < 2));
     const n = nodes[Math.floor(Math.random() * nodes.length)];
     if (!n) return;
     const kinds: PowerKind[] = ["rapid", "shield", "double"];
     p.kind = kinds[Math.floor(Math.random() * kinds.length)]!;
     (p.mesh.material as THREE.MeshBasicMaterial).color.setRGB(...POWER[p.kind].color);
     p.x = n.x;
+    p.y = n.y;
     p.z = n.z;
     p.mesh.visible = true;
   }
@@ -812,6 +843,7 @@ export class LaserTag implements Activity {
         g.pos.z = room.start.z;
         g.camYaw = room.start.heading;
         this.pitch = 0;
+        this.y = this.vy = 0;
         this.vest = VEST;
         this.ammo = gun.mag;
         this.reloading = 0;
@@ -876,7 +908,17 @@ export class LaserTag implements Activity {
     }
     g.pos.x += g.vel.x * dt;
     g.pos.z += g.vel.z * dt;
-    pushOut(g.pos, 0.36, room.solids);
+    const A = this.arena;
+    pushOut(g.pos, 0.36, A.solidsAt(this.y));
+    // What is under his feet: up a ramp it carries him, off an edge he drops.
+    const ground = A.surface(g.pos.x, g.pos.z, this.y);
+    if (ground >= this.y - 0.02) {
+      this.y += (ground - this.y) * damp(22, dt);
+      this.vy = 0;
+    } else {
+      this.vy -= 24 * dt;
+      this.y = Math.max(ground, this.y + this.vy * dt);
+    }
     const speed = Math.hypot(g.vel.x, g.vel.z);
     g.heading = g.camYaw;
     g.benji.speed = 0;
@@ -937,7 +979,7 @@ export class LaserTag implements Activity {
       for (const b of this.bots) {
         if (!b.playing || b.team === 0 || b.out > 0) continue;
         const e = Math.abs(wrapAngle(Math.atan2(b.x - g.pos.x, b.z - g.pos.z) - g.camYaw));
-        if (e < err && sight(g.pos.x, g.pos.z, b.x, b.z, room.solids, 0.05) >= 1) {
+        if (e < err && A.clear(g.pos.x, this.y + EYE, g.pos.z, b.x, b.y + b.height * 0.62, b.z)) {
           near = b;
           err = e;
         }
@@ -947,7 +989,7 @@ export class LaserTag implements Activity {
         const pull = damp(turnKeys ? 7 : 2.4, dt);
         g.camYaw = wrapAngle(g.camYaw + wrapAngle(want - g.camYaw) * pull);
         const dist = Math.hypot(near.x - g.pos.x, near.z - g.pos.z);
-        this.pitch += (Math.atan2(near.height * 0.62 - EYE, dist) - this.pitch) * pull;
+        this.pitch += (Math.atan2(near.y + near.height * 0.62 - this.y - EYE, dist) - this.pitch) * pull;
       } else if (turnKeys) this.pitch += (0 - this.pitch) * damp(3, dt);
     }
     // The trigger: held for a blaster that keeps firing, pressed for one that does not; on a
@@ -973,9 +1015,9 @@ export class LaserTag implements Activity {
         }
         continue;
       }
-      p.mesh.position.set(p.x, 1 + Math.sin(g.time * 3 + p.x) * 0.12, p.z);
+      p.mesh.position.set(p.x, p.y + 1 + Math.sin(g.time * 3 + p.x) * 0.12, p.z);
       p.mesh.rotation.y += dt * 2.4;
-      if (live && Math.hypot(p.x - g.pos.x, p.z - g.pos.z) < 1.05) {
+      if (live && Math.hypot(p.x - g.pos.x, p.z - g.pos.z) < 1.05 && Math.abs(p.y - this.y) < 1.3) {
         p.mesh.visible = false;
         p.wait = 11;
         const def = POWER[p.kind];
@@ -1020,7 +1062,7 @@ export class LaserTag implements Activity {
       if (!b.playing) continue;
       if (b.team === 1 && b.out <= 0 && this.sweep <= 0 && this.clock + 1000 - b.shot > 2.5 && b !== this.target) {
         const ahead = (b.x - g.pos.x) * fx + (b.z - g.pos.z) * fz;
-        if (ahead < 0 || sight(g.pos.x, g.pos.z, b.x, b.z, room.solids, 0.05) < 1) continue;
+        if (ahead < 0 || !A.clear(g.pos.x, this.y + EYE, g.pos.z, b.x, b.y + 1.1, b.z)) continue;
       }
       blip(b.x, b.z, b.out > 0 ? 5 : b.team);
     }
@@ -1044,6 +1086,9 @@ export class LaserTag implements Activity {
   private others(dt: number, live: boolean, speed: number, lv: number) {
     const g = this.g;
     const room = g.rooms.laser;
+    const A = this.arena;
+    // Where a beam at Benji is aimed: his chest, wherever in the hall that is.
+    const chest = this.y + EYE - 0.3;
     const benjiUp = live && this.shield <= 0;
     let lines = 0;
     this.warned -= dt;
@@ -1061,6 +1106,9 @@ export class LaserTag implements Activity {
         if (b.out <= 0) {
           b.x = b.tx = b.home.x;
           b.z = b.tz = b.home.z;
+          b.y = 0;
+          b.node = A.near(b.x, b.z, 0, true);
+          b.goal = -1;
           b.hp = VEST;
           b.cool = 1.2;
           b.stuck = 0;
@@ -1068,7 +1116,7 @@ export class LaserTag implements Activity {
           c.visible = true;
         }
         c.place(b.x, b.z);
-        c.update(dt, g.camera.position, g.tint, room.floorY + 0.03);
+        c.update(dt, g.camera.position, g.tint, room.floorY + b.y + 0.03);
         continue;
       }
       c.visible = true;
@@ -1076,9 +1124,9 @@ export class LaserTag implements Activity {
       if (this.hold) {
         c.speed = 0;
         b.plate.visible = b.team === 0 ? this.phase !== "over" : this.target === b;
-        b.plate.position.set(b.x, room.floorY + b.height + 0.3, b.z);
+        b.plate.position.set(b.x, room.floorY + b.y + b.height + 0.3, b.z);
         c.place(b.x, b.z);
-        c.update(dt, g.camera.position, g.tint, room.floorY + 0.03);
+        c.update(dt, g.camera.position, g.tint, room.floorY + b.y + 0.03);
         continue;
       }
       const dx = b.tx - b.x;
@@ -1092,7 +1140,7 @@ export class LaserTag implements Activity {
         let near = 15 + lv;
         if (b.team === 1 && benjiUp) {
           const dd = Math.hypot(g.pos.x - b.x, g.pos.z - b.z);
-          if (dd < (b.alert > 0 ? 40 : near) && sight(b.x, b.z, g.pos.x, g.pos.z, room.solids, 0.05) >= 1) {
+          if (dd < (b.alert > 0 ? 40 : near) && A.clear(b.x, b.y + 1.2, b.z, g.pos.x, chest, g.pos.z)) {
             near = b.alert > 0 ? 0 : dd;
             seen = "benji";
           }
@@ -1100,30 +1148,48 @@ export class LaserTag implements Activity {
         for (const o of this.bots) {
           if (!o.playing || o.team === b.team || o.out > 0) continue;
           const dd = Math.hypot(o.x - b.x, o.z - b.z);
-          if (dd < near && sight(b.x, b.z, o.x, o.z, room.solids, 0.05) >= 1) {
+          if (dd < near && A.clear(b.x, b.y + 1.2, b.z, o.x, o.y + 1.1, o.z)) {
             near = dd;
             seen = o;
           }
         }
         // Nobody about and their base in the open: go for it. Pinks only once the arena has warmed up.
-        if (!seen && enemyBase.dark <= 0 && (b.team === 0 || lv >= 3) && Math.hypot(enemyBase.x - b.x, enemyBase.z - b.z) < 12 && sight(b.x, b.z, enemyBase.x, enemyBase.z, room.solids, 0.05) >= 1) seen = "base";
+        if (!seen && enemyBase.dark <= 0 && (b.team === 0 || lv >= 3) && Math.hypot(enemyBase.x - b.x, enemyBase.z - b.z) < 12 && A.clear(b.x, b.y + 1.2, b.z, enemyBase.x, 2.05, enemyBase.z)) seen = "base";
       }
 
       if (dist < 0.5 || b.stuck > 1.2) {
-        // Next stop: any node this one can walk straight to.
-        const open = room.nodes.filter((nd) => Math.hypot(nd.x - b.x, nd.z - b.z) > 3 && sight(b.x, b.z, nd.x, nd.z, room.solids, 0.45) >= 1);
-        const toward = (px: number, pz: number) => [...open].sort((p, q) => Math.hypot(p.x - px, p.z - pz) - Math.hypot(q.x - px, q.z - pz))[0];
-        const r = Math.random();
-        let pick: { x: number; z: number } | undefined;
-        if (b.team === 1) {
-          // Pinks hunt Benji harder as it heats up, and some of them make a run on the green base.
-          if (live && r < 0.18 + lv * 0.1) pick = toward(g.pos.x, g.pos.z);
-          else if (lv >= 3 && r > 0.78) pick = toward(this.bases[0].x, this.bases[0].z);
-        } else if (r < 0.4) pick = toward(g.pos.x, g.pos.z);
-        else if (r > 0.68) pick = toward(this.bases[1].x, this.bases[1].z);
-        pick ??= open[Math.floor(Math.random() * open.length)] ?? room.nodes[Math.floor(Math.random() * room.nodes.length)]!;
-        b.tx = pick.x;
-        b.tz = pick.z;
+        // Next stop. Nodes are joined where one can be walked to from another in a straight line,
+        // and a ramp joins its foot to its head: going somewhere is following the joins.
+        if (b.stuck > 1.2) b.node = A.near(b.x, b.z, b.y, true);
+        const here = b.node;
+        const at = A.nodes[here]!;
+        let pick = here;
+        // Off the paths (just come in, or knocked off them): onto the nearest node first.
+        if (Math.hypot(at.x - b.x, at.z - b.z) <= 0.7) {
+          // Benji moves, so where he is gets looked up afresh; anywhere else is kept until it is reached.
+          if (b.want === "benji") b.goal = A.near(g.pos.x, g.pos.z, this.y);
+          if (b.goal < 0 || b.goal === here || Math.random() < 0.1) {
+            const r = Math.random();
+            b.want = "post";
+            if (b.team === 1) {
+              // Pinks hunt Benji harder as it heats up, and some of them make a run on the green base.
+              if (live && r < 0.18 + lv * 0.1) b.want = "benji";
+              else if (lv >= 3 && r > 0.78) b.want = "base";
+            } else if (r < 0.4) b.want = "benji";
+            else if (r > 0.68) b.want = "base";
+            if (b.want === "benji") b.goal = A.near(g.pos.x, g.pos.z, this.y);
+            else if (b.want === "base") b.goal = A.near(enemyBase.x, enemyBase.z, 0);
+            // Otherwise somewhere to hold for a while: half the time upstairs, where there is one.
+            else b.goal = A.upper.length && Math.random() < 0.5 ? A.upper[Math.floor(Math.random() * A.upper.length)]! : Math.floor(Math.random() * A.nodes.length);
+          }
+          pick = A.step(here, b.goal);
+          // Already there: anywhere that can be walked to from here.
+          if (pick === here) pick = at.links[Math.floor(Math.random() * at.links.length)] ?? here;
+        }
+        const to = A.nodes[pick]!;
+        b.node = pick;
+        b.tx = to.x;
+        b.tz = to.z;
         b.stuck = 0;
       }
       let moved = 0;
@@ -1133,7 +1199,10 @@ export class LaserTag implements Activity {
         const bz = b.z;
         b.x += (dx / dist) * v * dt;
         b.z += (dz / dist) * v * dt;
-        pushOut(b, 0.36, room.solids);
+        pushOut(b, 0.36, A.solidsAt(b.y));
+        // Up the ramp with it, or down off the edge.
+        const under = A.surface(b.x, b.z, b.y);
+        b.y = under >= b.y ? under : Math.max(under, b.y - 9 * dt);
         moved = Math.hypot(b.x - bx, b.z - bz) / dt;
         b.stuck = moved < v * 0.35 ? b.stuck + dt : 0;
         c.heading = Math.atan2(dx, dz);
@@ -1152,8 +1221,8 @@ export class LaserTag implements Activity {
       // A pink lining up on Benji shows a line: time to dash or get behind something.
       if (b.team === 1 && b.aim > 0 && b.at === "benji" && lines < this.sights.length) {
         const sm = this.sights[lines++]!;
-        _a.set(b.x, 1.12, b.z);
-        _b.set(g.pos.x, EYE - 0.32, g.pos.z);
+        _a.set(b.x, b.y + 1.12, b.z);
+        _b.set(g.pos.x, chest, g.pos.z);
         const len = _a.distanceTo(_b);
         sm.position.copy(_a).lerp(_b, 0.5);
         sm.scale.set(1 + (1 - b.aim) * 2, len, 1 + (1 - b.aim) * 2);
@@ -1168,12 +1237,13 @@ export class LaserTag implements Activity {
         if (b.aim <= 0) {
           b.cool = b.team ? (2.9 + Math.random() * 2) * (1 - lv * 0.08) : 2 + Math.random() * 1.4;
           b.shot = now;
-          const clear = sight(b.x, b.z, tx, tz, room.solids, 0.05) >= 1;
+          const ty = b.at === "benji" ? chest : b.at === "base" ? 2.05 : b.at.y + 1.1;
+          const clear = A.clear(b.x, b.y + 1.2, b.z, tx, ty, tz);
           const gx = b.x + Math.sin(c.heading) * 0.5;
           const gz = b.z + Math.cos(c.heading) * 0.5;
           if (clear && b.at === "base") {
             if (enemyBase.dark <= 0) {
-              this.beam(gx, 1.12, gz, tx, 2.05, tz, b.team);
+              this.beam(gx, b.y + 1.12, gz, tx, 2.05, tz, b.team);
               const paid = this.hitBase(enemyBase, b.team);
               if (b.team === 1) {
                 g.sound.bad();
@@ -1187,14 +1257,14 @@ export class LaserTag implements Activity {
           } else if (clear && b.at === "benji") {
             const hit = this.shield <= 0 && this.down <= 0 && Math.random() < (speed > 3.2 ? 0.28 + lv * 0.03 : 0.6 + lv * 0.05) + this.skill * 0.12;
             const miss = hit ? 0 : (Math.random() > 0.5 ? 1 : -1) * 0.9;
-            this.beam(gx, 1.12, gz, g.pos.x + miss, EYE - 0.3, g.pos.z + miss, 1);
+            this.beam(gx, b.y + 1.12, gz, g.pos.x + miss, chest, g.pos.z + miss, 1);
             g.sound.release();
             if (hit) this.tagged(b);
           } else if (clear && b.at !== "base" && b.at !== "benji") {
             const o = b.at;
             const hit = o.out <= 0 && Math.random() < (b.team ? 0.4 + this.skill * 0.1 : 0.58 - this.skill * 0.14);
             const miss = hit ? 0 : (Math.random() > 0.5 ? 1 : -1) * 0.8;
-            this.beam(gx, 1.12, gz, o.x + miss, 1.1, o.z + miss, b.team);
+            this.beam(gx, b.y + 1.12, gz, o.x + miss, o.y + 1.1, o.z + miss, b.team);
             if (hit) {
               o.hp -= 50;
               o.aim = 0;
@@ -1212,12 +1282,12 @@ export class LaserTag implements Activity {
       }
       // Names: his own side's all the time, a pink's only while the crosshair is on them.
       b.plate.visible = b.team === 0 ? this.phase !== "over" : this.target === b;
-      b.plate.position.set(b.x, room.floorY + b.height + 0.3, b.z);
+      b.plate.position.set(b.x, room.floorY + b.y + b.height + 0.3, b.z);
       const away = Math.hypot(b.x - g.pos.x, b.z - g.pos.z);
       const size = clamp(away / 9, 0.75, 2.2);
       b.plate.scale.set(1.3 * size, 0.325 * size, 1);
       c.place(b.x, b.z);
-      c.update(dt, g.camera.position, g.tint, room.floorY + 0.03);
+      c.update(dt, g.camera.position, g.tint, room.floorY + b.y + 0.03);
     }
     for (let i = lines; i < this.sights.length; i++) this.sights[i]!.visible = false;
   }
@@ -1231,7 +1301,7 @@ export class LaserTag implements Activity {
     const stride = Math.min(1, speed / 4.2);
     const out = this.down > 0 ? clamp((3.4 - this.down) * 4, 0, 1) : 0;
     const step = Math.sin(this.bob) * 0.028 * stride * (1 - this.ads * 0.7);
-    cam.position.set(g.pos.x, room.floorY + EYE + step - out * 0.75, g.pos.z);
+    cam.position.set(g.pos.x, room.floorY + this.y + EYE + step - out * 0.75, g.pos.z);
     cam.rotation.order = "YXZ";
     cam.rotation.set(this.pitch + this.kick * 0.035, g.camYaw + Math.PI, out * 0.38 + Math.cos(this.bob * 0.5) * 0.004 * stride);
     const fov = FOV + (gun.zoom - FOV) * this.ads + (sprint ? 4 : 0);
