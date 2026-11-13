@@ -2,7 +2,7 @@ import type { OutfitId } from "../assets/cast";
 
 export type Facing = "front" | "back" | "left" | "right";
 
-export type Place = "street" | "home" | "hq" | "bowl" | "fun" | "laser";
+export type Place = "street" | "home" | "hq" | "bowl" | "fun" | "laser" | "club";
 
 export type Solid = {
   minX: number;

@@ -87,6 +87,14 @@ const ROOMS: Partial<Record<Place, string[]>> = {
     "Air hockey table's in the corner. First to five.",
     "Them two cabinets in the row play real games. Whole browser in there.",
   ],
+  club: [
+    "That band been the house band since before you were born.",
+    "Put five in the jar and they'll play what you ask for.",
+    "Wait till the saxophone takes it. Whole room goes quiet.",
+    "My daddy brought me here. His daddy brought him.",
+    "Get out on that floor. Nobody in here is judging.",
+    "This room used to show pictures. Now it shows you what the blues is.",
+  ],
 };
 
 /** Where they are, out of doors. */

@@ -96,7 +96,7 @@ function bealeSouth(ctx: BuildCtx) {
   ctx.solid.box(16, 1, 8, sx, Y0 + 0.5, sz, MAT.darkWood());
   for (const px of [-7.6, 7.6]) for (const pz of [-3.6, 3.6]) ctx.solid.cyl(0.14, 0.14, 5.6, sx + px, Y0 + 3.8, sz + pz, MAT.black(), 6);
   ctx.solid.add(new THREE.BoxGeometry(17, 0.2, 9), MAT.black(), sx, Y0 + 6.7, sz, 0, -0.1);
-  ctx.solid.wall(15.4, 4.6, sx, Y0 + 3.6, sz + 3.7, MAT.brick("#33221e", 4), YAW.north, 4, 1.2);
+  ctx.solid.wall(15.4, 5.3, sx, Y0 + 3.6, sz + 3.7, MAT.brick("#33221e", 4), YAW.north, 4, 1.4);
   ctx.flat.wall(10, 2.2, sx, Y0 + 4.6, sz + 3.6, neon(ctx, "LIVE ON BEALE", "#ff4fd8", { sub: "HOME OF THE BLUES", w: 768, h: 192 }), YAW.north);
   ctx.flat.flat(18, 12, sx, Y0 + 1.02, sz - 1, poolMat(ctx, 0xff7ae0, 0.4));
   ctx.lamps.push({ x: sx, y: Y0 + 5, z: sz - 2, color: 0xff7ae0 });

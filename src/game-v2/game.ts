@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { Card } from "./actors/card";
+import { StageBand } from "./actors/stageband";
 import { Troupe, type Act, type Stop, type Talker } from "./actors/crowd";
 import { People } from "./actors/people";
 import { Traffic } from "./actors/traffic";
@@ -8,6 +9,7 @@ import { Fireworks } from "./gfx/fx";
 import { Rain } from "./gfx/rain";
 import { BALLERS, BAND, CAST, COACH, PEDS, OUTFITS, BENJI_HEIGHT, SITTERS, TAGGERS, type CastId, type OutfitId, VENDORS } from "./assets/cast";
 import { Sound } from "./core/audio";
+import { SONGS, TUNES } from "./core/band";
 import { Input, type Nav } from "./core/input";
 import type { AlbumHud, HoopsKind, Dialogue, HudState, Live, Mode, Overlay, Place, Results, Reveal, Save, Solid } from "./core/types";
 import { clamp, damp, dampAngle, wrapAngle } from "./core/util";
@@ -40,9 +42,10 @@ import { BOUNTIES, CHAPTERS, RANKS, RANK_PAY, STORE_REWARD, STORY, chapterOf, ra
 import { buildCity, type City } from "./world/city";
 import { buildSkyShow, type SkyShow } from "./world/skyshow";
 import { pushCircle, pushOut, sight } from "./world/collide";
+import { buildClubRoom, type ClubRoom } from "./world/club";
 import { buildFunRoom, buildLaserRoom, type FunRoom, type LaserRoom } from "./world/funhouse";
 import { CORNHOLE, HOLES, PUTT_PAR, PUTT_STAND, TENNIS_GATE } from "./world/rec-map";
-import { BOWL, FUN, HQ, PARK, PARK_TABLES, POIS, RACE_MEET, RIVER_Z, ROAD_HALF, ROOM, SLIDE, STREETS_X, STREETS_Z, SWING, TRUCKS, WALK, districtAt, nearestStreet } from "./world/map";
+import { BEALE_STAGE, BOWL, FUN, HQ, MEMPHIAN, PARK, PARK_TABLES, POIS, RACE_MEET, RIVER_Z, ROAD_HALF, ROOM, SLIDE, STREETS_X, STREETS_Z, SWING, TRUCKS, WALK, districtAt, nearestStreet } from "./world/map";
 import { LANE, buildBowlRoom, buildHomeRoom, buildHqRoom, type BowlRoom, type HomeRoom, type HqRoom, type Room } from "./world/rooms";
 
 const SAVE_KEY = "sack-v2-save-4";
@@ -187,7 +190,7 @@ export class Game {
   readonly stage: Stage;
   readonly camera: THREE.PerspectiveCamera;
   readonly sky: Sky;
-  readonly rooms: { hq: HqRoom; home: HomeRoom; bowl: BowlRoom; fun: FunRoom; laser: LaserRoom };
+  readonly rooms: { hq: HqRoom; home: HomeRoom; bowl: BowlRoom; fun: FunRoom; laser: LaserRoom; club: ClubRoom };
   readonly live: Live = { fp: { on: false, gun: 0, ads: 0, bob: 0, move: 0, kick: 0, flash: 0, reload: -1, sprint: 0, gap: 0, target: 0, hit: 0, hitKind: 0, hurt: 0, hurtAngle: 0, swayX: 0, swayY: 0, down: 0, fov: 72 }, meter: 0, sweetLo: 0, sweetHi: 0, aim: 0, tension: 0, speed: 0, drift: 0, nitro: 0, fade: 1, radar: new Array<number>(48).fill(0), radarN: 0, cue: 999, turn: -1, markX: 0.5, markY: 0.5, markOn: false, markDist: 0, x: 0, z: 0, heading: 0, camYaw: 0, party: 0, partyLevel: 0 };
   readonly benji: Card;
   car: CarModel;
@@ -204,7 +207,7 @@ export class Game {
   room: Room | null = null;
   activity: Activity | null = null;
   /** The art tables, where tools and tests can read them. */
-  readonly tables = { OUTFITS, PEDS, BALLERS, CAST, VENDORS, STORY, CHAPTERS, RIDES, POSTCARDS, POIS, HOLES, PUTT_PAR, CHATTER: ALL_LINES, TAGGERS, COACH, BAND, BLASTERS, TAG_RANKS };
+  readonly tables = { OUTFITS, PEDS, BALLERS, CAST, VENDORS, STORY, CHAPTERS, RIDES, POSTCARDS, POIS, HOLES, PUTT_PAR, CHATTER: ALL_LINES, TAGGERS, COACH, BAND, BLASTERS, TAG_RANKS, TUNES, SONGS, BEALE_STAGE, MEMPHIAN };
   pos = { x: START.x, z: START.z };
   vel = { x: 0, z: 0 };
   heading = 0;
@@ -219,6 +222,12 @@ export class Game {
   /** The video on the big screen at Veli's Wings. Made the first time Benji gets near the lot. */
   private veli: { video: HTMLVideoElement; tex: THREE.VideoTexture } | null = null;
   private veliVol = 0;
+  /** The band on the stage in Handy Park and the one inside the Memphian, the crowd in front of the first, and which song the second is on. */
+  private bealeBand!: StageBand;
+  private clubBand!: StageBand;
+  private gig!: Troupe;
+  private song = 0;
+  private tipped = -999;
   results: Results | null = null;
   /** The HUD's handler for pad presses while a menu is up. */
   onNav: ((n: Nav) => void) | null = null;
@@ -371,7 +380,7 @@ export class Game {
       this.stage.setScale(RUNGS[this.rung]!.scale);
     }
     this.fitQuality();
-    this.rooms = { hq: buildHqRoom(), home: buildHomeRoom(), bowl: buildBowlRoom(), fun: buildFunRoom(), laser: buildLaserRoom() };
+    this.rooms = { hq: buildHqRoom(), home: buildHomeRoom(), bowl: buildBowlRoom(), fun: buildFunRoom(), laser: buildLaserRoom(), club: buildClubRoom() };
     for (const r of Object.values(this.rooms)) this.scene.add(r.group);
 
     this.benji = new Card(OUTFITS[this.save.wearing]?.art ?? OUTFITS.starter.art, BENJI_HEIGHT);
@@ -678,6 +687,49 @@ export class Game {
       }
     }
 
+    // ---- Live music. The band on the stage in Handy Park, and the people who came out for it.
+    const S = BEALE_STAGE;
+    this.bealeBand = new StageBand(this.city.exterior, S.x, S.z - 0.5, Math.PI, S.top + 0.03, S.w - 4.2, S.d - 2.2, 1.16);
+    const gig = (this.gig = new Troupe(this.city.exterior, this.city.solids, null, 37));
+    const lip = S.z - S.d / 2;
+    const pit: Stop[] = [
+      ...[-5, -2.6, -0.4, 2, 4.4].map((dx, i) => at(S.x + dx, lip - 2.4 - (i % 2) * 1.3, S.x + dx * 0.4, S.z, "dance", { stay: [20, 44] })),
+      ...[-6.5, -3.4, 0.8, 3.6, 6.8].map((dx, i) => at(S.x + dx, lip - 5.6 - (i % 2) * 1.1, S.x, S.z, i % 2 ? "cheer" : "watch", { stay: [16, 34] })),
+      ...[-8, -1.5, 5.5].map((dx) => at(S.x + dx, lip - 9, S.x, S.z, "watch", { stay: [10, 22] })),
+    ];
+    gig.stops(pit);
+    for (let i = 0; i < (few ? 5 : 9); i++) {
+      const w = who();
+      gig.roam(w.art, w.height, pit);
+    }
+
+    // ---- The Memphian: the house band, somebody at every table, a bar and a floor that never empties.
+    const club = this.rooms.club;
+    this.clubBand = new StageBand(club.group, club.stage.x, club.stage.z, club.stage.heading, club.stage.top, club.stage.w, club.stage.d, 1.06);
+    const ct = (this.troupes.club = new Troupe(club.group, club.solids, club.floorY + 0.03, 41));
+    let chair = 0;
+    for (const t of club.tables) {
+      for (const seat of few ? t.seats.slice(0, 1) : t.seats) {
+        // Sat at the table, turned to the stage.
+        const w = SITTERS[(chair++ * 3 + 1) % SITTERS.length]!;
+        ct.post(w.art, w.height, at(seat.x, seat.z, seat.x, club.stage.z, "play"));
+      }
+    }
+    const keep = PEDS[9 % PEDS.length]!;
+    ct.post(keep.art, keep.height, at(club.barkeep.x, club.barkeep.z, club.bar.x, club.bar.z, "serve"));
+    const dance = club.floor;
+    const house: Stop[] = [
+      ...[-2.9, -1.1, 0.8, 2.8].map((dx, i) => at(dance.x + dx, dance.z - 0.9 + (i % 2) * 1.5, club.stage.x, club.stage.z, "dance", { stay: [12, 26] })),
+      ...[-2, 1.9].map((dx) => at(dance.x + dx, dance.z + 1.7, club.stage.x, club.stage.z, "dance", { stay: [10, 20] })),
+      ...club.rail.map((r, i) => at(r.x, r.z, i < club.rail.length - 2 ? club.barkeep.x : club.stage.x, i < club.rail.length - 2 ? r.z : club.stage.z, i < club.rail.length - 2 ? "watch" : "cheer", { stay: [8, 18] })),
+      at(club.exit.x + 1.5, club.exit.z - 0.4, club.exit.x, club.exit.z + 3, "inside", { stay: [8, 16] }),
+    ];
+    ct.stops(house);
+    for (let i = 0; i < (few ? 4 : 7); i++) {
+      const w = who();
+      ct.roam(w.art, w.height, house);
+    }
+
     // ---- The park. A regular at every table, people watching the games, walking the paths and sat by the fountain.
     let seat = 0;
     const sitter = () => SITTERS[(seat++ * 3 + 6) % SITTERS.length]!;
@@ -741,6 +793,14 @@ export class Game {
       this.enter("fun");
     });
     this.spot("fun", fun.exit.x, fun.exit.z, 1.6, "Step outside", () => this.leave(FUN.doorX, FUN.frontZ - 2.6, Math.PI));
+
+    // Live music: the old picture house on Union, and the stage in Handy Park.
+    const club = this.rooms.club;
+    this.spot("street", MEMPHIAN.x, MEMPHIAN.z + 1.3, 2.4, "Enter The Memphian", () => this.enter("club"));
+    this.spot("club", club.exit.x, club.exit.z, 1.5, "Step outside", () => this.leave(MEMPHIAN.x, MEMPHIAN.z + 2.4, 0));
+    this.spot("club", club.request.x, club.request.z, 1.8, "Request a song · $5", () => this.requestSong());
+    this.spot("club", club.bar.x, club.bar.z, 1.5, "Sweet tea at the bar · $4", () => this.barTea());
+    this.spot("street", BEALE_STAGE.x, BEALE_STAGE.z - BEALE_STAGE.d / 2 - 1.3, 2, "Tip the band · $5", () => this.tipBand());
 
     // The coupe.
     this.carSpot = this.spot(
@@ -2125,6 +2185,60 @@ export class Game {
     if (!this.overlay) this.activity?.tap?.(nx, ny);
   }
 
+  /** The song the house band at the Memphian is on. */
+  get clubSong() {
+    return SONGS[this.song % SONGS.length]!;
+  }
+
+  /** Beats into a tune: the band's own count while that is the tune sounding, the clock's if not (sound off, or not yet begun). */
+  private beatOf(id: string) {
+    const b = this.sound.beat(id);
+    return b >= 0 ? b : (this.time * (TUNES[id]?.bpm ?? 100)) / 60;
+  }
+
+  /** Whose turn it is to take the tune: the band knows while it is sounding; without it they go round, twelve bars each. */
+  private leadOf(id: string, beat: number) {
+    if (this.sound.beat(id) >= 0) return this.sound.soloist;
+    const leads = TUNES[id]?.leads ?? ["none"];
+    return leads[Math.floor(beat / 48) % leads.length]!;
+  }
+
+  /** Five in the jar and the band plays the next one on its list. */
+  requestSong() {
+    if (!this.spend(5)) return;
+    this.song = (this.song + 1) % SONGS.length;
+    this.troupes.club?.cheer(this.pos.x, this.pos.z, 14, 1.6);
+    this.sound.cheer();
+    this.earn(0, 1, { quiet: true });
+    this.toast(`Five in the jar. The band counts off "${this.clubSong.name}".`, 4.5);
+    this.push();
+  }
+
+  barTea() {
+    if (!this.spend(4)) return;
+    this.fedUntil = Math.max(this.fedUntil, this.time + 150);
+    this.troupes.club?.serveAt(this.pos.x, this.pos.z);
+    this.toast("Sweet tea, extra lemon, slid the length of the bar.", 4);
+    this.push();
+  }
+
+  tipBand() {
+    if (!this.spend(5)) return;
+    this.gig.cheer(BEALE_STAGE.x, BEALE_STAGE.z - 8, 16, 1.6);
+    this.sound.cheer();
+    // The first tip of the set gets him pointed out from the stage.
+    const first = this.time - this.tipped > 240;
+    this.tipped = this.time;
+    if (first) this.earn(0, 2, { quiet: true });
+    this.toast(first ? "The singer points Benji out to the whole square: \"That's SackReligious right there!\"" : "The guitar man tips his hat.", 4.5);
+    this.push();
+  }
+
+  /** How far he is from the stage in Handy Park. */
+  private toStage() {
+    return Math.hypot(this.pos.x - BEALE_STAGE.x, this.pos.z - BEALE_STAGE.z);
+  }
+
   /** The music for where he is, most wanted first: whichever of these has been recorded plays. */
   private tracks(): string[] {
     const city = this.sky.phase === "night" ? ["city-night", "city-day"] : ["city-day", "city-night"];
@@ -2134,9 +2248,11 @@ export class Game {
     if (this.mode === "bowl" || this.place === "bowl") return ["bowl", ...city];
     if (this.place === "fun" || this.place === "laser") return ["funhouse", ...city];
     if (this.place === "hq") return ["hq", ...city];
+    if (this.place === "club") return [this.clubSong.id, "club", ...city];
     if (this.mode === "fish") return ["river", ...city];
     if (this.mode === "drive") return ["radio", ...city];
-    if (!this.room && districtAt(this.pos.x, this.pos.z) === "Beale Street") return ["beale", ...city];
+    // On Beale, and anywhere the band in Handy Park can be heard.
+    if (!this.room && (districtAt(this.pos.x, this.pos.z) === "Beale Street" || this.toStage() < 52)) return ["beale", ...city];
     return city;
   }
 
@@ -2637,7 +2753,14 @@ export class Game {
     // Benji only counts as someone to walk round and talk to while he is on foot.
     const afoot = this.mode === "walk" ? this.pos : null;
     if (this.place !== "street") {
-      this.troupes[this.place]?.update(dt, cam, this.tint, afoot, this.time);
+      // In the Memphian everybody moves to the band, and the stage lights go with it.
+      const live = this.place === "club";
+      const cb = live ? this.beatOf(this.clubSong.id) : -1;
+      this.troupes[this.place]?.update(dt, cam, this.tint, afoot, this.time, live ? cb / 1.58 : -1);
+      if (live) {
+        this.clubBand.update(dt, cam, this.tint, cb, this.leadOf(this.clubSong.id, cb));
+        this.rooms.club.pulse(cb);
+      }
       if (this.place === "bowl") {
         for (const b of this.laneBalls) {
           if (!b.live) continue;
@@ -2683,7 +2806,12 @@ export class Game {
         }
         this.people.update(dt, cam, this.tint, this.pos, beat, this.city.anchors.trucks.screen.x, this.city.anchors.trucks.screen.z, wheels);
         // The song only reaches the lot, so only the lot moves to it.
-        this.street.update(dt, cam, this.tint, afoot, this.time, Math.hypot(this.pos.x - TRUCKS.x, this.pos.z - TRUCKS.z) < 40 ? beat : -1, this.stage.quality === "low" ? 115 : 150, wheels);
+        const reach = this.stage.quality === "low" ? 115 : 150;
+        this.street.update(dt, cam, this.tint, afoot, this.time, Math.hypot(this.pos.x - TRUCKS.x, this.pos.z - TRUCKS.z) < 40 ? beat : -1, reach, wheels);
+        // The band in Handy Park, and everyone who came out for it.
+        const gb = this.beatOf("beale");
+        this.bealeBand.update(dt, cam, this.tint, gb, this.leadOf("beale", gb), Math.abs(cam.x - BEALE_STAGE.x) + Math.abs(cam.z - BEALE_STAGE.z) < reach);
+        this.gig.update(dt, cam, this.tint, afoot, this.time, gb / 1.58, reach, wheels);
       }
       this.city.glow.apply(look.lights, look.roadRough * (1 - 0.66 * wx.wet), wx.wet);
       this.city.glow.tick(this.time, look.lights);
@@ -2714,6 +2842,12 @@ export class Game {
     }
 
     this.updateVeli(dt);
+    // Stood in front of a band it is louder, and Benji cannot keep still.
+    const heard = this.tracks()[0]!;
+    const near = this.place === "club" ? 1 : heard === "beale" ? clamp(1 - (this.toStage() - 12) / 40, 0, 1) : 0;
+    this.sound.live(near);
+    if (near > 0.55 && this.mode === "walk") this.benji.groove = this.beatOf(heard) / 1.58;
+    else if (this.veliVol <= 0.25) this.benji.groove = -1;
     this.updateCoins(dt, paused);
     this.mark();
 
@@ -2842,7 +2976,7 @@ export class Game {
       dollars: s.dollars,
       respect: s.respect,
       tickets: s.tickets,
-      district: this.room ? { hq: "SackReligious HQ", home: "Home", bowl: "901 Bowl", fun: "The Fun House", laser: "Laser Arena" }[this.room.id as Exclude<Place, "street">] : districtAt(this.pos.x, this.pos.z),
+      district: this.room ? { hq: "SackReligious HQ", home: "Home", bowl: "901 Bowl", fun: "The Fun House", laser: "Laser Arena", club: "The Memphian" }[this.room.id as Exclude<Place, "street">] : districtAt(this.pos.x, this.pos.z),
       street: this.room ? "" : nearestStreet(this.pos.x, this.pos.z),
       phase: this.sky.phase,
       rain: this.weather.want > 0,

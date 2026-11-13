@@ -6,12 +6,13 @@
  * lists what there is (voices, effects, music tracks, each an mp3 named by its id); anything
  * not listed is made up as before.
  */
+import { Band, TUNES } from "./band";
+
 type Ctx = AudioContext;
 type Kind = "voice" | "sfx" | "music";
 const BANK = "/game-v2/audio";
-
-const E2 = 82.41;
-const semi = (n: number) => E2 * Math.pow(2, n / 12);
+/** How loud the house band sits under everything else. */
+const BED = 0.3;
 
 export class Sound {
   private ctx: Ctx | null = null;
@@ -22,8 +23,7 @@ export class Sound {
   private engine: { osc: OscillatorNode; osc2: OscillatorNode; gain: GainNode; filter: BiquadFilterNode } | null = null;
   private ambience: GainNode | null = null;
   private rain: { hiss: GainNode; body: GainNode } | null = null;
-  private nextBeat = 0;
-  private beat = 0;
+  private band: Band | null = null;
   private timer: number | null = null;
   musicOn = true;
   sfxOn = true;
@@ -69,7 +69,7 @@ export class Sound {
       const comp = ctx.createDynamicsCompressor();
       this.master.connect(comp).connect(ctx.destination);
       this.musicGain = ctx.createGain();
-      this.musicGain.gain.value = this.musicOn ? 0.22 : 0;
+      this.musicGain.gain.value = this.musicOn ? BED : 0;
       this.musicGain.connect(this.master);
       this.sfxGain = ctx.createGain();
       this.sfxGain.gain.value = this.sfxOn ? 0.9 : 0;
@@ -83,7 +83,9 @@ export class Sound {
       const data = this.noise.getChannelData(0);
       for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
       this.startAmbience();
-      this.nextBeat = ctx.currentTime + 0.2;
+      this.band = new Band(ctx, this.noise, this.musicGain);
+      const tune = this.wanted.find((w) => TUNES[w]);
+      if (tune) this.band.play(tune);
       this.timer = window.setInterval(() => this.schedule(), 90);
     } catch {
       this.ctx = null;
@@ -111,9 +113,9 @@ export class Sound {
     this.save();
   }
 
-  /** The made-up shuffle plays only while no recorded track does. */
+  /** The house band plays only while no recorded track does, and louder the nearer its players are. */
   private setBed(ease: number) {
-    if (this.musicGain && this.ctx) this.musicGain.gain.setTargetAtTime(this.musicOn && !this.track ? 0.22 * this.bedLevel : 0, this.ctx.currentTime, ease);
+    if (this.musicGain && this.ctx) this.musicGain.gain.setTargetAtTime(this.musicOn && !this.track ? BED * this.bedLevel * (1 + 0.75 * this.liveLevel) : 0, this.ctx.currentTime, ease);
   }
 
   // ---------------------------------------------------------------- recordings
@@ -200,10 +202,13 @@ export class Sound {
 
   /**
    * The music for where Benji is: the first of these tracks there is a recording of plays on
-   * a loop, and the made-up shuffle stands down. With none of them recorded the shuffle plays.
+   * a loop, and the house band stands down. With none of them recorded the band plays the first
+   * of them it knows.
    */
   setTrack(wanted: string[]) {
     this.wanted = wanted;
+    const tune = wanted.find((w) => TUNES[w]);
+    if (tune) this.band?.play(tune);
     const id = wanted.find((w) => this.bank.music.has(w)) ?? null;
     if (id === (this.track?.id ?? null)) return;
     if (this.track) this.fading.push(this.track.el);
@@ -237,6 +242,29 @@ export class Sound {
   }
 
   private bedLevel = 1;
+  private liveLevel = 0;
+
+  /** How near the players are: 0 a tune from somewhere, 1 stood in front of the band. */
+  live(k: number) {
+    const next = Math.max(0, Math.min(1, k));
+    if (Math.abs(next - this.liveLevel) < 0.02) return;
+    this.liveLevel = next;
+    this.setBed(0.25);
+  }
+
+  /** Beats into the tune that is sounding, or -1 if that is not `id` (or nothing is). Players and dancers move to this. */
+  beat(id = "") {
+    if (!this.band || !this.ctx || this.ctx.state !== "running" || (id && this.band.now !== id)) return -1;
+    return this.band.beat();
+  }
+
+  /** The tune that is sounding, who has the lead in it, and the tunes the band knows. */
+  get tune() {
+    return this.band?.now ?? "";
+  }
+  get soloist() {
+    return this.band?.soloist ?? "none";
+  }
 
   /** How much of the city's own music plays, 0..1. Another track nearby turns it down. */
   bed(k: number) {
@@ -305,36 +333,11 @@ export class Sound {
     src.stop(t + attack + decay + 0.05);
   }
 
-  /** Twelve-bar shuffle in E: walking bass, a soft chord stab, brushed hats. */
+  /** Every so often: write the next stretch of the tune, and ease the recordings. */
   private schedule() {
-    const ctx = this.ctx;
     this.easeTracks();
-    if (!ctx || !this.musicGain) return;
-    const step = 60 / 92 / 3;
-    while (this.nextBeat < ctx.currentTime + 0.3) {
-      const t = this.nextBeat;
-      const i = this.beat;
-      const bar = Math.floor(i / 12) % 12;
-      const pos = i % 12;
-      const root = [0, 0, 0, 0, 5, 5, 0, 0, 7, 5, 0, 7][bar]!;
-      const out = this.musicGain;
-      if (pos % 3 === 0) {
-        const walk = [0, 4, 7, 9][pos / 3]!;
-        this.tone(semi(root + walk), "triangle", t, 0.5, 0.01, 0.34, out);
-        this.tone(semi(root + walk) * 0.5, "sine", t, 0.35, 0.01, 0.3, out);
-      }
-      if (pos % 3 !== 1) this.hiss(t, pos % 3 === 0 ? 0.05 : 0.09, 0.004, 0.05, 7200, 1.2, out, "highpass");
-      if (pos === 3 || pos === 9) {
-        this.hiss(t, 0.16, 0.003, 0.11, 1900, 0.9, out);
-        this.tone(190, "triangle", t, 0.12, 0.003, 0.08, out, 0.6);
-      }
-      if (pos === 0 || pos === 8) {
-        for (const n of [root + 12, root + 16, root + 22]) this.tone(semi(n), "sine", t, 0.085, 0.012, 0.42, out);
-      }
-      if ((bar === 3 || bar === 11) && pos >= 6 && pos % 2 === 0) this.tone(semi(root + 24 + [3, 5, 7][(pos - 6) / 2]!), "square", t, 0.03, 0.01, 0.16, out);
-      this.nextBeat += step;
-      this.beat += 1;
-    }
+    // Nothing is written while it could not be heard; the band picks the tune up where it is.
+    if (this.ctx && this.band && this.musicOn && !this.track && !this.hushed) this.band.pump(this.ctx.currentTime + 0.3);
   }
 
   private startAmbience() {

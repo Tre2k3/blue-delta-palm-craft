@@ -2158,6 +2158,151 @@ try {
   check(fps.thumbs.fired >= 2 && fps.thumbs.pad && fps.thumbs.aim, "laser tag: on a touch screen it fires by itself on a target, with buttons to aim, reload, dash and sprint", fps.thumbs);
   check(fps.done.phase === "over" && fps.done.overlay === "results" && fps.done.xp > 0 && fps.done.games === 1 && fps.done.rank && !fps.done.on && fps.after.place === "fun" && fps.after.mode === "walk" && fps.after.benji && fps.after.roll < 0.01, "laser tag: the match goes on his record, and leaving puts him back in the Fun House as himself", { done: fps.done, after: fps.after });
 
+  // ---- live music: a tune for every place, the band in Handy Park, and the Memphian
+  const gigs = await page.evaluate(async () => {
+    const g = window.__GAME__;
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    const run = (n, dt = 1 / 30) => {
+      for (let i = 0; i < n; i++) g.tick(dt);
+    };
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    if (g.overlay) g.close();
+    if (g.activity) g.activity.quit();
+    run(6);
+    for (let i = 0; i < 200 && (g.mode !== "walk" || g.place !== "street" || g.live.fade > 0.05); i++) g.tick(1 / 30);
+    const { POIS, TUNES, SONGS, BEALE_STAGE: S, MEMPHIAN: M, BAND } = g.tables;
+    g.setRain(false);
+    g.setPhase("day");
+    g.sky.setPhase("day", true);
+    const cash0 = g.save.dollars;
+    g.save.dollars = 300;
+    // The band knows a tune for everywhere the game can ask for one.
+    const asked = ["title", "race", "radio", "court", "bowl", "funhouse", "hq", "river", "beale", "city-day", "city-night", ...SONGS.map((q) => q.id)];
+    const known = asked.filter((id) => TUNES[id]).length;
+    g.warp(-100, 60, 0);
+    run(4);
+    const day = g.tracks()[0];
+    g.setPhase("night");
+    g.sky.setPhase("night", true);
+    run(2);
+    const night = g.tracks()[0];
+    g.setPhase("day");
+    g.sky.setPhase("day", true);
+    // With the sound on, what is sounding is what was asked for (from the top of the next bar).
+    g.sound.unlock();
+    await wait(300);
+    const on = g.sound.ctx?.state === "running";
+    let heard = "";
+    for (let i = 0; on && i < 40 && (heard = g.sound.tune) !== g.tracks()[0]; i++) {
+      run(1);
+      await wait(150);
+    }
+    const sounding = { on, heard, want: g.tracks()[0], beat: on ? g.sound.beat() : -1 };
+    // From here the clock keeps the beat, so the test does not wait on a real one.
+    const real = g.sound.beat;
+    g.sound.beat = () => -1;
+
+    // ---- Handy Park: six on the boards, playing, with a crowd; nearer is louder and Benji cannot stand still.
+    g.warp(S.x, S.z - 16, 0);
+    run(30);
+    const tune = g.tracks()[0];
+    const band = g.bealeBand.players;
+    const seen = band.map(() => new Set());
+    let stepped = 0;
+    let dancing = 0;
+    for (let i = 0; i < 660; i++) {
+      g.tick(1 / 30);
+      band.forEach((p, k) => seen[k].add(p.card.pose ?? "a"));
+      stepped = Math.max(stepped, ...band.map((p) => p.out));
+      // Whoever has reached their spot moves to the tune; the rest are still finding one.
+      dancing = Math.max(dancing, g.gig.members.filter((m) => m.card.groove >= 0).length);
+    }
+    const stage = {
+      players: band.length,
+      up: band.every((p) => p.card.visible && Math.abs(p.card.group.position.y - (S.top + 0.03)) < 0.02),
+      on: band.every((p) => Math.abs(p.x - S.x) < S.w / 2 && Math.abs(p.z - S.z) < S.d / 2),
+      both: seen.filter((q) => q.size === 2).length,
+      stepped: +stepped.toFixed(2),
+      crowd: g.gig.members.length,
+      dancing,
+    };
+    g.warp(S.x, S.z - S.d / 2 - 1.6, 0);
+    run(40);
+    const close = { live: +g.sound.liveLevel.toFixed(2), bop: g.benji.groove >= 0, ask: g.prompt };
+    const r0 = g.save.respect;
+    const d0 = g.save.dollars;
+    g.input.press("interact");
+    run(3);
+    const tip = { paid: d0 - g.save.dollars, respect: g.save.respect - r0, said: g.toastText };
+    g.warp(-100, 60, 0);
+    run(40);
+    const far = { live: +g.sound.liveLevel.toFixed(2), bop: g.benji.groove >= 0, tune: g.tracks()[0] };
+
+    // ---- The Memphian: in at the doors on Union, the house band, the tables, the bar, a request.
+    const stop = POIS.find((q) => q.id === "memphian");
+    g.warp(stop.arrive.x, stop.arrive.z, stop.arrive.heading);
+    run(6);
+    const door = g.prompt;
+    g.input.press("interact");
+    for (let i = 0; i < 240 && (g.place !== "club" || g.live.fade > 0.05); i++) g.tick(1 / 30);
+    run(20);
+    const club = g.rooms.club;
+    const house = g.clubBand.players;
+    const folk = g.troupes.club.members;
+    const inside = {
+      place: g.place,
+      tune: g.tracks()[0],
+      live: +g.sound.liveLevel.toFixed(2),
+      players: house.length,
+      up: house.every((p) => p.card.visible && Math.abs(p.card.group.position.y - club.stage.top) < 0.02),
+      sat: folk.filter((m) => m.posted && m.card.pose === "sit").length,
+      tables: club.tables.length,
+      keep: folk.filter((m) => m.stop.act === "serve").length,
+      floor: folk.filter((m) => !m.posted).length,
+      moving: folk.filter((m) => m.card.groove >= 0).length,
+    };
+    // The stage lights go with the beat.
+    const lamp = club.lights[0];
+    const glow = new Set();
+    for (let i = 0; i < 40; i++) {
+      g.tick(1 / 30);
+      glow.add(Math.round(lamp.intensity));
+    }
+    g.warp(club.request.x, club.request.z, Math.PI);
+    run(5);
+    const ask = g.prompt;
+    const before = { song: g.clubSong.name, tune: g.tracks()[0], cash: g.save.dollars };
+    g.input.press("interact");
+    run(3);
+    const asked2 = { song: g.clubSong.name, tune: g.tracks()[0], paid: before.cash - g.save.dollars, said: g.toastText, cheer: folk.filter((m) => m.hop > 0).length };
+    g.warp(club.bar.x, club.bar.z, -Math.PI / 2);
+    run(5);
+    const bar = g.prompt;
+    const c1 = g.save.dollars;
+    g.input.press("interact");
+    run(3);
+    const tea = { paid: c1 - g.save.dollars, fed: g.fedUntil > g.time, said: g.toastText };
+    g.warp(club.exit.x, club.exit.z, 0);
+    run(5);
+    const out = g.prompt;
+    g.input.press("interact");
+    for (let i = 0; i < 240 && (g.place !== "street" || g.live.fade > 0.05); i++) g.tick(1 / 30);
+    const back = { place: g.place, at: Math.hypot(g.pos.x - M.x, g.pos.z - M.z) < 4 };
+    g.sound.beat = real;
+    g.save.dollars = cash0;
+    g.stage.render = draw;
+    return { known, asked: asked.length, day, night, sounding, tune, stage, close, tip, far, door, inside, lights: glow.size, ask, before, asked2, bar, tea, out, back, stops: POIS.filter((q) => q.id === "memphian" || q.id === "bealestage").length, drawn: BAND.length };
+  });
+  check(gigs.known === gigs.asked && gigs.day === "city-day" && gigs.night === "city-night" && (!gigs.sounding.on || (gigs.sounding.heard === gigs.sounding.want && gigs.sounding.beat >= 0)), "music: the band knows a tune for every place, the city has one for day and one for night, and what plays is what was asked for", { known: gigs.known, day: gigs.day, night: gigs.night, ...gigs.sounding });
+  check(gigs.tune === "beale" && gigs.stage.players === 6 && gigs.drawn === 6 && gigs.stage.up && gigs.stage.on && gigs.stage.both === 6 && gigs.stage.stepped > 0.5, "music: six players are on the boards in Handy Park, every one of them moving with the tune, and whoever has the lead steps up", { tune: gigs.tune, ...gigs.stage });
+  check(gigs.stage.crowd >= 5 && gigs.stage.dancing >= 3 && gigs.close.live === 1 && gigs.close.bop && gigs.far.live === 0 && !gigs.far.bop && gigs.far.tune === "city-day", "music: a crowd dances in front of the stage, up close it is louder and Benji moves to it, and across town it is the city's tune again", { crowd: gigs.stage.crowd, dancing: gigs.stage.dancing, close: gigs.close, far: gigs.far });
+  check(/^Tip the band/.test(gigs.close.ask) && gigs.tip.paid === 5 && gigs.tip.respect >= 2 && /SackReligious/.test(gigs.tip.said), "music: a tip in Handy Park gets Benji pointed out from the stage", gigs.tip);
+  check(gigs.stops === 2 && gigs.door === "Enter The Memphian" && gigs.inside.place === "club" && gigs.inside.tune === "club" && gigs.inside.live === 1 && gigs.inside.players === 6 && gigs.inside.up, "the Memphian: it is on the map, its doors on Union let him in, and the house band is on the stage", { door: gigs.door, ...gigs.inside });
+  check(gigs.inside.sat >= gigs.inside.tables && gigs.inside.keep === 1 && gigs.inside.floor >= 4 && gigs.inside.moving >= 8 && gigs.lights >= 3, "the Memphian: every table has somebody sat at it, there is a barkeep, a floor of dancers, and the stage lights go with the beat", { ...gigs.inside, lights: gigs.lights });
+  check(/^Request a song/.test(gigs.ask) && gigs.asked2.paid === 5 && gigs.asked2.song !== gigs.before.song && gigs.asked2.tune !== gigs.before.tune && gigs.asked2.said.includes(gigs.asked2.song) && gigs.asked2.cheer >= 3, "the Memphian: five in the jar and the band plays the next song on its list, to a cheer", { before: gigs.before, after: gigs.asked2 });
+  check(/^Sweet tea/.test(gigs.bar) && gigs.tea.paid === 4 && gigs.tea.fed && gigs.out === "Step outside" && gigs.back.place === "street" && gigs.back.at, "the Memphian: the bar serves, and the doors let him back out on Union", { bar: gigs.bar, tea: gigs.tea, out: gigs.out, back: gigs.back });
+
   // ---- the people of the city
   const folk = await page.evaluate(async () => {
     const g = window.__GAME__;

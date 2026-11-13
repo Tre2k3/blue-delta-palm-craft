@@ -107,6 +107,7 @@ export const ROOM = {
   bowl: { x: 400, z: 1000 },
   fun: { x: 600, z: 1000 },
   laser: { x: 800, z: 1000 },
+  club: { x: 1000, z: 1000 },
 };
 
 /** Street circuit. Clockwise from the grid on Riverside Drive. */
@@ -127,6 +128,11 @@ export const RACE_LOOP: { x: number; z: number }[] = [
 export const RACE_MEET = { x: -104, z: -151 };
 
 /** `arrive` is where a ride lets Benji out and which way he faces, when the spot itself is not the place to stand. */
+/** The Memphian's doors on Union Avenue: the front of the old picture house faces south. */
+export const MEMPHIAN = { x: -40, z: -21 };
+/** The stage in Handy Park: the middle of its boards, how big they are and how high. It faces north, up the square to Beale. */
+export const BEALE_STAGE = { x: 32, z: -27, w: 16, d: 8, top: CURB + 1 };
+
 export type Poi = { id: string; name: string; x: number; z: number; color: string; arrive?: { x: number; z: number; heading: number } };
 
 export const POIS: Poi[] = [
@@ -147,6 +153,9 @@ export const POIS: Poi[] = [
   { id: "putt", name: "Sack Putt", x: -32, z: 96, color: "#39ff14", arrive: { x: -32, z: 105.8, heading: Math.PI } },
   { id: "courts", name: "Park Avenue Courts", x: 32, z: 96, color: "#5ac8ff", arrive: { x: 17.9, z: 104.6, heading: Math.PI } },
   { id: "cornhole", name: "Cornhole Lawn", x: 14, z: 97.5, color: "#f3e9c8", arrive: { x: 14.6, z: 104.4, heading: Math.PI } },
+  // The old picture house on Union, and the stage in Handy Park: live music at both.
+  { id: "memphian", name: "The Memphian Blues Club", x: MEMPHIAN.x, z: MEMPHIAN.z + 2, color: "#ffb400", arrive: { x: MEMPHIAN.x, z: MEMPHIAN.z + 2.5, heading: Math.PI } },
+  { id: "bealestage", name: "Live on Beale", x: BEALE_STAGE.x, z: BEALE_STAGE.z - 8, color: "#ff4fd8", arrive: { x: BEALE_STAGE.x, z: BEALE_STAGE.z - 12, heading: 0 } },
   { id: "playground", name: "Swings and Slide", x: -109, z: 96, color: "#ff8a5c", arrive: { x: -109.5, z: 90.4, heading: 0 } },
 ];
 

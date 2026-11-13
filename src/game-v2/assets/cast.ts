@@ -314,7 +314,7 @@ export const BAND = (
     ["drums", 1.67, 1.49],
     ["bass", 1.95, 1.95],
     ["sax", 1.75, 1.61],
-    ["keys", 1.58, 1.62],
+    ["keys", 1.5, 1.49],
   ] as const
 ).map(([id, a, b]) => ({ id, frames: [`/game-v2/characters/band/${id}-a.webp`, `/game-v2/characters/band/${id}-b.webp`] as [string, string], heights: [a, b] as [number, number] }));
 

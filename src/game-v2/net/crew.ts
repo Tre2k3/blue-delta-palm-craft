@@ -37,7 +37,7 @@ const LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 const NAME_KEY = "sack-v2-name";
 const CODE_KEY = "sack-v2-crew";
 const RATE = 1 / 12;
-const PLACES: Record<Exclude<Place, "street">, string> = { hq: "SackReligious HQ", home: "Home", bowl: "901 Bowl", fun: "The Fun House", laser: "Laser Arena" };
+const PLACES: Record<Exclude<Place, "street">, string> = { hq: "SackReligious HQ", home: "Home", bowl: "901 Bowl", fun: "The Fun House", laser: "Laser Arena", club: "The Memphian" };
 /** What a friend is up to, in the words the crew screen uses. */
 const DOING: Record<string, string> = { walk: "Walking", drive: "Driving", race: "Street racing", hoops: "Playing ball", bowl: "Bowling", fish: "Fishing", kart: "Racing karts", laser: "Playing laser tag", bounce: "On the trampoline", pit: "In the ball pit", whack: "Playing a game", title: "At the title screen" };
 /** Most people in one crew: every device holds a line open to every other. */
