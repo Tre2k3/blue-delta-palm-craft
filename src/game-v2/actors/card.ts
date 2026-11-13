@@ -163,6 +163,11 @@ export class Card {
     for (const src of [a.front, a.back, a.left, a.right, ...Object.values(a.walk ?? {}).flat(), ...poses]) if (src) cutout(src);
   }
 
+  /** The drawing of them from in front: what a talk card shows of them. */
+  get face() {
+    return this.art.front;
+  }
+
   /** Is there a drawing for this pose? */
   has(pose: string) {
     return !!this.art.poses?.[pose];

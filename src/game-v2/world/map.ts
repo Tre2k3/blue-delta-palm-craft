@@ -124,7 +124,8 @@ export type Poi = { id: string; name: string; x: number; z: number; color: strin
 
 export const POIS: Poi[] = [
   { id: "hq", name: "SackReligious HQ", x: HQ.doorX, z: HQ.frontZ + 2, color: "#39ff14", arrive: { x: HQ.doorX, z: HQ.frontZ + 4.5, heading: Math.PI } },
-  { id: "court", name: "901 Court", x: COURT.cx, z: COURT.cz, color: "#ff8a3c" },
+  // Outside the fence at Court OG's table, turned to it: that is where a game is picked up, not out on the floor.
+  { id: "court", name: "901 Court", x: COURT.cx, z: COURT.cz, color: "#ff8a3c", arrive: { x: COURT.cx + 4.6, z: COURT.cz + COURT.halfL + 5.5, heading: Math.PI } },
   { id: "pier", name: "Riverside Pier", x: PIER.x, z: -206, color: "#5ac8ff", arrive: { x: PIER.x, z: -203, heading: Math.PI } },
   // The windows are on the river side of the trucks: a ride lets him out in front of them, facing the counters.
   { id: "trucks", name: "Food Trucks", x: TRUCKS.x, z: TRUCKS.z, color: "#ffd166", arrive: { x: TRUCKS.x + 0.2, z: TRUCKS.z - 7, heading: 0 } },

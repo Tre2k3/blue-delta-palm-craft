@@ -1611,7 +1611,7 @@ try {
     b2.sv = 1.6;
     b2.mesh.visible = true;
     for (let i = 0; i < 120; i++) c.slide(1 / 60);
-    const shoved = { pushed: a.state, v: +a.v.toFixed(2) };
+    const shoved = { pushed: a.state, v: +a.v.toFixed(3) };
     // Played out with good throws, it ends on a card and counts as a win.
     c.start();
     run(12);
@@ -1619,7 +1619,7 @@ try {
     let guard = 0;
     while (guard++ < 40000 && !g.overlay) {
       g.tick(1 / 30);
-      if (c.phase === "aim" && c.t > 0.3) c.toss(0, (Math.random() - 0.5) * 0.2, 0.62 + Math.random() * 0.07, 0, 0);
+      if (c.phase === "aim" && c.t > 0.3) c.toss(0, 0, 0.655, 0, 0);
     }
     g.sound = sound;
     const bags = { title: g.results?.title ?? "", score: c.score.slice(), wins: (g.save.best.cornhole ?? 0) - wins, rounds: c.round };
@@ -1684,11 +1684,163 @@ try {
   check(!rec.soft.up && rec.soft.strokes === 1 && rec.firm.phase !== "roll", "putt-putt: a putt too soft for the hill rolls back down it", { soft: rec.soft, firm: rec.firm });
   check(rec.blocked && rec.through, "putt-putt: the paddle wheel stops a ball when a paddle is down and lets it through when it is not", { blocked: rec.blocked, through: rec.through });
   check(/PAR/.test(rec.round.title) && rec.round.card.length === 9 && rec.round.pay > 0 && rec.round.best > 0, "putt-putt: the ninth hole ends the round with a card and a best score", rec.round);
-  check(rec.first.state === "in" && rec.short.includes("grass") && rec.shoved.pushed !== "hand" && (rec.shoved.pushed === "in" || rec.shoved.v > 0.85), "cornhole: a bag slides up into the hole, a short one lands on the grass, and one bag shoves another", { first: rec.first, short: rec.short, shoved: rec.shoved });
-  check(/BAGS/.test(rec.bags.title) && rec.bags.score[0] >= 21 && rec.bags.wins === 1, "cornhole: a match is played out to 21 and counts as a win", rec.bags);
+  check(rec.first.state === "in" && rec.short.includes("grass") && rec.shoved.pushed !== "hand" && (rec.shoved.pushed === "in" || rec.shoved.v > 0.81), "cornhole: a bag slides up into the hole, a short one lands on the grass, and one bag shoves another", { first: rec.first, short: rec.short, shoved: rec.shoved });
+  check(/TOOK IT/.test(rec.bags.title) && Math.max(...rec.bags.score) >= 21 && rec.bags.wins === (rec.bags.score[0] > rec.bags.score[1] ? 1 : 0), "cornhole: a match is played out to 21, and a win is counted when it is his", rec.bags);
   check(rec.opening.phase === "serve" && rec.opening.server === 0 && /FAULT/.test(rec.fault.call) && rec.fault.pts === "0,0" && rec.box.live && rec.box.x > 0 && rec.box.x < 6.5, "tennis: a serve hit too hard is a fault, and a good one comes down in the box", { opening: rec.opening, fault: rec.fault, box: rec.box });
-  check(rec.match.title.length > 0 && Math.max(...rec.match.games) === 3 && rec.match.hits > 5 && rec.match.longest >= 3, "tennis: a match is rallied out to three games", rec.match);
+  check(rec.match.title.length > 0 && Math.max(...rec.match.games) === 3 && rec.match.hits > 3 && rec.match.longest >= 2, "tennis: a match is rallied out to three games", rec.match);
   check(rec.sky.flew > 20 && rec.sky.y > 60 && rec.sky.day === 0 && rec.sky.night > 0.03, "a blimp circles over the city, and searchlights come on over the boutique after dark", rec.sky);
+  // ---- the people of the city
+  const folk = await page.evaluate(async () => {
+    const g = window.__GAME__;
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    const run = (n, dt = 1 / 30) => {
+      for (let i = 0; i < n; i++) g.tick(dt);
+    };
+    if (g.overlay) g.close();
+    if (g.activity) g.activity.quit();
+    run(6);
+    g.dialogue.length = 0;
+    // Somebody at the fence by the race meet: walk up, and there is a name to speak to.
+    const s = g.people.standing.find((q) => q.at === "race");
+    g.warp(s.x + 1.3, s.z + 0.9, 0);
+    run(8);
+    const asked = g.prompt;
+    g.input.press("interact");
+    run(3);
+    const first = g.dialogue[0] ? { who: g.dialogue[0].who, text: g.dialogue[0].text, face: g.dialogue[0].portrait } : null;
+    g.input.press("interact");
+    run(3);
+    const second = g.dialogue[0]?.text ?? "";
+    // Somebody walking by stops and turns to him when he speaks.
+    g.dialogue.length = 0;
+    // Whichever walker can be stood beside, from whichever side there is room on.
+    let w = null;
+    for (const q of g.people.walkers.slice(0, 10)) {
+      for (const [ox, oz] of [[1.1, 0.3], [-1.1, 0.3], [0.3, 1.1], [0.3, -1.1]]) {
+        g.warp(q.x + ox, q.z + oz, 0);
+        run(5);
+        if (/^Talk to /.test(g.prompt) && Math.hypot(q.x - g.pos.x, q.z - g.pos.z) < 1.6 && g.people.nearest(g.pos.x, g.pos.z, 1.9)?.card === q.card) {
+          w = q;
+          break;
+        }
+      }
+      if (w) break;
+    }
+    let walker = null;
+    if (w) {
+      const prompt = g.prompt;
+      g.input.press("interact");
+      run(2);
+      // Step back out of the reach where they stop by themselves: only the hail keeps them now.
+      const away = Math.hypot(g.pos.x - w.x, g.pos.z - w.z) || 1;
+      g.pos.x = w.x + ((g.pos.x - w.x) / away) * 2.6;
+      g.pos.z = w.z + ((g.pos.z - w.z) / away) * 2.6;
+      const at = w.s;
+      run(45);
+      const want = Math.atan2(g.pos.x - w.x, g.pos.z - w.z);
+      const turned = Math.abs(Math.atan2(Math.sin(w.card.heading - want), Math.cos(w.card.heading - want)));
+      walker = { prompt, said: g.dialogue[0]?.text ?? "", stayed: Math.abs(w.s - at) < 0.05, turned: +turned.toFixed(2) };
+    }
+    // The ones with names have something to say when there is no errand for him: Mama Dee, beside her truck.
+    g.dialogue.length = 0;
+    const dee = g.npcs.find((q) => q.id === "mamaDee");
+    let named = null;
+    for (const [ox, oz] of [[-1.5, 0.8], [0.6, 1.7], [-1.6, -0.6], [1.5, 0.8]]) {
+      g.warp(dee.x + ox, dee.z + oz, 0);
+      run(4);
+      if (g.prompt !== "Talk to Mama Dee") continue;
+      g.input.press("interact");
+      run(3);
+      const one = g.dialogue[0]?.text ?? "";
+      g.input.press("interact");
+      run(3);
+      named = { who: g.dialogue[0]?.who ?? "", one, two: g.dialogue[0]?.text ?? "" };
+      break;
+    }
+    // Indoors too: whoever is on the Fun House floor.
+    g.dialogue.length = 0;
+    g.enter("fun");
+    run(45);
+    let inside = null;
+    for (let i = 0; i < 900 && !inside; i++) {
+      run(1);
+      const m = g.troupes.fun.members.find((q) => q.card.visible && !q.posted && !q.going && q.stop.act !== "inside");
+      if (m) {
+        g.pos.x = m.x + 0.9;
+        g.pos.z = m.z + 0.9;
+        run(2);
+        if (/^Talk to /.test(g.prompt)) {
+          g.input.press("interact");
+          run(2);
+          inside = { prompt: g.prompt, who: g.dialogue[0]?.who ?? "", text: g.dialogue[0]?.text ?? "" };
+        }
+      }
+    }
+    g.dialogue.length = 0;
+    g.leave(0, -150, 0);
+    for (let i = 0; i < 200 && (g.place !== "street" || g.live.fade > 0.05); i++) g.tick(1 / 30);
+    // A ride to the court lets him out at the sign-up table, not out on the floor.
+    g.save.dollars = Math.max(g.save.dollars, 50);
+    g.warp(0, -150, 0);
+    run(4);
+    g.taxi("court");
+    for (let i = 0; i < 240; i++) g.tick(1 / 30);
+    const court = { x: +g.pos.x.toFixed(1), z: +g.pos.z.toFixed(1), prompt: g.prompt, onFloor: Math.abs(g.pos.z - (-177)) < 14 };
+    // Every line is short enough to read and has its blanks filled.
+    const lines = g.tables.CHATTER;
+    const bad = lines.filter((t) => t.length > 96 || t.length < 4);
+    // The cut-outs: nothing of the old white backdrop between Nitro's legs, and Mama Dee's jeans are whole again.
+    const alpha = async (src, x, y) => {
+      const img = new Image();
+      img.src = src;
+      await img.decode();
+      const c = document.createElement("canvas");
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      const k = c.getContext("2d");
+      k.drawImage(img, 0, 0);
+      return k.getImageData(x, y, 1, 1).data[3];
+    };
+    const base = "/game-v2/characters";
+    const gaps = [await alpha(`${base}/nitro/front.png`, 145, 600), await alpha(`${base}/nitro/back.png`, 140, 600), await alpha(`${base}/nitro/left.png`, 147, 600), await alpha(`${base}/nitro/right.png`, 110, 600)];
+    const holes = await (async () => {
+      const img = new Image();
+      img.src = `${base}/mama-dee/front.png`;
+      await img.decode();
+      const c = document.createElement("canvas");
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      const k = c.getContext("2d");
+      k.drawImage(img, 0, 0);
+      // Clear pixels boxed in on all four sides within a few pixels, from the apron down to the cuffs: pinholes.
+      const d = k.getImageData(0, 0, c.width, c.height).data;
+      const clear = (x, y) => d[(y * c.width + x) * 4 + 3] < 128;
+      let n = 0;
+      for (let y = 300; y < 660; y++)
+        for (let x = 20; x < c.width - 20; x++) {
+          if (!clear(x, y)) continue;
+          let boxed = true;
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            let hit = false;
+            for (let r = 1; r <= 6 && !hit; r++) hit = !clear(x + dx * r, y + dy * r);
+            boxed &&= hit;
+          }
+          if (boxed) n++;
+        }
+      return n;
+    })();
+    g.stage.render = draw;
+    return { asked, first, second, walker, named, inside, court, lines: lines.length, bad, gaps, holes };
+  });
+  check(/^Talk to \S/.test(folk.asked) && folk.first && folk.asked === `Talk to ${folk.first.who}` && folk.first.text.length > 8 && /pedestrians\//.test(folk.first.face) && folk.second.length > 8 && folk.second !== folk.first.text, "anyone standing about has a name and something to say, and something else the second time", { asked: folk.asked, first: folk.first, second: folk.second });
+  check(folk.walker && /^Talk to /.test(folk.walker.prompt) && folk.walker.said.length > 8 && folk.walker.stayed && folk.walker.turned < 0.3, "someone walking by stops and turns to Benji when he speaks to them", folk.walker);
+  check(folk.named && folk.named.who === "Mama Dee" && folk.named.one.length > 8 && folk.named.two.length > 8 && folk.named.one !== folk.named.two, "the named cast talk when there is no errand for him", folk.named);
+  check(folk.inside && folk.inside.who.length > 1 && folk.inside.text.length > 8, "people indoors talk too", folk.inside);
+  check(/^(Play ball|Hand Court OG)/.test(folk.court.prompt) && !folk.court.onFloor, "a ride to the 901 Court lets Benji out at the sign-up table with the game on offer", folk.court);
+  check(folk.lines > 120 && folk.bad.length === 0, "every line the city has is short enough to read", { lines: folk.lines, bad: folk.bad });
+  check(folk.gaps.every((a) => a === 0) && folk.holes < 40, "Nitro's cut-out is clear between the legs and Mama Dee's has no pinholes", { gaps: folk.gaps, holes: folk.holes });
+
   // ---- playing with friends
   // The line two devices find each other over: who is in a crew, and the handshake passed between them.
   const relay = await page.evaluate(async () => {

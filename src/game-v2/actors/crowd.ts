@@ -54,7 +54,12 @@ type Member = {
   rest: number;
   team: string;
   served: number;
+  /** Seconds left standing still, turned to whoever spoke to them. */
+  hail: number;
 };
+
+/** Somebody Benji could speak to: who they are, where, and what they are in the middle of. */
+export type Talker = { key: string; card: Card; x: number; z: number; doing: string };
 
 const STAY: Record<Act, [number, number]> = {
   watch: [4, 9],
@@ -150,6 +155,32 @@ export class Troupe {
     return card;
   }
 
+  /**
+   * Whoever is nearest a point and free to be spoken to. Not the ones working a counter or sat at
+   * a game (they have their own business with Benji), nor anyone out of reach on a trampoline.
+   */
+  nearest(x: number, z: number, r: number, tag: string): Talker | null {
+    let best = -1;
+    let bestD = r;
+    this.members.forEach((m, i) => {
+      const act = m.stop.act;
+      if (!m.card.visible || (!m.going && (act === "inside" || act === "bounce" || act === "wade")) || (m.posted && (act === "serve" || act === "play"))) return;
+      const d = Math.hypot(m.x - x, m.z - z);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    });
+    const m = this.members[best];
+    return m ? { key: `${tag}${best}`, card: m.card, x: m.x, z: m.z, doing: m.going ? "walk" : m.stop.act } : null;
+  }
+
+  /** They stop what they are doing for a few seconds and turn to him. */
+  hail(key: string, tag: string, seconds: number) {
+    const m = key.startsWith(tag) ? this.members[Number(key.slice(tag.length))] : undefined;
+    if (m) m.hail = seconds;
+  }
+
   /** One of the crew holds an order out. The ones who share a window take turns. */
   private serve(m: Member, seconds: number) {
     m.serving = seconds;
@@ -175,7 +206,7 @@ export class Troupe {
     stop.taken = true;
     const seed = this.rand() * 10;
     const stay = stop.stay ?? STAY[stop.act];
-    const m: Member = { card, stops, stop, going: false, t: stay[0] + this.rand() * (stay[1] - stay[0]), x: stop.x, z: stop.z, pace: 1.25 + this.rand() * 0.5, seed, hop: 0, checkT: 0, checkX: stop.x, checkZ: stop.z, posted, order, at: Math.max(0, stops.indexOf(stop)), serving: 0, rest: 2 + this.rand() * 4, team: "", served: -1 };
+    const m: Member = { card, stops, stop, going: false, t: stay[0] + this.rand() * (stay[1] - stay[0]), x: stop.x, z: stop.z, pace: 1.25 + this.rand() * 0.5, seed, hop: 0, checkT: 0, checkX: stop.x, checkZ: stop.z, posted, order, at: Math.max(0, stops.indexOf(stop)), serving: 0, rest: 2 + this.rand() * 4, team: "", served: -1, hail: 0 };
     card.heading = Math.atan2(stop.fx - stop.x, stop.fz - stop.z);
     this.members.push(m);
     return card;
@@ -243,6 +274,19 @@ export class Troupe {
       const pd = player ? Math.hypot(player.x - m.x, player.z - m.z) : 99;
       let lift = 0;
       c.groove = -1;
+      // Spoken to: stand still and look at him until the moment has passed or he has walked off.
+      if (m.hail > 0 && player && pd < 5 && s.act !== "inside") {
+        m.hail -= dt;
+        c.visible = true;
+        c.speed = 0;
+        c.pose = null;
+        c.heading = dampAngle(c.heading, Math.atan2(player.x - m.x, player.z - m.z), damp(8, dt));
+        c.lift = m.going ? 0 : (s.lift ?? 0);
+        c.place(m.x, m.z);
+        c.update(dt, camera, tint, this.floorY);
+        continue;
+      }
+      m.hail = 0;
       if (m.going) {
         const dx = s.x - m.x;
         const dz = s.z - m.z;

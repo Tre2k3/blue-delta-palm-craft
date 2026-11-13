@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { Card } from "./actors/card";
-import { Troupe, type Act, type Stop } from "./actors/crowd";
+import { Troupe, type Act, type Stop, type Talker } from "./actors/crowd";
 import { People } from "./actors/people";
 import { Traffic } from "./actors/traffic";
 import { CarModel, Driver, STREET, type DriveTune } from "./actors/vehicle";
@@ -29,6 +29,7 @@ import { PinballTable, PrizeWheel, SkeeLane } from "./play/floor";
 import { POSTCARDS, dailyFor, dailyPay, dayBefore, dayKey, meets, postcardImg } from "./play/extras";
 import { TableGames } from "./play/tables";
 import { Crew } from "./net/crew";
+import { ALL_LINES, castLine, chat, nameOf } from "./play/chatter";
 import { RIDES, rideById } from "./play/garage";
 import { AirHockey, BagToss, BottleBash, ClownToss } from "./play/midway";
 import { PopShot, Whack } from "./play/machines";
@@ -201,7 +202,7 @@ export class Game {
   room: Room | null = null;
   activity: Activity | null = null;
   /** The art tables, where tools and tests can read them. */
-  readonly tables = { OUTFITS, PEDS, BALLERS, CAST, VENDORS, STORY, CHAPTERS, RIDES, POSTCARDS, POIS, HOLES, PUTT_PAR };
+  readonly tables = { OUTFITS, PEDS, BALLERS, CAST, VENDORS, STORY, CHAPTERS, RIDES, POSTCARDS, POIS, HOLES, PUTT_PAR, CHATTER: ALL_LINES };
   pos = { x: START.x, z: START.z };
   vel = { x: 0, z: 0 };
   heading = 0;
@@ -256,6 +257,8 @@ export class Game {
   private laneBalls: { mesh: THREE.Mesh; z: number; end: number; live: boolean }[] = [];
   private rolling = { x: 0, z: 0, vx: 0, vz: 0, speed: 0 };
   private nearSpot: Spot | null = null;
+  /** How many times each person on the street has been spoken to, so they say something new. */
+  private talks = new Map<string, number>();
   private camPos = new THREE.Vector3();
   private titleSpin = 0;
   /** The opening shot: seconds in, the path of the lens and the path of what it looks at. */
@@ -1241,6 +1244,54 @@ export class Game {
       this.camera.getWorldDirection(_v);
       this.fireworks.show(this.camera.position, _v, this.stage.quality === "low" ? 2 : 3);
     }
+  }
+
+  /** Whoever is close enough to speak to: on the street, or in the room he is in. */
+  private someone(): Talker | null {
+    const { x, z } = this.pos;
+    const r = 1.9;
+    // One of the named cast, standing where no errand of theirs is in reach.
+    for (const n of this.npcs) if (n.place === this.place && Math.hypot(n.x - x, n.z - z) < 2.2) return { key: n.id, card: n.card, x: n.x, z: n.z, doing: "cast" };
+    if (this.place !== "street") return this.troupes[this.place]?.nearest(x, z, r, `${this.place}-`) ?? null;
+    const a = this.people.nearest(x, z, r);
+    const b = this.street.nearest(x, z, r, "t");
+    if (a && b) return Math.hypot(a.x - x, a.z - z) <= Math.hypot(b.x - x, b.z - z) ? a : b;
+    return a ?? b;
+  }
+
+  /** They stop, turn to him and say their piece: something new each time he asks. */
+  private talkTo(who: Talker, name: string) {
+    const turn = this.talks.get(who.key) ?? 0;
+    this.talks.set(who.key, turn + 1);
+    if (who.doing === "cast") {
+      const c = CAST[who.key as CastId];
+      this.dialogue.length = 0;
+      this.say(c.name, castLine(who.key, turn), c.portrait ?? who.card.face);
+      this.sound.ui();
+      return;
+    }
+    const rank = rankOf(this.save.respect);
+    const text = chat(
+      who.key,
+      {
+        doing: who.doing,
+        district: districtAt(this.pos.x, this.pos.z),
+        place: this.place,
+        phase: this.sky.phase,
+        rain: this.weather.want > 0,
+        rank: rank.name,
+        rankIndex: rank.index,
+        fit: OUTFITS[this.save.wearing].name.split(" · ")[0]!,
+        ride: rideById(this.save.ride).name,
+      },
+      turn,
+    );
+    if (who.key[0] === "w" || who.key[0] === "s") this.people.hail(who.key, 5);
+    else if (who.key[0] === "t") this.street.hail(who.key, "t", 5);
+    else if (this.place !== "street") this.troupes[this.place]?.hail(who.key, `${this.place}-`, 5);
+    this.dialogue.length = 0;
+    this.say(name, text, who.card.face);
+    this.sound.ui();
   }
 
   /** His fist in the air for a moment, if he is standing about on foot. */
@@ -2335,7 +2386,10 @@ export class Game {
       }
     }
     this.nearSpot = best;
-    const label = best ? best.label() : "";
+    // No door or counter in reach: is there somebody to speak to?
+    const who = best ? null : this.someone();
+    const name = !who ? "" : who.doing === "cast" ? CAST[who.key as CastId].name : nameOf(who.key, who.card.face.includes("female"));
+    const label = best ? best.label() : who ? `Talk to ${name}` : "";
     if (label !== this.prompt) {
       this.prompt = label;
       this.push();
@@ -2345,7 +2399,8 @@ export class Game {
       if (best && !this.afterFade) {
         this.dialogue.length = 0;
         best.act();
-      } else if (this.dialogue.length) this.nextLine();
+      } else if (who && !this.afterFade && (!this.dialogue.length || this.dialogue[0]!.who === name)) this.talkTo(who, name);
+      else if (this.dialogue.length) this.nextLine();
     }
     this.chase(dt);
   }

@@ -1,7 +1,7 @@
 import type { CardArt, View } from "../actors/card";
 import { characters } from "./characters";
 
-const V = "?v=8";
+const V = "?v=9";
 const turn = (folder: string): CardArt => ({
   front: `/game-v2/characters/${folder}/front.png${V}`,
   back: `/game-v2/characters/${folder}/back.png${V}`,

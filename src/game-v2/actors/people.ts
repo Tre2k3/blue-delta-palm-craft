@@ -3,11 +3,12 @@ import { PEDS } from "../assets/cast";
 import { rng } from "../core/util";
 import { COURT, KART_TRACK, PIER, RACE_MEET, WALK, slab, type Rect } from "../world/map";
 import { Card } from "./card";
-import { stepClear, type Moving } from "./crowd";
+import { stepClear, type Moving, type Talker } from "./crowd";
 
-type Walker = { card: Card; ring: Rect; s: number; dir: 1 | -1; pace: number; wait: number; ox: number; oz: number; hop: number };
-/** Someone who stays put: where they are, what they are watching, and how long they keep jumping. */
-type Stander = { card: Card; x: number; z: number; fx: number; fz: number; hop: number; seed: number; ox: number; oz: number };
+/** `x`, `z` are where they were last drawn; `hail` is seconds left stopped and turned to whoever spoke. */
+type Walker = { card: Card; ring: Rect; s: number; dir: 1 | -1; pace: number; wait: number; ox: number; oz: number; hop: number; x: number; z: number; hail: number };
+/** Someone who stays put: where they are, what they are watching (`at`), and how long they keep jumping. */
+type Stander = { card: Card; x: number; z: number; fx: number; fz: number; hop: number; seed: number; ox: number; oz: number; at: string };
 
 /** Point `s` metres clockwise round a rectangle, starting at its north-west corner. */
 function ringAt(r: Rect, s: number, out: { x: number; z: number; heading: number }) {
@@ -63,10 +64,11 @@ export class People {
       const kind = PEDS[i % PEDS.length]!;
       const card = new Card(kind.art, kind.height);
       this.group.add(card.group);
-      this.walkers.push({ card, ring, s: rand() * 400, dir: rand() > 0.5 ? 1 : -1, pace: 1.15 + rand() * 0.5, wait: 0, ox: 0, oz: 0, hop: 0 });
+      this.walkers.push({ card, ring, s: rand() * 400, dir: rand() > 0.5 ? 1 : -1, pace: 1.15 + rand() * 0.5, wait: 0, ox: 0, oz: 0, hop: 0, x: 0, z: 0, hail: 0 });
     }
 
     let n = 0;
+    let at = "court";
     const stand = (x: number, z: number, fx: number, fz: number) => {
       const kind = PEDS[(n * 3 + 1 + Math.floor(rand() * 3)) % PEDS.length]!;
       const card = new Card(kind.art, kind.height * (0.94 + rand() * 0.1));
@@ -74,13 +76,15 @@ export class People {
       const jz = (rand() - 0.5) * 0.5;
       card.place(x + jx, z + jz);
       this.group.add(card.group);
-      this.standing.push({ card, x: x + jx, z: z + jz, fx, fz, hop: 0, seed: rand() * 10, ox: 0, oz: 0 });
+      this.standing.push({ card, x: x + jx, z: z + jz, fx, fz, hop: 0, seed: rand() * 10, ox: 0, oz: 0, at });
       n++;
     };
     // The court: both sidelines, inside the fence, watching the floor.
     for (const side of [-1, 1]) for (let z = -11; z <= 11; z += dense ? 2.4 : 4.8) stand(COURT.cx + side * (COURT.halfW + 1.1), COURT.cz + z, COURT.cx, COURT.cz + z * 0.4);
+    at = "pier";
     for (const pz of [-203, -211, -219]) stand(PIER.x + (pz % 2 ? 1.3 : -1.3), pz, PIER.x, pz - 12);
     // Riverside Strip, where the racers meet.
+    at = "race";
     for (const [rx, rz] of [
       [2.4, 0.6],
       [-2.2, 1.2],
@@ -89,6 +93,7 @@ export class People {
     ] as const)
       stand(RACE_MEET.x + rx, RACE_MEET.z + rz, RACE_MEET.x, RACE_MEET.z);
     // The fence round the kart track.
+    at = "karts";
     const k = KART_TRACK;
     for (const side of [-1, 1]) for (let x = -16; x <= 16; x += dense ? 3.2 : 6.4) stand(k.cx + x, k.cz + side * (k.halfZ + k.width / 2 + 2.3), k.cx + x * 0.6, k.cz);
     for (const side of [-1, 1]) for (const z of [-3, 0, 3]) stand(k.cx + side * (k.halfX + k.width / 2 + 2.4), k.cz + z, k.cx, k.cz);
@@ -116,6 +121,33 @@ export class People {
     return false;
   }
 
+  /** Whoever is nearest a point: someone Benji could speak to. */
+  nearest(x: number, z: number, r: number): Talker | null {
+    let found: Talker | null = null;
+    let bestD = r;
+    this.walkers.forEach((w, i) => {
+      const d = Math.hypot(w.x - x, w.z - z);
+      if (w.card.visible && d < bestD) {
+        bestD = d;
+        found = { key: `w${i}`, card: w.card, x: w.x, z: w.z, doing: "walk" };
+      }
+    });
+    this.standing.forEach((s, i) => {
+      const d = Math.hypot(s.x - x, s.z - z);
+      if (s.card.visible && d < bestD) {
+        bestD = d;
+        found = { key: `s${i}`, card: s.card, x: s.x, z: s.z, doing: s.at };
+      }
+    });
+    return found;
+  }
+
+  /** A walker stops for a few seconds and turns to him. The ones standing about turn by themselves. */
+  hail(key: string, seconds: number) {
+    const w = key[0] === "w" ? this.walkers[Number(key.slice(1))] : undefined;
+    if (w) w.hail = seconds;
+  }
+
   /** Everyone standing within `r` of a point jumps for a moment. */
   cheer(x: number, z: number, r: number, seconds = 1.3) {
     for (const s of this.standing) if (Math.hypot(s.x - x, s.z - z) < r) s.hop = seconds * (0.7 + ((s.seed * 7) % 1) * 0.6);
@@ -132,7 +164,11 @@ export class People {
       const far = Math.abs(_p.x - camera.x) + Math.abs(_p.z - camera.z) > this.reach;
       const near = Math.hypot(_p.x - player.x, _p.z - player.z) < 1.3;
       const clear = this.dodge(_p.x, _p.z, w, car, dt);
-      w.wait = near || clear ? 0.6 : Math.max(0, w.wait - dt);
+      w.x = _p.x + w.ox;
+      w.z = _p.z + w.oz;
+      const held = w.hail > 0 && Math.hypot(w.x - player.x, w.z - player.z) < 5;
+      w.hail = held ? w.hail - dt : 0;
+      w.wait = near || clear || held ? 0.6 : Math.max(0, w.wait - dt);
       const v = w.wait > 0 ? 0 : w.pace;
       w.s += v * w.dir * dt;
       w.card.visible = !far;
@@ -141,7 +177,7 @@ export class People {
         continue;
       }
       w.card.place(_p.x + w.ox, _p.z + w.oz);
-      w.card.heading = w.dir > 0 ? _p.heading : _p.heading + Math.PI;
+      w.card.heading = held ? Math.atan2(player.x - w.x, player.z - w.z) : w.dir > 0 ? _p.heading : _p.heading + Math.PI;
       w.card.speed = v;
       w.hop = Math.max(0, w.hop - dt);
       w.card.lift = w.hop > 0 ? Math.abs(Math.sin(w.hop * 12)) * 0.22 : 0;
