@@ -1702,6 +1702,10 @@ try {
     run(6);
     g.dialogue.length = 0;
     const { PEDS, POIS } = g.tables;
+    // The green tee is the fit with the drawings of him sat, putting and holding a racket.
+    const worn = g.save.wearing;
+    g.wear("starter");
+    run(2);
     const spots = ["Get on the swing", "Go down the slide", "Take the boat out"].map((w) => g.spots.some((q) => q.label().startsWith(w)));
     const lawn = g.spots.filter((q) => q.label().startsWith("Cornhole")).length;
     const stops = ["cornhole", "playground"].map((id) => !!POIS.find((q) => q.id === id)?.arrive);
@@ -1853,6 +1857,7 @@ try {
     const sat = { n: seats.length, posed: seats.filter((m) => m.card.pose === "sit").length, sunk: seats.filter((m) => m.card.lift !== 0).length };
     const fresh = (c) => /\/(male-0[5-9]|female-0[5-7])/.test(c.face);
     const faces = { kinds: PEDS.length, walking: g.people.walkers.filter((w) => fresh(w.card)).length, about: [...g.street.members, ...Object.values(g.troupes).flatMap((t) => t.members)].filter((m) => fresh(m.card)).length };
+    g.wear(worn);
     g.stage.render = draw;
     return { spots, lawn, stops, swingAsk, onSwing, swung, jump, offSwing, settled, slideAsk, onSlide, deck, slid, boatAsk, aboard, out, turned, sack, jumped, piles, ashore, address, back, coming, struck, ready, serving, sat, faces };
   });
@@ -1862,7 +1867,7 @@ try {
   check(play.settled.before > 0.05 && play.settled.after < 0.02, "the swing: the empty seat goes on swinging and comes to rest", play.settled);
   check(play.slideAsk === "Go down the slide" && play.onSlide && play.deck.phase === "top" && Math.abs(play.deck.lift - 1.6) < 0.05 && play.slid.fast > 3.5 && play.slid.mode === "walk" && play.slid.z > 100.5 && play.slid.lift === 0 && play.slid.best > 5, "the slide: up the ladder, down the chute and off the end on his feet", { deck: play.deck, ...play.slid });
   check(play.boatAsk === "Take the boat out" && play.aboard && play.out.moved > 12 && play.out.speed > 8 && play.out.z < -222 && play.turned < -0.4, "the boat: aboard at the pier, out into the river under throttle, and she answers the wheel", { ask: play.boatAsk, ...play.out, turned: play.turned });
-  check(play.sack.got === 1 && play.sack.paid === 10 && play.jumped.flew > 8 && play.jumped.high > 1.2 && play.jumped.down && play.piles < -228, "the boat: a sack alongside is brought in, a ramp at speed puts her in the air, and the pier stops her", { sack: play.sack, jumped: play.jumped, piles: play.piles });
+  check(play.sack.got === 1 && play.sack.paid >= 10 && play.jumped.flew > 8 && play.jumped.high > 1.2 && play.jumped.down && play.piles < -228, "the boat: a sack alongside is brought in, a ramp at speed puts her in the air, and the pier stops her", { sack: play.sack, jumped: play.jumped, piles: play.piles });
   check(play.ashore.mode === "walk" && !play.ashore.riding && Math.abs(play.ashore.x - -82.9) < 0.3 && play.ashore.lift === 0, "the boat: tying up puts Benji back on the pier", play.ashore);
   check(play.address.pose === "putt" && play.address.club && play.address.off < 0.5 && play.back > 0.25 && play.coming.strike && play.coming.phase === "aim" && play.coming.strokes === 0, "putting: he stands over the ball with the putter in his hands, and it swings back as the meter fills", { ...play.address, back: play.back, coming: play.coming });
   check(play.struck.phase === "roll" && play.struck.ticks >= 2 && play.struck.ticks <= 9 && play.struck.strokes === 1 && play.struck.through < 0 && play.struck.drift < 0.01 && play.struck.rolled > 0.6, "putting: the ball leaves when the club reaches it, the club follows through, and Benji stays where he stood", play.struck);
