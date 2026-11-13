@@ -1796,11 +1796,31 @@ try {
     return f && f.visible && f.tag && f.outfit === o && Math.hypot(f.x - 2, f.z + 70) < 0.6;
   }, fit);
   await page.evaluate(() => window.__GAME__.crew.react("🔥"));
-  await on(friend, () => window.__GAME__.crew.shown[0].say);
-  await friend.waitForTimeout(400);
+  // The reaction hangs for three seconds: what is on screen is read in the same breath it is seen in.
+  const seen = await (
+    await on(friend, () => {
+      const g = window.__GAME__;
+      return g.crew.shown[0].say ? { shown: g.crew.shown[0], dot: g.crew.hud().friends[0] } : false;
+    })
+  ).jsonValue();
   await friend.screenshot({ path: `${out}/20-crew-friend.png` });
-  const seen = await friend.evaluate(() => ({ shown: window.__GAME__.crew.shown[0], dot: window.__GAME__.crew.hud().friends[0] }));
   check(seen.shown.visible && seen.shown.outfit === fit && seen.shown.say && seen.dot.street && seen.dot.where.length > 0 && seen.dot.doing === "Walking", "online: a friend stands in your city where they stood in theirs, in their own fit, with a name over their head, a reaction over that, and a dot on the map", seen);
+
+  // A big win in one city is called out in the other.
+  await page.evaluate(() => window.__GAME__.moment(3));
+  // Each of the three comes and goes in its own time, so each is noted when it is seen.
+  const roar = await (
+    await on(friend, () => {
+      const g = window.__GAME__;
+      const w = (window.__roar ??= { call: false, trophy: false, shells: false });
+      w.call ||= document.body.innerText.includes("Tre just won big");
+      w.trophy ||= g.crew.shown[0].say;
+      w.shells ||= g.fireworks.points.visible;
+      return w.call && w.trophy && w.shells ? w : false;
+    })
+  ).jsonValue();
+  check(roar.call && roar.trophy && roar.shells, "online: a friend's big win is called out in your city, with fireworks over your river", roar);
+  await ff(1.5);
 
   // A game at a table, each on their own device: asked from the table, answered from the street.
   await page.evaluate(() => window.__GAME__.board.sit("connect4"));

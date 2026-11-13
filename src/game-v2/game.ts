@@ -1036,7 +1036,10 @@ export class Game {
     this.sound.cheer();
     // On his own feet with nothing else in his hands, the fist goes up.
     if (!this.activity && this.mode === "walk") this.fistLeft = level === 1 ? 1.5 : 2.4;
-    if (level >= 2) this.sound.fanfare();
+    if (level >= 2) {
+      this.sound.fanfare();
+      this.crew.celebrate(level);
+    }
     this.buzz(level === 1 ? 45 : [45, 60, 140]);
     if (level === 3 && !this.room) {
       this.camera.getWorldDirection(_v);
@@ -1223,6 +1226,21 @@ export class Game {
     this.sound.hush(o === "video");
     this.push();
     if (this.input.pad) setTimeout(() => this.onNav?.("init"), 60);
+  }
+
+  /**
+   * Somebody in the crew has just won something in their Memphis. This one hears about it:
+   * a call-out, the people round them jump if they are in sight, and the biggest wins put
+   * a few shells up over this river too.
+   */
+  crewWin(name: string, level: 2 | 3, near: { x: number; z: number } | null) {
+    this.toast(level === 3 ? `${name} just won big` : `${name} just got a win`, 3.2);
+    this.sound.cheer();
+    if (near) this.cheer(near.x, near.z, 14, 1.6);
+    if (level === 3 && !this.room && this.mode !== "title") {
+      this.camera.getWorldDirection(_v);
+      this.fireworks.show(this.camera.position, _v, this.stage.quality === "low" ? 2 : 3);
+    }
   }
 
   /** His fist in the air for a moment, if he is standing about on foot. */

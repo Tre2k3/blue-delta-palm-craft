@@ -31,7 +31,7 @@ const direct: MakeTransport = (room, selfId, name, hooks) => {
  * stand; at the wheel it is where the car is, and `y` is how high the road has it.
  */
 type State = { k: "s"; x: number; z: number; y: number; h: number; v: number; p: Place; m: string; o: OutfitId; r: string; a: string | null; l: number };
-type Wire = State | { k: "re"; e: string } | { k: "tb"; [key: string]: unknown };
+type Wire = State | { k: "re"; e: string } | { k: "win"; l: number } | { k: "tb"; [key: string]: unknown };
 
 const LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 const NAME_KEY = "sack-v2-name";
@@ -71,6 +71,8 @@ type Friend = {
   pose: string | null;
   lift: number;
   say: number;
+  /** When their last win was called out here, so a run of them is one call. */
+  cheered: number;
 };
 
 function label(text: string, color: string, size = 44) {
@@ -279,7 +281,20 @@ export class Crew {
     bubble.renderOrder = 10;
     bubble.visible = false;
     this.g.city.scene.add(card.group, tag, bubble);
-    return { id, name, link: "connecting", rtt: null, card, tag, bubble, car: null, ride: "", seen: false, x: 0, y: 0, z: 0, h: 0, tx: 0, ty: 0, tz: 0, th: 0, v: 0, place: "street", mode: "walk", outfit: "starter", pose: null, lift: 0, say: 0 };
+    return { id, name, link: "connecting", rtt: null, card, tag, bubble, car: null, ride: "", seen: false, x: 0, y: 0, z: 0, h: 0, tx: 0, ty: 0, tz: 0, th: 0, v: 0, place: "street", mode: "walk", outfit: "starter", pose: null, lift: 0, say: 0, cheered: -1e9 };
+  }
+
+  /** Something in a bubble over a friend's head for a few seconds. */
+  private pop(f: Friend, text: string) {
+    f.bubble.material.map?.dispose();
+    f.bubble.material.map = label(text, "#f4d77a", 68);
+    f.bubble.material.needsUpdate = true;
+    f.say = 3.2;
+  }
+
+  /** A win worth a roar here is news for the whole crew. */
+  celebrate(level: number) {
+    this.link?.send({ k: "win", l: level });
   }
 
   private drop(f: Friend) {
@@ -357,12 +372,16 @@ export class Crew {
     } else if (data.k === "re") {
       const e = String(data.e);
       if (!(REACTIONS as readonly string[]).includes(e)) return;
-      f.bubble.material.map?.dispose();
-      f.bubble.material.map = label(e, "#f4d77a", 68);
-      f.bubble.material.needsUpdate = true;
-      f.say = 3.2;
+      this.pop(f, e);
       this.g.sound.ui();
       if (f.place !== this.g.place || Math.hypot(f.x - this.g.pos.x, f.z - this.g.pos.z) > 40) this.g.toast(`${f.name}: ${e}`, 2.2);
+    } else if (data.k === "win") {
+      const now = performance.now();
+      if (now - f.cheered < 4000) return;
+      f.cheered = now;
+      this.pop(f, "🏆");
+      const here = f.seen && f.place === this.g.place;
+      this.g.crewWin(f.name, data.l === 3 ? 3 : 2, here ? { x: f.x, z: f.z } : null);
     } else if (data.k === "tb") this.onTable?.(from, data as Record<string, unknown>);
   }
 
