@@ -39,6 +39,17 @@ export class Putt implements Activity {
   private ball: THREE.Mesh;
   private guide: THREE.Mesh;
   private club: THREE.Group;
+  /** The part of the putter that swings: it hangs from his hands and turns about them. */
+  private arm = new THREE.Group();
+  private shaft: THREE.Mesh;
+  private head: THREE.Mesh;
+  private laid = 0;
+  /** Let go of the button: the club is coming down, and meets the ball at `at`. */
+  private strike: { t: number; at: number; aim: number; power: number } | null = null;
+  /** How hard the last one was hit, for the follow-through. */
+  private struck = 0;
+  /** Where Benji is standing, and whether he has been put there yet this hole. */
+  private stand = { x: 0, z: 0, set: false };
   private wheel: THREE.Group;
   private turn = 0;
   private at = 0;
@@ -77,15 +88,18 @@ export class Putt implements Activity {
     this.guide = new THREE.Mesh(gg, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, toneMapped: false, depthTest: false }));
     this.guide.renderOrder = 7;
     this.guide.visible = false;
-    // The putter: a head behind the ball and a shaft up toward his hands.
+    // The putter. It hangs from his hands: the group sits at them, turned to the line of the putt,
+    // and the arm inside it swings back and through about that point.
     this.club = new THREE.Group();
     const steel = new THREE.MeshStandardMaterial({ color: 0xc9ccd2, roughness: 0.25, metalness: 0.9 });
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.035, 0.04), steel);
-    head.position.set(0, 0.02, -0.07);
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.95, 6), steel);
-    shaft.position.set(0.19, 0.46, -0.09);
-    shaft.rotation.z = -0.4;
-    this.club.add(head, shaft);
+    this.head = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.034, 0.04), steel);
+    this.shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 1, 6), steel);
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.012, 0.16, 6), new THREE.MeshStandardMaterial({ color: 0x15171b, roughness: 0.8 }));
+    grip.position.y = 0.42;
+    this.shaft.add(grip);
+    this.shaft.castShadow = true;
+    this.arm.add(this.head, this.shaft);
+    this.club.add(this.arm);
     this.club.visible = false;
     // The paddle wheel on the sixth: it never stops, played or not.
     this.wheel = new THREE.Group();
@@ -157,6 +171,8 @@ export class Putt implements Activity {
     this.t = 0;
     this.power = 0;
     this.charging = false;
+    this.strike = null;
+    this.stand.set = false;
     this.ball.visible = true;
     this.ball.scale.setScalar(1);
     this.hint();
@@ -264,7 +280,15 @@ export class Putt implements Activity {
         g.push();
       }
     }
-    if (this.phase === "aim") {
+    if (this.phase === "aim" && this.strike) {
+      // The club is on its way down: nothing changes until it meets the ball.
+      this.strike.t += dt;
+      if (this.strike.t >= this.strike.at) {
+        const hit = this.strike;
+        this.strike = null;
+        this.putt(hit.aim, hit.power);
+      }
+    } else if (this.phase === "aim") {
       // Right on the stick turns the putter to the right of where he is looking.
       this.aim -= input.move().x * (this.charging ? 0.35 : 0.95) * dt;
       if (!this.charging && this.t > 0.3 && input.down("action")) {
@@ -281,7 +305,11 @@ export class Putt implements Activity {
           this.power = 0;
           this.dir = 1;
         }
-        if (!input.down("action")) this.putt(this.aim, this.power);
+        if (!input.down("action")) {
+          // Let go: the swing comes down from wherever the meter was, and the ball leaves when the club gets there.
+          this.charging = false;
+          this.strike = { t: 0, at: 0.1 + this.power * 0.1, aim: this.aim, power: this.power };
+        }
       }
     } else if (this.phase === "roll") {
       let sunk = false;
@@ -324,21 +352,63 @@ export class Putt implements Activity {
     const fz = Math.cos(this.aim);
     if (this.phase !== "sunk") this.ball.position.set(wx, y, wz);
     const aiming = this.phase === "aim";
-    this.guide.visible = aiming;
-    this.club.visible = aiming || (this.phase === "roll" && this.t < 0.35);
+    this.guide.visible = aiming && !this.strike;
     if (aiming) {
       this.guide.position.set(wx, y - BALL_R + 0.012, wz);
       this.guide.rotation.y = this.aim;
       this.guide.scale.z = 1.4 + this.power * 2.6;
     }
-    const pull = aiming ? (this.charging ? this.power * 0.42 : 0.02) : -0.12;
-    this.club.position.set(wx - fx * pull, y - BALL_R, wz - fz * pull);
+    // Benji addresses the ball side on, as a golfer does. He stays where he hit it from while it
+    // rolls, then walks to wherever it stopped.
+    const awayX = Math.cos(this.aim);
+    const awayZ = -Math.sin(this.aim);
+    const st = this.stand;
+    let walking = false;
+    if (aiming || !st.set) {
+      const tx = wx + awayX * 0.36;
+      const tz = wz + awayZ * 0.36;
+      const far = Math.hypot(tx - st.x, tz - st.z);
+      if (!st.set || far < 0.7 || this.strike) {
+        st.x = tx;
+        st.z = tz;
+        st.set = true;
+      } else {
+        const step = Math.min(far, 5.5 * dt);
+        g.heading = Math.atan2(tx - st.x, tz - st.z);
+        st.x += ((tx - st.x) / far) * step;
+        st.z += ((tz - st.z) / far) * step;
+        walking = true;
+      }
+    }
+    g.pos.x = st.x;
+    g.pos.z = st.z;
+    const posed = g.benji.has("putt");
+    const over = aiming || (this.phase === "roll" && this.t < 1.1);
+    if (!walking) g.heading = this.aim - Math.PI / 2;
+    g.benji.speed = walking ? 4.2 : 0;
+    g.benji.pose = this.phase === "sunk" && this.strokes <= hole.par ? "cheer" : over && !walking && posed ? "putt" : null;
+    // The swing: back as the meter fills, down to the ball, and on through after it.
+    let swing = 0.03;
+    if (this.strike) {
+      const k = this.strike.t / this.strike.at;
+      swing = this.strike.power * 0.6 * (1 - k * k) + 0.03;
+    } else if (aiming) swing = this.charging ? 0.03 + this.power * 0.6 : 0.03;
+    else if (this.phase === "roll") {
+      const k = clamp(this.t / 0.24, 0, 1);
+      swing = -(0.16 + this.struck * 0.34) * (1 - (1 - k) * (1 - k));
+    }
+    // His hands, a touch behind the drawing of him so they hide the top of the grip.
+    const cx = g.camera.position.x - st.x;
+    const cz = g.camera.position.z - st.z;
+    const cl = Math.hypot(cx, cz) || 1;
+    const hands = posed ? 0.585 : 0.74;
+    if (hands !== this.laid) this.lay(hands);
+    this.club.visible = over && !walking;
+    this.club.position.set(st.x + awayX * 0.034 + (cx / cl) * 0.08, y - BALL_R + hands, st.z + awayZ * 0.034 + (cz / cl) * 0.08);
     this.club.rotation.y = this.aim;
-    g.pos.x = wx + Math.cos(this.aim) * 0.55 - fx * 0.12;
-    g.pos.z = wz - Math.sin(this.aim) * 0.55 - fz * 0.12;
-    g.heading = this.aim;
-    g.benji.speed = 0;
-    g.benji.pose = this.phase === "sunk" && this.strokes <= hole.par ? "cheer" : null;
+    this.arm.rotation.x = swing;
+    // His shoulders rock with it.
+    g.benji.tilt = over && !walking ? swing * 0.06 : 0;
     g.live.meter = this.charging ? this.power : 0;
     g.live.sweetLo = this.sweet[0];
     g.live.sweetHi = this.sweet[1];
@@ -352,6 +422,8 @@ export class Putt implements Activity {
     this.charging = false;
     this.aim = aim;
     const v = SOFT + (HARD - SOFT) * clamp(power, 0, 1);
+    this.strike = null;
+    this.struck = clamp(power, 0, 1);
     this.vx = Math.sin(aim) * v;
     this.vz = Math.cos(aim) * v;
     this.strokes++;
@@ -405,6 +477,17 @@ export class Putt implements Activity {
       if (over < 0) g.sound.cheer();
     }
     g.push();
+  }
+
+  /** Lay the putter out from his hands, `hands` metres up, to just behind the ball. */
+  private lay(hands: number) {
+    this.laid = hands;
+    // In the club's own frame: across to the ball, down to the felt, and a little behind it.
+    const foot = new THREE.Vector3(-0.394, 0.02 - hands, -(BALL_R + 0.03) + 0.08);
+    this.head.position.copy(foot);
+    this.shaft.position.copy(foot).multiplyScalar(0.5);
+    this.shaft.scale.set(1, foot.length(), 1);
+    this.shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), foot.clone().normalize().negate());
   }
 
   /** Strokes against par over the holes played so far, the way a card shows it. */

@@ -84,8 +84,33 @@ const starterMoves = ((): Required<Pick<CardArt, "poses" | "scale">> => {
       reel: { back: f("reel-back") },
       bowl: { back: f("bowl-back") },
       cheer: { front: f("cheer-front"), back: f("cheer-back") },
+      // Sat on the swing, down the slide and over a putt: drawn from his left, mirrored for his right.
+      swing: { left: f("swing"), right: `flip:${f("swing")}` },
+      slide: { left: f("slide"), right: `flip:${f("slide")}` },
+      putt: { left: f("putt"), right: `flip:${f("putt")}` },
+      // With a racket in his hand, from behind his baseline.
+      tennis: { back: f("tennis-ready") },
+      forehand: { back: f("tennis-fore") },
+      backhand: { back: f("tennis-back") },
+      serve: { back: f("tennis-serve") },
     },
-    scale: { [f("dunk-back")]: 1.371, [f("reel-back")]: 0.98, [f("bowl-back")]: 1.064, [f("cheer-back")]: 1.199, [f("cheer-front")]: 1.143 },
+    scale: {
+      [f("dunk-back")]: 1.371,
+      [f("reel-back")]: 0.98,
+      [f("bowl-back")]: 1.064,
+      [f("cheer-back")]: 1.199,
+      [f("cheer-front")]: 1.143,
+      [f("swing")]: 0.78,
+      [`flip:${f("swing")}`]: 0.78,
+      [f("slide")]: 0.735,
+      [`flip:${f("slide")}`]: 0.735,
+      [f("putt")]: 0.968,
+      [`flip:${f("putt")}`]: 0.968,
+      [f("tennis-ready")]: 0.97,
+      [f("tennis-fore")]: 1.008,
+      [f("tennis-back")]: 0.997,
+      [f("tennis-serve")]: 1.365,
+    },
   };
 })();
 
@@ -136,19 +161,62 @@ export const CAST: Record<"kBlanco" | "courtOg" | "mamaDee" | "uncJ" | "nitro" |
 
 export type CastId = keyof typeof CAST;
 
+/** How tall someone sat on a stool is next to them standing, and each one's back and side drawing next to the front one. */
+const SAT = 0.7;
+const SIT: Record<string, [number, number]> = {
+  "male-01": [0.979, 0.995],
+  "female-01": [0.95, 0.97],
+  "male-02": [0.968, 0.989],
+  "female-02": [0.957, 0.965],
+  "male-03": [0.973, 0.952],
+  "female-03": [0.949, 0.971],
+  "male-04": [0.942, 0.99],
+  "female-04": [0.97, 0.989],
+};
+
 /**
  * People on the street: drawn from the front and from behind, standing, in two strides, and
  * jumping with both hands up. `cheer` is how tall the jump stands next to the standing drawing.
  */
 const ped = (name: string, height: number, cheer = 1.12): { art: CardArt; height: number } => {
   const f = (n: string) => `/game-v2/characters/pedestrians/${name}${n}`;
+  const [back, side] = SIT[name]!;
   return {
     art: {
       front: f(`.png${V}`),
       back: f("-back.webp?v=2"),
       walk: { front: [f(`-walk.png${V}`), f("-walk-b.webp")], back: [f("-walk-back.webp?v=2"), f("-walk-back-b.webp")] },
-      poses: { cheer: { front: f("-cheer-front.webp"), back: f("-cheer-back.webp") } },
-      scale: { [f("-cheer-front.webp")]: cheer, [f("-cheer-back.webp")]: cheer },
+      poses: {
+        cheer: { front: f("-cheer-front.webp"), back: f("-cheer-back.webp") },
+        // Sat on a park stool, which is part of the drawing.
+        sit: { front: f("-sit-front.webp"), back: f("-sit-back.webp"), left: f("-sit-side.webp"), right: `flip:${f("-sit-side.webp")}` },
+      },
+      scale: {
+        [f("-cheer-front.webp")]: cheer,
+        [f("-cheer-back.webp")]: cheer,
+        [f("-sit-front.webp")]: SAT,
+        [f("-sit-back.webp")]: SAT * back,
+        [f("-sit-side.webp")]: SAT * side,
+        [`flip:${f("-sit-side.webp")}`]: SAT * side,
+      },
+    },
+    height,
+  };
+};
+
+/**
+ * Street people drawn later: standing and mid-stride, from in front and from behind. The other
+ * stride is the same drawing mirrored. `sizes` is how tall the back, the stride and the stride
+ * from behind stand next to the standing drawing.
+ */
+const walker = (name: string, height: number, sizes: [number, number, number]): { art: CardArt; height: number } => {
+  const f = (n: string) => `/game-v2/characters/pedestrians/${name}${n}.webp`;
+  return {
+    art: {
+      front: f(""),
+      back: f("-back"),
+      walk: { front: [f("-walk"), `flip:${f("-walk")}`], back: [f("-walk-back"), `flip:${f("-walk-back")}`] },
+      scale: { [f("-back")]: sizes[0], [f("-walk")]: sizes[1], [`flip:${f("-walk")}`]: sizes[1], [f("-walk-back")]: sizes[2], [`flip:${f("-walk-back")}`]: sizes[2] },
     },
     height,
   };
@@ -177,7 +245,78 @@ export const PEDS = [
   ped("female-03", 1.66, 1.06),
   ped("male-04", 1.76, 1.08),
   ped("female-04", 1.64),
+  // The second eight: a church elder, a delivery man, a runner, a bluesman, a boy with a ball, a nurse, a big man and a teenager.
+  walker("female-05", 1.6, [0.981, 1.0, 0.992]),
+  walker("male-05", 1.86, [0.994, 0.989, 1.0]),
+  walker("female-06", 1.7, [0.995, 0.992, 0.998]),
+  walker("male-06", 1.74, [0.992, 1.0, 1.005]),
+  walker("male-07", 1.36, [1.0, 1.016, 1.019]),
+  walker("female-07", 1.66, [1.006, 1.003, 1.008]),
+  walker("male-08", 1.8, [0.995, 1.003, 1.0]),
+  walker("male-09", 1.64, [0.997, 1.006, 1.008]),
 ];
+
+/** The first eight are the ones with a seated drawing: whoever holds a park table is one of them. */
+export const SITTERS = PEDS.slice(0, 8);
+
+/**
+ * The same eight in a laser tag vest with a blaster in both hands: aiming at the lens, from
+ * behind, running side on, and tagged out with the vest dark. Three wear green with Benji, five
+ * wear pink. Sizes are the aiming, back and side drawings next to the tagged-out one.
+ */
+const tagger = (name: string, team: 0 | 1, sizes: [number, number, number]): { name: string; team: 0 | 1; art: CardArt; height: number } => {
+  const f = (n: string) => `/game-v2/characters/pedestrians/${name}-tag-${n}.webp`;
+  const height = PEDS.find((p) => p.art.front.includes(`/${name}.`))!.height;
+  return {
+    name,
+    team,
+    art: {
+      front: f("front"),
+      back: f("back"),
+      left: f("side"),
+      right: `flip:${f("side")}`,
+      poses: { out: { front: f("out") } },
+      scale: { [f("front")]: sizes[0], [f("back")]: sizes[1], [f("side")]: sizes[2], [`flip:${f("side")}`]: sizes[2], [f("out")]: 0.99 },
+    },
+    height,
+  };
+};
+export const TAGGERS = [
+  tagger("male-01", 0, [0.984, 0.982, 0.959]),
+  tagger("male-02", 0, [0.985, 0.97, 0.957]),
+  tagger("female-02", 0, [0.982, 0.982, 0.954]),
+  tagger("male-03", 1, [0.981, 0.985, 0.965]),
+  tagger("female-01", 1, [0.984, 0.974, 0.918]),
+  tagger("female-03", 1, [0.967, 0.962, 0.956]),
+  tagger("male-04", 1, [0.998, 0.988, 0.943]),
+  tagger("female-04", 1, [0.97, 0.97, 0.926]),
+];
+
+/** Coach Renee on the tennis court: the purple tracksuit, with a racket, seen from across the net. */
+export const COACH = ((): { art: CardArt; height: number } => {
+  const base = PEDS[7]!;
+  const f = (n: string) => `/game-v2/characters/pedestrians/female-04-tennis-${n}.webp`;
+  return {
+    art: {
+      ...base.art,
+      poses: { ...base.art.poses, tennis: { front: f("ready") }, forehand: { front: f("fore") }, backhand: { front: f("back") }, serve: { front: f("serve") } },
+      scale: { ...base.art.scale, [f("ready")]: 0.94, [f("fore")]: 0.945, [f("back")]: 0.943, [f("serve")]: 1.226 },
+    },
+    height: base.height,
+  };
+})();
+
+/** The house band: each player in two drawings that alternate with the beat, and how tall each stands in metres. */
+export const BAND = (
+  [
+    ["guitar", 1.71, 1.63],
+    ["singer", 1.86, 1.73],
+    ["drums", 1.67, 1.49],
+    ["bass", 1.95, 1.95],
+    ["sax", 1.75, 1.61],
+    ["keys", 1.58, 1.62],
+  ] as const
+).map(([id, a, b]) => ({ id, frames: [`/game-v2/characters/band/${id}-a.webp`, `/game-v2/characters/band/${id}-b.webp`] as [string, string], heights: [a, b] as [number, number] }));
 
 /** The four who run the 901 Court, easiest first: a street person, plus the court drawings only they have. */
 const baller = (index: number, name: string, size: Sizes, run = 0.96, dunk = 1.02): CardArt => {

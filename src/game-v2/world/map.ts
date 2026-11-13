@@ -81,6 +81,13 @@ export const KART_TRACK = { cx: 96, cz: 96, halfX: 19, halfZ: 8.2, width: 5.2 };
 
 /** Orange Mound Park takes block (0, 3), across Main Street from Benji's house. */
 export const PARK = { minX: -119, maxX: -73, minZ: 61, maxZ: 107, cx: -96, cz: 84 };
+/**
+ * The playground in the park's south-west corner. The swing Benji rides hangs from `top` on
+ * chains `len` long and swings north and south; the slide's chute runs south off the deck.
+ * What is built and what is played both read these.
+ */
+export const SWING = { x: -112.95, z: 93, top: 2.72, len: 2.08 };
+export const SLIDE = { x: -105.5, z: 97.5, deck: 1.6, top: { z: 0.614, y: 1.578 }, foot: { z: 3.586, y: 0.142 } };
 /** The paved corner with the game tables, north-east of the fountain. */
 export const PARK_TERRACE = { minX: -93.5, maxX: -75, minZ: 63, maxZ: 81 };
 /** One table per game. The regular has the north seat; Benji walks up from the south. */
@@ -139,6 +146,8 @@ export const POIS: Poi[] = [
   // The rec grounds on Park Avenue: let out at the hut, and at the gate between the court and the cornhole boards.
   { id: "putt", name: "Sack Putt", x: -32, z: 96, color: "#39ff14", arrive: { x: -32, z: 105.8, heading: Math.PI } },
   { id: "courts", name: "Park Avenue Courts", x: 32, z: 96, color: "#5ac8ff", arrive: { x: 17.9, z: 104.6, heading: Math.PI } },
+  { id: "cornhole", name: "Cornhole Lawn", x: 14, z: 97.5, color: "#f3e9c8", arrive: { x: 14.6, z: 104.4, heading: Math.PI } },
+  { id: "playground", name: "Swings and Slide", x: -109, z: 96, color: "#ff8a5c", arrive: { x: -109.5, z: 90.4, heading: 0 } },
 ];
 
 export function districtAt(x: number, z: number) {

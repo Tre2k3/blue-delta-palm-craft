@@ -6,7 +6,7 @@ import { Traffic } from "./actors/traffic";
 import { CarModel, Driver, STREET, type DriveTune } from "./actors/vehicle";
 import { Fireworks } from "./gfx/fx";
 import { Rain } from "./gfx/rain";
-import { BALLERS, CAST, PEDS, OUTFITS, BENJI_HEIGHT, type CastId, type OutfitId, VENDORS } from "./assets/cast";
+import { BALLERS, BAND, CAST, COACH, PEDS, OUTFITS, BENJI_HEIGHT, SITTERS, TAGGERS, type CastId, type OutfitId, VENDORS } from "./assets/cast";
 import { Sound } from "./core/audio";
 import { Input, type Nav } from "./core/input";
 import type { AlbumHud, HoopsKind, Dialogue, HudState, Live, Mode, Overlay, Place, Results, Reveal, Save, Solid } from "./core/types";
@@ -20,6 +20,8 @@ import { CATALOG, COLLECTION_BONUS, productById } from "./play/catalog";
 import { Cornhole } from "./play/cornhole";
 import { FISH, Fishing } from "./play/fishing";
 import { Putt } from "./play/putt";
+import { BOARD, BoatRide } from "./play/boat";
+import { Slide, Swing } from "./play/playground";
 import { Tennis } from "./play/tennis";
 import { BallPit, Bounce, KartRace } from "./play/fun";
 import { LaserTag } from "./play/laser";
@@ -39,8 +41,8 @@ import { buildCity, type City } from "./world/city";
 import { buildSkyShow, type SkyShow } from "./world/skyshow";
 import { pushCircle, pushOut, sight } from "./world/collide";
 import { buildFunRoom, buildLaserRoom, type FunRoom, type LaserRoom } from "./world/funhouse";
-import { CORNHOLE, CORNHOLE_STAND, HOLES, PUTT_PAR, PUTT_STAND, TENNIS_GATE } from "./world/rec-map";
-import { BOWL, FUN, HQ, PARK, PARK_TABLES, POIS, RACE_MEET, RIVER_Z, ROAD_HALF, ROOM, STREETS_X, STREETS_Z, TRUCKS, WALK, districtAt, nearestStreet } from "./world/map";
+import { CORNHOLE, HOLES, PUTT_PAR, PUTT_STAND, TENNIS_GATE } from "./world/rec-map";
+import { BOWL, FUN, HQ, PARK, PARK_TABLES, POIS, RACE_MEET, RIVER_Z, ROAD_HALF, ROOM, SLIDE, STREETS_X, STREETS_Z, SWING, TRUCKS, WALK, districtAt, nearestStreet } from "./world/map";
 import { LANE, buildBowlRoom, buildHomeRoom, buildHqRoom, type BowlRoom, type HomeRoom, type HqRoom, type Room } from "./world/rooms";
 
 const SAVE_KEY = "sack-v2-save-4";
@@ -202,7 +204,7 @@ export class Game {
   room: Room | null = null;
   activity: Activity | null = null;
   /** The art tables, where tools and tests can read them. */
-  readonly tables = { OUTFITS, PEDS, BALLERS, CAST, VENDORS, STORY, CHAPTERS, RIDES, POSTCARDS, POIS, HOLES, PUTT_PAR, CHATTER: ALL_LINES };
+  readonly tables = { OUTFITS, PEDS, BALLERS, CAST, VENDORS, STORY, CHAPTERS, RIDES, POSTCARDS, POIS, HOLES, PUTT_PAR, CHATTER: ALL_LINES, TAGGERS, COACH, BAND };
   pos = { x: START.x, z: START.z };
   vel = { x: 0, z: 0 };
   heading = 0;
@@ -313,6 +315,10 @@ export class Game {
   private cornhole: Cornhole;
   private putt: Putt;
   private tennis: Tennis;
+  /** The playground in the park, and the speedboat at the pier. */
+  private swings: Swing;
+  private slide: Slide;
+  private boat: BoatRide;
   private race: StreetRace;
   private kart: KartRace;
   private laser: LaserTag;
@@ -400,6 +406,9 @@ export class Game {
     this.cornhole = new Cornhole(this);
     this.putt = new Putt(this);
     this.tennis = new Tennis(this);
+    this.swings = new Swing(this);
+    this.slide = new Slide(this);
+    this.boat = new BoatRide(this);
     this.race = new StreetRace(this);
     this.kart = new KartRace(this);
     this.laser = new LaserTag(this);
@@ -670,14 +679,16 @@ export class Game {
     }
 
     // ---- The park. A regular at every table, people watching the games, walking the paths and sat by the fountain.
+    let seat = 0;
+    const sitter = () => SITTERS[(seat++ * 3 + 6) % SITTERS.length]!;
     for (const t of PARK_TABLES) {
-      const w = who();
-      // Sat on the stool: sunk to the seat, so the table hides the rest.
-      st.post(w.art, w.height, at(t.x, t.z - 1.06, t.x, t.z, "play", { lift: -0.4 }));
+      const w = sitter();
+      // Sat on a stool at the table: the stool is in the drawing of them.
+      st.post(w.art, w.height, at(t.x, t.z - 1.02, t.x, t.z, "play"));
       if (t.seats === 4) {
-        for (const dx of [-1.06, 1.06]) {
-          const o = who();
-          st.post(o.art, o.height, at(t.x + dx, t.z, t.x, t.z, "play", { lift: -0.4 }));
+        for (const dx of [-1.02, 1.02]) {
+          const o = sitter();
+          st.post(o.art, o.height, at(t.x + dx, t.z, t.x, t.z, "play"));
         }
       }
     }
@@ -915,10 +926,32 @@ export class Game {
         this.tennis.start();
       });
     });
-    this.spot("street", CORNHOLE_STAND.x - 0.4, CORNHOLE.nearZ + 1.9, 1.7, "Cornhole: first to 21", () => {
+    // Cornhole can be started from anywhere on its lawn: by the sign and Mr. Willie, down the lane, or at the far board.
+    for (const [cx, cz, cr] of [
+      [CORNHOLE.x - 0.4, CORNHOLE.nearZ + 1.6, 2.6],
+      [CORNHOLE.x, (CORNHOLE.nearZ + CORNHOLE.farZ) / 2, 2.5],
+      [CORNHOLE.x, CORNHOLE.farZ - 0.8, 2.3],
+    ] as const)
+      this.spot("street", cx, cz, cr, "Cornhole: first to 21", () => {
+        this.transition(() => {
+          this.begin(this.cornhole, "whack");
+          this.cornhole.start();
+        });
+      });
+    // The playground: the swing he can ride, and the slide.
+    this.spot("street", SWING.x, SWING.z, 1.15, "Get on the swing", () => {
+      this.begin(this.swings, "whack");
+      this.swings.start();
+    });
+    this.spot("street", SLIDE.x, SLIDE.z - 1.7, 1.2, "Go down the slide", () => {
+      this.begin(this.slide, "whack");
+      this.slide.start();
+    });
+    // The speedboat tied up at the pier.
+    this.spot("street", BOARD.x, BOARD.z, 1.5, "Take the boat out", () => {
       this.transition(() => {
-        this.begin(this.cornhole, "whack");
-        this.cornhole.start();
+        this.begin(this.boat, "kart");
+        this.boat.start();
       });
     });
 
@@ -1184,6 +1217,7 @@ export class Game {
     this.live.turn = -1;
     this.benji.pose = null;
     this.benji.lift = 0;
+    this.benji.tilt = 0;
     this.benji.visible = mode !== "drive";
     this.stage.setPunch(0);
     this.sound.duck(false);
@@ -2563,6 +2597,8 @@ export class Game {
       if (this.activity !== this.cornhole) this.cornhole.idle(dt);
       if (this.activity !== this.tennis) this.tennis.idle(dt);
       if (this.activity !== this.putt) this.putt.idle(paused ? 0 : dt);
+      if (this.activity !== this.swings) this.swings.idle(paused ? 0 : dt);
+      if (this.activity !== this.boat) this.boat.idle(paused ? 0 : dt);
     }
     for (const n of this.npcs) {
       if (n.place !== this.place) continue;

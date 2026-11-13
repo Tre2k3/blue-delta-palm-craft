@@ -354,7 +354,7 @@ export class Troupe {
         let up = false;
         if (act === "bounce") lift += Math.abs(Math.sin((time + m.seed) * 2.7)) * 1.15;
         else if (act === "wade") lift += Math.max(0, Math.sin((time + m.seed) * 2.1)) * 0.35;
-        else if (act === "play") lift += Math.max(0, Math.sin((time + m.seed) * 7)) * 0.02;
+        else if (act === "play" && !c.has("sit")) lift += Math.max(0, Math.sin((time + m.seed) * 7)) * 0.02;
         else if (act === "cheer" && Math.sin(time * 0.55 + m.seed * 3) > 0.55) {
           lift += Math.abs(Math.sin((time + m.seed) * 8)) * 0.16;
           up = true;
@@ -380,7 +380,8 @@ export class Troupe {
           up = m.hop > 0.15;
         }
         // Both hands in the air while they are jumping about something.
-        if (act !== "serve") c.pose = up ? "cheer" : null;
+        // Sat at a table, where there is a drawing of them sat.
+        if (act !== "serve") c.pose = up ? "cheer" : act === "play" && c.has("sit") ? "sit" : null;
         if (!m.posted) {
           m.t -= dt;
           // Benji wants the spot: let him have it.

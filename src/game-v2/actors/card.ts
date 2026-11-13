@@ -126,6 +126,8 @@ export class Card {
   /** Extra lift above the ground (jumps, trampolines). */
   lift = 0;
   pose: string | null = null;
+  /** Lean of the whole drawing about the soles, radians, as the lens sees it: on a swing, down a slide. */
+  tilt = 0;
   /** Seconds into a song playing nearby, or -1. Standing still, the character bops to it. */
   groove = -1;
   visible = true;
@@ -226,7 +228,7 @@ export class Card {
     const h = this.height * (this.art.scale?.[src] ?? 1) * (1 + breathe - step * 0.012 - bop * 0.035);
     this.mesh.scale.set(h * aspect, h, 1);
     this.mesh.position.y = this.lift + step * 0.055;
-    this.mesh.rotation.set(0, toCam - g.rotation.y, moving ? Math.sin(this.phase * Math.PI) * 0.035 : Math.sin(this.idle * 1.3) * 0.008 + sway);
+    this.mesh.rotation.set(0, toCam - g.rotation.y, (moving ? Math.sin(this.phase * Math.PI) * 0.035 : Math.sin(this.idle * 1.3) * 0.008 + sway) + this.tilt);
     // Pull the card a touch toward the lens so a curb never clips the shoes.
     this.mesh.position.x = Math.sin(toCam) * 0.1;
     this.mesh.position.z = Math.cos(toCam) * 0.1;

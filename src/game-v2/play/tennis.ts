@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { Card } from "../actors/card";
-import { PEDS } from "../assets/cast";
+import { COACH } from "../assets/cast";
 import type { HudState } from "../core/types";
 import { clamp, damp, lerp } from "../core/util";
 import type { Activity, Game } from "../game";
@@ -16,7 +16,7 @@ const REACH = 1.8;
 const RIVAL_REACH = 1.5;
 const PACE = 6.4;
 const POINTS = ["0", "15", "30", "40"];
-const RIVAL = { name: "Coach Renee", ped: 7 };
+const RIVAL = { name: "Coach Renee" };
 /** The serve meter: in the green is a first serve with pace; over it is long. */
 const SWEET: [number, number] = [0.62, 0.86];
 
@@ -71,6 +71,9 @@ export class Tennis implements Activity {
   private dir = 1;
   private charging = false;
   private swing = 0;
+  /** Which side of each of them the ball was on when they last swung: 1 forehand, -1 backhand. */
+  private wing = 1;
+  private rivalWing = 1;
   private swingCool = 0;
   private rivalCool = 0;
   /** How far the ball was from her a frame ago: she swings when it is as near as it is going to get. */
@@ -102,8 +105,7 @@ export class Tennis implements Activity {
     this.mark = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: 0x39ff14, toneMapped: false, transparent: true, opacity: 0.9, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -8 }));
     this.mark.renderOrder = 3;
     this.mark.visible = false;
-    const ped = PEDS[RIVAL.ped]!;
-    this.rival = new Card(ped.art, ped.height);
+    this.rival = new Card(COACH.art, COACH.height);
     this.opp.x = T.cx + T.half - 1;
     this.opp.z = T.cz;
     this.rival.place(this.opp.x, this.opp.z);
@@ -114,7 +116,7 @@ export class Tennis implements Activity {
   /** Coach Renee is always out on her end, played or not. */
   idle(dt: number) {
     if (this.on) return;
-    this.rival.pose = null;
+    this.rival.pose = "tennis";
     this.rival.speed = 0;
     this.rival.heading = -Math.PI / 2;
     this.rival.update(dt, this.g.camera.position, this.g.tint, null);
@@ -350,6 +352,7 @@ export class Tennis implements Activity {
     this.rallies++;
     this.launch(tx, tz, time, clear);
     this.rivalSwing = 0.3;
+    this.rivalWing = this.p.z <= this.opp.z ? 1 : -1;
     this.rivalCool = 0.4;
     g.sound.board();
   }
@@ -463,6 +466,7 @@ export class Tennis implements Activity {
       if (input.hit("action") && this.swingCool <= 0) {
         this.swingCool = 0.32;
         this.swing = 0.3;
+        this.wing = this.p.z >= g.pos.z ? 1 : -1;
         if (can) this.hit(mv.x, mv.y, d);
         else g.sound.whoosh();
       }
@@ -525,13 +529,30 @@ export class Tennis implements Activity {
     g.heading = Math.PI / 2;
     g.benji.speed = moved;
     // Arms up to serve; the long follow-through when he swings.
-    g.benji.pose = this.phase === "serve" && this.server === 0 && this.charging ? "shoot" : this.swing > 0 ? "bowl" : this.phase === "point" && this.after && this.call.includes("BENJI") && this.call.includes("GAME") ? "cheer" : null;
+    // In the fit he has racket drawings for, he holds one: up to serve, across him on either side, and ready between shots.
+    const racket = g.benji.has("tennis");
+    g.benji.pose =
+      this.phase === "serve" && this.server === 0 && this.charging
+        ? racket
+          ? "serve"
+          : "shoot"
+        : this.swing > 0
+          ? racket
+            ? this.wing > 0
+              ? "forehand"
+              : "backhand"
+            : "bowl"
+          : this.phase === "point" && this.after && this.call.includes("BENJI") && this.call.includes("GAME")
+            ? "cheer"
+            : racket
+              ? "tennis"
+              : null;
     const rc = this.rival;
     rc.place(this.opp.x, this.opp.z);
     rc.speed = rivalMoved;
     rc.heading = rivalMoved > 0.6 && this.phase === "rally" ? Math.atan2(this.meet.x - this.opp.x || -1, this.meet.z - this.opp.z) : -Math.PI / 2;
     if (rivalMoved < 0.6 || this.last === 1) rc.heading = -Math.PI / 2;
-    rc.pose = this.rivalSwing > 0 ? "cheer" : null;
+    rc.pose = this.rivalSwing > 0 ? (this.rivalWing > 0 ? "forehand" : "backhand") : this.phase === "serve" && this.server === 1 ? "serve" : "tennis";
     rc.update(dt, g.camera.position, g.tint, null);
     g.live.meter = this.charging ? this.power : 0;
     g.live.sweetLo = SWEET[0];

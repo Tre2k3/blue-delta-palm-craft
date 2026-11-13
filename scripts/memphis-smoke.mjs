@@ -1343,7 +1343,7 @@ try {
   // The drawn pictures: fish, postcards, rank badges and clown faces; and everybody's new moves.
   const pics = await page.evaluate(async () => {
     const g = window.__GAME__;
-    const { OUTFITS, PEDS, BALLERS, CAST, POSTCARDS } = g.tables;
+    const { OUTFITS, PEDS, BALLERS, CAST, POSTCARDS, TAGGERS, COACH, BAND } = g.tables;
     const draw = g.stage.render;
     g.stage.render = () => {};
     const run = (n) => {
@@ -1361,8 +1361,8 @@ try {
       });
     // Every drawing a character can be shown as is a real picture.
     const every = (a) => [a.front, a.back, a.left, a.right, ...Object.values(a.walk ?? {}).flat(), ...Object.values(a.poses ?? {}).flatMap((q) => (typeof q === "string" ? [q] : Object.values(q)))].filter(Boolean).map((u) => u.replace(/^flip:/, ""));
-    const people = [...Object.values(OUTFITS).map((o) => o.art), ...PEDS.map((q) => q.art), ...BALLERS, ...Object.values(CAST).map((c) => c.art)];
-    const files = [...new Set(people.flatMap(every))];
+    const people = [...Object.values(OUTFITS).map((o) => o.art), ...PEDS.map((q) => q.art), ...BALLERS, ...Object.values(CAST).map((c) => c.art), ...TAGGERS.map((q) => q.art), COACH.art];
+    const files = [...new Set([...people.flatMap(every), ...BAND.flatMap((q) => q.frames)])];
     const broken = [];
     for (const f of files) if (!(await size(f))) broken.push(f);
     // The album: what it lists, and every picture in it.
@@ -1689,6 +1689,186 @@ try {
   check(rec.opening.phase === "serve" && rec.opening.server === 0 && /FAULT/.test(rec.fault.call) && rec.fault.pts === "0,0" && rec.box.live && rec.box.x > 0 && rec.box.x < 6.5, "tennis: a serve hit too hard is a fault, and a good one comes down in the box", { opening: rec.opening, fault: rec.fault, box: rec.box });
   check(rec.match.title.length > 0 && Math.max(...rec.match.games) === 3 && rec.match.hits > 3 && rec.match.longest >= 2, "tennis: a match is rallied out to three games", rec.match);
   check(rec.sky.flew > 20 && rec.sky.y > 60 && rec.sky.day === 0 && rec.sky.night > 0.03, "a blimp circles over the city, and searchlights come on over the boutique after dark", rec.sky);
+  // ---- the playground, the boat, the putter and the rackets
+  const play = await page.evaluate(async () => {
+    const g = window.__GAME__;
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    const run = (n, dt = 1 / 30) => {
+      for (let i = 0; i < n; i++) g.tick(dt);
+    };
+    if (g.overlay) g.close();
+    if (g.activity) g.activity.quit();
+    run(6);
+    g.dialogue.length = 0;
+    const { PEDS, POIS } = g.tables;
+    const spots = ["Get on the swing", "Go down the slide", "Take the boat out"].map((w) => g.spots.some((q) => q.label().startsWith(w)));
+    const lawn = g.spots.filter((q) => q.label().startsWith("Cornhole")).length;
+    const stops = ["cornhole", "playground"].map((id) => !!POIS.find((q) => q.id === id)?.arrive);
+
+    // ---- the swing: on from the prompt, pumped up by holding only on the way forward, and off it for distance.
+    g.save.best.swing = 0;
+    g.warp(-112.95, 93, 0);
+    run(4);
+    const swingAsk = g.prompt;
+    g.input.press("interact");
+    run(2);
+    const sw = g.swings;
+    const onSwing = g.activity === sw;
+    g.input.press("action");
+    run(1);
+    let top = 0;
+    let lift = 0;
+    for (let i = 0; i < 30 * 16; i++) {
+      g.input.hold("action", sw.state.w > 0);
+      run(1);
+      top = Math.max(top, sw.state.height);
+      lift = Math.max(lift, g.benji.lift);
+    }
+    g.input.hold("action", false);
+    const swung = { top: +top.toFixed(2), lift: +lift.toFixed(2), pose: g.benji.pose, seat: Math.abs(sw.state.seat) > 0.001 };
+    let waited = 0;
+    while (!(sw.state.w > 1.2 && sw.state.a > 0.5 && sw.state.a < 0.9) && waited++ < 900) run(1);
+    sw.jump();
+    let air = 0;
+    while (sw.state.phase === "air" && air++ < 240) run(1);
+    const jump = { cm: sw.state.last, best: g.save.best.swing ?? 0, air };
+    let rest = 0;
+    while (g.activity === sw && rest++ < 240) run(1);
+    const offSwing = { mode: g.mode, z: +g.pos.z.toFixed(1), lift: g.benji.lift, tilt: g.benji.tilt };
+    // The empty seat goes on swinging and comes to rest by itself.
+    const still = Math.abs(sw.state.a) + Math.abs(sw.state.w);
+    run(30 * 20);
+    const settled = { before: +still.toFixed(3), after: +(Math.abs(sw.state.a) + Math.abs(sw.state.w)).toFixed(3) };
+
+    // ---- the slide: up the ladder, a push, down the chute and off the end on his feet.
+    g.warp(-105.5, 95.8, 0);
+    run(4);
+    const slideAsk = g.prompt;
+    g.input.press("interact");
+    run(2);
+    const sl = g.slide;
+    const onSlide = g.activity === sl;
+    let up = 0;
+    while (sl.state.phase === "climb" && up++ < 150) run(1);
+    const deck = { phase: sl.state.phase, lift: +g.benji.lift.toFixed(2) };
+    g.input.press("action");
+    run(2);
+    let fast = 0;
+    let down = 0;
+    while (g.activity === sl && down++ < 400) {
+      run(1);
+      fast = Math.max(fast, sl.state.v);
+    }
+    const slid = { fast: +fast.toFixed(1), mode: g.mode, z: +g.pos.z.toFixed(1), lift: g.benji.lift, best: g.save.best.slide ?? 0 };
+
+    // ---- the boat: aboard from the pier, out under her own power, a sack, a ramp, the pier's piles, and home.
+    g.save.best.river = 0;
+    g.warp(-82.9, -208.5, Math.PI);
+    run(4);
+    const boatAsk = g.prompt;
+    g.input.press("interact");
+    for (let i = 0; i < 200 && g.activity !== g.boat; i++) g.tick(1 / 30);
+    for (let i = 0; i < 90 && g.live.fade > 0.05; i++) g.tick(1 / 30);
+    const b = g.boat;
+    const aboard = g.activity === b && b.state.riding;
+    const from = { x: b.state.x, z: b.state.z };
+    g.input.hold("up", true);
+    run(100);
+    const out = { moved: +Math.hypot(b.state.x - from.x, b.state.z - from.z).toFixed(1), speed: +b.state.speed.toFixed(1), z: +b.state.z.toFixed(1) };
+    const h0 = b.state.heading;
+    g.input.hold("right", true);
+    run(45);
+    g.input.hold("right", false);
+    const turned = +Math.atan2(Math.sin(b.state.heading - h0), Math.cos(b.state.heading - h0)).toFixed(2);
+    g.input.hold("up", false);
+    const [sx, sz] = b.state.sacks[0];
+    const money = g.save.dollars;
+    b.set(sx + 7, sz, -Math.PI / 2, 8);
+    run(45);
+    const sack = { got: b.state.got, paid: g.save.dollars - money };
+    const ramp = b.state.ramps[0];
+    b.set(ramp.x - 13, ramp.z, Math.PI / 2, 20);
+    g.input.hold("up", true);
+    let flew = 0;
+    let high = 0;
+    for (let i = 0; i < 110; i++) {
+      run(1);
+      if (b.state.air) flew++;
+      high = Math.max(high, b.state.y);
+    }
+    g.input.hold("up", false);
+    const jumped = { flew, high: +high.toFixed(2), down: !b.state.air && b.state.y < 0.05 };
+    b.set(-84, -240, 0, 14);
+    g.input.hold("up", true);
+    run(70);
+    g.input.hold("up", false);
+    const piles = +b.state.z.toFixed(1);
+    b.set(-80.4, -209.5, Math.PI, 0);
+    run(4);
+    g.input.press("interact");
+    for (let i = 0; i < 200 && g.activity === b; i++) g.tick(1 / 30);
+    for (let i = 0; i < 90 && g.live.fade > 0.05; i++) g.tick(1 / 30);
+    const ashore = { mode: g.mode, x: +g.pos.x.toFixed(1), z: +g.pos.z.toFixed(1), riding: b.state.riding, lift: g.benji.lift };
+
+    // ---- the putter: the swing goes back with the meter, the ball leaves when the club reaches it, and he stays put while it rolls.
+    g.begin(g.putt, "whack");
+    g.putt.start();
+    run(15);
+    const p = g.putt;
+    const address = { pose: g.benji.pose, club: p.club.visible, off: +Math.hypot(g.pos.x - p.ball.position.x, g.pos.z - p.ball.position.z).toFixed(2) };
+    g.input.hold("action", true);
+    run(22);
+    const back = +p.arm.rotation.x.toFixed(2);
+    g.input.hold("action", false);
+    run(1);
+    const coming = { strike: !!p.strike, phase: p.state.phase, strokes: p.state.strokes };
+    let ticks = 0;
+    while (p.state.phase === "aim" && ticks++ < 40) run(1);
+    run(5);
+    const through = +p.arm.rotation.x.toFixed(2);
+    const stood = { x: g.pos.x, z: g.pos.z };
+    run(12);
+    const struck = { phase: p.state.phase, ticks, strokes: p.state.strokes, through, drift: +Math.hypot(g.pos.x - stood.x, g.pos.z - stood.z).toFixed(3), rolled: +Math.hypot(p.ball.position.x - stood.x, p.ball.position.z - stood.z).toFixed(1) };
+    p.quit();
+    run(4);
+
+    // ---- rackets: he holds one ready, lifts it to serve, and the coach has hers.
+    g.begin(g.tennis, "whack");
+    g.tennis.start();
+    run(40);
+    const ready = { benji: g.benji.pose, coach: g.tennis.rival.pose };
+    g.input.hold("action", true);
+    run(8);
+    const serving = g.benji.pose;
+    g.input.hold("action", false);
+    run(2);
+    g.tennis.quit();
+    run(4);
+
+    // ---- whoever holds a park table is sat at it, and the new faces are out on the street.
+    g.warp(-84, 80.5, Math.PI);
+    run(12);
+    const seats = g.street.members.filter((m) => m.posted && m.stop.act === "play");
+    const sat = { n: seats.length, posed: seats.filter((m) => m.card.pose === "sit").length, sunk: seats.filter((m) => m.card.lift !== 0).length };
+    const fresh = (c) => /\/(male-0[5-9]|female-0[5-7])/.test(c.face);
+    const faces = { kinds: PEDS.length, walking: g.people.walkers.filter((w) => fresh(w.card)).length, about: [...g.street.members, ...Object.values(g.troupes).flatMap((t) => t.members)].filter((m) => fresh(m.card)).length };
+    g.stage.render = draw;
+    return { spots, lawn, stops, swingAsk, onSwing, swung, jump, offSwing, settled, slideAsk, onSlide, deck, slid, boatAsk, aboard, out, turned, sack, jumped, piles, ashore, address, back, coming, struck, ready, serving, sat, faces };
+  });
+  check(play.spots.every(Boolean) && play.lawn === 3 && play.stops.every(Boolean), "the swing, the slide and the boat can be walked up to, cornhole starts from anywhere on its lawn, and the map has both new stops", { spots: play.spots, lawn: play.lawn, stops: play.stops });
+  check(play.swingAsk === "Get on the swing" && play.onSwing && play.swung.top > 0.75 && play.swung.lift > 1 && play.swung.seat, "the swing: holding on the way forward pumps it high, and the seat moves with him", { ask: play.swingAsk, ...play.swung });
+  check(play.jump.cm > 250 && play.jump.cm < 700 && play.jump.best === play.jump.cm && play.offSwing.mode === "walk" && play.offSwing.lift === 0 && play.offSwing.tilt === 0 && play.offSwing.z > 95, "the swing: letting go on the way up throws him out over the chips, and the distance is kept", { ...play.jump, off: play.offSwing });
+  check(play.settled.before > 0.05 && play.settled.after < 0.02, "the swing: the empty seat goes on swinging and comes to rest", play.settled);
+  check(play.slideAsk === "Go down the slide" && play.onSlide && play.deck.phase === "top" && Math.abs(play.deck.lift - 1.6) < 0.05 && play.slid.fast > 3.5 && play.slid.mode === "walk" && play.slid.z > 100.5 && play.slid.lift === 0 && play.slid.best > 5, "the slide: up the ladder, down the chute and off the end on his feet", { deck: play.deck, ...play.slid });
+  check(play.boatAsk === "Take the boat out" && play.aboard && play.out.moved > 12 && play.out.speed > 8 && play.out.z < -222 && play.turned < -0.4, "the boat: aboard at the pier, out into the river under throttle, and she answers the wheel", { ask: play.boatAsk, ...play.out, turned: play.turned });
+  check(play.sack.got === 1 && play.sack.paid === 10 && play.jumped.flew > 8 && play.jumped.high > 1.2 && play.jumped.down && play.piles < -228, "the boat: a sack alongside is brought in, a ramp at speed puts her in the air, and the pier stops her", { sack: play.sack, jumped: play.jumped, piles: play.piles });
+  check(play.ashore.mode === "walk" && !play.ashore.riding && Math.abs(play.ashore.x - -82.9) < 0.3 && play.ashore.lift === 0, "the boat: tying up puts Benji back on the pier", play.ashore);
+  check(play.address.pose === "putt" && play.address.club && play.address.off < 0.5 && play.back > 0.25 && play.coming.strike && play.coming.phase === "aim" && play.coming.strokes === 0, "putting: he stands over the ball with the putter in his hands, and it swings back as the meter fills", { ...play.address, back: play.back, coming: play.coming });
+  check(play.struck.phase === "roll" && play.struck.ticks >= 2 && play.struck.ticks <= 9 && play.struck.strokes === 1 && play.struck.through < 0 && play.struck.drift < 0.01 && play.struck.rolled > 0.6, "putting: the ball leaves when the club reaches it, the club follows through, and Benji stays where he stood", play.struck);
+  check(play.ready.benji === "tennis" && play.ready.coach === "tennis" && play.serving === "serve", "tennis: both players hold a racket, and Benji lifts his to serve", { ...play.ready, serving: play.serving });
+  check(play.sat.n === 8 && play.sat.posed === 8 && play.sat.sunk === 0 && play.faces.kinds === 16 && play.faces.walking + play.faces.about > 3, "the regulars are sat at their tables, and eight new people are out in the city", { ...play.sat, ...play.faces });
+
   // ---- the people of the city
   const folk = await page.evaluate(async () => {
     const g = window.__GAME__;

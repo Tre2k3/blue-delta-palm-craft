@@ -209,16 +209,16 @@ function terrace(ctx: BuildCtx, paving: THREE.Material, stone: THREE.Material) {
   ctx.flat.wall(2.6, 0.65, T.maxX - 1.4, Y0 + 2.2, T.maxZ - 0.84, board, YAW.south);
   ctx.flat.wall(2.6, 0.65, T.maxX - 1.4, Y0 + 2.2, T.maxZ - 0.96, board, YAW.north);
 
-  for (const t of PARK_TABLES) table(ctx, t.id, t.name, t.color, t.x, t.z, t.seats, stone);
+  for (const t of PARK_TABLES) table(ctx, t.id, t.name, t.color, t.x, t.z, stone);
 }
 
-function table(ctx: BuildCtx, id: TableId, name: string, color: string, x: number, z: number, seats: 2 | 4, stone: THREE.Material) {
+function table(ctx: BuildCtx, id: TableId, name: string, color: string, x: number, z: number, stone: THREE.Material) {
   ctx.solid.cyl(0.17, 0.26, 0.72, x, Y0 + 0.36, z, stone, 8);
   ctx.solid.box(1.2, 0.08, 1.2, x, Y0 + 0.76, z, stone);
   ctx.solid.flat(1.04, 1.04, x, Y0 + 0.803, z, top(id));
   addSolid(ctx, x - 0.55, x + 0.55, z - 0.55, z + 0.55);
-  const around: [number, number][] = seats === 4 ? [[0, -1], [0, 1], [-1, 0], [1, 0]] : [[0, -1], [0, 1]];
-  for (const [dx, dz] of around) ctx.solid.cyl(0.22, 0.2, 0.46, x + dx * 1.02, Y0 + 0.23, z + dz * 1.02, stone, 10);
+  // The open seat is Benji's, on the south side. The regulars bring their own stools: each is drawn sat on one.
+  ctx.solid.cyl(0.22, 0.2, 0.46, x, Y0 + 0.23, z + 1.02, stone, 10);
   // What is on the table says which game it is from across the lawn.
   const y = Y0 + 0.806;
   const dark = std(0x17130f, 0.5);
@@ -266,7 +266,7 @@ function table(ctx: BuildCtx, id: TableId, name: string, color: string, x: numbe
     }
   } else if (id === "spades") {
     ctx.solid.box(0.075, 0.03, 0.105, x, y + 0.015, z, std(0x17336e, 0.5));
-    for (const [dx, dz] of around) {
+    for (const [dx, dz] of [[0, -1], [0, 1], [-1, 0], [1, 0]] as const) {
       for (let i = -2; i <= 2; i++) {
         const along = dz !== 0 ? [i * 0.05, 0] : [0, i * 0.05];
         ctx.solid.box(0.07, 0.004, 0.1, x + dx * 0.36 + along[0]!, y + 0.004 + (i + 2) * 0.002, z + dz * 0.36 + along[1]!, light, (dz !== 0 ? 0 : Math.PI / 2) + i * 0.12);
@@ -399,7 +399,8 @@ function playground(ctx: BuildCtx) {
     addSolid(ctx, sx + side * 2 - 0.15, sx + side * 2 + 0.15, sz - 1.1, sz + 1.1);
   }
   ctx.solid.add(new THREE.CylinderGeometry(0.05, 0.05, 4.2, 6), red, sx, Y0 + 2.72, sz, 0, 0, Math.PI / 2);
-  for (const dx of [-0.95, 0.95]) {
+  // The east seat hangs still. The west one is the one Benji rides: the game builds it, so it can move.
+  for (const dx of [0.95]) {
     ctx.solid.box(0.02, 2.05, 0.02, sx + dx - 0.2, Y0 + 1.68, sz, steel);
     ctx.solid.box(0.02, 2.05, 0.02, sx + dx + 0.2, Y0 + 1.68, sz, steel);
     ctx.solid.box(0.5, 0.04, 0.2, sx + dx, Y0 + 0.64, sz, MAT.black());
