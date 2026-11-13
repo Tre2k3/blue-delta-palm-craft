@@ -86,6 +86,13 @@ export function Title({ game, hud }: { game: Game; hud: HudState }) {
               </button>
             )}
           </div>
+          <button data-partners-open className="mt-3 flex items-center gap-2.5 rounded-xl border border-[#39ff14]/45 bg-black/60 px-3.5 py-2 text-left transition hover:border-[#39ff14]" onClick={() => game.openPartners("billboard")}>
+            <span className="h-2 w-2 shrink-0 rounded-full bg-[#39ff14]" />
+            <span>
+              <span className="block text-xs font-extrabold uppercase tracking-wider text-white">Get in the game</span>
+              <span className="block text-[11px] font-semibold text-white/60">Put your business, food truck or music in Memphis</span>
+            </span>
+          </button>
           <div className="mt-4 text-[11px] font-semibold uppercase tracking-widest text-white/45">{hud.pad ? "Gamepad ready: press A" : "Keyboard, gamepad or touch"}</div>
         </div>
       </div>
@@ -211,6 +218,9 @@ export function Pause({ game, hud }: { game: Game; hud: HudState }) {
           {hud.account.status === "in" ? `Account  ·  ${hud.account.name}` : "Sign in to keep your progress on any device"}
         </button>
       )}
+      <button data-partners-open className="sr-btn sr-btn-ghost mb-3 w-full py-2.5" onClick={() => game.openPartners("billboard")}>
+        Get in the game: your business, food truck or music
+      </button>
       <Row label="Today's drop">
         <div className="text-right">
           <div className="text-sm font-extrabold" style={{ color: hud.daily.done ? "#39ff14" : "#f4d77a" }}>

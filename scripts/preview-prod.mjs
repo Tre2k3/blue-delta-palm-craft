@@ -46,6 +46,8 @@ if (!process.env.DATABASE_URL) {
       if (existsSync(from) && !existsSync(to)) await copyFile(from, to);
     }
   }
+  // Who may read the requests businesses send, for the checks only: an account the checks make.
+  process.env.PARTNER_OWNERS ??= "owner-smoke@example.com";
 }
 
 const nitro = await import(pathToFileURL(entry).href);

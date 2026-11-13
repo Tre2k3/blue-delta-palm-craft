@@ -45,6 +45,7 @@ import { BOUNTIES, CHAPTERS, RANKS, RANK_PAY, STORE_REWARD, STORY, chapterOf, ra
 import { buildCity, type City } from "./world/city";
 import { buildSkyShow, type SkyShow } from "./world/skyshow";
 import { pushCircle, pushOut, sight } from "./world/collide";
+import { OPEN_SPOTS } from "./world/openspots";
 import { buildClubRoom, type ClubRoom } from "./world/club";
 import { buildFunRoom, buildLaserRoom, type FunRoom, type LaserRoom } from "./world/funhouse";
 import { CORNHOLE, HOLES, PUTT_PAR, PUTT_STAND, TENNIS_GATE } from "./world/rec-map";
@@ -220,7 +221,7 @@ export class Game {
   room: Room | null = null;
   activity: Activity | null = null;
   /** The art tables, where tools and tests can read them. */
-  readonly tables = { OUTFITS, PEDS, BALLERS, CAST, VENDORS, STORY, CHAPTERS, RIDES, POSTCARDS, POIS, HOLES, PUTT_PAR, CHATTER: ALL_LINES, TAGGERS, COACH, BAND, BLASTERS, TAG_RANKS, TUNES, SONGS, BEALE_STAGE, MEMPHIAN, CYPHER, JOOKERS };
+  readonly tables = { OUTFITS, PEDS, BALLERS, CAST, VENDORS, STORY, CHAPTERS, RIDES, POSTCARDS, POIS, HOLES, PUTT_PAR, CHATTER: ALL_LINES, TAGGERS, COACH, BAND, BLASTERS, TAG_RANKS, TUNES, SONGS, BEALE_STAGE, MEMPHIAN, CYPHER, JOOKERS, OPEN_SPOTS };
   pos = { x: START.x, z: START.z };
   vel = { x: 0, z: 0 };
   heading = 0;
@@ -231,6 +232,8 @@ export class Game {
   fishTrip = 0;
   shopFocus: string | null = null;
   cabinet: string | null = null;
+  /** What somebody who wants to be in the game is asking about: set by the sign they walked up to. */
+  partnerKind: "billboard" | "truck" | "store" | "music" | "other" = "billboard";
   foodAt: TruckId | "pizza" = "catch";
   /** The video on the big screen at Veli's Wings. Made the first time Benji gets near the lot. */
   private veli: { video: HTMLVideoElement; tex: THREE.VideoTexture } | null = null;
@@ -833,6 +836,11 @@ export class Game {
       this.jook.start();
     });
 
+    // The spots that are open to a real business: each sign takes whoever walks up to the asking screen.
+    this.spot("street", OPEN_SPOTS.truck.stand.x, OPEN_SPOTS.truck.stand.z, OPEN_SPOTS.truck.r, "Put your truck in the game", () => this.openPartners("truck"));
+    this.spot("street", OPEN_SPOTS.billboard.stand.x, OPEN_SPOTS.billboard.stand.z, OPEN_SPOTS.billboard.r, "Advertise here", () => this.openPartners("billboard"));
+    this.spot("street", OPEN_SPOTS.music.stand.x, OPEN_SPOTS.music.stand.z, OPEN_SPOTS.music.r, "Get your music in the game", () => this.openPartners("music"));
+
     // The coupe.
     this.carSpot = this.spot(
       "street",
@@ -1318,6 +1326,12 @@ export class Game {
     else this.sound.bad();
     this.persist();
     this.push();
+  }
+
+  /** The screen where a business, a food truck or an artist asks to be put in the game. */
+  openPartners(kind: Game["partnerKind"] = "billboard") {
+    this.partnerKind = kind;
+    this.open("partners");
   }
 
   /** Choose how the arena is laid out for the next match. */

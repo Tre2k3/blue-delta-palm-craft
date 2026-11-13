@@ -3104,6 +3104,73 @@ try {
   });
   await ff(0.3);
 
+  // ---- getting a business into the game: three open spots in the city, the asking screen, and a request sent
+  const spots = await page.evaluate(async () => {
+    const g = window.__GAME__;
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    if (g.overlay) g.close();
+    if (g.activity) g.activity.quit();
+    for (let i = 0; i < 10; i++) g.tick(1 / 30);
+    if (g.mode === "drive") g.exitCar(true);
+    if (g.place !== "street") g.setPlace("street");
+    g.dialogue.length = 0;
+    // Each sign has somewhere to stand, and its prompt opens the screen set to what that sign is for.
+    const S = g.tables.OPEN_SPOTS;
+    const signs = {};
+    for (const k of Object.keys(S)) {
+      g.warp(S[k].stand.x, S[k].stand.z, 0);
+      for (let i = 0; i < 8; i++) g.tick(1 / 30);
+      const prompt = g.prompt;
+      const stood = Math.hypot(g.pos.x - S[k].stand.x, g.pos.z - S[k].stand.z) < 0.3;
+      g.input.press("interact");
+      for (let i = 0; i < 3; i++) g.tick(1 / 30);
+      signs[k] = { prompt, stood, overlay: g.overlay, kind: g.partnerKind };
+      g.close();
+      for (let i = 0; i < 3; i++) g.tick(1 / 30);
+    }
+    // And from the pause menu, wherever he is.
+    g.open("pause");
+    await wait(400);
+    const inPause = !!document.querySelector("[data-partners-open]");
+    document.querySelector("[data-partners-open]")?.click();
+    await wait(500);
+    const kinds = [...document.querySelectorAll("[data-partners-kind]")].map((b) => b.getAttribute("data-partners-kind") + (b.getAttribute("aria-pressed") === "true" ? "*" : ""));
+    g.stage.render = draw;
+    return { signs, inPause, kinds, form: !!document.querySelector("[data-partners-form]"), x: g.pos.x, z: g.pos.z };
+  });
+  check(
+    ["truck", "billboard", "music"].every((k) => spots.signs[k]?.stood && spots.signs[k].overlay === "partners" && spots.signs[k].kind === k) && /truck/.test(spots.signs.truck.prompt) && /Advertise/.test(spots.signs.billboard.prompt) && /music/.test(spots.signs.music.prompt) && spots.inPause && spots.form && spots.kinds.join() === "billboard*,truck,store,music,other",
+    "open spots: a pitch on the truck row, a billboard on the plaza and a board by the Beale stage each open the asking screen set to what they are for, and the pause menu opens it too",
+    spots,
+  );
+  // Nothing sent with nothing in it; letters typed into the form go into the form; a real request is taken.
+  await page.locator("[data-partners-send]").click();
+  const noName = await page.locator("[data-partners-error]").innerText();
+  await page.locator('[data-partners-kind="truck"]').click();
+  await page.locator('[data-partners-field="name"]').fill("Smoke Tester");
+  await page.locator('[data-partners-field="business"]').fill("Smoke Wings");
+  await page.locator('[data-partners-field="reach"]').pressSequentially("wasd");
+  await page.locator("[data-partners-send]").click();
+  const noReach = await page.locator("[data-partners-error]").innerText();
+  await page.locator('[data-partners-field="reach"]').fill("@smokewings  901-555-0100");
+  await page.locator('[data-partners-field="note"]').fill("A truck by the river.");
+  await page.locator("[data-partners-send]").click();
+  await page.waitForSelector("[data-partners-sent]", { timeout: 60000 });
+  const asked2 = await page.evaluate(() => {
+    const g = window.__GAME__;
+    return { said: document.querySelector("[data-partners-sent]")?.textContent ?? "", tabs: document.querySelectorAll("[data-partners-tab]").length, x: g.pos.x, z: g.pos.z };
+  });
+  await page.locator("[data-partners-sent] [data-primary]").click();
+  await page.waitForTimeout(300);
+  const afterAsk = await page.evaluate(() => ({ overlay: window.__GAME__.overlay, mode: window.__GAME__.mode }));
+  check(
+    /name/i.test(noName) && /reach/i.test(noReach) && /Request sent/.test(asked2.said) && /@smokewings\s+901-555-0100/.test(asked2.said) && asked2.tabs === 0 && Math.hypot(asked2.x - spots.x, asked2.z - spots.z) < 0.01 && afterAsk.overlay === null && afterAsk.mode === "walk",
+    "open spots: an empty request is turned away, typing in the form does not walk Benji about, a request is taken without an account, and nobody is shown the requests",
+    { noName, noReach, asked2, afterAsk },
+  );
+
   // ---- an account: made on one device, signed in to on another, and the progress is there
   const mail = `smoke${Date.now().toString(36)}@example.com`;
   const pass = "river-bridge-901";
@@ -3186,6 +3253,55 @@ try {
   await restarted(phone, () => phone.evaluate(() => void window.__GAME__.account.signOut()));
   const gone = await phone.evaluate(() => ({ status: window.__GAME__.account.hud().status, dollars: window.__GAME__.save.dollars }));
   check(sentOn.saved >= 0 && sentOn.saved < 30 && !sentOn.error && home.status === "in" && home.dollars === 5555 && !home.choice && gone.status === "out" && gone.dollars === 5555, "account: what one device saves is on the other the next time it opens, and signing out leaves the device its copy", { sentOn, home, gone });
+  // Who reads the requests: not a signed-in player, only the account the site names as its owner.
+  const player = await page.evaluate(async () => {
+    const g = window.__GAME__;
+    if (g.overlay) g.close();
+    g.openPartners("store");
+    await new Promise((r) => setTimeout(r, 2500));
+    const out = { status: g.account.hud().status, form: !!document.querySelector("[data-partners-form]"), tabs: document.querySelectorAll("[data-partners-tab]").length, picked: document.querySelector('[data-partners-kind][aria-pressed="true"]')?.getAttribute("data-partners-kind") };
+    g.close();
+    return out;
+  });
+  await phone.locator("[data-account-open]").first().click();
+  await phone.locator('[data-account-mode="new"]').click();
+  await phone.locator('[data-account-field="name"]').fill("Owner");
+  await phone.locator('[data-account-field="email"]').fill("owner-smoke@example.com");
+  await phone.locator('[data-account-field="password"]').fill(pass);
+  await phone.locator("[data-account-submit]").click();
+  // The checks may be run twice against one server: the second time the account is already there.
+  for (let i = 0; i < 300; i++) {
+    const st = await phone.evaluate(() => ({ status: window.__GAME__?.account.hud().status, error: window.__GAME__?.account.hud().error ?? "" })).catch(() => ({ status: "", error: "" }));
+    if (st.status === "in") break;
+    if (/already an account/.test(st.error)) {
+      await phone.locator('[data-account-mode="in"]').click();
+      await phone.locator('[data-account-field="password"]').fill(pass);
+      await phone.locator("[data-account-submit]").click();
+      await phone.waitForTimeout(500);
+    }
+    await phone.waitForTimeout(200);
+  }
+  await phone.waitForFunction(() => !!window.__GAME__ && window.__GAME__.account.ready && window.__GAME__.account.hud().status === "in", undefined, { timeout: 120000, polling: 200 });
+  await phone.evaluate(() => {
+    const g = window.__GAME__;
+    if (g.overlay) g.close();
+    g.openPartners("billboard");
+  });
+  await phone.waitForSelector('[data-partners-tab="inbox"]', { timeout: 60000 });
+  await phone.locator('[data-partners-tab="inbox"]').click();
+  await phone.waitForSelector("[data-partners-ask]", { timeout: 20000 });
+  const inbox = await phone.evaluate(() => {
+    const rows = [...document.querySelectorAll("[data-partners-ask]")];
+    const mine = rows.find((r) => /Smoke Wings/.test(r.textContent ?? ""));
+    return { rows: rows.length, text: mine?.textContent ?? "", tab: document.querySelector('[data-partners-tab="inbox"]')?.textContent ?? "" };
+  });
+  await phone.locator("[data-partners-ask]", { hasText: "Smoke Wings" }).first().getByRole("button").click();
+  await phone.waitForFunction(() => [...document.querySelectorAll("[data-partners-ask]")].some((r) => /Smoke Wings/.test(r.textContent ?? "") && /Put back/.test(r.textContent ?? "")), undefined, { timeout: 30000, polling: 200 });
+  check(
+    player.status === "in" && player.form && player.tabs === 0 && player.picked === "store" && inbox.rows >= 1 && /A food truck/.test(inbox.text) && /Smoke Tester/.test(inbox.text) && /@smokewings 901-555-0100/.test(inbox.text) && /A truck by the river/.test(inbox.text) && /new/.test(inbox.tab),
+    "open spots: a signed-in player is shown no requests, and the owner's account reads what was sent, with who sent it and how to reach them, and ticks it off",
+    { player, inbox },
+  );
   await phone.close();
   check(errors.length === 0, "no page errors", errors);
   console.log("Memphis smoke passed.");

@@ -8,6 +8,7 @@ import { clearGround } from "./ground";
 import { Glow, makeCtx, resetKit, type Lamp } from "./kit";
 import { buildFarBank, buildHorizon, buildRiverboat, type Riverboat } from "./landmarks";
 import { FAR_BANK_Z, RIVER_Z, WORLD } from "./map";
+import { buildOpenSpots } from "./openspots";
 import { buildRiverfront, type Riverfront } from "./riverfront";
 import { applySignals, buildStreets, signalState, type SignalMats, type SignalState } from "./streets";
 
@@ -46,6 +47,7 @@ export function buildCity(): City {
   const signalMats: SignalMats = buildStreets(ctx);
   const blocks = buildBlocks(ctx);
   const river = buildRiverfront(ctx);
+  buildOpenSpots(ctx);
   buildFarBank(ctx);
   buildHorizon(ctx);
 
