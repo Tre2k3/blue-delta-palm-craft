@@ -48,7 +48,12 @@ if (!process.env.DATABASE_URL) {
   }
   // Who may read the requests businesses send, for the checks only: an account the checks make.
   process.env.PARTNER_OWNERS ??= "owner-smoke@example.com";
+  // Requests are emailed through a relay on the live site. The checks get a stand-in on this
+  // server (below): it keeps what it is sent and emails nobody.
+  process.env.PARTNER_RELAY_URL ??= "/__relay";
 }
+// What the stand-in relay has been sent.
+const relayed = [];
 
 const nitro = await import(pathToFileURL(entry).href);
 const fetchHandler = nitro.default?.fetch?.bind(nitro.default);
@@ -65,6 +70,35 @@ function fileFromUrl(urlPath) {
 
 const server = createServer(async (req, res) => {
   try {
+    // The stand-in relay: takes a request as the real one does, and answers the way the real one
+    // answers. A name with "Unconfirmed" in it gets the answer an owner who has not confirmed
+    // their address yet gets, so the checks can see what the sender is shown then.
+    if ((req.url || "/").split("?")[0] === "/__relay" && process.env.PARTNER_RELAY_URL === "/__relay") {
+      res.setHeader("content-type", "application/json; charset=utf-8");
+      res.setHeader("cache-control", "no-store");
+      if (req.method === "POST") {
+        const chunks = [];
+        for await (const chunk of req) chunks.push(chunk);
+        let sent = null;
+        try {
+          sent = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        } catch {
+          /* not a request */
+        }
+        if (!sent || typeof sent !== "object") {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ success: "false", message: "Not a form." }));
+          return;
+        }
+        relayed.push(sent);
+        if (relayed.length > 50) relayed.shift();
+        const waiting = /Unconfirmed/.test(String(sent.Name ?? ""));
+        res.end(JSON.stringify(waiting ? { success: "false", message: "This form needs Activation." } : { success: "true", message: "The form was submitted successfully." }));
+        return;
+      }
+      res.end(JSON.stringify(relayed));
+      return;
+    }
     const filePath = fileFromUrl(req.url || "/");
     if (filePath) {
       try {

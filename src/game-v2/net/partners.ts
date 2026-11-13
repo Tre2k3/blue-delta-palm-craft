@@ -31,19 +31,24 @@ const ownPages = createMiddleware({ type: "function" }).server(async ({ next }) 
   return next();
 });
 
-/** Send a request. Needs no account. What is kept is checked and cut down on the server. */
+/**
+ * Send a request. Needs no account. What is kept is checked and cut down on the server, and
+ * comes back with the address the sender's browser posts it to so that it is emailed to the owner.
+ */
 export const partnerSend = createServerFn({ method: "POST" })
   .validator((input: Request) => input)
   .middleware([ownPages])
   .handler(async ({ data }) => {
-    const { checkAsk, keepAsk } = await import("./partners.server");
+    const { checkAsk, keepAsk, relayUrl } = await import("./partners.server");
     let ask;
     try {
       ask = checkAsk(data);
     } catch (e) {
       return { ok: false as const, why: e instanceof Error ? e.message : "That could not be sent." };
     }
-    return (await keepAsk(ask)) ? { ok: true as const, why: "" } : { ok: false as const, why: "A lot of requests have just come in. Try again in a little while." };
+    if (!(await keepAsk(ask))) return { ok: false as const, why: "A lot of requests have just come in. Try again in a little while." };
+    // What was kept goes back with where to post it so that it reaches the owner's inbox (see partner-mail.ts).
+    return { ok: true as const, why: "", ask, relay: relayUrl(PARTNER_EMAIL) };
   });
 
 /** The requests, for an owner. Anyone else gets nothing, and is told they are not an owner. */

@@ -8,6 +8,9 @@
  * Where the site has a hosted database the requests are kept there, in a table made on first
  * use (nothing is added to `migrations/`). Where it has none (a preview, a test run) they are
  * kept in the server's memory, and the database helper is not loaded at all.
+ *
+ * A kept request is also sent on to the owner's email, by the sender's own browser, through a
+ * form-to-email relay: see `relayUrl`.
  */
 import type { Sql } from "@/lib/db";
 
@@ -90,6 +93,28 @@ export async function keepAsk(ask: Ask): Promise<boolean> {
   if (Number(recent[0]?.n ?? 0) >= PER_HOUR) return false;
   await sql.query(`INSERT INTO partner_requests (kind, name, business, reach, note) VALUES ($1, $2, $3, $4, $5)`, [ask.kind, ask.name, ask.business, ask.reach, ask.note]);
   return true;
+}
+
+/**
+ * Where the sender's browser posts a kept request so that it lands in the owner's inbox, or null
+ * where requests are not emailed.
+ *
+ * On the hosted site that is FormSubmit's form-to-email address for the owner (no key and no
+ * account: the owner confirms the address once, from the first email it sends). A preview or a
+ * test run has no hosted database and gets null, so it never sends mail. `PARTNER_RELAY_URL` in
+ * the hosting settings puts another address in its place, and "off" turns the email off.
+ */
+export function relayUrl(to: string): string | null {
+  const set = process.env.PARTNER_RELAY_URL?.trim();
+  if (set) return set.toLowerCase() === "off" ? null : set;
+  if (!hosted || process.env.VERCEL_ENV === "preview") return null;
+  return /^[\w.+-]+@[\w-]+(\.[\w-]+)+$/.test(to) ? `https://formsubmit.co/ajax/${to}` : null;
+}
+
+/** How requests are handled on this server, for a status page: which kind of each, never an address. */
+export function partnerSetup(to: string) {
+  const relay = relayUrl(to);
+  return { kept: hosted ? "database" : "memory", emailed: !relay ? "no" : relay.startsWith("https://formsubmit.co/") ? "formsubmit" : "custom", owners: (process.env.PARTNER_OWNERS ?? "").split(",").filter((q) => q.trim()).length };
 }
 
 /** Whether this signed-in account may read the requests. Its email is looked up, never taken from the caller. */

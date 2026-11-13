@@ -3162,6 +3162,13 @@ try {
     const g = window.__GAME__;
     return { said: document.querySelector("[data-partners-sent]")?.textContent ?? "", tabs: document.querySelectorAll("[data-partners-tab]").length, x: g.pos.x, z: g.pos.z };
   });
+  // The request went on to the inbox: the relay was handed everything in it, under a subject that says what it is.
+  const relayed = await page.evaluate(async () => {
+    const sent = document.querySelector("[data-partners-sent]")?.getAttribute("data-partners-sent") ?? "";
+    const all = await (await fetch("/__relay", { cache: "no-store" })).json();
+    const setup = await (await fetch("/api/partners", { cache: "no-store" })).json();
+    return { sent, got: all.find((q) => q["Business or artist"] === "Smoke Wings") ?? null, setup };
+  });
   await page.locator("[data-partners-sent] [data-primary]").click();
   await page.waitForTimeout(300);
   const afterAsk = await page.evaluate(() => ({ overlay: window.__GAME__.overlay, mode: window.__GAME__.mode }));
@@ -3169,6 +3176,58 @@ try {
     /name/i.test(noName) && /reach/i.test(noReach) && /Request sent/.test(asked2.said) && /@smokewings\s+901-555-0100/.test(asked2.said) && asked2.tabs === 0 && Math.hypot(asked2.x - spots.x, asked2.z - spots.z) < 0.01 && afterAsk.overlay === null && afterAsk.mode === "walk",
     "open spots: an empty request is turned away, typing in the form does not walk Benji about, a request is taken without an account, and nobody is shown the requests",
     { noName, noReach, asked2, afterAsk },
+  );
+  check(
+    relayed.sent === "mailed" &&
+      /in our inbox/.test(asked2.said) &&
+      relayed.got?.Name === "Smoke Tester" &&
+      relayed.got["Wants in the game"] === "A food truck" &&
+      relayed.got["Reach them at"] === "@smokewings 901-555-0100" &&
+      relayed.got.Note === "A truck by the river." &&
+      /Get in the game: A food truck · Smoke Wings/.test(relayed.got._subject) &&
+      relayed.got._replyto === undefined &&
+      relayed.setup.emailed === "custom" &&
+      relayed.setup.kept === "memory",
+    "open spots: a request that is sent goes on to the inbox with everything in it, and the sender is told it is there",
+    relayed,
+  );
+  // Where the inbox does not take it (here: the owner has not confirmed their address), the sender
+  // is told there is one more step and handed the request written out as an email of their own.
+  await page.evaluate(() => {
+    const g = window.__GAME__;
+    g.openPartners("music");
+  });
+  await page.waitForSelector("[data-partners-form]", { timeout: 20000 });
+  await page.locator('[data-partners-field="name"]').fill("Unconfirmed Artist");
+  await page.locator('[data-partners-field="reach"]').fill("artist@example.com");
+  await page.locator('[data-partners-field="note"]').fill("A song for the radio & the stage.");
+  await page.locator("[data-partners-send]").click();
+  await page.waitForSelector("[data-partners-sent]", { timeout: 60000 });
+  const unsent = await page.evaluate(async () => {
+    const el = document.querySelector("[data-partners-sent]");
+    const all = await (await fetch("/__relay", { cache: "no-store" })).json();
+    const href = el?.querySelector("[data-partners-mail]")?.getAttribute("href") ?? "";
+    const q = href.indexOf("?");
+    const args = new URLSearchParams(q >= 0 ? href.slice(q + 1) : "");
+    return { sent: el?.getAttribute("data-partners-sent") ?? "", said: el?.textContent ?? "", to: href.slice(0, q), subject: args.get("subject") ?? "", body: args.get("body") ?? "", asked: all.find((r) => r.Name === "Unconfirmed Artist") ?? null };
+  });
+  await page.locator("[data-partners-back]").click();
+  await page.waitForTimeout(300);
+  const afterUnsent = await page.evaluate(() => ({ overlay: window.__GAME__.overlay }));
+  check(
+    unsent.sent === "kept" &&
+      /One more step/.test(unsent.said) &&
+      !/Request sent/.test(unsent.said) &&
+      /^mailto:\S+@\S+$/.test(unsent.to) &&
+      /Get in the game: Your music · Unconfirmed Artist/.test(unsent.subject) &&
+      /Wants in the game: Your music/.test(unsent.body) &&
+      /Name: Unconfirmed Artist/.test(unsent.body) &&
+      /Reach them at: artist@example\.com/.test(unsent.body) &&
+      /Note: A song for the radio & the stage\./.test(unsent.body) &&
+      unsent.asked?._replyto === "artist@example.com" &&
+      afterUnsent.overlay === null,
+    "open spots: a request the inbox does not take is not called sent: the sender is handed it written out as an email to send, and an answer to an emailed request goes to the address they left",
+    unsent,
   );
 
   // ---- an account: made on one device, signed in to on another, and the progress is there

@@ -1,6 +1,7 @@
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { HudState } from "../core/types";
 import type { Game } from "../game";
+import { mailtoFor, sendOn, type Sent } from "../net/partner-mail";
 import { PARTNER_EMAIL, SPOT_KINDS, partnerInbox, partnerMark, partnerSend, type Received, type SpotKind } from "../net/partners";
 import { Sheet } from "./Menus";
 
@@ -51,8 +52,9 @@ function Inbox({ asks, onMark, busy }: { asks: Received[]; onMark: (id: number, 
 
 /**
  * "Get in the game": where a business, a food truck or an artist sees what can be put in the
- * city and asks for it. The request is kept on the server; whoever owns the game reads the
- * requests on this same screen once they are signed in.
+ * city and asks for it. The request is kept on the server and emailed to whoever sells the
+ * spots; where the email does not go, the sender is handed the same request written out as an
+ * email of their own to send. An owner can also read the requests on this screen, signed in.
  */
 export function PartnersScreen({ game, hud }: { game: Game; hud: HudState }) {
   const [kind, setKind] = useState<SpotKind>(game.partnerKind);
@@ -62,6 +64,9 @@ export function PartnersScreen({ game, hud }: { game: Game; hud: HudState }) {
   const [note, setNote] = useState("");
   const [trap, setTrap] = useState("");
   const [state, setState] = useState<"form" | "sending" | "sent">("form");
+  // What the server kept, and whether it reached the inbox.
+  const [kept, setKept] = useState<Sent | null>(null);
+  const [mailed, setMailed] = useState(false);
   const [error, setError] = useState("");
   const [owner, setOwner] = useState(false);
   const [asks, setAsks] = useState<Received[]>([]);
@@ -99,6 +104,10 @@ export function PartnersScreen({ game, hud }: { game: Game; hud: HudState }) {
     try {
       const r = await partnerSend({ data: { kind, name, business, reach, note, website: trap } });
       if (r.ok) {
+        // Kept. Now on to the inbox: a request that does not get there is offered as an email to send.
+        const went = await sendOn(r.relay, r.ask);
+        setKept(r.ask);
+        setMailed(went);
         setState("sent");
         game.sound.ui();
       } else {
@@ -123,7 +132,8 @@ export function PartnersScreen({ game, hud }: { game: Game; hud: HudState }) {
   };
 
   const waiting = asks.filter((a) => !a.done).length;
-  const mailto = `mailto:${PARTNER_EMAIL}?subject=${encodeURIComponent(`Get in the game: ${nameOf(kind)}`)}`;
+  // The same request as an email from the sender's own mail app: whatever is filled in so far, or what was kept.
+  const mailto = mailtoFor(kept ?? { kind, name, business, reach, note });
 
   return (
     <Sheet title="Get in the game" sub="Put your business, your food truck or your music in SackReligious · Memphis 901. Spots are open now." onClose={close} wide>
@@ -140,19 +150,38 @@ export function PartnersScreen({ game, hud }: { game: Game; hud: HudState }) {
       {owner && tab === "inbox" ? (
         <Inbox asks={asks} onMark={(id, done) => void mark(id, done)} busy={busy} />
       ) : state === "sent" ? (
-        <div data-partners-sent className="py-8 text-center">
-          <div className="sr-title text-4xl text-[#39ff14]">Request sent</div>
-          <div className="mx-auto mt-2 max-w-md text-sm font-semibold text-white/80">We have it. Somebody from the game will reach out to you at {reach.trim()} about what is open and what it costs.</div>
-          <div className="mx-auto mt-3 max-w-md text-sm font-semibold text-white/65">
-            You can also write to{" "}
-            <a data-partners-mail href={mailto} className="select-text font-extrabold text-[#39ff14] underline">
-              {PARTNER_EMAIL}
-            </a>
+        mailed ? (
+          <div data-partners-sent="mailed" className="py-8 text-center">
+            <div className="sr-title text-4xl text-[#39ff14]">Request sent</div>
+            <div className="mx-auto mt-2 max-w-md text-sm font-semibold text-white/80">It is in our inbox. Somebody from the game will reach out to you at {reach.trim()} about what is open and what it costs.</div>
+            <div className="mx-auto mt-3 max-w-md text-sm font-semibold text-white/65">
+              You can also write to{" "}
+              <a data-partners-mail href={mailto} className="select-text font-extrabold text-[#39ff14] underline">
+                {PARTNER_EMAIL}
+              </a>
+            </div>
+            <button data-primary className="sr-btn sr-btn-green mt-6 px-8 py-3" onClick={close}>
+              Back to Memphis
+            </button>
           </div>
-          <button data-primary className="sr-btn sr-btn-green mt-6 px-8 py-3" onClick={close}>
-            Back to Memphis
-          </button>
-        </div>
+        ) : (
+          <div data-partners-sent="kept" className="py-3 text-center">
+            <div className="sr-title text-3xl text-[#f4d77a]">One more step</div>
+            <div className="mx-auto mt-1.5 max-w-md text-sm font-semibold text-white/80">Your request is written out and ready. Send it to our inbox from your own email and somebody from the game will reach out to you at {reach.trim()}.</div>
+            {/* Side by side, so the whole of it is on a phone held sideways without scrolling. */}
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2.5">
+              <a data-primary data-partners-mail href={mailto} className="sr-btn sr-btn-green px-7 py-3">
+                Email it to us
+              </a>
+              <button data-partners-back className="sr-btn sr-btn-ghost px-6 py-3" onClick={close}>
+                Back to Memphis
+              </button>
+            </div>
+            <div className="mx-auto mt-3 max-w-md select-text text-sm font-semibold text-white/65">
+              It goes to <span className="font-extrabold text-[#39ff14]">{PARTNER_EMAIL}</span>
+            </div>
+          </div>
+        )
       ) : (
         <div className="grid gap-5 md:grid-cols-[1.05fr_1fr]">
           <div>
@@ -210,7 +239,7 @@ export function PartnersScreen({ game, hud }: { game: Game; hud: HudState }) {
                 {PARTNER_EMAIL}
               </a>
             </div>
-            <div className="text-xs text-white/45">What you put here is only used to get back to you about your request.</div>
+            <div className="text-xs text-white/45">What you put here is emailed to us and only used to get back to you about your request.</div>
           </form>
         </div>
       )}

@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiAccountRouteImport } from './routes/api/account'
 import { Route as ApiItchRouteImport } from './routes/api/itch'
+import { Route as ApiPartnersRouteImport } from './routes/api/partners'
 import { Route as ApiRtcRouteImport } from './routes/api/rtc'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
@@ -30,6 +31,11 @@ const ApiItchRoute = ApiItchRouteImport.update({
   path: '/api/itch',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPartnersRoute = ApiPartnersRouteImport.update({
+  id: '/api/partners',
+  path: '/api/partners',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiRtcRoute = ApiRtcRouteImport.update({
   id: '/api/rtc',
   path: '/api/rtc',
@@ -45,6 +51,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/account': typeof ApiAccountRoute
   '/api/itch': typeof ApiItchRoute
+  '/api/partners': typeof ApiPartnersRoute
   '/api/rtc': typeof ApiRtcRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -52,6 +59,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/account': typeof ApiAccountRoute
   '/api/itch': typeof ApiItchRoute
+  '/api/partners': typeof ApiPartnersRoute
   '/api/rtc': typeof ApiRtcRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -60,22 +68,42 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/api/account': typeof ApiAccountRoute
   '/api/itch': typeof ApiItchRoute
+  '/api/partners': typeof ApiPartnersRoute
   '/api/rtc': typeof ApiRtcRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/account' | '/api/itch' | '/api/rtc' | '/api/auth/$'
+  fullPaths:
+    | '/'
+    | '/api/account'
+    | '/api/itch'
+    | '/api/partners'
+    | '/api/rtc'
+    | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/account' | '/api/itch' | '/api/rtc' | '/api/auth/$'
+  to:
+    | '/'
+    | '/api/account'
+    | '/api/itch'
+    | '/api/partners'
+    | '/api/rtc'
+    | '/api/auth/$'
   id:
-    '__root__' | '/' | '/api/account' | '/api/itch' | '/api/rtc' | '/api/auth/$'
+    | '__root__'
+    | '/'
+    | '/api/account'
+    | '/api/itch'
+    | '/api/partners'
+    | '/api/rtc'
+    | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiAccountRoute: typeof ApiAccountRoute
   ApiItchRoute: typeof ApiItchRoute
+  ApiPartnersRoute: typeof ApiPartnersRoute
   ApiRtcRoute: typeof ApiRtcRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -103,6 +131,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiItchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/partners': {
+      id: '/api/partners'
+      path: '/api/partners'
+      fullPath: '/api/partners'
+      preLoaderRoute: typeof ApiPartnersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/rtc': {
       id: '/api/rtc'
       path: '/api/rtc'
@@ -124,6 +159,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiAccountRoute: ApiAccountRoute,
   ApiItchRoute: ApiItchRoute,
+  ApiPartnersRoute: ApiPartnersRoute,
   ApiRtcRoute: ApiRtcRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
