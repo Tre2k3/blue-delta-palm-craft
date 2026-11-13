@@ -1896,17 +1896,39 @@ try {
   await friend.click("[data-crew-leave]");
   await on(page, () => window.__GAME__.crew.hud().friends.length === 0);
   const alone = { his: await page.evaluate(() => window.__GAME__.crew.hud().status), hers: await friend.evaluate(() => window.__GAME__.crew.hud().status) };
+  // A page loading the whole city draws its first frames slowly, and slower still while another page is
+  // drawing beside it on the same machine. So the first device stops drawing while the second loads,
+  // and the second is given as long to show its title as it is given to load.
+  await page.evaluate(() => {
+    const g = window.__GAME__;
+    window.__draw = g.stage.render;
+    g.stage.render = () => {};
+  });
   await friend.goto(`${base}?q=low&calm=1&intro=0&crew=${code}`, { waitUntil: "domcontentloaded" });
-  await friend.waitForFunction(() => !!window.__GAME__, undefined, { timeout: 120000 });
+  await friend.waitForFunction(() => !!window.__GAME__, undefined, { timeout: 120000, polling: 100 });
   // The title screen says the crew is waiting; pressing play is what joins it.
-  await on(friend, () => !!document.querySelector("[data-crew-waiting]"));
-  const titled = { note: await friend.textContent("[data-crew-waiting]"), code: await friend.evaluate(() => window.__GAME__.crew.code) };
+  const titled = await friend
+    .waitForFunction(
+      () => {
+        const note = document.querySelector("[data-crew-waiting]");
+        return note ? { note: note.textContent, code: window.__GAME__.crew.code } : false;
+      },
+      undefined,
+      { timeout: 120000, polling: 100 },
+    )
+    .then((h) => h.jsonValue())
+    .catch(async (e) => {
+      // Say what the page did show, so a failure here explains itself.
+      const state = await friend.evaluate(() => ({ mode: window.__GAME__?.mode, waiting: window.__GAME__?.crew.waiting, code: window.__GAME__?.crew.code, text: document.body.innerText.slice(0, 300) })).catch((x) => String(x));
+      throw new Error(`the title never showed the waiting crew: ${JSON.stringify(state)} (${e.message.split("\n")[0]})`);
+    });
   await friend.evaluate(() => {
     const g = window.__GAME__;
     g.play(true);
     g.skipIntro?.();
   });
-  await on(friend, () => window.__GAME__.crew.hud().ready);
+  await friend.waitForFunction(() => window.__GAME__.crew.hud().ready, undefined, { timeout: 120000, polling: 100 });
+  await page.evaluate(() => (window.__GAME__.stage.render = window.__draw));
   const linkIn = await friend.evaluate(async () => {
     const g = window.__GAME__;
     const roster = await (await fetch(`/api/rtc?room=sack-${g.crew.code}&peer=smoke&since=1`)).json();
