@@ -11,6 +11,9 @@ export const SPOT_KINDS = [
 ] as const;
 export type SpotKind = (typeof SPOT_KINDS)[number]["id"];
 
+/** Where a business can write straight to whoever sells the spots, as well as (or without) using the form. */
+export const PARTNER_EMAIL = "tdhamptonproductions@gmail.com";
+
 export type Request = { kind: SpotKind; name: string; business: string; reach: string; note: string; website?: string };
 export type Received = { id: number; kind: SpotKind; name: string; business: string; reach: string; note: string; at: string; done: boolean };
 

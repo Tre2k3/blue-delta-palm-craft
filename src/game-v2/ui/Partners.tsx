@@ -1,7 +1,7 @@
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { HudState } from "../core/types";
 import type { Game } from "../game";
-import { SPOT_KINDS, partnerInbox, partnerMark, partnerSend, type Received, type SpotKind } from "../net/partners";
+import { PARTNER_EMAIL, SPOT_KINDS, partnerInbox, partnerMark, partnerSend, type Received, type SpotKind } from "../net/partners";
 import { Sheet } from "./Menus";
 
 const quiet = { onKeyDown: (e: KeyboardEvent) => e.stopPropagation(), onKeyUp: (e: KeyboardEvent) => e.stopPropagation() };
@@ -123,6 +123,7 @@ export function PartnersScreen({ game, hud }: { game: Game; hud: HudState }) {
   };
 
   const waiting = asks.filter((a) => !a.done).length;
+  const mailto = `mailto:${PARTNER_EMAIL}?subject=${encodeURIComponent(`Get in the game: ${nameOf(kind)}`)}`;
 
   return (
     <Sheet title="Get in the game" sub="Put your business, your food truck or your music in SackReligious · Memphis 901. Spots are open now." onClose={close} wide>
@@ -142,6 +143,12 @@ export function PartnersScreen({ game, hud }: { game: Game; hud: HudState }) {
         <div data-partners-sent className="py-8 text-center">
           <div className="sr-title text-4xl text-[#39ff14]">Request sent</div>
           <div className="mx-auto mt-2 max-w-md text-sm font-semibold text-white/80">We have it. Somebody from the game will reach out to you at {reach.trim()} about what is open and what it costs.</div>
+          <div className="mx-auto mt-3 max-w-md text-sm font-semibold text-white/65">
+            You can also write to{" "}
+            <a data-partners-mail href={mailto} className="select-text font-extrabold text-[#39ff14] underline">
+              {PARTNER_EMAIL}
+            </a>
+          </div>
           <button data-primary className="sr-btn sr-btn-green mt-6 px-8 py-3" onClick={close}>
             Back to Memphis
           </button>
@@ -197,6 +204,12 @@ export function PartnersScreen({ game, hud }: { game: Game; hud: HudState }) {
             <button data-primary data-partners-send type="submit" disabled={state === "sending"} className="sr-btn sr-btn-green py-3 text-base disabled:opacity-40">
               {state === "sending" ? "Sending…" : "Send the request"}
             </button>
+            <div className="text-sm font-semibold text-white/75">
+              Or email{" "}
+              <a data-partners-mail href={mailto} className="select-text font-extrabold text-[#39ff14] underline">
+                {PARTNER_EMAIL}
+              </a>
+            </div>
             <div className="text-xs text-white/45">What you put here is only used to get back to you about your request.</div>
           </form>
         </div>

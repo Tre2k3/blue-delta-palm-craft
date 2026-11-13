@@ -3138,11 +3138,11 @@ try {
     await wait(500);
     const kinds = [...document.querySelectorAll("[data-partners-kind]")].map((b) => b.getAttribute("data-partners-kind") + (b.getAttribute("aria-pressed") === "true" ? "*" : ""));
     g.stage.render = draw;
-    return { signs, inPause, kinds, form: !!document.querySelector("[data-partners-form]"), x: g.pos.x, z: g.pos.z };
+    return { signs, inPause, kinds, form: !!document.querySelector("[data-partners-form]"), mail: document.querySelector("[data-partners-mail]")?.getAttribute("href") ?? "", x: g.pos.x, z: g.pos.z };
   });
   check(
-    ["truck", "billboard", "music"].every((k) => spots.signs[k]?.stood && spots.signs[k].overlay === "partners" && spots.signs[k].kind === k) && /truck/.test(spots.signs.truck.prompt) && /Advertise/.test(spots.signs.billboard.prompt) && /music/.test(spots.signs.music.prompt) && spots.inPause && spots.form && spots.kinds.join() === "billboard*,truck,store,music,other",
-    "open spots: a pitch on the truck row, a billboard on the plaza and a board by the Beale stage each open the asking screen set to what they are for, and the pause menu opens it too",
+    ["truck", "billboard", "music"].every((k) => spots.signs[k]?.stood && spots.signs[k].overlay === "partners" && spots.signs[k].kind === k) && /truck/.test(spots.signs.truck.prompt) && /Advertise/.test(spots.signs.billboard.prompt) && /music/.test(spots.signs.music.prompt) && spots.inPause && spots.form && /^mailto:\S+@\S+\?subject=/.test(spots.mail) && spots.kinds.join() === "billboard*,truck,store,music,other",
+    "open spots: a pitch on the truck row, a billboard on the plaza and a board by the Beale stage each open the asking screen set to what they are for, the pause menu opens it too, and it gives an address to write to",
     spots,
   );
   // Nothing sent with nothing in it; letters typed into the form go into the form; a real request is taken.
