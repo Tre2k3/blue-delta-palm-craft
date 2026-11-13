@@ -37,11 +37,15 @@ export function Sheet({ title, sub, onClose, children, wide }: { title: string; 
 export function Title({ game, hud }: { game: Game; hud: HudState }) {
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
+      // Not while a screen is open over the title: Enter there belongs to its form.
+      if (hud.overlay) return;
       if (e.code === "Enter" || e.code === "Space") game.play(!hud.hasSave);
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [game, hud.hasSave]);
+  }, [game, hud.hasSave, hud.overlay]);
+  const acct = hud.account;
+  const canSignIn = acct.status === "in" || (acct.status === "out" && (acct.email || acct.social.length > 0));
   return (
     <div data-menu className="pointer-events-auto absolute inset-0 z-30 flex flex-col justify-end" style={{ background: "linear-gradient(180deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.82) 100%)" }}>
       <div className="mx-auto w-full max-w-[1200px] px-5 pb-8 sm:px-10 sm:pb-12">
@@ -76,6 +80,11 @@ export function Title({ game, hud }: { game: Game; hud: HudState }) {
             >
               Shop the real store
             </button>
+            {canSignIn && (
+              <button data-account-open className="sr-btn sr-btn-ghost px-6 py-3" onClick={() => game.open("account")}>
+                {acct.status === "in" ? `Signed in: ${acct.name}` : "Sign in"}
+              </button>
+            )}
           </div>
           <div className="mt-4 text-[11px] font-semibold uppercase tracking-widest text-white/45">{hud.pad ? "Gamepad ready: press A" : "Keyboard, gamepad or touch"}</div>
         </div>
@@ -195,6 +204,11 @@ export function Pause({ game, hud }: { game: Game; hud: HudState }) {
       {hud.mode !== "title" && (
         <button data-crew-open className="sr-btn sr-btn-ghost mb-3 w-full py-2.5" onClick={() => game.open("online")}>
           {hud.crew.code ? `Your crew  ·  ${hud.crew.code}` : "Play with friends"}
+        </button>
+      )}
+      {(hud.account.status === "in" || (hud.account.status === "out" && (hud.account.email || hud.account.social.length > 0))) && (
+        <button data-account-open className="sr-btn sr-btn-ghost mb-3 w-full py-2.5" onClick={() => game.open("account")}>
+          {hud.account.status === "in" ? `Account  ·  ${hud.account.name}` : "Sign in to keep your progress on any device"}
         </button>
       )}
       <Row label="Today's drop">

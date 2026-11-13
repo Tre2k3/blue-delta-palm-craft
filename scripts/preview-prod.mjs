@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+import { createReadStream, existsSync } from "node:fs";
+import { copyFile, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, join, normalize, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -31,6 +31,22 @@ const MIME = {
   ".woff": "font/woff",
   ".woff2": "font/woff2",
 };
+
+// With no hosted database (CI, a local check) the server falls back to its embedded one, and
+// the build leaves that library's data files behind. Put them beside it, so signing in and
+// saved progress can be tested against the production build. The live site has a real database
+// and never loads any of this.
+if (!process.env.DATABASE_URL) {
+  const libs = resolve(root, ".vercel/output/functions/__server.func/_libs");
+  const dist = resolve(root, "node_modules/@electric-sql/pglite/dist");
+  if (existsSync(libs) && existsSync(dist)) {
+    for (const name of ["pglite.data", "pglite.wasm", "initdb.wasm"]) {
+      const from = join(dist, name);
+      const to = join(libs, name);
+      if (existsSync(from) && !existsSync(to)) await copyFile(from, to);
+    }
+  }
+}
 
 const nitro = await import(pathToFileURL(entry).href);
 const fetchHandler = nitro.default?.fetch?.bind(nitro.default);
@@ -81,9 +97,13 @@ const server = createServer(async (req, res) => {
     const response = await fetchHandler(request);
     res.statusCode = response.status;
     response.headers.forEach((value, key) => {
-      if (key.toLowerCase() === "transfer-encoding") return;
+      const name = key.toLowerCase();
+      if (name === "transfer-encoding" || name === "set-cookie") return;
       res.setHeader(key, value);
     });
+    // Signing in sets more than one cookie. Each is its own header; set one at a time, only the last got through.
+    const cookies = response.headers.getSetCookie?.() ?? [];
+    if (cookies.length) res.setHeader("set-cookie", cookies);
     res.end(Buffer.from(await response.arrayBuffer()));
   } catch (err) {
     if (!res.headersSent) {

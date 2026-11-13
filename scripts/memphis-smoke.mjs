@@ -1450,7 +1450,8 @@ try {
     const quiet = og.pose;
     // The crowd throws its hands up when it jumps.
     const still = [...g.street.members, ...(g.people.members ?? [])].filter((m) => !m.going && m.stop.act !== "inside" && m.stop.act !== "serve" && m.card.has("cheer"));
-    const near = still[0];
+    // Somebody who is staying put for the next few seconds: one about to walk off drops their hands as they go.
+    const near = still.find((m) => m.posted || m.t > 6) ?? still[0];
     g.warp(near.x + 3, near.z + 3, 0);
     g.tick(1 / 30);
     g.cheer(near.x, near.z, 6, 2);
@@ -2708,6 +2709,90 @@ try {
     if (g.mode === "drive") g.input.press("interact");
   });
   await ff(0.3);
+
+  // ---- an account: made on one device, signed in to on another, and the progress is there
+  const mail = `smoke${Date.now().toString(36)}@example.com`;
+  const pass = "river-bridge-901";
+  const settled = (p) => p.waitForFunction(() => !!window.__GAME__ && window.__GAME__.account.ready, undefined, { timeout: 120000, polling: 100 });
+  // A page that takes the account's progress starts itself again: wait for the page that comes after.
+  const restarted = async (p, act) => {
+    await p.evaluate(() => (window.__old = true));
+    await act();
+    for (let i = 0; i < 600; i++) {
+      const fresh = await p.evaluate(() => !window.__old && !!window.__GAME__ && window.__GAME__.account.ready).catch(() => false);
+      if (fresh) return;
+      await p.waitForTimeout(200);
+    }
+    throw new Error("the page never came back after signing in or out");
+  };
+  await settled(page);
+  const asked = await page.evaluate(async () => {
+    const g = window.__GAME__;
+    if (g.overlay) g.close();
+    g.save.dollars = 4321;
+    g.persist();
+    const a = g.account.hud();
+    g.open("account");
+    await new Promise((r) => setTimeout(r, 400));
+    return { status: a.status, email: a.email, form: !!document.querySelector("[data-account-form]"), mode: g.mode, x: g.pos.x };
+  });
+  await page.locator('[data-account-mode="new"]').click();
+  await page.locator('[data-account-field="name"]').fill("Smoke");
+  await page.locator('[data-account-field="email"]').fill(mail);
+  await page.locator('[data-account-field="password"]').fill("wasd");
+  await page.locator("[data-account-submit]").click();
+  const short = await page.locator("[data-account-error]").innerText();
+  // What goes to the server when progress is saved, to be tried again later by somebody with no session.
+  const sent = [];
+  const tap2 = (r) => r.method() === "POST" && r.url().includes("/_serverFn/") && sent.push({ url: r.url(), headers: r.headers(), body: r.postData() });
+  page.on("request", tap2);
+  await page.locator('[data-account-field="password"]').fill(pass);
+  await page.locator("[data-account-submit]").click();
+  await page.waitForFunction(() => window.__GAME__.account.hud().status === "in" && window.__GAME__.account.hud().saved >= 0, undefined, { timeout: 60000, polling: 100 });
+  page.off("request", tap2);
+  const signedUp = await page.evaluate(() => {
+    const g = window.__GAME__;
+    const a = g.account.hud();
+    return { status: a.status, name: a.name, saved: a.saved, shown: document.querySelector("[data-account-name]")?.textContent ?? "", error: a.error, x: g.pos.x };
+  });
+  check(asked.status === "out" && asked.email && asked.form && /8 characters/.test(short) && signedUp.status === "in" && signedUp.name === "Smoke" && signedUp.shown === "Smoke" && signedUp.saved >= 0 && !signedUp.error && Math.abs(signedUp.x - asked.x) < 0.01 && sent.length >= 1, "account: one is made from the form, a short password is turned away, typing does not walk Benji about, and his progress goes to it", { asked, short, signedUp, sends: sent.length });
+
+  const phone = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  phone.on("pageerror", (e) => errors.push(`other device: ${e.message}`));
+  await phone.goto(`${base}?q=low&calm=1&intro=0`, { waitUntil: "domcontentloaded" });
+  await settled(phone);
+  // Nobody without a session can write to (or read) an account: the same request, sent from a device that is not signed in.
+  const stranger = await phone.evaluate(async (req) => {
+    const headers = {};
+    for (const [k, v] of Object.entries(req.headers)) if (!/^(cookie|content-length|host|origin|referer|user-agent|sec-|accept-encoding|connection)/i.test(k)) headers[k] = v;
+    const r = await fetch(req.url, { method: "POST", headers, body: req.body });
+    return { status: r.status, text: (await r.text()).slice(0, 200) };
+  }, sent[sent.length - 1]);
+  const cold = await phone.evaluate(() => ({ status: window.__GAME__.account.hud().status, dollars: window.__GAME__.save.dollars, button: document.querySelector("[data-account-open]")?.textContent ?? "" }));
+  await phone.locator("[data-account-open]").first().click();
+  await phone.locator('[data-account-field="email"]').fill(mail);
+  await phone.locator('[data-account-field="password"]').fill("not-the-password");
+  await phone.locator("[data-account-submit]").click();
+  await phone.waitForFunction(() => !!window.__GAME__.account.hud().error, undefined, { timeout: 60000, polling: 100 });
+  const wrong = await phone.evaluate(() => ({ error: window.__GAME__.account.hud().error, status: window.__GAME__.account.hud().status }));
+  await phone.locator('[data-account-field="password"]').fill(pass);
+  await restarted(phone, () => phone.locator("[data-account-submit]").click());
+  const moved = await phone.evaluate(() => ({ status: window.__GAME__.account.hud().status, name: window.__GAME__.account.hud().name, dollars: window.__GAME__.save.dollars, button: document.querySelector("[data-account-open]")?.textContent ?? "" }));
+  check(/"Unauthorized"/.test(stranger.text) && !/"rev"/.test(stranger.text) && cold.status === "out" && cold.dollars !== 4321 && /sign in/i.test(cold.button) && wrong.status === "out" && /do not match/.test(wrong.error) && moved.status === "in" && moved.name === "Smoke" && moved.dollars === 4321 && /Smoke/.test(moved.button), "account: a device with no session is refused, the wrong password is refused, and signing in on another device brings his progress to it", { stranger, cold, wrong, moved });
+
+  // The other device earns something and saves; the first, opened again, has it without being asked. Then it signs out and keeps its copy.
+  await phone.evaluate(async () => {
+    const g = window.__GAME__;
+    g.save.dollars = 5555;
+    await g.account.saveNow();
+  });
+  const sentOn = await phone.evaluate(() => ({ saved: window.__GAME__.account.hud().saved, error: window.__GAME__.account.hud().error }));
+  await restarted(page, () => page.reload({ waitUntil: "domcontentloaded" }));
+  const home = await page.evaluate(() => ({ status: window.__GAME__.account.hud().status, dollars: window.__GAME__.save.dollars, choice: !!window.__GAME__.account.hud().choice }));
+  await restarted(phone, () => phone.evaluate(() => void window.__GAME__.account.signOut()));
+  const gone = await phone.evaluate(() => ({ status: window.__GAME__.account.hud().status, dollars: window.__GAME__.save.dollars }));
+  check(sentOn.saved >= 0 && sentOn.saved < 30 && !sentOn.error && home.status === "in" && home.dollars === 5555 && !home.choice && gone.status === "out" && gone.dollars === 5555, "account: what one device saves is on the other the next time it opens, and signing out leaves the device its copy", { sentOn, home, gone });
+  await phone.close();
   check(errors.length === 0, "no page errors", errors);
   console.log("Memphis smoke passed.");
 } finally {

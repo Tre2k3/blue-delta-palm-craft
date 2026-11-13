@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { HudState } from "./core/types";
 import type { Game } from "./game";
+import { prelude } from "./net/prelude";
 import { initStore } from "./play/store";
 import { Hud } from "./ui/Hud";
 
@@ -24,8 +25,9 @@ export function GameV2() {
       });
     } else {
       initStore();
-      void import("./game")
-        .then(({ Game }) => {
+      // A device tied to an account gets the account's newest progress while the game itself is loading.
+      void Promise.all([import("./game"), prelude()])
+        .then(([{ Game }]) => {
           if (dead || !canvas.current) return;
           const g = new Game(canvas.current, (h) => setHud(h));
           stop = () => g.dispose();

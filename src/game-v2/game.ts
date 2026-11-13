@@ -9,6 +9,7 @@ import { Fireworks } from "./gfx/fx";
 import { Rain } from "./gfx/rain";
 import { BALLERS, BAND, CAST, COACH, PEDS, OUTFITS, BENJI_HEIGHT, SITTERS, TAGGERS, type CastId, type OutfitId, VENDORS } from "./assets/cast";
 import { Sound } from "./core/audio";
+import { SAVE_KEY } from "./core/keys";
 import { SONGS, TUNES } from "./core/band";
 import { Input, type Nav } from "./core/input";
 import type { AlbumHud, HoopsKind, Dialogue, HudState, Live, Mode, Overlay, Place, Results, Reveal, Save, Solid } from "./core/types";
@@ -32,6 +33,7 @@ import { Hoops } from "./play/hoops";
 import { PinballTable, PrizeWheel, SkeeLane } from "./play/floor";
 import { POSTCARDS, dailyFor, dailyPay, dayBefore, dayKey, meets, postcardImg } from "./play/extras";
 import { TableGames } from "./play/tables";
+import { Account } from "./net/account";
 import { Crew } from "./net/crew";
 import { ALL_LINES, castLine, chat, nameOf } from "./play/chatter";
 import { RIDES, rideById } from "./play/garage";
@@ -48,7 +50,7 @@ import { CORNHOLE, HOLES, PUTT_PAR, PUTT_STAND, TENNIS_GATE } from "./world/rec-
 import { BEALE_STAGE, BOWL, FUN, HQ, MEMPHIAN, PARK, PARK_TABLES, POIS, RACE_MEET, RIVER_Z, ROAD_HALF, ROOM, SLIDE, STREETS_X, STREETS_Z, SWING, TRUCKS, WALK, districtAt, nearestStreet } from "./world/map";
 import { LANE, buildBowlRoom, buildHomeRoom, buildHqRoom, type BowlRoom, type HomeRoom, type HqRoom, type Room } from "./world/rooms";
 
-const SAVE_KEY = "sack-v2-save-4";
+
 
 export type Spot = {
   place: Place;
@@ -338,6 +340,10 @@ export class Game {
   readonly board: TableGames;
   /** Friends on other devices, walking round the same city. */
   readonly crew: Crew;
+  /** Signing in, and progress kept on the account as well as on the device. */
+  readonly account: Account;
+  /** The account's progress has just been put on this device and the page is starting again: leave it be. */
+  adopted = false;
   private popshot: PopShot;
   private pinball: PinballTable;
   private skee: SkeeLane;
@@ -426,6 +432,7 @@ export class Game {
     this.whack = new Whack(this);
     this.board = new TableGames(this);
     this.crew = new Crew(this);
+    this.account = new Account(this);
     this.crew.onTable = (from, msg) => this.board.onNet(from, msg);
     this.crew.onGone = (id) => this.board.gone(id);
     this.popshot = new PopShot(this);
@@ -2299,6 +2306,7 @@ export class Game {
   }
 
   persist() {
+    if (this.adopted) return;
     const s = this.save;
     if (this.mode === "walk" && this.place === "street") {
       s.x = this.pos.x;
@@ -2309,6 +2317,7 @@ export class Game {
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(s));
       this.hasSave = true;
+      this.account.touch();
     } catch {
       /* private mode */
     }
@@ -2749,6 +2758,7 @@ export class Game {
     }
     // Friends keep moving whatever is open on this screen.
     this.crew.update(dt);
+    this.account.update(dt);
 
     // Benji only counts as someone to walk round and talk to while he is on foot.
     const afoot = this.mode === "walk" ? this.pos : null;
@@ -2985,6 +2995,7 @@ export class Game {
       daily: { title: today.title, detail: today.detail, done: s.daily.done, streak: s.daily.streak, pay: dailyPay(s.daily.streak + (s.daily.done ? 0 : 1)) },
       table: this.overlay === "table" ? this.board.hud() : null,
       crew: this.crew.hud(),
+      account: this.account.hud(),
       invite: this.board.inviteHud(),
       postcards: { got: POSTCARDS.filter((c) => s.flags[`card_${c.id}`]).length, total: POSTCARDS.length, next: nextCard ? `${nextCard.name}, ${nextCard.hint}` : "" },
       rank: rankOf(s.respect),

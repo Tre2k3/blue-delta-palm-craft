@@ -28,7 +28,7 @@ export type Anchor = { x: number; z: number };
 
 export type Mode = "title" | "walk" | "drive" | "race" | "hoops" | "bowl" | "fish" | "kart" | "laser" | "bounce" | "pit" | "whack";
 
-export type Overlay = null | "pause" | "map" | "shop" | "wardrobe" | "arcade" | "prizes" | "food" | "results" | "video" | "court" | "photo" | "garage" | "table" | "album" | "online" | "loadout";
+export type Overlay = null | "pause" | "map" | "shop" | "wardrobe" | "arcade" | "prizes" | "food" | "results" | "video" | "court" | "photo" | "garage" | "table" | "album" | "online" | "loadout" | "account";
 
 export type Catch = { name: string; lb: number; pay: number; rarity: string; color: string; img?: string };
 
@@ -60,6 +60,28 @@ export type CrewHud = {
   waiting: string;
   friends: CrewFriend[];
   max: number;
+};
+
+/** One lot of progress, in the few numbers that tell two of them apart. */
+export type Progress = { minutes: number; dollars: number; respect: number };
+
+/** His account: whether there can be one here, who is signed in, and how his progress stands with it. */
+export type AccountHud = {
+  /** Off: no accounts on this site. Loading: still asking who he is. Then signed out, or in. */
+  status: "off" | "loading" | "out" | "in";
+  /** An email and a password can be used. */
+  email: boolean;
+  /** Other ways to sign in that work where this is running. */
+  social: { id: string; label: string }[];
+  name: string;
+  mail: string;
+  busy: boolean;
+  error: string;
+  note: string;
+  /** Seconds since progress last went to the account, or -1 if it has not yet. */
+  saved: number;
+  /** The account and this device each hold progress the other has not seen: he picks. */
+  choice: { account: Progress; device: Progress } | null;
 };
 
 /** A friend asking for a game at a table. */
@@ -238,6 +260,7 @@ export type HudState = {
   /** The park table Benji is sat at, or null. */
   table: TableHud | null;
   crew: CrewHud;
+  account: AccountHud;
   /** A friend is asking for a game. */
   invite: TableInvite | null;
   mission: MissionCard | null;
