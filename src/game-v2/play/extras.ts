@@ -21,6 +21,7 @@ export const DAILIES: Daily[] = [
   { id: "putt", title: "Short game", detail: "Finish nine holes at Sack Putt in 23 strokes or fewer.", goal: { kind: "putt", max: 23 } },
   { id: "tennis", title: "Break point", detail: "Beat Coach Renee at the Park Avenue Courts.", goal: { kind: "tennis", n: 1 } },
   { id: "cornhole", title: "Bags", detail: "Beat Mr. Willie at cornhole, first to 21.", goal: { kind: "cornhole", n: 1 } },
+  { id: "jook", title: "Buck jump", detail: "Take the jookin cypher inside the Beale Street arch.", goal: { kind: "jook", n: 1 } },
 ];
 
 /** The date where the player is, as 2026-11-12. */

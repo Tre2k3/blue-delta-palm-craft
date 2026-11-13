@@ -312,7 +312,8 @@ export function Pause({ game, hud }: { game: Game; hud: HudState }) {
               ["RB", "Run, nitro"],
               ["B", "Leave an activity, close a menu"],
               ["Y", "Map and taxi"],
-              ["View", "Change time of day"],
+              ["View", "Change the camera view: standard, close, wide"],
+              ["R3", "Change time of day"],
               ["Start", "Pause"],
             ] as const)
           : ([
@@ -321,6 +322,7 @@ export function Pause({ game, hud }: { game: Game; hud: HudState }) {
               ["E", "Interact"],
               ["Space", "Shoot, cast, bowl, handbrake"],
               ["M", "Map and taxi"],
+              ["C", "Change the camera view"],
               ["N", "Change time of day"],
               ["Q", "Leave an activity"],
               ["Esc", "Pause"],

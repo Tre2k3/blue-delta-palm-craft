@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { paintMat, tex } from "../gfx/tex";
 import { garage, house, lotSurface, midrise, mural, shopRow, tower } from "./buildings";
 import { MAT, Frame, YAW, addSolid, bench, bush, emissiveMat, facade, globeLamp, neon, poolMat, sign, std, storefront, tree, type BuildCtx, makeCtx } from "./kit";
-import { ARENA, BOWL, CURB, HOME, lot, rect, STREETS_X } from "./map";
+import { ARENA, BOWL, CURB, CYPHER, HOME, lot, rect, STREETS_X } from "./map";
 import { blockText } from "./riverfront";
 import { buildFunExterior } from "./funhouse";
 import { buildPark, resetPark, resetParkArt } from "./park";
@@ -133,6 +133,8 @@ function bealeSouth(ctx: BuildCtx) {
   ctx.flat.wall(12, 1.5, sx, Y0 + 6.5, P.minZ + 0.6, neon(ctx, "BEALE STREET", "#39ff14", { w: 768, h: 112, border: false }), YAW.north);
   ctx.flat.wall(12, 1.5, sx, Y0 + 6.5, P.minZ + 0.58, neon(ctx, "BEALE STREET", "#39ff14", { w: 768, h: 112, border: false }), YAW.south);
 
+  cypher(ctx);
+
   // Smokehouse and its mural on Union.
   const bbq = rect(73, 101, -51, -21);
   midrise(ctx, bbq, 11, "brickBrown", { shops: ["south"], accent: 0x7a1f1f, variant: 2, sign: { text: "CHARCOAL ALLEY BBQ", color: "#ff3b3b", face: "south", y: 7.4, w: 14 } });
@@ -141,6 +143,107 @@ function bealeSouth(ctx: BuildCtx) {
   midrise(ctx, rect(105, 119, -51, -21), 17, "brickRed", { shops: ["east"], accent: 0x2b2b2e, variant: 0 });
   mural(ctx, 112, -21 + 0.08, YAW.south, 13, 6.5, "soul");
   return { x: sx, z: sz - 6 };
+}
+
+/**
+ * The cypher: a sheet of checked lino taped to the plaza just inside the arch, a speaker cabinet
+ * and a boombox on a crate at its back, and a sign over them. Everything stands on the Beale
+ * side of the sheet, so whoever dances on it is seen from the square with all of it behind them.
+ */
+function cypher(ctx: BuildCtx) {
+  const f = new Frame(ctx, CYPHER.x, CYPHER.z, YAW.south);
+  const wide = CYPHER.r * 2;
+  const lino = tex(
+    256,
+    256,
+    (g, w, h) => {
+      const n = 6;
+      const cell = w / n;
+      for (let y = 0; y < n; y++)
+        for (let x = 0; x < n; x++) {
+          g.fillStyle = (x + y) % 2 ? "#15151a" : "#e9e4d6";
+          g.fillRect(x * cell, y * cell, cell, cell);
+        }
+      // Scuffs where the glides go, and silver tape round the edge.
+      g.strokeStyle = "rgba(120,120,120,0.16)";
+      g.lineWidth = 2;
+      for (let i = 0; i < 26; i++) {
+        const y = 20 + ((i * 53) % (h - 40));
+        const x = 16 + ((i * 97) % (w - 110));
+        g.beginPath();
+        g.moveTo(x, y);
+        g.quadraticCurveTo(x + 40, y + ((i % 5) - 2) * 5, x + 78, y + ((i % 3) - 1) * 8);
+        g.stroke();
+      }
+      g.strokeStyle = "#b9bcc2";
+      g.lineWidth = 12;
+      g.strokeRect(6, 6, w - 12, h - 12);
+    },
+    { repeat: false },
+  );
+  f.flat(wide, wide, 0, Y0 + 0.025, 0, new THREE.MeshStandardMaterial({ map: lino, roughness: 0.32, metalness: 0.05, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), ctx.flat);
+  f.flat(11, 11, 0, Y0 + 0.03, 0, poolMat(ctx, 0xff5a44, 0.24), ctx.flat);
+  f.lamp(0, Y0 + 4.4, 0.5, 0xff6a50);
+
+  // What the music comes out of. Drawn fronts on plain boxes.
+  const face = (draw: (g: CanvasRenderingContext2D, w: number, h: number) => void, w = 128, h = 192) => new THREE.MeshStandardMaterial({ map: tex(w, h, draw, { repeat: false }), roughness: 0.6 });
+  const cone = (g: CanvasRenderingContext2D, x: number, y: number, r: number) => {
+    g.fillStyle = "#0a0a0c";
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = "#5c5f66";
+    g.lineWidth = Math.max(2, r * 0.12);
+    g.stroke();
+    g.fillStyle = "#2c2d33";
+    g.beginPath();
+    g.arc(x, y, r * 0.34, 0, Math.PI * 2);
+    g.fill();
+  };
+  const cab = face((g, w, h) => {
+    g.fillStyle = "#17171b";
+    g.fillRect(0, 0, w, h);
+    cone(g, w / 2, h * 0.64, w * 0.36);
+    cone(g, w / 2, h * 0.2, w * 0.17);
+    g.fillStyle = "#39ff14";
+    g.font = "900 13px sans-serif";
+    g.textAlign = "center";
+    g.fillText("SACK SOUND", w / 2, h - 7);
+  });
+  for (const lx of [-2.5, -1.72]) {
+    f.box(0.72, 1.15, 0.6, lx, Y0 + 0.575, -3.75, MAT.black());
+    f.wall(0.68, 1.11, lx, Y0 + 0.575, -3.44, cab, ctx.flat);
+  }
+  f.box(0.72, 0.62, 0.56, -2.11, Y0 + 1.46, -3.75, MAT.black());
+  f.wall(0.68, 0.58, -2.11, Y0 + 1.46, -3.46, cab, ctx.flat);
+  f.solid(-2.9, -1.3, -4.1, -3.4);
+  const box = face(
+    (g, w, h) => {
+      g.fillStyle = "#b8bcc4";
+      g.fillRect(0, 0, w, h);
+      g.fillStyle = "#1a1a1e";
+      g.fillRect(6, 6, w - 12, h - 12);
+      cone(g, w * 0.2, h * 0.56, h * 0.33);
+      cone(g, w * 0.8, h * 0.56, h * 0.33);
+      g.fillStyle = "#2d2f36";
+      g.fillRect(w * 0.38, h * 0.3, w * 0.24, h * 0.5);
+      g.fillStyle = "#ff3b3b";
+      g.fillRect(w * 0.4, h * 0.14, w * 0.2, h * 0.08);
+    },
+    256,
+    112,
+  );
+  f.box(0.5, 0.42, 0.42, 2.35, Y0 + 0.21, -3.7, std(0xc8402a, 0.7));
+  f.box(0.92, 0.42, 0.24, 2.35, Y0 + 0.63, -3.7, std(0x9a9da4, 0.4, 0.5));
+  f.wall(0.9, 0.4, 2.35, Y0 + 0.63, -3.575, box, ctx.flat);
+  f.solid(1.9, 2.8, -4, -3.45);
+
+  // The sign over the back of the ring, on two poles.
+  for (const lx of [-1.9, 1.9]) ctx.solid.cyl(0.05, 0.06, 3.5, f.wx(lx, -4.7), Y0 + 1.75, f.wz(lx, -4.7), MAT.black(), 6);
+  f.box(4.1, 1.24, 0.1, 0, Y0 + 3.05, -4.7, MAT.black());
+  f.wall(3.9, 1.06, 0, Y0 + 3.05, -4.64, neon(ctx, "JOOKIN", "#ff3b3b", { sub: "MEMPHIS MADE · BUCK ALL NIGHT", w: 640, h: 176 }), ctx.flat);
+  f.solid(-2, -1.8, -4.8, -4.6);
+  f.solid(1.8, 2, -4.8, -4.6);
 }
 
 function guitarSign(ctx: BuildCtx) {

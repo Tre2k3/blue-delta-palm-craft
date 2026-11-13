@@ -532,14 +532,18 @@ function buildPier(ctx: BuildCtx) {
   f.box(5.4, 3.1, 4.2, 0, Y0 + 1.55, -2.1, MAT.wood());
   f.add(new THREE.BoxGeometry(6.2, 0.14, 3), std(0x2f4a38, 0.8), 0, Y0 + 3.45, -0.9, ctx.solid, 0, 0.3);
   f.add(new THREE.BoxGeometry(6.2, 0.14, 3), std(0x2f4a38, 0.8), 0, Y0 + 3.45, -3.3, ctx.solid, 0, -0.3);
-  f.box(3.2, 1.3, 0.1, 0, Y0 + 1.9, 0.02, emissiveMat(ctx, 0xffc27a, 0.5, 2.4));
+  // The serving hatch: the shop behind it, lit, with its rods, reels and tubs on show.
+  f.box(3.3, 1.4, 0.08, 0, Y0 + 1.9, 0, dark);
+  f.wall(3.2, 1.3, 0, Y0 + 1.9, 0.05, baitWindow(ctx), ctx.flat);
   f.box(3.6, 0.12, 0.7, 0, Y0 + 1.2, 0.3, dark);
   // A proper counter under the shelf. Unc J keeps shop from the end of it, out front.
   f.box(3.6, 1.14, 0.1, 0, Y0 + 0.57, 0.6, MAT.wood());
   for (const sx of [-1.8, 1.8]) f.box(0.1, 1.14, 0.62, sx, Y0 + 0.57, 0.3, MAT.wood());
   f.wall(3.2, 0.6, 0, Y0 + 0.6, 0.66, sign("LIVE BAIT", "#35e0d0", "#17110e", { sub: "WORMS · MINNOWS · ICE", w: 512, h: 110 }), ctx.flat);
   f.solid(-1.85, 1.85, 0, 0.7);
-  f.wall(4.4, 0.95, 0, Y0 + 3.05, 0.08, neon(ctx, "BAIT & TACKLE", "#35e0d0", { w: 512, h: 112 }), ctx.flat);
+  // The sign hangs off the front of the eave, clear of the roof boards that used to cut across it.
+  f.box(4.7, 1.12, 0.1, 0, Y0 + 3.0, 0.72, dark);
+  f.wall(4.4, 0.95, 0, Y0 + 3.0, 0.78, neon(ctx, "BAIT & TACKLE", "#35e0d0", { w: 512, h: 112 }), ctx.flat);
   f.flat(5, 5, 0, Y0 + 0.02, 2.4, poolMat(ctx, 0xffb46a, 0.36), ctx.flat);
   f.lamp(0, Y0 + 2.6, 1.2, 0xffc27a);
   f.solid(-2.7, 2.7, -4.2, 0);
@@ -551,6 +555,107 @@ function buildPier(ctx: BuildCtx) {
     { x: x + half - 0.7, z: z1 + 12 },
   ];
   return { baitCounter, castSpots, uncStand: { x: f.wx(-2.5, 1.05), z: f.wz(-2.5, 1.05), heading: Math.PI / 2 } };
+}
+
+/** What is seen through the bait shack's hatch: rods on the back wall, reels and lures on the shelves, tubs of bait along the bottom. */
+function baitWindow(ctx: BuildCtx) {
+  const map = tex(
+    512,
+    208,
+    (g, w, h) => {
+      const wall = g.createLinearGradient(0, 0, 0, h);
+      wall.addColorStop(0, "#5a3d22");
+      wall.addColorStop(1, "#33210f");
+      g.fillStyle = wall;
+      g.fillRect(0, 0, w, h);
+      // Planks.
+      g.strokeStyle = "rgba(0,0,0,0.28)";
+      g.lineWidth = 2;
+      for (let x = 0; x < w; x += 42) {
+        g.beginPath();
+        g.moveTo(x, 0);
+        g.lineTo(x, h);
+        g.stroke();
+      }
+      // A lamp's worth of light in the middle of it.
+      const lit = g.createRadialGradient(w / 2, h * 0.3, 10, w / 2, h * 0.3, w * 0.55);
+      lit.addColorStop(0, "rgba(255,214,150,0.55)");
+      lit.addColorStop(1, "rgba(255,214,150,0)");
+      g.fillStyle = lit;
+      g.fillRect(0, 0, w, h);
+      // Rods racked on the back wall, each with its reel.
+      const rods = ["#1d1d20", "#7a1f1f", "#23406a", "#2f5a3a", "#1d1d20", "#8a6a2c"];
+      rods.forEach((c, i) => {
+        const x = 26 + i * 30;
+        g.strokeStyle = c;
+        g.lineWidth = 4;
+        g.beginPath();
+        g.moveTo(x, h - 46);
+        g.lineTo(x + 5, 8);
+        g.stroke();
+        g.fillStyle = "#c9ccd2";
+        g.beginPath();
+        g.arc(x + 1, h - 62, 7, 0, Math.PI * 2);
+        g.fill();
+        g.fillStyle = "#3a3c42";
+        g.beginPath();
+        g.arc(x + 1, h - 62, 3, 0, Math.PI * 2);
+        g.fill();
+      });
+      // Two shelves on the right: floats, lures on cards, spools.
+      g.fillStyle = "#24160a";
+      g.fillRect(220, 70, w - 236, 7);
+      g.fillRect(220, 132, w - 236, 7);
+      for (let i = 0; i < 7; i++) {
+        const x = 240 + i * 38;
+        // Floats: red over white.
+        g.fillStyle = "#f4f1ea";
+        g.beginPath();
+        g.arc(x, 56, 9, 0, Math.PI * 2);
+        g.fill();
+        g.fillStyle = "#e23a2c";
+        g.beginPath();
+        g.arc(x, 56, 9, Math.PI, 0);
+        g.fill();
+        g.fillStyle = "#1d1d20";
+        g.fillRect(x - 1, 40, 2, 8);
+        // Lure cards.
+        g.fillStyle = ["#ffd23a", "#35e0d0", "#ff7ae0", "#f4f1ea"][i % 4]!;
+        g.fillRect(x - 11, 90, 22, 36);
+        g.fillStyle = ["#2f5a3a", "#7a1f1f", "#23406a"][i % 3]!;
+        g.beginPath();
+        g.ellipse(x, 110, 7, 3.5, 0.5, 0, Math.PI * 2);
+        g.fill();
+      }
+      // Tubs of bait and a stack of tackle boxes along the bottom.
+      for (let i = 0; i < 5; i++) {
+        const x = 232 + i * 52;
+        g.fillStyle = i % 2 ? "#e9e6de" : "#35a0d0";
+        g.fillRect(x, 150, 38, 38);
+        g.fillStyle = "#17110e";
+        g.fillRect(x, 150, 38, 6);
+        g.fillStyle = "#17110e";
+        g.font = "900 10px sans-serif";
+        g.textAlign = "center";
+        g.fillText(["WORMS", "SHAD", "MINNOW", "CRICKET", "ICE"][i]!, x + 19, 176);
+      }
+      // OPEN, in the corner of the glass.
+      g.strokeStyle = "#ff5a4a";
+      g.lineWidth = 3;
+      g.strokeRect(w - 96, 10, 80, 30);
+      g.fillStyle = "#ff8a7a";
+      g.font = "900 20px sans-serif";
+      g.textAlign = "center";
+      g.fillText("OPEN", w - 56, 33);
+      // The counter's shadow, and the hatch frame.
+      g.fillStyle = "rgba(0,0,0,0.35)";
+      g.fillRect(0, h - 14, w, 14);
+    },
+    { repeat: false },
+  );
+  const mat = new THREE.MeshStandardMaterial({ map, emissiveMap: map, emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.5 });
+  ctx.glow.emissive(mat, 0.22, 1.05);
+  return mat;
 }
 
 /** The menu board beside a truck: its own dishes at its own prices. */

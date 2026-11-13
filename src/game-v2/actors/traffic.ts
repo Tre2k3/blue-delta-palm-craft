@@ -28,6 +28,10 @@ type Car = {
   z: number;
   heading: number;
   nextDir: number;
+  /** Seconds spent waiting to turn left, seconds stood still with nothing to wait for, and seconds left of pushing on regardless. */
+  held: number;
+  stuck: number;
+  ghost: number;
 };
 
 export type TrafficCar = { x: number; z: number; radius: number; speed: number };
@@ -40,14 +44,18 @@ function inGrid(i: number, j: number) {
 
 /**
  * Cars working the grid. Right-hand traffic, one lane each way, every junction on the
- * shared signal clock. Cars go straight or turn right; they only turn left where the road ends,
- * so nothing crosses an oncoming lane on a green.
+ * shared signal clock. Cars go straight on more often than they turn, and turn either way: a
+ * car turning left waits at its line for whatever is coming the other way, and for the junction
+ * to be empty. (When they could only turn right, every one of them ended up lapping the outside
+ * streets and the middle of town stood empty.)
  */
 export class Traffic {
   readonly group = new THREE.Group();
   readonly cars: Car[] = [];
   private rand = rng(4242);
   hidden = false;
+  /** How far from the player (along the streets) a car is still drawn. */
+  reach = 190;
 
   constructor(count: number) {
     const kinds: CarKind[] = ["sedan", "suv", "sedan", "coupe", "sedan", "van", "suv", "sedan"];
@@ -62,7 +70,7 @@ export class Traffic {
       if (this.cars.some((c) => c.i === i && c.j === j && c.dir === dir)) continue;
       const model = new CarModel(kinds[n % kinds.length]!, PAINTS[n % PAINTS.length]!);
       n += 1;
-      const car: Car = { model, i, j, dir, s: STOP_BACK + 6 + this.rand() * 20, turn: null, speed: 0, cruise: 9 + this.rand() * 3.5, x: 0, z: 0, heading: 0, nextDir: dir };
+      const car: Car = { model, i, j, dir, s: STOP_BACK + 6 + this.rand() * 20, turn: null, speed: 0, cruise: 9 + this.rand() * 3.5, x: 0, z: 0, heading: 0, nextDir: dir, held: 0, stuck: 0, ghost: 0 };
       car.nextDir = this.choose(car);
       this.poseOnLeg(car);
       this.group.add(model.group);
@@ -89,10 +97,13 @@ export class Traffic {
     const left = (car.dir + 3) % 4;
     const can = (dir: number) => inGrid(ni + DIRS[dir]!.dx, nj + DIRS[dir]!.dz);
     const opts: number[] = [];
-    if (can(car.dir)) opts.push(car.dir, car.dir);
+    // At a crossroads, straight on three times in five. Along the edge of town, where there is only
+    // one way to turn, it is taken half the time: that is what keeps as many cars in the middle
+    // as on the outside streets.
+    if (can(car.dir)) opts.push(car.dir, ...(can(right) && can(left) ? [car.dir, car.dir] : []));
     if (can(right)) opts.push(right);
-    if (!can(car.dir) && can(left)) opts.push(left);
-    if (!opts.length) opts.push(can(left) ? left : (car.dir + 2) % 4);
+    if (can(left)) opts.push(left);
+    if (!opts.length) opts.push((car.dir + 2) % 4);
     return opts[Math.floor(this.rand() * opts.length)]!;
   }
 
@@ -133,7 +144,41 @@ export class Traffic {
       let want = car.cruise;
       // Hold at the line on amber and red. A car already past it clears the junction.
       if (signals[axis] !== "green" && left > -0.5 && left < 14) want = Math.min(want, Math.max(0, (left - 0.4) * 1.4));
-      // Keep a gap to whatever is ahead in the same lane: traffic, Benji, his car.
+      // Turning left: give way to what is coming the other way, and do not go until the junction is clear.
+      // What counts as coming: a car on its way in, or the first one sat at the line opposite. (Not the
+      // queue behind that one: waiting on a car that is itself waiting is how a whole street locks up.)
+      // Of two facing each other both turning left, the one heading the lower compass point goes first.
+      let yielding = false;
+      if (car.nextDir === (car.dir + 3) % 4 && left > -0.5 && left < 12 && car.ghost <= 0) {
+        const ni = car.i + d.dx;
+        const nj = car.j + d.dz;
+        const jx = STREETS_X[ni]!;
+        const jz = STREETS_Z[nj]!;
+        const facing = (car.dir + 2) % 4;
+        // Long enough at the line and he takes any gap in what is stood still.
+        const patient = car.held > 9;
+        for (const o of this.cars) {
+          if (o === car) continue;
+          let wait = Math.abs(o.x - jx) < 8.5 && Math.abs(o.z - jz) < 8.5;
+          if (!wait && o.dir === facing) {
+            const od = DIRS[o.dir]!;
+            const gap = this.toStop(o);
+            if (o.i + od.dx === ni && o.j + od.dz === nj && gap > -0.5) {
+              const first = gap < 3;
+              if (o.nextDir === (o.dir + 3) % 4) wait = first && o.dir < car.dir && !patient;
+              else wait = o.speed > 0.5 ? gap < 12 + o.speed * 3.2 : first && !patient;
+            }
+          }
+          if (wait) {
+            yielding = true;
+            want = Math.min(want, Math.max(0, (left - 0.4) * 1.4));
+            break;
+          }
+        }
+      }
+      car.held = yielding ? car.held + dt : 0;
+      // Keep a gap to whatever is ahead in the same lane: traffic, Benji, his car. Not to a car
+      // coming the other way: that one is in its own lane, or passing through the same junction.
       const fx = Math.sin(car.heading);
       const fz = Math.cos(car.heading);
       const check = (ox: number, oz: number, radius: number) => {
@@ -143,8 +188,20 @@ export class Traffic {
         const side = Math.abs(rx * fz - rz * fx);
         if (ahead > 0.5 && ahead < 16 && side < 1.5 + radius) want = Math.min(want, Math.max(0, (ahead - 4.6 - radius) * 1.2));
       };
-      for (const other of this.cars) if (other !== car) check(other.x, other.z, 1.2);
-      for (const b of blockers) check(b.x, b.z, b.radius);
+      if (car.ghost > 0) car.ghost -= dt;
+      else {
+        for (const other of this.cars) if (other !== car && Math.sin(other.heading) * fx + Math.cos(other.heading) * fz > -0.5) check(other.x, other.z, 1.2);
+        for (const b of blockers) check(b.x, b.z, b.radius);
+      }
+      // Stood still on a green, or in the middle of a junction, for far too long: whatever the knot
+      // is, he drives out of it. A car through a car for a moment is better than a street that never moves again.
+      const boxed = !!car.turn && car.s < car.turn.len;
+      if (car.speed < 0.3 && (signals[axis] === "green" || boxed)) car.stuck += dt;
+      else if (car.speed > 1) car.stuck = 0;
+      if (car.stuck > 20) {
+        car.stuck = 0;
+        car.ghost = 5;
+      }
       const rate = want < car.speed ? 14 : 4.5;
       car.speed += Math.max(-rate * dt, Math.min(rate * dt, want - car.speed));
       const travel = car.speed * dt;
@@ -177,7 +234,7 @@ export class Traffic {
       const before = car.heading;
       this.poseOnLeg(car);
       const steer = Math.max(-0.5, Math.min(0.5, (before - car.heading) * 6));
-      const seen = !focus || Math.abs(car.x - focus.x) + Math.abs(car.z - focus.z) < 190;
+      const seen = !focus || Math.abs(car.x - focus.x) + Math.abs(car.z - focus.z) < this.reach;
       car.model.group.visible = seen;
       if (!seen) continue;
       car.model.place(car.x, 0, car.z, car.heading);

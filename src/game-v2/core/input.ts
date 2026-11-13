@@ -42,9 +42,11 @@ const PAD_FOOT: Partial<Record<number, Action>> = {
   5: "run",
   6: "run",
   7: "action",
-  8: "time",
+  // The View button changes the view; clicking the right stick, which is the one that looks about, turns the day over.
+  8: "camera",
   9: "pause",
   10: "horn",
+  11: "time",
 };
 /** In first person the left trigger raises the sights, the right one fires, and X reloads. */
 const PAD_FPS: Partial<Record<number, Action>> = {
@@ -64,9 +66,10 @@ const PAD_CAR: Partial<Record<number, Action>> = {
   2: "action",
   3: "map",
   5: "run",
-  8: "time",
+  8: "camera",
   9: "pause",
   10: "horn",
+  11: "time",
 };
 
 /** What a pad sends to a menu. */

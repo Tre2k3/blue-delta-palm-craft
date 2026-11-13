@@ -7,13 +7,18 @@
  * a round of chords, and who plays: which drum pattern, what the bass does, who comps and who
  * takes the lead. The lead makes up a phrase, leaves room, answers it, and starts a new idea
  * each time round, so a twelve-bar blues never comes out the same twice.
+ *
+ * The city has a second music besides the blues: Memphis rap, made the way it was first made,
+ * out of a drum machine. An 808 that is the kick and the bass at once, claps on two and four,
+ * hats that break into rolls, a tuned cowbell playing the hook and a few dark keys. No voices:
+ * these are the beats, not the records.
  */
 
 type Feel = "shuffle" | "straight";
-type Drums = "shuffle" | "slow" | "funk" | "boombap" | "four" | "drive" | "brush";
-type Bass = "walk" | "boogie" | "funk" | "sub" | "eighths" | "two";
-type Comp = "organ" | "piano" | "guitar" | "rhodes" | "horns" | "pad" | "none";
-type Lead = "guitar" | "harp" | "sax" | "synth" | "slide" | "none";
+type Drums = "shuffle" | "slow" | "funk" | "boombap" | "four" | "drive" | "brush" | "trap" | "buck";
+type Bass = "walk" | "boogie" | "funk" | "sub" | "eighths" | "two" | "808";
+type Comp = "organ" | "piano" | "guitar" | "rhodes" | "horns" | "pad" | "bells" | "strings" | "none";
+type Lead = "guitar" | "harp" | "sax" | "synth" | "slide" | "cowbell" | "bell" | "none";
 
 export type Tune = {
   id: string;
@@ -60,10 +65,13 @@ export const TUNES: Record<string, Tune> = {
   bowl: { id: "bowl", bpm: 104, feel: "straight", key: 5, round: [0, 0, 5, 0], minor: yes(4), drums: "funk", bass: "funk", comp: "guitar", leads: ["sax", "none", "synth", "none"], busy: 0.5, level: 0.85 },
   // The boutique: a head-nod beat with warm chords.
   hq: { id: "hq", bpm: 86, feel: "straight", key: 2, round: [0, 8, 10, 0], minor: [true, false, false, true], drums: "boombap", bass: "sub", comp: "rhodes", leads: ["none", "synth", "none", "sax"], busy: 0.3, level: 0.85 },
-  // The court: drums and a bass line to play ball to.
-  court: { id: "court", bpm: 96, feel: "straight", key: 7, round: [0, 0, 10, 8], minor: yes(4), drums: "boombap", bass: "sub", comp: "pad", leads: ["none", "synth"], busy: 0.35, level: 0.8 },
-  // Behind the wheel, and on the strip.
-  radio: { id: "radio", bpm: 112, feel: "straight", key: 0, round: [0, 0, 3, 5], minor: yes(4), drums: "drive", bass: "eighths", comp: "guitar", leads: ["guitar", "none"], busy: 0.5, level: 0.8 },
+  // The court: Memphis rap off somebody's speaker, an 808 and stabs of strings to play ball to.
+  court: { id: "court", bpm: 84, feel: "straight", key: 7, round: [0, 0, 10, 8], minor: [true, true, false, false], drums: "trap", bass: "808", comp: "strings", leads: ["none", "cowbell", "none", "bell"], busy: 0.5, level: 0.9 },
+  // Behind the wheel: Memphis rap on the radio, slow and heavy, the cowbell carrying the hook.
+  radio: { id: "radio", bpm: 74, feel: "straight", key: 5, round: [0, 0, 8, 7], minor: [true, true, false, false], drums: "trap", bass: "808", comp: "bells", leads: ["cowbell", "none", "bell", "cowbell"], busy: 0.6, level: 0.95 },
+  // The cypher on Beale: what jookin is danced to. Counted at eighty it glides, felt at a hundred and sixty it bucks.
+  jook: { id: "jook", bpm: 80, feel: "straight", key: 8, round: [0, 0, 8, 7], minor: [true, true, false, false], drums: "buck", bass: "808", comp: "strings", leads: ["cowbell", "bell", "cowbell", "none"], busy: 0.8, level: 1 },
+  // On the strip.
   race: { id: "race", bpm: 150, feel: "straight", key: 2, round: [0, 0, 8, 10], minor: yes(4), drums: "drive", bass: "eighths", comp: "pad", leads: ["synth", "guitar"], busy: 0.75, level: 0.85 },
   // The title card: the city's shuffle, a little prouder.
   title: { id: "title", bpm: 100, feel: "shuffle", key: 0, round: BLUES, minor: no(12), drums: "shuffle", bass: "boogie", comp: "organ", leads: ["harp", "guitar"], busy: 0.6, level: 0.95 },
@@ -76,6 +84,34 @@ export const SONGS = [
   { id: "club-minor", name: "Midnight on the Bluff" },
   { id: "club-soul", name: "Sack Full of Soul" },
 ] as const;
+
+/**
+ * Where the 808 lands in Memphis rap, by step of sixteen: one bar, then the bar that answers it.
+ * The drum and the bass are the same hit, so both read this.
+ */
+const BOOM: Record<string, number[][]> = {
+  trap: [
+    [0, 6, 10],
+    [0, 3, 6, 11, 14],
+  ],
+  buck: [
+    [0, 3, 6, 10],
+    [0, 3, 8, 11, 14],
+  ],
+};
+
+/** Cowbell hooks: step of the bar and note above the key. One is picked each time round and played every bar. */
+const HOOKS: [number, number][][] = [
+  [[0, 0], [2, 0], [3, 3], [6, 0], [8, 7], [10, 5], [11, 3], [14, 0]],
+  [[0, 12], [3, 12], [6, 10], [8, 12], [10, 7], [12, 10], [14, 7]],
+  [[0, 0], [1, 0], [4, 3], [6, 5], [8, 0], [9, 0], [12, 7], [14, 5]],
+  [[0, 7], [3, 7], [4, 8], [6, 7], [10, 3], [12, 5], [14, 3]],
+];
+/** The high piano line: two bars, slow, a half step leaning on the fifth the way a horror film does it. */
+const CREEP: [number, number][][] = [
+  [[0, 12], [4, 15], [8, 14], [12, 12]],
+  [[0, 8], [4, 7], [10, 3], [12, 7]],
+];
 
 const E2 = 82.41;
 const hz = (semis: number) => E2 * Math.pow(2, semis / 12);
@@ -209,7 +245,8 @@ export class Band {
     this.low(tune.bass, pos, beat, root, nextRoot, third, t, len, L, bars);
     this.chords(tune.comp, pos, per, beat, root, third, t, len, L, bar);
     const who = tune.leads[this.chorus % tune.leads.length]!;
-    if (who !== "none") this.solo(who, pos, per, bar, n, bars, t, len, L);
+    if (who === "cowbell" || who === "bell") this.hook(who, pos, bar, n, t, len, L);
+    else if (who !== "none") this.solo(who, pos, per, bar, n, bars, t, len, L);
   }
 
   // ---------------------------------------------------------------- drums
@@ -242,6 +279,27 @@ export class Band {
       if (on([0, 7, 10])) this.kick(t, 0.6 * L);
       if (on([4, 12])) this.snare(t, 0.36 * L);
       if (pos % 2 === 0) this.hat(t + (pos % 4 === 2 ? len * 0.18 : 0), 0.08 * L, 0.04);
+    } else if (kind === "trap" || kind === "buck") {
+      const answer = bar % 2 === 1;
+      if (BOOM[kind]![answer ? 1 : 0]!.includes(pos)) this.kick(t, 0.34 * L);
+      if (on([4, 12])) {
+        this.clap(t, 0.3 * L);
+        this.snare(t, 0.12 * L);
+      }
+      // Hats: eighths in the slow one, sixteenths when it bucks, and an open one before three.
+      if (pos % 2 === 0) this.hat(t, 0.085 * L, pos === 10 && !answer ? 0.17 : 0.03);
+      else if (kind === "buck" || (answer && pos > 8)) this.hat(t, 0.045 * L, 0.025);
+      // The rolls: thirty-seconds out of every second bar, triplets across the middle of every fourth.
+      if (answer && pos >= 14) this.hat(t + len / 2, 0.05 * L, 0.02);
+      if (bar % 4 === 3 && (pos === 6 || pos === 7)) {
+        this.hat(t + len / 3, 0.05 * L, 0.02);
+        this.hat(t + (len * 2) / 3, 0.06 * L, 0.02);
+      }
+      // Into the top of the round: the snare runs up to it.
+      if (fill) {
+        this.snare(t, (0.08 + (pos - 12) * 0.045) * L);
+        if (pos >= 14) this.snare(t + len / 2, 0.16 * L);
+      }
     } else if (kind === "four") {
       if (pos % 4 === 0) this.kick(t, 0.5 * L);
       if (on([4, 12])) this.snare(t, 0.22 * L);
@@ -279,6 +337,16 @@ export class Band {
     } else if (kind === "funk") {
       const at = [0, 3, 6, 8, 10, 14].indexOf(pos);
       if (at >= 0) note(root + [0, 0, 12, 0, 10, 7][at]!, 0.55, len * (at === 0 ? 2.4 : 1.2));
+    } else if (kind === "808") {
+      const hits = BOOM[this.tune.drums]?.[bars % 2] ?? BOOM.trap![0]!;
+      const at = hits.indexOf(pos);
+      if (at < 0) return;
+      // It rings until the next one cuts it off.
+      const until = (hits[at + 1] ?? 16) - pos;
+      const last = at === hits.length - 1;
+      // The answering bar ends by sliding: up into the next chord, or an octave if the chord stays.
+      const to = last && bars % 2 === 1 ? hz(nextRoot !== root ? nextRoot : root + 12) * 0.5 : 0;
+      this.boom(hz(root) * 0.5, t, 0.62 * L, Math.min(len * 7, len * until * 0.96), to);
     } else if (kind === "sub") {
       if (pos === 0) this.sub(hz(root), t, 0.7 * L, len * 7);
       else if (pos === 10) this.sub(hz(root), t, 0.55 * L, len * 5);
@@ -308,6 +376,16 @@ export class Band {
       const riff = beat === 3 ? [0, 2, 6, 8] : [0, 3, 8, 11];
       if (bar % 2 === 0 && riff.includes(pos)) for (const v of voicing) this.horn(hz(v), t, 0.085 * L, len * (pos === riff[1] || pos === riff[3] ? 2.6 : 1.1));
       if (bar % 4 === 3 && pos === beat * 3) for (const v of voicing) this.horn(hz(v + 1), t, 0.07 * L, len * beat * 0.9, hz(v));
+    } else if (kind === "strings") {
+      // Three short stabs across the bar, a fourth in the bar that answers.
+      const triad = [root + 12, root + 12 + third, root + 19];
+      if (pos === 0 || pos === 3 || pos === 6 || (bar % 2 === 1 && pos === 10)) for (const v of triad) this.strings(hz(v), t, 0.06 * L, len * 1.5);
+    } else if (kind === "bells") {
+      // The same few dark notes over and over, like a loop off a record: they stay in the key
+      // while the 808 moves under them.
+      const fig: Record<number, number> = bar % 2 === 0 ? { 0: 7, 3: 8, 6: 7, 8: 3, 11: 0, 14: 3 } : { 0: 7, 3: 8, 6: 7, 8: 10, 11: 8, 14: 7 };
+      const note = fig[pos];
+      if (note !== undefined) this.keys(hz(this.tune.key + 24 + note), t, 0.1 * L, len * 3.2);
     } else if (pos === 0) for (const v of voicing) this.organ(hz(v), t, 0.05 * L, len * per);
   }
 
@@ -355,6 +433,22 @@ export class Band {
       else if (who === "sax") this.sax(f, t, 0.15 * L, long);
       else this.synth(f, t, 0.1 * L, long);
     }
+  }
+
+  /**
+   * What a drum machine plays for a lead: the same bar over and over. The cowbell has a hook for
+   * each time round and doubles up going into the top; the piano has two slow bars.
+   */
+  private hook(who: Lead, pos: number, bar: number, n: number, t: number, len: number, L: number) {
+    const key = this.tune.key;
+    if (who === "bell") {
+      for (const [at, note] of CREEP[bar % 2]!) if (at === pos) this.keys(hz(key + 36 + note), t, 0.11 * L, len * 5);
+      return;
+    }
+    const riff = HOOKS[(this.chorus + this.tune.id.length) % HOOKS.length]!;
+    for (const [at, note] of riff) if (at === pos) this.cowbell(hz(key + 24 + note), t, 0.12 * L);
+    // The last half bar of the round: every step.
+    if (bar === n - 1 && pos >= 8 && !riff.some(([at]) => at === pos)) this.cowbell(hz(key + 24 + (pos % 4 === 0 ? 7 : 12)), t, 0.07 * L);
   }
 
   // ---------------------------------------------------------------- the instruments
@@ -440,6 +534,74 @@ export class Band {
     o.connect(g);
     o.start(t);
     o.stop(t + 0.24);
+  }
+
+  /** Hands, not a drum: three quick smacks and the one that rings. */
+  private clap(t: number, peak: number) {
+    this.hiss(t, peak * 0.55, 0.001, 0.018, 1300, 1.4);
+    this.hiss(t + 0.011, peak * 0.6, 0.001, 0.018, 1300, 1.4);
+    this.hiss(t + 0.022, peak, 0.001, 0.17, 1250, 1.1);
+  }
+
+  /**
+   * The 808: a sine that drops onto its note and rings there, and slides to `to` on its way out
+   * when asked. An octave above goes with it so that it is still a note on a phone's speaker.
+   */
+  private boom(f: number, t: number, peak: number, long: number, to = 0) {
+    const g = this.ctx.createGain();
+    this.env(g, t, peak, 0.004, long * 0.3, long * 0.7);
+    g.connect(this.out);
+    const up = this.ctx.createGain();
+    up.gain.value = 0.4;
+    up.connect(g);
+    const stop = t + long + 0.1;
+    for (const [mult, type, dest] of [
+      [1, "sine", g],
+      [2, "triangle", up],
+    ] as const) {
+      const o = this.ctx.createOscillator();
+      o.type = type;
+      o.frequency.setValueAtTime(f * mult * 2.4, t);
+      o.frequency.exponentialRampToValueAtTime(f * mult, t + 0.045);
+      if (to) {
+        o.frequency.setValueAtTime(f * mult, t + long * 0.4);
+        o.frequency.exponentialRampToValueAtTime(to * mult, t + long * 0.85);
+      }
+      o.connect(dest);
+      o.start(t);
+      o.stop(stop);
+    }
+  }
+
+  /** The 808's cowbell, tuned: two square waves a fifth apart through a narrow filter, struck and gone. */
+  private cowbell(f: number, t: number, peak: number) {
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t + 0.002);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak * 0.35), t + 0.035);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = Math.min(3600, f * 2.4);
+    bp.Q.value = 2.4;
+    bp.connect(g).connect(this.out);
+    g.connect(this.room);
+    this.osc("square", f, t, t + 0.34, bp);
+    this.osc("square", f * 1.48, t, t + 0.34, bp);
+  }
+
+  /** A section of strings playing it short. */
+  private strings(f: number, t: number, peak: number, long: number) {
+    const g = this.ctx.createGain();
+    this.env(g, t, peak, 0.015, long * 0.5, long * 0.5 + 0.06);
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 2300;
+    lp.connect(g).connect(this.out);
+    g.connect(this.room);
+    const stop = t + long + 0.12;
+    this.osc("sawtooth", f * 0.996, t, stop, lp);
+    this.osc("sawtooth", f * 1.004, t, stop, lp);
   }
 
   private bassNote(f: number, t: number, peak: number, long: number) {

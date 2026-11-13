@@ -7,7 +7,7 @@ import { Traffic } from "./actors/traffic";
 import { CarModel, Driver, STREET, type DriveTune } from "./actors/vehicle";
 import { Fireworks } from "./gfx/fx";
 import { Rain } from "./gfx/rain";
-import { BALLERS, BAND, CAST, COACH, PEDS, OUTFITS, BENJI_HEIGHT, SITTERS, TAGGERS, type CastId, type OutfitId, VENDORS } from "./assets/cast";
+import { BALLERS, BAND, CAST, COACH, JOOKERS, PEDS, OUTFITS, BENJI_HEIGHT, SITTERS, TAGGERS, type CastId, type OutfitId, VENDORS } from "./assets/cast";
 import { Sound } from "./core/audio";
 import { SAVE_KEY } from "./core/keys";
 import { SONGS, TUNES } from "./core/band";
@@ -21,6 +21,7 @@ import { PHASES, Sky, type Phase } from "./gfx/sky";
 import { Bowling } from "./play/bowling";
 import { CATALOG, COLLECTION_BONUS, productById } from "./play/catalog";
 import { Cornhole } from "./play/cornhole";
+import { Jook } from "./play/jook";
 import { FISH, Fishing } from "./play/fishing";
 import { Putt } from "./play/putt";
 import { BOARD, BoatRide } from "./play/boat";
@@ -47,7 +48,7 @@ import { pushCircle, pushOut, sight } from "./world/collide";
 import { buildClubRoom, type ClubRoom } from "./world/club";
 import { buildFunRoom, buildLaserRoom, type FunRoom, type LaserRoom } from "./world/funhouse";
 import { CORNHOLE, HOLES, PUTT_PAR, PUTT_STAND, TENNIS_GATE } from "./world/rec-map";
-import { BEALE_STAGE, BOWL, FUN, HQ, MEMPHIAN, PARK, PARK_TABLES, POIS, RACE_MEET, RIVER_Z, ROAD_HALF, ROOM, SLIDE, STREETS_X, STREETS_Z, SWING, TRUCKS, WALK, districtAt, nearestStreet } from "./world/map";
+import { BEALE_STAGE, BOWL, CYPHER, FUN, HQ, MEMPHIAN, PARK, PARK_TABLES, POIS, RACE_MEET, RIVER_Z, ROAD_HALF, ROOM, SLIDE, STREETS_X, STREETS_Z, SWING, TRUCKS, WALK, districtAt, nearestStreet } from "./world/map";
 import { LANE, buildBowlRoom, buildHomeRoom, buildHqRoom, type BowlRoom, type HomeRoom, type HqRoom, type Room } from "./world/rooms";
 
 
@@ -109,6 +110,16 @@ function saveRung(rung: number, tooSlow: number) {
 }
 
 const START = { x: -13.4, z: -160.5, heading: 0 };
+/**
+ * The views the lens can be put on, with its own button: how long the boom behind Benji is and how
+ * high it rides, and what the chase behind a car is multiplied by.
+ */
+export const VIEWS = [
+  { name: "Standard", boom: 6.4, up: 1.25, back: 1, rise: 1 },
+  { name: "Close", boom: 4, up: 0.8, back: 0.7, rise: 0.74 },
+  { name: "Wide", boom: 10, up: 2.6, back: 1.5, rise: 1.6 },
+] as const;
+
 const CAR_START = { x: 8, z: -151.6, heading: Math.PI / 2 };
 
 function freshSave(): Save {
@@ -193,7 +204,7 @@ export class Game {
   readonly camera: THREE.PerspectiveCamera;
   readonly sky: Sky;
   readonly rooms: { hq: HqRoom; home: HomeRoom; bowl: BowlRoom; fun: FunRoom; laser: LaserRoom; club: ClubRoom };
-  readonly live: Live = { fp: { on: false, gun: 0, ads: 0, bob: 0, move: 0, kick: 0, flash: 0, reload: -1, sprint: 0, gap: 0, target: 0, hit: 0, hitKind: 0, hurt: 0, hurtAngle: 0, swayX: 0, swayY: 0, down: 0, fov: 72 }, meter: 0, sweetLo: 0, sweetHi: 0, aim: 0, tension: 0, speed: 0, drift: 0, nitro: 0, fade: 1, radar: new Array<number>(48).fill(0), radarN: 0, cue: 999, turn: -1, markX: 0.5, markY: 0.5, markOn: false, markDist: 0, x: 0, z: 0, heading: 0, camYaw: 0, party: 0, partyLevel: 0 };
+  readonly live: Live = { fp: { on: false, gun: 0, ads: 0, bob: 0, move: 0, kick: 0, flash: 0, reload: -1, sprint: 0, gap: 0, target: 0, hit: 0, hitKind: 0, hurt: 0, hurtAngle: 0, swayX: 0, swayY: 0, down: 0, fov: 72 }, meter: 0, sweetLo: 0, sweetHi: 0, aim: 0, tension: 0, speed: 0, drift: 0, nitro: 0, fade: 1, radar: new Array<number>(48).fill(0), radarN: 0, cue: 999, turn: -1, jook: new Array<number>(72).fill(0), jookN: 0, jookTap: [0, 0, 0, 0, 0], jookWord: 0, jookWordAge: 9, jookBeat: 0, markX: 0.5, markY: 0.5, markOn: false, markDist: 0, x: 0, z: 0, heading: 0, camYaw: 0, party: 0, partyLevel: 0 };
   readonly benji: Card;
   car: CarModel;
   readonly driver = new Driver();
@@ -209,7 +220,7 @@ export class Game {
   room: Room | null = null;
   activity: Activity | null = null;
   /** The art tables, where tools and tests can read them. */
-  readonly tables = { OUTFITS, PEDS, BALLERS, CAST, VENDORS, STORY, CHAPTERS, RIDES, POSTCARDS, POIS, HOLES, PUTT_PAR, CHATTER: ALL_LINES, TAGGERS, COACH, BAND, BLASTERS, TAG_RANKS, TUNES, SONGS, BEALE_STAGE, MEMPHIAN };
+  readonly tables = { OUTFITS, PEDS, BALLERS, CAST, VENDORS, STORY, CHAPTERS, RIDES, POSTCARDS, POIS, HOLES, PUTT_PAR, CHATTER: ALL_LINES, TAGGERS, COACH, BAND, BLASTERS, TAG_RANKS, TUNES, SONGS, BEALE_STAGE, MEMPHIAN, CYPHER, JOOKERS };
   pos = { x: START.x, z: START.z };
   vel = { x: 0, z: 0 };
   heading = 0;
@@ -292,6 +303,8 @@ export class Game {
   private weather = { rain: 0, want: 0, wet: 0, next: 210 + Math.random() * 150, left: 0, pinned: false, flash: 0, thunder: 9 };
   /** Phones buzz on hits and wins unless this is off. */
   buzzOn = true;
+  /** Which of `VIEWS` the lens is on. */
+  view = 0;
   private skip = 0;
   private padWas = false;
   /** A game is running inside a cabinet's browser. */
@@ -324,6 +337,7 @@ export class Game {
   /** The blimp and the searchlights. */
   readonly skyShow: SkyShow;
   private cornhole: Cornhole;
+  private jook: Jook;
   private putt: Putt;
   private tennis: Tennis;
   /** The playground in the park, and the speedboat at the pier. */
@@ -392,7 +406,10 @@ export class Game {
     this.benji = new Card(OUTFITS[this.save.wearing]?.art ?? OUTFITS.starter.art, BENJI_HEIGHT);
     this.scene.add(this.benji.group);
     this.car = this.buildCar(this.save.ride);
-    this.traffic = new Traffic(this.stage.quality === "high" ? 14 : this.stage.quality === "medium" ? 10 : 6);
+    // Enough on the grid that there is something coming on every street: about a car to every block of lane.
+    // Only the ones near him are drawn, and on the lighter settings "near" is nearer.
+    this.traffic = new Traffic(this.stage.quality === "high" ? 60 : this.stage.quality === "medium" ? 46 : 28);
+    this.traffic.reach = this.stage.quality === "high" ? 190 : this.stage.quality === "medium" ? 165 : 135;
     this.city.exterior.add(this.traffic.group);
     this.coins = new Sacks(this.save.flags);
     this.city.exterior.add(this.coins.mesh);
@@ -411,6 +428,7 @@ export class Game {
     this.fireworks.onBurst = () => this.sound.boom();
     try {
       this.buzzOn = localStorage.getItem("sack-v2-buzz") !== "0";
+      this.view = clamp(Math.floor(Number(localStorage.getItem("sack-v2-view")) || 0), 0, VIEWS.length - 1);
     } catch {
       // Private windows have no storage: the default stands.
     }
@@ -419,6 +437,7 @@ export class Game {
     this.bowling = new Bowling(this);
     this.fishing = new Fishing(this);
     this.cornhole = new Cornhole(this);
+    this.jook = new Jook(this);
     this.putt = new Putt(this);
     this.tennis = new Tennis(this);
     this.swings = new Swing(this);
@@ -719,7 +738,7 @@ export class Game {
       for (const seat of few ? t.seats.slice(0, 1) : t.seats) {
         // Sat at the table, turned to the stage.
         const w = SITTERS[(chair++ * 3 + 1) % SITTERS.length]!;
-        ct.post(w.art, w.height, at(seat.x, seat.z, seat.x, club.stage.z, "play"));
+        ct.post(w.art, w.height, at(seat.x, seat.z, seat.x, club.stage.z, "sit"));
       }
     }
     const keep = PEDS[9 % PEDS.length]!;
@@ -743,11 +762,11 @@ export class Game {
     for (const t of PARK_TABLES) {
       const w = sitter();
       // Sat on a stool at the table: the stool is in the drawing of them.
-      st.post(w.art, w.height, at(t.x, t.z - 1.02, t.x, t.z, "play"));
+      st.post(w.art, w.height, at(t.x, t.z - 1.02, t.x, t.z, "sit"));
       if (t.seats === 4) {
         for (const dx of [-1.02, 1.02]) {
           const o = sitter();
-          st.post(o.art, o.height, at(t.x + dx, t.z, t.x, t.z, "play"));
+          st.post(o.art, o.height, at(t.x + dx, t.z, t.x, t.z, "sit"));
         }
       }
     }
@@ -808,6 +827,11 @@ export class Game {
     this.spot("club", club.request.x, club.request.z, 1.8, "Request a song · $5", () => this.requestSong());
     this.spot("club", club.bar.x, club.bar.z, 1.5, "Sweet tea at the bar · $4", () => this.barTea());
     this.spot("street", BEALE_STAGE.x, BEALE_STAGE.z - BEALE_STAGE.d / 2 - 1.3, 2, "Tip the band · $5", () => this.tipBand());
+    // The cypher: anywhere on the lino or at the open side of the ring.
+    this.spot("street", CYPHER.x, CYPHER.z + 1.2, CYPHER.r + 1.1, "Jump in the cypher", () => {
+      this.begin(this.jook, "whack");
+      this.jook.start();
+    });
 
     // The coupe.
     this.carSpot = this.spot(
@@ -1247,6 +1271,25 @@ export class Game {
     } catch {
       // Some browsers refuse until the page has been touched.
     }
+  }
+
+  /**
+   * The next view: on foot, at the wheel, in a race, on the boat. It has its own key and its own
+   * button on a pad and on a touch screen, and stays chosen from one day to the next.
+   */
+  nextView() {
+    // Games that put the lens where the game needs it (a shot, a lane, a first-person arena) keep it there.
+    const follows = !this.activity || this.mode === "race" || this.mode === "kart" || this.activity === this.boat;
+    if (!follows || this.mode === "title" || this.intro || this.overlay) return;
+    this.view = (this.view + 1) % VIEWS.length;
+    try {
+      localStorage.setItem("sack-v2-view", String(this.view));
+    } catch {
+      /* private window: the choice lasts as long as the page does */
+    }
+    this.sound.ui();
+    this.toast(`View: ${VIEWS[this.view]!.name}`, 1.6);
+    this.push();
   }
 
   setBuzz(on: boolean) {
@@ -2246,6 +2289,11 @@ export class Game {
     return Math.hypot(this.pos.x - BEALE_STAGE.x, this.pos.z - BEALE_STAGE.z);
   }
 
+  /** How far he is from the middle of the lino the jookers dance on. */
+  private toCypher() {
+    return Math.hypot(this.pos.x - CYPHER.x, this.pos.z - CYPHER.z);
+  }
+
   /** The music for where he is, most wanted first: whichever of these has been recorded plays. */
   private tracks(): string[] {
     const city = this.sky.phase === "night" ? ["city-night", "city-day"] : ["city-day", "city-night"];
@@ -2258,6 +2306,8 @@ export class Game {
     if (this.place === "club") return [this.clubSong.id, "club", ...city];
     if (this.mode === "fish") return ["river", ...city];
     if (this.mode === "drive") return ["radio", ...city];
+    // By the cypher its speaker is all anybody hears.
+    if (!this.room && this.toCypher() < 14) return ["jook", "beale", ...city];
     // On Beale, and anywhere the band in Handy Park can be heard.
     if (!this.room && (districtAt(this.pos.x, this.pos.z) === "Beale Street" || this.toStage() < 52)) return ["beale", ...city];
     return city;
@@ -2493,6 +2543,9 @@ export class Game {
     this.camYaw = wrapAngle(this.camYaw - this.input.takeLook() * 0.6);
     const fx = Math.sin(this.camYaw);
     const fz = Math.cos(this.camYaw);
+    const v = VIEWS[this.view]!;
+    back *= v.back;
+    up *= v.rise;
     const dist = back + d.speed * 0.045;
     let t = sight(d.x, d.z, d.x - fx * dist, d.z - fz * dist, solids, 0.5);
     t = Math.max(0.4, t);
@@ -2588,7 +2641,9 @@ export class Game {
   /** Third-person camera on foot. Shortens its boom rather than look through a wall. */
   chase(dt: number, snap = false) {
     const room = this.room;
-    const want = room ? room.boom : 6.4;
+    const v = VIEWS[this.view]!;
+    // Indoors the walls decide how far back the lens can go; the close view still comes in.
+    const want = room ? room.boom * Math.min(1, v.boom / 6.4) : v.boom;
     const fx = Math.sin(this.camYaw);
     const fz = Math.cos(this.camYaw);
     const tx = this.pos.x;
@@ -2607,7 +2662,7 @@ export class Game {
     // Squeezed against a wall: go up and look down instead of sitting in his hair.
     const near = 1 - this.boom / want;
     const y0 = (room ? room.floorY : this.benji.group.position.y) + 1.25;
-    _v.set(tx - fx * this.boom, y0 + (room ? 0.95 : 1.25) + near * (room ? 1.3 : 1.7), tz - fz * this.boom);
+    _v.set(tx - fx * this.boom, y0 + (room ? Math.min(0.95, v.up) : v.up) + near * (room ? 1.3 : 1.7), tz - fz * this.boom);
     if (snap) this.camera.position.copy(_v);
     else this.camera.position.lerp(_v, damp(14, dt));
     // Indoors the lens looks more level, so the walls are in the picture and not just the floor.
@@ -2678,6 +2733,7 @@ export class Game {
         if (this.overlay) this.close();
         else if (this.mode === "walk" || this.mode === "drive") this.open("map");
       } else if (input.hitRaw("back") && this.overlay) this.close();
+      if (input.hit("camera")) this.nextView();
       if (input.hit("time") && !this.room) {
         this.sky.auto = false;
         this.sky.setPhase(PHASES[(PHASES.indexOf(this.sky.phase) + 1) % PHASES.length]!);
@@ -2742,6 +2798,7 @@ export class Game {
     // The regulars on the rec grounds, and the paddle wheel on the sixth, whether or not anyone is playing.
     if (!this.room) {
       if (this.activity !== this.cornhole) this.cornhole.idle(dt);
+      if (this.activity !== this.jook) this.jook.idle(paused ? 0 : dt);
       if (this.activity !== this.tennis) this.tennis.idle(dt);
       if (this.activity !== this.putt) this.putt.idle(paused ? 0 : dt);
       if (this.activity !== this.swings) this.swings.idle(paused ? 0 : dt);
@@ -2854,7 +2911,7 @@ export class Game {
     this.updateVeli(dt);
     // Stood in front of a band it is louder, and Benji cannot keep still.
     const heard = this.tracks()[0]!;
-    const near = this.place === "club" ? 1 : heard === "beale" ? clamp(1 - (this.toStage() - 12) / 40, 0, 1) : 0;
+    const near = this.place === "club" ? 1 : heard === "jook" ? clamp(1 - (this.toCypher() - 5) / 9, 0.25, 1) : heard === "beale" ? clamp(1 - (this.toStage() - 12) / 40, 0, 1) : 0;
     this.sound.live(near);
     if (near > 0.55 && this.mode === "walk") this.benji.groove = this.beatOf(heard) / 1.58;
     else if (this.veliVol <= 0.25) this.benji.groove = -1;
@@ -2970,6 +3027,7 @@ export class Game {
             ["A D", "Steer"],
             ["Space", "Handbrake"],
             ["H", "Horn"],
+            ["C", "Change view"],
             ["E", "Get out"],
           ]
         : [
@@ -2977,6 +3035,7 @@ export class Game {
             ["Shift", "Run"],
             ["E", "Interact"],
             ["M", "Map"],
+            ["C", "Change view"],
             ["N", "Time of day"],
           ]);
     const h: HudState = {
@@ -3028,12 +3087,13 @@ export class Game {
       pit: null,
       whack: null,
       machine: null,
+      jook: null,
       driving: this.mode === "drive",
       results: this.results,
       shopFocus: this.shopFocus,
       cabinet: this.cabinet,
       foodAt: this.foodAt,
-      settings: { quality: this.stage.quality, auto: this.auto, music: this.sound.musicOn, sfx: this.sound.sfxOn, clock: this.sky.auto, buzz: this.buzzOn },
+      settings: { quality: this.stage.quality, auto: this.auto, music: this.sound.musicOn, sfx: this.sound.sfxOn, clock: this.sky.auto, buzz: this.buzzOn, view: VIEWS[this.view]!.name },
       cinema: this.cinema,
       hasSave: this.hasSave && s.step > 0,
       storyDone: !step,

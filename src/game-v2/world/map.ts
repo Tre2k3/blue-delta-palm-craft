@@ -133,6 +133,12 @@ export const MEMPHIAN = { x: -40, z: -21 };
 /** The stage in Handy Park: the middle of its boards, how big they are and how high. It faces north, up the square to Beale. */
 export const BEALE_STAGE = { x: 32, z: -27, w: 16, d: 8, top: CURB + 1 };
 
+/**
+ * The cypher in Handy Park: a sheet of lino taped down inside the Beale Street arch, a speaker,
+ * and whoever is jookin on it. `r` is how far the lino reaches from its middle.
+ */
+export const CYPHER = { x: 22.5, z: -55.5, r: 2.7 };
+
 export type Poi = { id: string; name: string; x: number; z: number; color: string; arrive?: { x: number; z: number; heading: number } };
 
 export const POIS: Poi[] = [
@@ -156,6 +162,8 @@ export const POIS: Poi[] = [
   // The old picture house on Union, and the stage in Handy Park: live music at both.
   { id: "memphian", name: "The Memphian Blues Club", x: MEMPHIAN.x, z: MEMPHIAN.z + 2, color: "#ffb400", arrive: { x: MEMPHIAN.x, z: MEMPHIAN.z + 2.5, heading: Math.PI } },
   { id: "bealestage", name: "Live on Beale", x: BEALE_STAGE.x, z: BEALE_STAGE.z - 8, color: "#ff4fd8", arrive: { x: BEALE_STAGE.x, z: BEALE_STAGE.z - 12, heading: 0 } },
+  // Let out on the open side of the ring, turned to the dancers.
+  { id: "cypher", name: "Jookin Cypher", x: CYPHER.x, z: CYPHER.z, color: "#ff3b3b", arrive: { x: CYPHER.x + 0.6, z: CYPHER.z + 6.2, heading: Math.PI } },
   { id: "playground", name: "Swings and Slide", x: -109, z: 96, color: "#ff8a5c", arrive: { x: -109.5, z: 90.4, heading: 0 } },
 ];
 

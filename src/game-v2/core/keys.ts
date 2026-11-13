@@ -14,3 +14,6 @@ export function signature(save: unknown): string {
   for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
   return `${text.length}:${h >>> 0}`;
 }
+
+/** Jookin: how many beats ahead a move is shown coming down the screen. */
+export const JOOK_LEAD = 2;

@@ -113,7 +113,7 @@ const DISTRICTS: Record<string, string[]> = {
     "The Fun House is over that way. Lit up like a carnival.",
     "You can see the Pyramid from the corner on a clear day.",
   ],
-  "Beale Street": ["Beale don't sleep. Neon comes on and so do we.", "Home of the blues, baby. Listen.", "Every door on this street got music behind it.", "Come back after dark. Whole street glows."],
+  "Beale Street": ["Beale don't sleep. Neon comes on and so do we.", "Home of the blues, baby. Listen.", "Every door on this street got music behind it.", "Come back after dark. Whole street glows.", "They jookin inside the arch again. G-Lyde don't touch the ground.", "That's Memphis rap on that speaker. Jookin was born to it."],
   Midtown: ["Midtown's quiet in the day. Bowl's right over there though.", "901 Bowl got the cleanest lanes in the city.", "I like it out here. Room to breathe."],
   "Orange Mound": [
     "Orange Mound. This where the real ones stay.",
@@ -146,6 +146,7 @@ const TIPS = [
   "You can link up with your friends now. Hit Friends and start a crew.",
   "Spades at the park. Tasha needs a partner.",
   "Cornhole on Park Avenue. Mr. Willie don't lose to strangers.",
+  "Go jump in that cypher in Handy Park. Land it on the beat and the floor is yours.",
   "Hold the handbrake through a turn. They score your drift.",
   "Tennis courts on Park Avenue. Coach Renee will run you.",
   "Got a full cooler? Unc J buys every fish at the bait shack.",

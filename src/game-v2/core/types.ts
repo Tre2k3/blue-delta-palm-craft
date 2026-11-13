@@ -236,6 +236,9 @@ export type WhackHud = { left: number; score: number; hits: number; call: string
 /** A machine on the arcade floor: its name, a row of numbers (label, value, colour), and what it is shouting. */
 export type MachineHud = { name: string; stats: [string, string, string?][]; call: string; meter: boolean; act: string };
 
+/** Jookin at the cypher: whether the moves are coming down the screen, and whether it is somebody else's turn on the floor. */
+export type JookHud = { on: boolean; watching: boolean };
+
 export type HudState = {
   mode: Mode;
   overlay: Overlay;
@@ -294,13 +297,14 @@ export type HudState = {
   pit: PitHud | null;
   whack: WhackHud | null;
   machine: MachineHud | null;
+  jook: JookHud | null;
   driving: boolean;
   results: Results | null;
   /** Product the shop opens on. */
   shopFocus: string | null;
   cabinet: string | null;
   foodAt: "catch" | "velis" | "brothers" | "pizza";
-  settings: { quality: "low" | "medium" | "high"; auto: boolean; music: boolean; sfx: boolean; clock: boolean; buzz: boolean };
+  settings: { quality: "low" | "medium" | "high"; auto: boolean; music: boolean; sfx: boolean; clock: boolean; buzz: boolean; view: string };
   /** A shot the player only watches: the opening. The rest of the screen clears for its title card. */
   cinema: { title: string; sub: string } | null;
   hasSave: boolean;
@@ -331,6 +335,18 @@ export type Live = {
   /** Laser tag radar: `radarN` blips, three numbers each (across, ahead, kind), in units of its radius. */
   radar: number[];
   radarN: number;
+  /**
+   * Jookin: `jookN` moves on their way down, three numbers each (lane 0 to 3, or 4 for the spin;
+   * beats until it lands; 0 coming, 1 landed, 2 missed). `jookTap` is how fresh the last press of
+   * each lane is, `jookWord` what the last one was called (1 dead on, 2 close, 3 missed) and
+   * `jookWordAge` how many seconds ago, `jookBeat` beats into the routine.
+   */
+  jook: number[];
+  jookN: number;
+  jookTap: number[];
+  jookWord: number;
+  jookWordAge: number;
+  jookBeat: number;
   /** Street race: metres to the next boost gate (negative once past it), 999 when there is none coming. */
   cue: number;
   /** Street race: metres to the next bend, -1 when it is a long way off. */

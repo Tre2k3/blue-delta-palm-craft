@@ -114,11 +114,32 @@ const starterMoves = ((): Required<Pick<CardArt, "poses" | "scale">> => {
   };
 })();
 
+/**
+ * Benji jookin, in the green tee: the glide, up on his toes, the buck, the spin, heel-toe, and
+ * how he ends it. A dance is done to whoever is watching, so each is one drawing shown from
+ * every side; the glide, the spin and the heel-toe are mirrored for going the other way.
+ */
+const starterJook = ((): Required<Pick<CardArt, "poses" | "scale">> => {
+  const f = (n: string) => `${FITS}/starter/jook-${n}.webp`;
+  const sizes: Record<string, number> = { glide: 0.926, toes: 0.96, buck: 0.949, spin: 0.975, heel: 0.951, finish: 0.966 };
+  const poses: Record<string, string> = {};
+  const scale: Record<string, number> = {};
+  for (const [n, size] of Object.entries(sizes)) {
+    poses[`jook-${n}`] = f(n);
+    scale[f(n)] = size;
+  }
+  for (const n of ["glide", "spin", "heel"]) {
+    poses[`jook-${n}-r`] = `flip:${f(n)}`;
+    scale[`flip:${f(n)}`] = sizes[n]!;
+  }
+  return { poses, scale };
+})();
+
 /** Benji in each fit he has art for, what wearing it does, and where it comes from. */
 export const OUTFITS: Record<OutfitId, { name: string; art: CardArt; perk: string; from: string }> = {
   starter: {
     name: "Starter Green Tee",
-    art: { ...turn("benji"), poses: { ...starterCourt.poses, ...starterMoves.poses }, walk: starterWalk.walk, scale: { ...starterCourt.scale, ...starterWalk.scale, ...starterMoves.scale } },
+    art: { ...turn("benji"), poses: { ...starterCourt.poses, ...starterMoves.poses, ...starterJook.poses }, walk: starterWalk.walk, scale: { ...starterCourt.scale, ...starterWalk.scale, ...starterMoves.scale, ...starterJook.scale } },
     perk: "The original. No perk, all Memphis.",
     from: "Yours",
   },
@@ -136,6 +157,24 @@ export const OUTFITS: Record<OutfitId, { name: string; art: CardArt; perk: strin
 };
 
 export const BENJI_HEIGHT = characters.benji.height;
+
+/**
+ * The two who hold the cypher down on Beale. They are only ever drawn dancing: the glide is
+ * what they stand in, and `sizes` is how tall the toe stand, the buck and the spin are next to it.
+ */
+const jooker = (id: string, name: string, height: number, sizes: readonly [number, number, number]): { name: string; height: number; art: CardArt } => {
+  const f = (n: string) => `/game-v2/characters/jookers/${id}-${n}.webp`;
+  return {
+    name,
+    height,
+    art: {
+      front: f("glide"),
+      poses: { "jook-glide": f("glide"), "jook-glide-r": `flip:${f("glide")}`, "jook-toes": f("toes"), "jook-buck": f("buck"), "jook-spin": f("spin"), "jook-spin-r": `flip:${f("spin")}` },
+      scale: { [`flip:${f("glide")}`]: 1, [f("toes")]: sizes[0], [f("buck")]: sizes[1], [f("spin")]: sizes[2], [`flip:${f("spin")}`]: sizes[2] },
+    },
+  };
+};
+export const JOOKERS = [jooker("m", "G-Lyde", 1.76, [0.987, 0.921, 0.999]), jooker("f", "Nia", 1.66, [0.997, 0.937, 1.019])];
 
 /** Someone drawn whole, head to shoes, from four sides. `size` is how tall a side stands next to the front. */
 const whole = (folder: string, size: { back?: number; left?: number; right?: number } = {}): CardArt => {

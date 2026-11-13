@@ -10,6 +10,7 @@ import { Arcade } from "./Arcade";
 import { Album, CourtMenu, CrewScreen, FoodMenu, Garage, MapScreen, Pause, Prizes, ResultsCard, Shop, Title, VideoScreen, Wardrobe } from "./Menus";
 import { AccountScreen } from "./Account";
 import { FirstPersonView, Loadout } from "./LaserView";
+import { JookLane } from "./Jook";
 import { drawMap } from "./map";
 import "./ui.css";
 
@@ -34,11 +35,14 @@ function padKey(key: string, driving: boolean, activity: boolean) {
   const table: Record<string, string> = {
     "W A S D": "L stick",
     "A D": "L stick",
+    W: "Up",
+    S: "Down",
     "W S": "RT  LT",
     Shift: "RB",
     E: "A",
     M: "Y",
-    N: "View",
+    C: "View",
+    N: "R3",
     Q: "B",
     H: "L3",
     Esc: "Start",
@@ -350,6 +354,7 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
             </>
           )}
           {hud.race?.wrongWay && <div className="sr-title sr-pulse absolute inset-x-0 top-[40%] z-20 text-center text-4xl text-[#ff3b3b] drop-shadow-lg">Wrong way</div>}
+          {hud.jook?.on && <JookLane game={game} touch={touch} pad={hud.pad} />}
           {hud.laser && <FirstPersonView game={game} hud={hud} touch={touch} />}
           {hud.laser?.hit && <div className="absolute inset-0 z-10 bg-[#ff2aa0]/25" />}
           {hud.laser && <canvas ref={radar} width={132} height={132} className="absolute left-3 top-20 z-20 h-[104px] w-[104px] sm:top-24 sm:h-[132px] sm:w-[132px]" />}
@@ -472,6 +477,7 @@ export function Hud({ game, hud }: { game: Game; hud: HudState }) {
             <div className={`pointer-events-auto absolute right-3 z-20 flex gap-1.5 ${activity ? "top-[84px]" : "top-[128px]"}`}>
               {!activity && <CrewChip game={game} hud={hud} />}
               {touch && !activity && <IconBtn label="Map" onClick={() => game.open("map")} />}
+              {touch && (!activity || hud.race) && <IconBtn label="View" onClick={() => game.nextView()} />}
               {touch && <IconBtn label="Pause" onClick={() => game.open("pause")} />}
             </div>
           )}

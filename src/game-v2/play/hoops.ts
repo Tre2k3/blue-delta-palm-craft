@@ -79,6 +79,8 @@ export class Hoops implements Activity {
   private group = new THREE.Group();
   private charge = 0;
   private charging = false;
+  /** How far the other player has dropped into his stance, 0 to 1: he gets down when there is something to guard, and stands up again after. */
+  private guard = 0;
   private cool = 0;
   private left = SECONDS;
   private started = false;
@@ -390,9 +392,18 @@ export class Hoops implements Activity {
       this.turn = "you";
       this.armed = false;
       this.shotClock = 10;
-      // He steps off the spot and guards it.
-      r.tx = this.spot.x - 2;
-      r.tz = this.spot.z + 1.2;
+      // He steps off the spot and guards it from the rim side, a stride off the line of the shot:
+      // between Benji and the basket, where a defender stands, and never between him and the lens.
+      const hx = this.hoop.x - this.spot.x;
+      const hz = this.hoop.z - this.spot.z;
+      const far = Math.hypot(hx, hz) || 1;
+      const up = Math.min(1.5, Math.max(0.4, far - 1.6));
+      // Off to whichever side has more floor: toward the middle of the court.
+      const px = -hz / far;
+      const pz = hx / far;
+      const side = (px >= 0 ? 1 : -1) * (this.spot.x > COURT.cx + 0.5 ? -1 : this.spot.x < COURT.cx - 0.5 ? 1 : -1);
+      r.tx = clamp(this.spot.x + (hx / far) * up + side * px * 2, COURT.cx - COURT.halfW + 0.6, COURT.cx + COURT.halfW - 0.6);
+      r.tz = this.spot.z + (hz / far) * up + side * pz * 2;
       g.pos.x = this.spot.x;
       g.pos.z = this.spot.z;
       g.push();
@@ -650,8 +661,16 @@ export class Hoops implements Activity {
         rc.lift = t >= 1 ? 0 : Math.sin(t * Math.PI) * 0.3;
         if (t >= 1) r.jump = 0;
       } else rc.lift = 0;
-      // Running to the spot, arms up through his jumper, in a stance while Benji has the ball.
-      rc.pose = running ? "drive" : r.jump > 0 || (this.turn === "rival" && r.wait < this.lead) ? "shoot" : this.turn === "you" ? "ready" : null;
+      // Running to the spot, arms up through his jumper. On Benji's ball he stands like anybody would
+      // until there is something to guard (Benji going up, or coming at him), then drops into his
+      // stance, on his toes, and stands up again a moment after. Held all through a still moment
+      // the crouch read as a short, wide man.
+      const close = Math.hypot(g.pos.x - r.x, g.pos.z - r.z) < 3.6;
+      const live = this.turn === "you" && close && (this.charging || this.jump > 0 || g.benji.speed > 0.8);
+      this.guard = Math.max(0, Math.min(1, this.guard + (live ? dt * 7 : -dt * 1.4)));
+      const set = this.turn === "you" && this.guard > 0.3;
+      if (set && !running && r.jump <= 0) rc.lift = Math.abs(Math.sin(g.time * 9)) * 0.045;
+      rc.pose = running ? "drive" : r.jump > 0 || (this.turn === "rival" && r.wait < this.lead) ? "shoot" : set ? "ready" : null;
       if (this.drive.on && this.drive.t > 0) {
         // Off the floor and up at the rim, one arm high.
         const u = Math.min(1, this.drive.t / DRIVE_AIR);

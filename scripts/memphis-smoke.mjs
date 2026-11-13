@@ -187,7 +187,7 @@ try {
     const render = g.stage.render;
     g.stage.render = () => {};
     let mine = 0;
-    const seen = { shoot: "", ready: 0, ran: 0, stood: 0 };
+    const seen = { shoot: "", ready: 0, tall: 0, ran: 0, stood: 0 };
     let last = [h.rival.x, h.rival.z];
     let hold = 0;
     for (let i = 0; i < 30 * 240 && !h.over; i++) {
@@ -195,25 +195,29 @@ try {
       const c = h.rival.card;
       if (c.pose === "shoot" && /shot-(front|back)/.test(c.current)) seen.shoot = c.current;
       if (c.pose === "ready") seen.ready++;
+      // Benji only holding the ball: the other player is on his feet, not down in a crouch.
+      if (h.turn === "you" && !h.charging && c.pose === null && c.speed === 0 && hold > 20) seen.tall++;
       if (c.pose === "drive") seen.ran += Math.hypot(h.rival.x - last[0], h.rival.z - last[1]);
       if (c.pose === "shoot" && Math.hypot(h.rival.x - h.spot.x, h.rival.z - h.spot.z) < 0.1) seen.stood++;
       last = [h.rival.x, h.rival.z];
-      // Benji takes a second over each shot, long enough for the other player to get set.
+      // Benji takes a second over each shot, then goes up for it the way a player does: held, and let go in the green.
       hold = h.turn === "you" ? hold + 1 : 0;
-      if (h.turn === "you" && !h.charging && h.cool <= 0 && hold > 30) {
-        h.charge = 0.8;
-        h.release();
+      if (h.turn === "you" && !h.charging && h.cool <= 0 && hold > 30 && !g.input.down("action")) g.input.key("action", true);
+      if (h.charging && h.charge >= 0.77) {
+        g.input.key("action", false);
         mine++;
       }
+      if (h.turn !== "you" && g.input.down("action")) g.input.key("action", false);
     }
+    g.input.key("action", false);
     for (let i = 0; i < 30; i++) g.tick(1 / 30);
     g.stage.render = render;
     const out = { kind: h.kind, over: h.over, you: h.score, them: h.rival.score, mine, title: g.results?.title, wins: g.save.best.versus, seen };
     g.close();
     return out;
   });
-  check(duel.kind === "versus" && duel.over && duel.mine >= 4 && Math.max(duel.you, duel.them) >= 11 && duel.you !== duel.them, "a game to eleven is played out shot for shot", duel);
-  check(/pedestrians\/male-0\d-shot-/.test(duel.seen.shoot) && duel.seen.stood > 0 && duel.seen.ran > 10 && duel.seen.ready > 30, "the other player runs to the spot, shoots with his arms up and guards in a stance", duel.seen);
+  check(duel.kind === "versus" && duel.over && duel.mine >= 3 && Math.max(duel.you, duel.them) >= 11 && duel.you !== duel.them, "a game to eleven is played out shot for shot", duel);
+  check(/pedestrians\/male-0\d-shot-/.test(duel.seen.shoot) && duel.seen.stood > 0 && duel.seen.ran > 10 && duel.seen.ready > 30 && duel.seen.tall > 30, "the other player runs to the spot, shoots with his arms up, stands while Benji holds the ball and drops into a stance when he goes up", duel.seen);
   await ff(1);
   await page.evaluate(() => window.__GAME__.playBall("shootout"));
   await ff(1.5);
@@ -609,10 +613,12 @@ try {
     const urls = [];
     for (const [, o] of fits) {
       urls.push(o.art.front, o.art.back, o.art.left, o.art.right);
-      for (const p of Object.values(o.art.poses ?? {})) for (const u of Object.values(p)) urls.push(u);
+      // A pose is one drawing for every side, or a drawing for each side it is seen from.
+      for (const p of Object.values(o.art.poses ?? {})) for (const u of typeof p === "string" ? [p] : Object.values(p)) urls.push(u);
     }
     for (const p of PEDS) urls.push(p.art.back, ...(p.art.walk?.back ?? []));
     const every = (a) => [a.front, a.back, a.left, a.right, ...Object.values(a.poses ?? {}).flatMap((q) => (typeof q === "string" ? [q] : Object.values(q)))];
+    for (const j of g.tables.JOOKERS) urls.push(...every(j.art));
     for (const a of BALLERS) urls.push(...every(a));
     for (const c of Object.values(CAST)) urls.push(...every(c.art));
     for (const v of Object.values(VENDORS)) urls.push(...every(v.art));
@@ -1449,7 +1455,7 @@ try {
     run(3);
     const quiet = og.pose;
     // The crowd throws its hands up when it jumps.
-    const still = [...g.street.members, ...(g.people.members ?? [])].filter((m) => !m.going && m.stop.act !== "inside" && m.stop.act !== "serve" && m.card.has("cheer"));
+    const still = [...g.street.members, ...(g.people.members ?? [])].filter((m) => !m.going && m.stop.act !== "inside" && m.stop.act !== "serve" && m.stop.act !== "sit" && m.card.has("cheer"));
     // Somebody who is staying put for the next few seconds: one about to walk off drops their hands as they go.
     const near = still.find((m) => m.posted || m.t > 6) ?? still[0];
     g.warp(near.x + 3, near.z + 3, 0);
@@ -1857,7 +1863,7 @@ try {
     // ---- whoever holds a park table is sat at it, and the new faces are out on the street.
     g.warp(-84, 80.5, Math.PI);
     run(12);
-    const seats = g.street.members.filter((m) => m.posted && m.stop.act === "play");
+    const seats = g.street.members.filter((m) => m.posted && m.stop.act === "sit");
     const sat = { n: seats.length, posed: seats.filter((m) => m.card.pose === "sit").length, sunk: seats.filter((m) => m.card.lift !== 0).length };
     const fresh = (c) => /\/(male-0[5-9]|female-0[5-7])/.test(c.face);
     const faces = { kinds: PEDS.length, walking: g.people.walkers.filter((w) => fresh(w.card)).length, about: [...g.street.members, ...Object.values(g.troupes).flatMap((t) => t.members)].filter((m) => fresh(m.card)).length };
@@ -2179,7 +2185,7 @@ try {
     const cash0 = g.save.dollars;
     g.save.dollars = 300;
     // The band knows a tune for everywhere the game can ask for one.
-    const asked = ["title", "race", "radio", "court", "bowl", "funhouse", "hq", "river", "beale", "city-day", "city-night", ...SONGS.map((q) => q.id)];
+    const asked = ["title", "race", "radio", "court", "jook", "bowl", "funhouse", "hq", "river", "beale", "city-day", "city-night", ...SONGS.map((q) => q.id)];
     const known = asked.filter((id) => TUNES[id]).length;
     g.warp(-100, 60, 0);
     run(4);
@@ -2303,6 +2309,229 @@ try {
   check(gigs.inside.sat >= gigs.inside.tables && gigs.inside.keep === 1 && gigs.inside.floor >= 4 && gigs.inside.moving >= 8 && gigs.lights >= 3, "the Memphian: every table has somebody sat at it, there is a barkeep, a floor of dancers, and the stage lights go with the beat", { ...gigs.inside, lights: gigs.lights });
   check(/^Request a song/.test(gigs.ask) && gigs.asked2.paid === 5 && gigs.asked2.song !== gigs.before.song && gigs.asked2.tune !== gigs.before.tune && gigs.asked2.said.includes(gigs.asked2.song) && gigs.asked2.cheer >= 3, "the Memphian: five in the jar and the band plays the next song on its list, to a cheer", { before: gigs.before, after: gigs.asked2 });
   check(/^Sweet tea/.test(gigs.bar) && gigs.tea.paid === 4 && gigs.tea.fed && gigs.out === "Step outside" && gigs.back.place === "street" && gigs.back.at, "the Memphian: the bar serves, and the doors let him back out on Union", { bar: gigs.bar, tea: gigs.tea, out: gigs.out, back: gigs.back });
+
+  // ---- jookin: the cypher inside the Beale Street arch, Memphis rap out of its speaker, and Benji's turn on the lino
+  const jook = await page.evaluate(() => {
+    const g = window.__GAME__;
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    const run = (n, dt = 1 / 30) => {
+      for (let i = 0; i < n; i++) g.tick(dt);
+    };
+    if (g.overlay) g.close();
+    if (g.activity) g.activity.quit();
+    run(6);
+    for (let i = 0; i < 200 && (g.mode !== "walk" || g.place !== "street" || g.live.fade > 0.05); i++) g.tick(1 / 30);
+    const { POIS, TUNES, CYPHER: C, JOOKERS, BEALE_STAGE: S } = g.tables;
+    g.setRain(false);
+    // The clock keeps the beat, so every run of this comes out the same.
+    const real = g.sound.beat;
+    g.sound.beat = () => -1;
+    const j = g.jook;
+    j.metronome = true;
+    const fit0 = g.save.wearing;
+    g.wear("starter");
+    const rap = ["jook", "radio", "court"].filter((id) => TUNES[id]?.bass === "808" && ["trap", "buck"].includes(TUNES[id].drums) && TUNES[id].leads.includes("cowbell")).length;
+    const stop = POIS.find((q) => q.id === "cypher");
+    g.warp(stop.arrive.x, stop.arrive.z, stop.arrive.heading);
+    run(12);
+    const here = { tune: g.tracks()[0], live: +g.sound.liveLevel.toFixed(2) };
+    g.warp(S.x, S.z - 12, 0);
+    run(4);
+    const stage = g.tracks()[0];
+    g.warp(stop.arrive.x, stop.arrive.z, stop.arrive.heading);
+    // The two trade the floor every four bars, each with all their moves, inside a ring of people.
+    const two = j.dancers;
+    const moves = two.map(() => new Set());
+    const led = new Set();
+    for (let i = 0; i < 30 * 26; i++) {
+      g.tick(1 / 30);
+      two.forEach((d, k) => {
+        moves[k].add(d.card.pose);
+        if (Math.hypot(d.x - C.x, d.z - C.z) < 1.7) led.add(k);
+      });
+    }
+    const cypher = { drawn: JOOKERS.length, names: j.names, moves: moves.map((q) => q.size), led: led.size, up: two.every((d) => d.card.visible), ring: j.ring.members.length, facing: j.ring.members.every((m) => Math.hypot(m.x - C.x, m.z - C.z) < 5.2 && Math.hypot(m.x - C.x, m.z - C.z) > 3.2) };
+    // Stood by it, he cannot keep still either; walking off, he is himself again.
+    const free = new Set();
+    for (let i = 0; i < 150; i++) {
+      g.tick(1 / 30);
+      if (g.benji.pose) free.add(g.benji.pose);
+    }
+    g.input.key("up", true);
+    run(20);
+    g.input.key("up", false);
+    const walking = g.benji.pose;
+    // On the lino the prompt takes him in.
+    g.warp(C.x + 0.4, C.z + 2.2, Math.PI);
+    run(8);
+    const ask = g.prompt;
+    delete g.save.best.jook;
+    g.save.best.jookWins = 0;
+    const d0 = g.save.dollars;
+    const r0 = g.save.respect;
+    g.input.press("interact");
+    run(2);
+    const began = { mode: g.mode, mine: g.activity === j, phase: j.phase, beat: +j.beat.toFixed(2), notes: j.notes.length };
+    const L = ["left", "down", "up", "right", "action"];
+    const play = (every, watch) => {
+      let k = 0;
+      for (let i = 0; i < 30 * 100 && j.phase !== "over"; i++) {
+        for (const n of j.notes) if (n.state === 0 && Math.abs(n.beat - j.beat) < 0.05 && k++ % every === 0) g.input.press(L[n.lane]);
+        g.tick(1 / 30);
+        watch();
+      }
+    };
+    // Every move landed dead on the beat.
+    const poses = new Set();
+    const phases = new Set();
+    const answered = new Set();
+    let glide = 0;
+    let shown = 0;
+    let heat = 0;
+    play(1, () => {
+      poses.add(g.benji.pose);
+      phases.add(j.phase);
+      shown = Math.max(shown, g.live.jookN);
+      heat = Math.max(heat, j.heat);
+      if (j.phase === "dance") glide = Math.max(glide, Math.abs(g.pos.x - C.x));
+      if (j.phase === "watch") two.forEach((d, k) => Math.hypot(d.x - C.x, d.z - C.z) < 1.7 && answered.add(k));
+    });
+    const clean = { score: j.score, max: j.max, tally: { ...j.tally }, title: g.results?.title, win: g.results?.win, record: g.results?.record, overlay: g.overlay, pay: g.save.dollars - d0, respect: g.save.respect - r0, best: g.save.best.jook, wins: g.save.best.jookWins, poses: [...poses].filter(Boolean), phases: [...phases], answered: answered.size, glide: +glide.toFixed(2), shown, heat: +heat.toFixed(2) };
+    // Run it back in another fit, landing one move in three: no win, a busier routine, and he still moves.
+    const other = g.save.outfits.find((id) => id !== "starter");
+    if (other) g.wear(other);
+    g.resultsAgain();
+    run(2);
+    const moved = { lean: 0, rise: 0, turned: 0 };
+    // A spin thrown in the count-in: without the drawing for it, he turns right round on the spot.
+    g.input.press("action");
+    for (let i = 0; i < 14; i++) {
+      g.tick(1 / 30);
+      if (Math.abs(Math.sin(g.heading)) > 0.9) moved.turned++;
+    }
+    play(3, () => {
+      moved.lean = Math.max(moved.lean, Math.abs(g.benji.tilt));
+      moved.rise = Math.max(moved.rise, g.benji.lift);
+    });
+    const loose = { fit: g.save.wearing, level: j.level, notes: j.notes.length, score: j.score, max: j.max, tally: { ...j.tally }, title: g.results?.title, win: g.results?.win, wins: g.save.best.jookWins, best: g.save.best.jook, lean: +moved.lean.toFixed(2), rise: +moved.rise.toFixed(2), turned: moved.turned };
+    g.close();
+    run(10);
+    const after = { mode: g.mode, busy: !!g.activity, near: Math.hypot(g.pos.x - C.x, g.pos.z - C.z) < 6, lanes: g.live.jookN, pose: g.benji.pose };
+    g.wear(fit0);
+    g.sound.beat = real;
+    g.stage.render = draw;
+    return { rap, here, stage, cypher, free: [...free], walking, ask, began, clean, loose, after, stops: POIS.filter((q) => q.id === "cypher").length };
+  });
+  check(jook.rap === 3 && jook.here.tune === "jook" && jook.here.live > 0.5 && jook.stage === "beale", "Memphis rap: the cypher, the car radio and the court each have a beat built on an 808 and a cowbell, and by the cypher its speaker is what is heard", { rap: jook.rap, here: jook.here, stage: jook.stage });
+  check(jook.stops === 1 && jook.cypher.drawn === 2 && jook.cypher.up && jook.cypher.moves.every((n) => n >= 5) && jook.cypher.led === 2 && jook.cypher.ring >= 5 && jook.cypher.facing, "jookin: the cypher is on the map, two jookers trade the floor with every move they have, and a ring of people stands round them", jook.cypher);
+  check(jook.free.length >= 3 && jook.free.every((p) => p.startsWith("jook-")) && !String(jook.walking).startsWith("jook-"), "jookin: stood by the ring Benji starts to jook on his own, and walks off as himself", { free: jook.free, walking: jook.walking });
+  check(jook.ask === "Jump in the cypher" && jook.began.mode === "whack" && jook.began.mine && jook.began.phase === "count" && jook.began.beat < -3 && jook.began.notes > 60, "jookin: the prompt on the lino starts his routine with a count-in", { ask: jook.ask, ...jook.began });
+  check(
+    jook.clean.score === jook.clean.max && jook.clean.tally.miss === 0 && jook.clean.tally.good === 0 && jook.clean.win && jook.clean.record && jook.clean.title === "THE CYPHER IS YOURS" && jook.clean.overlay === "results" && jook.clean.pay >= 90 && jook.clean.respect >= 5 && jook.clean.best === jook.clean.max && jook.clean.wins === 1,
+    "jookin: every move landed on the beat takes the cypher, pays, and goes on his record",
+    { ...jook.clean, poses: jook.clean.poses.length },
+  );
+  check(
+    ["jook-glide", "jook-glide-r", "jook-toes", "jook-buck", "jook-spin", "jook-spin-r", "jook-heel", "jook-finish"].every((p) => jook.clean.poses.includes(p)) && jook.clean.glide > 0.8 && jook.clean.glide < 1.9 && jook.clean.shown >= 3 && jook.clean.heat > 0.78 && ["count", "dance", "watch", "bow"].every((p) => jook.clean.phases.includes(p)) && jook.clean.answered === 2,
+    "jookin: he glides across the lino, goes up on his toes, bucks, spins and finishes, the moves are shown coming, the crowd warms to him, and each of the two answers a round",
+    { poses: jook.clean.poses, glide: jook.clean.glide, shown: jook.clean.shown, heat: jook.clean.heat, phases: jook.clean.phases, answered: jook.clean.answered },
+  );
+  check(
+    jook.loose.level === 1 && jook.loose.notes > jook.began.notes && jook.loose.win === false && jook.loose.wins === 1 && jook.loose.tally.miss > 30 && jook.loose.score < jook.loose.max * 0.5 && jook.loose.best === jook.clean.best && (jook.loose.fit === "starter" || (jook.loose.lean > 0.1 && jook.loose.rise > 0.05 && jook.loose.turned > 0)),
+    "jookin: after a win the routine is busier, missing most of it wins nothing, and in a fit without the drawings he still leans, rises and turns",
+    jook.loose,
+  );
+  check(jook.after.mode === "walk" && !jook.after.busy && jook.after.near && jook.after.lanes === 0, "jookin: closing the card puts him back by the ring on his own feet", jook.after);
+  // The lanes on the screen, and its buttons under a thumb.
+  const lanes = await page.evaluate(async () => {
+    const g = window.__GAME__;
+    const j = g.jook;
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const C = g.tables.CYPHER;
+    g.warp(C.x + 0.4, C.z + 2.2, Math.PI);
+    g.tick(1 / 30);
+    g.begin(j, "whack");
+    j.start();
+    for (let i = 0; i < 100; i++) g.tick(1 / 30);
+    // The screen is placed frame by frame. Without a graphics card a drawn frame takes seconds here, so nothing is drawn while it is watched.
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    let root = null;
+    let falling = 0;
+    for (let i = 0; i < 120 && !falling; i++) {
+      await wait(150);
+      root = document.querySelector("[data-jook]");
+      falling = root ? [...root.querySelectorAll("div")].filter((d) => d.style.display === "flex" && d.style.transform.includes("translate3d")).length : 0;
+    }
+    const pads = [...document.querySelectorAll("[data-jook-pad]")].map((b) => b.getAttribute("data-jook-pad"));
+    const state = { coming: g.live.jookN, beat: +j.beat.toFixed(1), phase: j.phase, mode: g.mode, overlay: g.overlay, drawn: root ? root.querySelectorAll("div").length : 0 };
+    document.querySelector('[data-jook-pad="right"]')?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    g.tick(1 / 30);
+    const tapped = { move: j.move, lit: g.live.jookTap[3] > 0.5, slid: j.slideTo > 0 };
+    j.quit();
+    j.metronome = false;
+    g.tick(1 / 30);
+    await wait(300);
+    g.stage.render = draw;
+    return { root: !!root, pads, falling, tapped, state, gone: !document.querySelector("[data-jook]"), mode: g.mode };
+  });
+  check(lanes.root && lanes.pads.join() === "left,down,up,right" && lanes.falling >= 1 && lanes.tapped.move === 3 && lanes.tapped.lit && lanes.tapped.slid && lanes.gone && lanes.mode === "walk", "jookin: four lanes with a button under each are on the screen, moves come down them, a button pressed is a move made, and walking away clears them", lanes);
+
+  // ---- the view has a button of its own: a key, the View button on a pad, a button under a thumb
+  const views = await page.evaluate(() => {
+    const g = window.__GAME__;
+    const draw = g.stage.render;
+    g.stage.render = () => {};
+    const run = (n) => {
+      for (let i = 0; i < n; i++) g.tick(1 / 30);
+    };
+    if (g.overlay) g.close();
+    g.warp(-100, 60, 0);
+    g.view = 0;
+    run(40);
+    const lens = () => ({ back: +Math.hypot(g.camera.position.x - g.pos.x, g.camera.position.z - g.pos.z).toFixed(1), up: +g.camera.position.y.toFixed(1) });
+    const seen = [{ view: g.view, ...lens() }];
+    for (let i = 0; i < 3; i++) {
+      g.input.press("camera");
+      run(12);
+      const said = g.toastText;
+      run(50);
+      seen.push({ view: g.view, said, ...lens() });
+    }
+    // In a game that owns the lens the button leaves it alone.
+    g.begin(g.jook, "whack");
+    g.jook.start();
+    run(4);
+    g.input.press("camera");
+    run(4);
+    const held = g.view;
+    g.jook.quit();
+    run(10);
+    g.stage.render = draw;
+    return { seen, held, kept: localStorage.getItem("sack-v2-view") };
+  });
+  const phase0 = await get(() => window.__GAME__.sky.phase);
+  await press(8);
+  const padView = await get(() => window.__GAME__.view);
+  await press(11);
+  const phase1 = await get(() => window.__GAME__.sky.phase);
+  await page.evaluate(() => {
+    window.__padOn = false;
+  });
+  await ff(0.2);
+  await page.evaluate(() => {
+    const g = window.__GAME__;
+    g.view = 0;
+    g.input.pad = false;
+    g.setPhase("day");
+    g.sky.setPhase("day", true);
+  });
+  check(
+    views.seen.map((q) => q.view).join() === "0,1,2,0" && views.seen[1].back < views.seen[0].back - 1.5 && views.seen[2].back > views.seen[0].back + 2.5 && views.seen[2].up > views.seen[0].up + 1 && /Close/.test(views.seen[1].said) && /Wide/.test(views.seen[2].said) && views.held === 0 && views.kept === "0" && padView === 1 && phase1 !== phase0,
+    "the view has its own button: C goes through standard, close and wide and the choice is kept, the View button on a pad does the same, and the right stick's click turns the day over",
+    { ...views, padView, phase0, phase1 },
+  );
 
   // ---- the people of the city
   const folk = await page.evaluate(async () => {

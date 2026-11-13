@@ -12,8 +12,9 @@ import { Card, type CardArt } from "./card";
  *  bounce on a trampoline               wade   in the ball pit
  *  inside gone through a door for a while
  *  throw  one go at something (a bowling ball), then off again
+ *  sit    sat down at a table, on the stool drawn with them
  */
-export type Act = "watch" | "play" | "eat" | "dance" | "cheer" | "serve" | "bounce" | "wade" | "inside" | "throw";
+export type Act = "watch" | "play" | "eat" | "dance" | "cheer" | "serve" | "bounce" | "wade" | "inside" | "throw" | "sit";
 
 export type Stop = {
   x: number;
@@ -72,6 +73,7 @@ const STAY: Record<Act, [number, number]> = {
   wade: [1e9, 1e9],
   inside: [8, 18],
   throw: [1.6, 2.2],
+  sit: [1e9, 1e9],
 };
 
 const _pos = { x: 0, z: 0 };
@@ -164,7 +166,7 @@ export class Troupe {
     let bestD = r;
     this.members.forEach((m, i) => {
       const act = m.stop.act;
-      if (!m.card.visible || (!m.going && (act === "inside" || act === "bounce" || act === "wade")) || (m.posted && (act === "serve" || act === "play"))) return;
+      if (!m.card.visible || (!m.going && (act === "inside" || act === "bounce" || act === "wade")) || (m.posted && (act === "serve" || act === "play" || act === "sit"))) return;
       const d = Math.hypot(m.x - x, m.z - z);
       if (d < bestD) {
         bestD = d;
@@ -347,14 +349,14 @@ export class Troupe {
         const act = s.act;
         c.visible = act !== "inside";
         // Turn to Benji when he is close enough to be talking to; otherwise mind your business.
-        const facePlayer = player && pd < (act === "serve" ? 4 : 1.7) && act !== "bounce" && act !== "play";
+        const facePlayer = player && pd < (act === "serve" ? 4 : 1.7) && act !== "bounce" && act !== "play" && act !== "sit";
         const want = facePlayer ? Math.atan2(player.x - m.x, player.z - m.z) : Math.atan2(s.fx - m.x, s.fz - m.z);
         c.heading = dampAngle(c.heading, want, damp(5, dt));
         lift = s.lift ?? 0;
         let up = false;
         if (act === "bounce") lift += Math.abs(Math.sin((time + m.seed) * 2.7)) * 1.15;
         else if (act === "wade") lift += Math.max(0, Math.sin((time + m.seed) * 2.1)) * 0.35;
-        else if (act === "play" && !c.has("sit")) lift += Math.max(0, Math.sin((time + m.seed) * 7)) * 0.02;
+        else if (act === "play") lift += Math.max(0, Math.sin((time + m.seed) * 7)) * 0.02;
         else if (act === "cheer" && Math.sin(time * 0.55 + m.seed * 3) > 0.55) {
           lift += Math.abs(Math.sin((time + m.seed) * 8)) * 0.16;
           up = true;
@@ -381,7 +383,7 @@ export class Troupe {
         }
         // Both hands in the air while they are jumping about something.
         // Sat at a table, where there is a drawing of them sat.
-        if (act !== "serve") c.pose = up ? "cheer" : act === "play" && c.has("sit") ? "sit" : null;
+        if (act !== "serve") c.pose = up ? "cheer" : act === "sit" && c.has("sit") ? "sit" : null;
         if (!m.posted) {
           m.t -= dt;
           // Benji wants the spot: let him have it.
