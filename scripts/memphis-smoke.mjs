@@ -166,15 +166,60 @@ try {
   });
   check(await get(() => window.__GAME__.save.owned.includes("sr-tour-black") && window.__GAME__.save.wearing === "tour_black"), "a piece can be bought and worn");
 
-  // Deliver, then the court.
-  await page.evaluate(() => {
+  // Deliver, then the court. Court OG himself takes the box, not only the sign-up table: walking
+  // up to him with it offers the hand-off and nothing else, and he answers about the job after.
+  const og = await page.evaluate(() => {
     const g = window.__GAME__;
     g.setPlace("street");
+    g.dialogue.length = 0;
+    const me = g.npcs.find((q) => q.id === "courtOg");
+    const table = { x: g.city.anchors.ogSpot.x, z: g.city.anchors.ogSpot.z + 1.5 };
+    // Somewhere beside him, out of the table's reach, so it is him and not the table that answers.
+    let at = null;
+    for (let a = 0; a < 16 && !at; a++) {
+      for (const r of [1.2, 1.6, 2]) {
+        const x = me.x + Math.sin((a / 16) * Math.PI * 2) * r;
+        const z = me.z + Math.cos((a / 16) * Math.PI * 2) * r;
+        if (Math.hypot(x - table.x, z - table.z) > 2.7) {
+          at = { x, z };
+          break;
+        }
+      }
+    }
+    if (at) g.warp(at.x, at.z, 0);
+    return { at, x: me.x, z: me.z };
+  });
+  await ff(0.3);
+  const handed = await page.evaluate(() => ({ prompt: window.__GAME__.prompt, step: window.__GAME__.save.step }));
+  await tap("interact");
+  await ff(0.2);
+  const ogAfter = await page.evaluate(() => {
+    const g = window.__GAME__;
+    return { step: g.save.step, carrying: g.save.flags.carrying, said: g.dialogue.map((d) => d.who + ": " + d.text), prompt: g.prompt };
+  });
+  check(
+    !!og.at && handed.step === 2 && handed.prompt === "Hand Court OG the drop" && ogAfter.step === 3 && !ogAfter.carrying && ogAfter.said.length === 1 && /^Court OG: That's the new drop/.test(ogAfter.said[0]),
+    "the drop is delivered to Court OG by walking up to him, as one hand-off with one line",
+    { og, handed, ogAfter },
+  );
+  // Now the court is the job: he talks about that, not small talk.
+  await page.evaluate(() => (window.__GAME__.dialogue.length = 0));
+  await ff(0.1);
+  const nudge0 = await page.evaluate(() => window.__GAME__.prompt);
+  await tap("interact");
+  await ff(0.2);
+  const nudge = await page.evaluate(() => ({ prompt: window.__GAME__.prompt, said: window.__GAME__.dialogue.map((d) => d.who + ": " + d.text), step: window.__GAME__.save.step }));
+  check(
+    nudge0 === "Court OG: Earn the court" && nudge.step === 3 && nudge.said.length === 1 && /^Court OG: .*shootout/.test(nudge.said[0]),
+    "while the court is the job, talking to Court OG is about the job",
+    { nudge0, nudge },
+  );
+  await page.evaluate(() => {
+    const g = window.__GAME__;
+    g.dialogue.length = 0;
     g.warp(g.city.anchors.ogSpot.x, g.city.anchors.ogSpot.z + 1.5, Math.PI);
   });
   await ff(0.3);
-  await tap("interact");
-  check((await get(() => window.__GAME__.save.step)) === 3, "the drop is delivered to Court OG");
   await tap("interact");
   await ff(0.3);
   check((await get(() => window.__GAME__.overlay)) === "court", "Court OG's table offers the three games");

@@ -80,6 +80,17 @@ type Npc = { id: CastId; card: Card; place: Place; x: number; z: number; home: n
 /** Longest stretch of game time played in one go. */
 const STEP = 1 / 30;
 
+/** Who each Drop Day job belongs to. The later jobs name their own giver. */
+const DROP_DAY_WHO: Record<string, CastId> = { meet: "kBlanco", deliver: "courtOg", hoops: "courtOg", fish: "uncJ", eat: "mamaDee", bowl: "strike", race: "nitro", buy: "kBlanco", fit: "kBlanco" };
+/** What they say about it when Benji comes up to them while it is open. */
+const DROP_DAY_LINES: Record<string, string> = {
+  hoops: "Package is in. Now earn the court: ten in a shootout. Sign-up table is right here.",
+  fish: "Bait's at the shack, rod's on the rail. Catch me one off this pier, nephew.",
+  eat: "You look hungry, baby. Order you a plate at the window.",
+  bowl: "Lanes are open. Grab a ball off the rack and bowl a game.",
+  race: "Three laps of Riverside Drive. Get in your car and pull up to the line when you're ready.",
+};
+
 /** Graphics from richest to lightest. The frame rate walks down this list, resolution before effects. */
 const RUNGS: { quality: Quality; scale: number }[] = [
   { quality: "high", scale: 1 },
@@ -886,12 +897,7 @@ export class Game {
       2.4,
       () => (this.save.flags.carrying ? "Hand Court OG the drop" : "Play ball: shootout, a game to 11, or practice"),
       () => {
-        if (this.save.flags.carrying) {
-          this.save.flags.carrying = false;
-          this.say("Court OG", "That's the new drop? Lil' man came through. Now let me see that jumper.", null, "og-new-drop");
-          this.emit("delivered");
-          return;
-        }
+        if (this.save.flags.carrying) return this.handOff();
         this.open("court");
       },
     );
@@ -1756,6 +1762,40 @@ export class Game {
       }
     }
     this.push();
+  }
+
+  /** The box from K Blanco goes to Court OG: at the sign-up table or wherever he is spoken to. */
+  private handOff() {
+    if (!this.save.flags.carrying) return;
+    this.save.flags.carrying = false;
+    this.dialogue.length = 0;
+    this.say("Court OG", "That's the new drop? Lil' man came through. Now let me see that jumper.", null, "og-new-drop");
+    this.emit("delivered");
+  }
+
+  /**
+   * What one of the named cast has to do with the job in hand, if anything. Whoever the job is
+   * for answers about the job, whatever way Benji comes up to them: never with small talk while it
+   * is open, and never two things at once.
+   */
+  private errand(id: CastId): { label: string; act: () => void } | null {
+    const step = STORY[this.save.step];
+    if (!step) return null;
+    const owner = step.who ? (Object.keys(CAST) as CastId[]).find((k) => CAST[k].name === step.who) : DROP_DAY_WHO[step.id];
+    if (owner !== id) return null;
+    const c = CAST[id];
+    if (step.id === "deliver") return this.save.flags.carrying ? { label: "Hand Court OG the drop", act: () => this.handOff() } : null;
+    if (id === "kBlanco") return { label: this.stepId() === "meet" ? "Talk to K Blanco" : `K Blanco: ${step.title}`, act: () => this.talkK() };
+    const line = step.line ?? DROP_DAY_LINES[step.id] ?? step.detail;
+    return {
+      label: `${c.name}: ${step.title}`,
+      act: () => {
+        this.dialogue.length = 0;
+        this.say(c.name, line, c.portrait ?? null);
+        this.toast(step.detail);
+        this.sound.ui();
+      },
+    };
   }
 
   private talkK() {
@@ -2644,7 +2684,8 @@ export class Game {
     // No door or counter in reach: is there somebody to speak to?
     const who = best ? null : this.someone();
     const name = !who ? "" : who.doing === "cast" ? CAST[who.key as CastId].name : nameOf(who.key, who.card.face.includes("female"));
-    const label = best ? best.label() : who ? `Talk to ${name}` : "";
+    const job = who && who.doing === "cast" ? this.errand(who.key as CastId) : null;
+    const label = best ? best.label() : job ? job.label : who ? `Talk to ${name}` : "";
     if (label !== this.prompt) {
       this.prompt = label;
       this.push();
@@ -2654,7 +2695,8 @@ export class Game {
       if (best && !this.afterFade) {
         this.dialogue.length = 0;
         best.act();
-      } else if (who && !this.afterFade && (!this.dialogue.length || this.dialogue[0]!.who === name)) this.talkTo(who, name);
+      } else if (job && !this.afterFade) job.act();
+      else if (who && !this.afterFade && (!this.dialogue.length || this.dialogue[0]!.who === name)) this.talkTo(who, name);
       else if (this.dialogue.length) this.nextLine();
     }
     this.chase(dt);
