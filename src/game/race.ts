@@ -7,6 +7,10 @@ export const RIVAL_NAME = "Cam";
 export const CRUISE_SPEED = 455;
 export const NITRO_SPEED = 655;
 export const SLOW_SPEED = 228;
+/** Tap ↑ within this many seconds before GO for a perfect launch; earlier jumps the light. */
+export const LAUNCH_WINDOW = 0.45;
+/** Tuck in behind Cam this close (px) to charge the slipstream. */
+export const SLIP_RANGE = 170;
 
 export type ArrowDir = "left" | "right" | "up";
 
@@ -102,6 +106,12 @@ export type RaceState = {
   boostArmed: boolean;
   boostT: number;
   slowT: number;
+  /** Launch call made during the countdown, applied on GO. */
+  launch: "none" | "perfect" | "early";
+  /** 0..1 slipstream charge from running behind Cam. */
+  slip: number;
+  finalLapCalled: boolean;
+  overtakes: number;
 };
 
 export type RaceHud = {
@@ -132,6 +142,9 @@ export type RaceHud = {
   combo: number;
   boosting: boolean;
   slowed: boolean;
+  slip: number;
+  launch: RaceState["launch"];
+  overtakes: number;
 };
 
 export function idleRace(bestTime = 0): RaceState {
@@ -156,6 +169,10 @@ export function idleRace(bestTime = 0): RaceState {
     boostArmed: false,
     boostT: 0,
     slowT: 0,
+    launch: "none",
+    slip: 0,
+    finalLapCalled: false,
+    overtakes: 0,
   };
 }
 
@@ -224,6 +241,10 @@ export function beginRace(bestTime = 0): RaceState {
     boostArmed: false,
     boostT: 0,
     slowT: 0,
+    launch: "none",
+    slip: 0,
+    finalLapCalled: false,
+    overtakes: 0,
   };
 }
 
@@ -427,6 +448,47 @@ export function tickRaceCues(state: RaceState, dt: number, tap: ArrowDir | null)
   }
 }
 
+/** ↑ during the countdown: a late tap is a perfect launch, an early one jumps the light. First call counts. */
+export function callLaunch(state: RaceState, tap: ArrowDir | null) {
+  if (state.phase !== "countdown" || state.launch !== "none" || tap !== "up") return null;
+  state.launch = state.countdown <= LAUNCH_WINDOW ? "perfect" : "early";
+  return state.launch;
+}
+
+/** On GO: a perfect launch fires nitro, jumping the light costs a beat. */
+export function applyLaunch(state: RaceState) {
+  if (state.launch === "perfect") {
+    state.boostT = 1.35;
+    state.cruise = NITRO_SPEED;
+  } else if (state.launch === "early") {
+    state.slowT = 0.9;
+    state.cruise = SLOW_SPEED;
+  }
+  return state.launch;
+}
+
+/** Charge the slipstream while tucked in behind Cam; returns true the moment it fires. */
+export function tickSlipstream(state: RaceState, dt: number) {
+  const p = state.player;
+  const r = state.rival;
+  const dist = Math.hypot(r.x - p.x, r.y - p.y);
+  const behind = progressOf(r) > progressOf(p);
+  const sameWay = p.vx * r.vx + p.vy * r.vy > 0;
+  if (behind && sameWay && dist < SLIP_RANGE && state.boostT <= 0) {
+    state.slip = Math.min(1, state.slip + dt / 1.5);
+    if (state.slip >= 1) {
+      state.slip = 0;
+      state.boostT = 1.1;
+      state.slowT = 0;
+      state.cruise = NITRO_SPEED;
+      return true;
+    }
+  } else {
+    state.slip = Math.max(0, state.slip - dt * 0.6);
+  }
+  return false;
+}
+
 export function armNextSegment(state: RaceState) {
   state.turnArmed = false;
   state.boostArmed = false;
@@ -488,6 +550,9 @@ export function toRaceHud(state: RaceState): RaceHud | null {
     combo: state.combo,
     boosting: state.boostT > 0,
     slowed: state.slowT > 0,
+    slip: state.slip,
+    launch: state.launch,
+    overtakes: state.overtakes,
   };
 }
 

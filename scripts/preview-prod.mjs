@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+import { createReadStream, existsSync } from "node:fs";
+import { copyFile, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, join, normalize, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -32,6 +32,29 @@ const MIME = {
   ".woff2": "font/woff2",
 };
 
+// With no hosted database (CI, a local check) the server falls back to its embedded one, and
+// the build leaves that library's data files behind. Put them beside it, so signing in and
+// saved progress can be tested against the production build. The live site has a real database
+// and never loads any of this.
+if (!process.env.DATABASE_URL) {
+  const libs = resolve(root, ".vercel/output/functions/__server.func/_libs");
+  const dist = resolve(root, "node_modules/@electric-sql/pglite/dist");
+  if (existsSync(libs) && existsSync(dist)) {
+    for (const name of ["pglite.data", "pglite.wasm", "initdb.wasm"]) {
+      const from = join(dist, name);
+      const to = join(libs, name);
+      if (existsSync(from) && !existsSync(to)) await copyFile(from, to);
+    }
+  }
+  // Who may read the requests businesses send, for the checks only: an account the checks make.
+  process.env.PARTNER_OWNERS ??= "owner-smoke@example.com";
+  // Requests are emailed through a relay on the live site. The checks get a stand-in on this
+  // server (below): it keeps what it is sent and emails nobody.
+  process.env.PARTNER_RELAY_URL ??= "/__relay";
+}
+// What the stand-in relay has been sent.
+const relayed = [];
+
 const nitro = await import(pathToFileURL(entry).href);
 const fetchHandler = nitro.default?.fetch?.bind(nitro.default);
 if (typeof fetchHandler !== "function") {
@@ -47,6 +70,35 @@ function fileFromUrl(urlPath) {
 
 const server = createServer(async (req, res) => {
   try {
+    // The stand-in relay: takes a request as the real one does, and answers the way the real one
+    // answers. A name with "Unconfirmed" in it gets the answer an owner who has not confirmed
+    // their address yet gets, so the checks can see what the sender is shown then.
+    if ((req.url || "/").split("?")[0] === "/__relay" && process.env.PARTNER_RELAY_URL === "/__relay") {
+      res.setHeader("content-type", "application/json; charset=utf-8");
+      res.setHeader("cache-control", "no-store");
+      if (req.method === "POST") {
+        const chunks = [];
+        for await (const chunk of req) chunks.push(chunk);
+        let sent = null;
+        try {
+          sent = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        } catch {
+          /* not a request */
+        }
+        if (!sent || typeof sent !== "object") {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ success: "false", message: "Not a form." }));
+          return;
+        }
+        relayed.push(sent);
+        if (relayed.length > 50) relayed.shift();
+        const waiting = /Unconfirmed/.test(String(sent.Name ?? ""));
+        res.end(JSON.stringify(waiting ? { success: "false", message: "This form needs Activation." } : { success: "true", message: "The form was submitted successfully." }));
+        return;
+      }
+      res.end(JSON.stringify(relayed));
+      return;
+    }
     const filePath = fileFromUrl(req.url || "/");
     if (filePath) {
       try {
@@ -69,16 +121,25 @@ const server = createServer(async (req, res) => {
       if (Array.isArray(value)) for (const item of value) headers.append(key, item);
       else headers.set(key, value);
     }
-    const request = new Request(`http://${hostHdr}${req.url || "/"}`, {
-      method: req.method || "GET",
-      headers,
-    });
+    // A POST carries a body; pass it on as it came.
+    const method = req.method || "GET";
+    let body;
+    if (method !== "GET" && method !== "HEAD") {
+      const chunks = [];
+      for await (const chunk of req) chunks.push(chunk);
+      if (chunks.length) body = Buffer.concat(chunks);
+    }
+    const request = new Request(`http://${hostHdr}${req.url || "/"}`, { method, headers, body });
     const response = await fetchHandler(request);
     res.statusCode = response.status;
     response.headers.forEach((value, key) => {
-      if (key.toLowerCase() === "transfer-encoding") return;
+      const name = key.toLowerCase();
+      if (name === "transfer-encoding" || name === "set-cookie") return;
       res.setHeader(key, value);
     });
+    // Signing in sets more than one cookie. Each is its own header; set one at a time, only the last got through.
+    const cookies = response.headers.getSetCookie?.() ?? [];
+    if (cookies.length) res.setHeader("set-cookie", cookies);
     res.end(Buffer.from(await response.arrayBuffer()));
   } catch (err) {
     if (!res.headersSent) {

@@ -1,0 +1,822 @@
+import * as THREE from "three";
+import type { Hoop } from "../core/types";
+import { cropTex, glyphCells, paintMat, tex } from "../gfx/tex";
+import { addGround } from "./ground";
+import { lotSurface } from "./buildings";
+import { MAT, Frame, YAW, addSolid, bench, bush, emissiveMat, globeLamp, neon, poolMat, sign, std, tree, type BuildCtx } from "./kit";
+import { BAIT_SHOP, COURT, CURB, HQ, PIER, PLAZA, RACE_MEET, RIVER_Z, ROAD_HALF, STREETS_Z, TRUCKS, rect } from "./map";
+import { FOOD, FOOD_TRUCKS, type Truck, type TruckId } from "../play/goods";
+
+const Y0 = CURB;
+const OPENING = "/game/opening-title.webp";
+
+export type Riverfront = {
+  hoops: Hoop[];
+  nets: THREE.Mesh[];
+  rims: THREE.Mesh[];
+  hqDoor: { x: number; z: number };
+  baitCounter: { x: number; z: number };
+  trucks: TruckLot;
+  castSpots: { x: number; z: number }[];
+  ogSpot: { x: number; z: number };
+  /** Where Court OG stands, behind his table. */
+  ogStand: { x: number; z: number };
+  uncStand: { x: number; z: number; heading: number };
+};
+
+/** Solid block lettering, readable from across the plaza. */
+export function blockText(ctx: BuildCtx, text: string, x: number, y: number, z: number, yaw: number, cell: number, mat: THREE.Material, depth = 0.6) {
+  const f = new Frame(ctx, x, z, yaw);
+  const adv = cell * 6.2;
+  const total = adv * text.length - cell * 1.2;
+  [...text].forEach((ch, i) => {
+    for (const [cx, cy] of glyphCells(ch)) {
+      f.box(cell, cell, depth, -total / 2 + i * adv + cx * cell + cell / 2, y + cy * cell + cell / 2, 0, mat);
+    }
+  });
+  return total;
+}
+
+export function buildRiverfront(ctx: BuildCtx): Riverfront {
+  const north = STREETS_Z[0] - ROAD_HALF;
+  const inner = north - 3.5;
+
+  // Surfaces. The promenade and the HQ plaza are the dark wet stone from the concept art.
+  lotSurface(ctx, rect(-230, 230, RIVER_Z, RIVER_Z + 6), "plaza");
+  lotSurface(ctx, rect(PLAZA.minX, PLAZA.maxX, RIVER_Z + 6, north), "plaza");
+  lotSurface(ctx, rect(-230, -112, RIVER_Z + 6, inner), "grass");
+  lotSurface(ctx, rect(-112, -70, RIVER_Z + 6, inner), "concrete");
+  lotSurface(ctx, rect(-70, PLAZA.minX, RIVER_Z + 6, inner), "grass");
+  lotSurface(ctx, rect(PLAZA.maxX, 50, RIVER_Z + 6, inner), "grass");
+  lotSurface(ctx, rect(50, 78, RIVER_Z + 6, inner), "concrete");
+  lotSurface(ctx, rect(78, 230, RIVER_Z + 6, inner), "grass");
+
+  // River wall and railing with a gap at the pier.
+  ctx.solid.wall(460, 2.2, 0, Y0 - 1.1, RIVER_Z, MAT.brick("#3a3632", 5), YAW.north, 60, 1);
+  const rail = MAT.black();
+  const railZ = RIVER_Z + 0.5;
+  const span = (a: number, b: number) => {
+    ctx.solid.box(b - a, 0.09, 0.09, (a + b) / 2, Y0 + 1.08, railZ, rail);
+    ctx.solid.box(b - a, 0.06, 0.06, (a + b) / 2, Y0 + 0.6, railZ, rail);
+    for (let x = a; x <= b + 0.01; x += 2.4) ctx.solid.box(0.1, 1.1, 0.1, x, Y0 + 0.55, railZ, rail);
+    addSolid(ctx, a, b, RIVER_Z - 0.4, railZ + 0.12);
+  };
+  span(-200, PIER.x - PIER.half);
+  span(PIER.x + PIER.half, 200);
+  for (let x = -146; x <= 146; x += 18) {
+    if (Math.abs(x - PIER.x) < 6) continue;
+    globeLamp(ctx, x, RIVER_Z + 1.5, Y0, 0xffd9a0);
+    ctx.solid.cyl(0.24, 0.3, 0.9, x + 9, Y0 + 0.45, RIVER_Z + 1.2, MAT.black(), 8);
+  }
+  for (let x = -138; x <= 138; x += 36) {
+    if (x > PLAZA.minX - 4 && x < PLAZA.maxX + 4) continue;
+    bench(ctx, x, RIVER_Z + 4.6, YAW.north, Y0);
+  }
+
+  const hqDoor = buildHqExterior(ctx);
+  const court = buildCourt(ctx);
+  const pier = buildPier(ctx);
+  const trucks = buildTrucks(ctx);
+  buildMemphisSign(ctx);
+  buildRaceGate(ctx);
+
+  // Park planting.
+  const r = ctx.rand;
+  const groves: [number, number, number, number, number][] = [
+    [-148, -116, -190, -152, 9],
+    [-68, -44, -176, -152, 5],
+    [36, 48, -190, -152, 4],
+    [82, 150, -192, -168, 12],
+    [124, 150, -166, -152, 4],
+  ];
+  for (const [x0, x1, z0, z1, n] of groves) {
+    for (let i = 0; i < n; i++) tree(ctx, x0 + r() * (x1 - x0), z0 + r() * (z1 - z0), 1 + r() * 0.5, Y0);
+    for (let i = 0; i < n; i++) bush(ctx, x0 + r() * (x1 - x0), z0 + r() * (z1 - z0), 0.9 + r() * 0.6, Y0);
+  }
+
+  return { ...court, hqDoor, baitCounter: pier.baitCounter, castSpots: pier.castSpots, uncStand: pier.uncStand, trucks };
+}
+
+/**
+ * The boutique from the concept art: black brick, the green script sign, a lit window full of
+ * clothes, wet stone out front. The sign and the window are lifted from the artwork itself.
+ */
+function buildHqExterior(ctx: BuildCtx) {
+  const w = HQ.maxX - HQ.minX;
+  const d = HQ.maxZ - HQ.minZ;
+  const cx = (HQ.minX + HQ.maxX) / 2;
+  const cz = (HQ.minZ + HQ.maxZ) / 2;
+  const h = HQ.height;
+  const brick = MAT.brick("#1c1816", 7);
+  ctx.solid.walls(w, h, d, cx, Y0, cz, brick, 4, 4);
+  ctx.solid.flat(w, d, cx, Y0 + h, cz, MAT.roof());
+  ctx.solid.box(w + 0.5, 0.5, d + 0.5, cx, Y0 + h - 0.05, cz, MAT.black());
+  addSolid(ctx, HQ.minX, HQ.maxX, HQ.minZ, HQ.maxZ);
+
+  const f = new Frame(ctx, cx, HQ.frontZ, YAW.south);
+  const lx = (worldX: number) => worldX - cx;
+  const green = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.25, 2.6, 0.18), toneMapped: false });
+  ctx.glow.basic(green, 0.55, 1.15);
+
+  // Script sign, straight from the artwork. Black in the crop adds nothing, so only the tubes show.
+  const signMat = new THREE.MeshBasicMaterial({ map: cropTex(OPENING, 0.272, 0.05, 0.536, 0.232, 1024, 512), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, toneMapped: false });
+  ctx.glow.basic(signMat, 1.25, 2.3);
+  f.wall(11.2, 5.4, lx(-14.2), Y0 + 6.72, 0.12, signMat, ctx.flat);
+
+  // Display window with the green tube frame.
+  const winX0 = -18.6;
+  const winX1 = -8.4;
+  const winY0 = 0.55;
+  const winH = 3.55;
+  const winTex = cropTex(OPENING, 0.386, 0.232, 0.507, 0.468, 512, 512);
+  winTex.wrapS = THREE.RepeatWrapping;
+  const winMat = new THREE.MeshBasicMaterial({ map: winTex, toneMapped: false });
+  ctx.glow.basic(winMat, 0.85, 1.55);
+  f.wall(winX1 - winX0, winH, lx((winX0 + winX1) / 2), Y0 + winY0 + winH / 2, 0.05, winMat, ctx.flat, 0, 3, 1);
+  // The new drop, postered on the brick beside the door.
+  const loader = new THREE.TextureLoader();
+  ["/game/products/sr-black-gold-tee.webp", "/game/products/sr-moneybag-hoodie.webp"].forEach((src, i) => {
+    const map = loader.load(src);
+    map.colorSpace = THREE.SRGBColorSpace;
+    const poster = new THREE.MeshBasicMaterial({ map, toneMapped: false });
+    ctx.glow.basic(poster, 0.5, 1.05);
+    const px = lx(-28.2 + i * 3.1);
+    f.box(2.3, 3.3, 0.1, px, Y0 + 2.5, 0.06, MAT.black());
+    f.wall(2.1, 3.1, px, Y0 + 2.5, 0.13, poster, ctx.flat);
+    f.box(1.2, 0.08, 0.3, px, Y0 + 4.35, 0.2, MAT.gold());
+  });
+  const tube = 0.09;
+  const mid = lx((winX0 + winX1) / 2);
+  f.box(winX1 - winX0 + tube, tube, tube, mid, Y0 + winY0 + winH, 0.14, green, ctx.flat);
+  f.box(winX1 - winX0 + tube, tube, tube, mid, Y0 + winY0, 0.14, green, ctx.flat);
+  for (const x of [winX0, winX1, winX0 + (winX1 - winX0) / 3, winX0 + ((winX1 - winX0) * 2) / 3]) f.box(tube, winH, tube, lx(x), Y0 + winY0 + winH / 2, 0.14, green, ctx.flat);
+  f.box(winX1 - winX0 + 0.5, winY0, 0.5, mid, Y0 + winY0 / 2, 0.1, brick);
+
+  // Glass door.
+  const doorMat = new THREE.MeshBasicMaterial({ map: cropTex(OPENING, 0.316, 0.262, 0.378, 0.498, 256, 512), toneMapped: false });
+  ctx.glow.basic(doorMat, 0.8, 1.45);
+  f.wall(2.3, 3.5, lx(HQ.doorX), Y0 + 1.75, 0.05, doorMat, ctx.flat);
+  f.box(2.5, 0.12, 0.3, lx(HQ.doorX), Y0 + 3.56, 0.1, MAT.black());
+  for (const s of [-1, 1]) f.box(0.12, 3.6, 0.3, lx(HQ.doorX) + s * 1.2, Y0 + 1.8, 0.1, MAT.black());
+  f.box(0.06, 1.2, 0.1, lx(HQ.doorX) + 0.8, Y0 + 1.4, 0.22, MAT.gold());
+
+  // Planters either side of the door, as in the artwork.
+  for (const px of [HQ.doorX - 2.2, winX1 + 1.1]) {
+    f.add(new THREE.CylinderGeometry(0.48, 0.38, 0.9, 10), std(0x4a4640, 0.9), lx(px), Y0 + 0.45, 0.9);
+    for (let i = 0; i < 5; i++) {
+      f.add(new THREE.ConeGeometry(0.2, 1.5 + (i % 3) * 0.3, 5), MAT.leaf(i), lx(px) + Math.cos(i * 1.3) * 0.2, Y0 + 1.6, 0.9 + Math.sin(i * 1.3) * 0.2, ctx.solid, 0, Math.cos(i) * 0.35, Math.sin(i * 2) * 0.35);
+    }
+  }
+  // Sconces.
+  for (const sx of [HQ.minX + 0.9, HQ.maxX - 0.9]) {
+    f.box(0.2, 0.5, 0.2, lx(sx), Y0 + 3.2, 0.14, MAT.black());
+    f.add(new THREE.SphereGeometry(0.13, 8, 6), emissiveMat(ctx, 0xffc27a, 0.4, 3.4), lx(sx), Y0 + 2.95, 0.18);
+  }
+
+  // What the art is really about: green and warm light lying on wet stone.
+  const pool = (color: number, k: number) => poolMat(ctx, color, k);
+  f.flat(17, 14, lx(-14), Y0 + 0.02, 6.6, pool(0x39ff14, 0.5), ctx.flat);
+  f.flat(12, 8, lx(-14), Y0 + 0.025, 4.2, pool(0xffb46a, 0.3), ctx.flat);
+  const streak = new THREE.MeshBasicMaterial({
+    map: tex(64, 256, (g, tw, th) => {
+      const grd = g.createLinearGradient(0, 0, 0, th);
+      grd.addColorStop(0, "rgba(57,255,20,0.95)");
+      grd.addColorStop(0.5, "rgba(57,255,20,0.3)");
+      grd.addColorStop(1, "rgba(57,255,20,0)");
+      g.fillStyle = grd;
+      g.fillRect(0, 0, tw, th);
+      const side = g.createLinearGradient(0, 0, tw, 0);
+      side.addColorStop(0, "rgba(0,0,0,1)");
+      side.addColorStop(0.5, "rgba(0,0,0,0)");
+      side.addColorStop(1, "rgba(0,0,0,1)");
+      g.globalCompositeOperation = "destination-out";
+      g.fillStyle = side;
+      g.fillRect(0, 0, tw, th);
+    }),
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+    polygonOffsetUnits: -4,
+  });
+  ctx.glow.fade(streak, 0.12, 0.62);
+  for (const x of [winX0, winX0 + (winX1 - winX0) / 3, winX0 + ((winX1 - winX0) * 2) / 3, winX1]) {
+    const g = new THREE.PlaneGeometry(1.5, 11);
+    g.rotateX(-Math.PI / 2);
+    ctx.flat.add(g, streak, x, Y0 + 0.03, HQ.frontZ + 5.9);
+  }
+  ctx.lamps.push({ x: -13.5, y: Y0 + 3, z: HQ.frontZ + 3, color: 0x39ff14 });
+  ctx.lamps.push({ x: HQ.doorX, y: Y0 + 2.6, z: HQ.frontZ + 2, color: 0xffc27a });
+
+  // East wall faces the open plaza and the river view.
+  const east = new Frame(ctx, HQ.maxX, cz, YAW.east);
+  east.wall(9, 3.4, 0, Y0 + 4, 0.08, neon(ctx, "MEMPHIS", "#39ff14", { sub: "EST. 901 · KLOTHING", w: 768, h: 288, board: "#0c0b0a" }), ctx.flat);
+  east.flat(9, 9, 0, Y0 + 0.02, 5, pool(0x39ff14, 0.3), ctx.flat);
+  // Bollards along the plaza edge by the road.
+  for (let x = PLAZA.minX + 3; x <= PLAZA.maxX - 3; x += 5.2) ctx.solid.cyl(0.16, 0.2, 0.85, x, Y0 + 0.42, STREETS_Z[0] - ROAD_HALF - 0.8, MAT.black(), 8);
+  for (const [x, z] of [
+    [8, -160],
+    [22, -176],
+    [8, -190],
+    [-36, -160],
+  ] as const) globeLamp(ctx, x, z, Y0);
+  bench(ctx, 16, -168, YAW.west, Y0);
+  bench(ctx, 16, -184, YAW.west, Y0);
+  return { x: HQ.doorX, z: HQ.frontZ + 1.1 };
+}
+
+
+/** Quarter turn that lays the court art along the court. */
+const COURT_TURN = -Math.PI / 2;
+
+/** Size on the ground of the court art, which keeps the proportions it was made with. */
+const COURT_ART = { w: 18.4, l: 18.4 * (1378 / 988) };
+
+/**
+ * The floor of the 901 Court is the Sackrow Ballers court art: black boards, gold lines, the
+ * ball-faced mascot at centre court. The picture is drawn lying on its side, because the court
+ * runs north-south and the art was made long side across.
+ */
+function courtTexture() {
+  const W = 1024;
+  const H = Math.round(W * (1378 / 988));
+  let ctx2: CanvasRenderingContext2D | null = null;
+  const t = tex(
+    W,
+    H,
+    (g, w, h) => {
+      ctx2 = g;
+      g.fillStyle = "#15120f";
+      g.fillRect(0, 0, w, h);
+    },
+    { aniso: 8 },
+  );
+  const img = new Image();
+  img.onload = () => {
+    const g = ctx2;
+    if (!g) return;
+    g.save();
+    g.translate(W / 2, H / 2);
+    g.rotate(COURT_TURN);
+    g.drawImage(img, -H / 2, -W / 2, H, W);
+    g.restore();
+    t.needsUpdate = true;
+  };
+  img.src = "/game/facades/court-floor.webp";
+  return t;
+}
+
+function graffitiMat(ctx: BuildCtx, lines: string[], fills: [string, string], accent: string) {
+  const map = tex(
+    1024,
+    320,
+    (g, w, h) => {
+      g.fillStyle = "#2a2622";
+      g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 9; i++) {
+        g.fillStyle = `rgba(${90 + i * 9},${70 + i * 6},${48 + i * 4},0.5)`;
+        g.fillRect((i * w) / 9 + 2, 0, w / 9 - 4, h);
+      }
+      for (let i = 0; i < 26; i++) {
+        g.fillStyle = [accent, fills[0], "#ffffff", "#101010"][i % 4]!;
+        g.globalAlpha = 0.5;
+        g.beginPath();
+        g.arc((i * 131) % w, (i * 71) % h, 3 + (i % 5) * 2.4, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.globalAlpha = 1;
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      g.lineJoin = "round";
+      const size = lines.length > 1 ? 150 : 220;
+      g.font = `italic 900 ${size}px Impact, "Arial Black", sans-serif`;
+      lines.forEach((text, i) => {
+        const y = lines.length > 1 ? h * (0.3 + i * 0.42) : h / 2;
+        const x = w / 2 + (i ? 40 : -30);
+        g.save();
+        g.translate(x, y);
+        g.rotate(-0.045);
+        g.fillStyle = "#050505";
+        g.fillText(text, 12, 12);
+        g.lineWidth = 26;
+        g.strokeStyle = "#070707";
+        g.strokeText(text, 0, 0);
+        g.lineWidth = 12;
+        g.strokeStyle = accent;
+        g.strokeText(text, 0, 0);
+        const grad = g.createLinearGradient(0, -size / 2, 0, size / 2);
+        grad.addColorStop(0, fills[0]);
+        grad.addColorStop(1, fills[1]);
+        g.fillStyle = grad;
+        g.fillText(text, 0, 0);
+        g.globalAlpha = 0.5;
+        g.fillStyle = "#ffffff";
+        g.beginPath();
+        g.rect(-w / 2, -size * 0.36, w, size * 0.1);
+        g.save();
+        g.clip();
+        g.fillText(text, 0, 0);
+        g.restore();
+        g.globalAlpha = 1;
+        g.restore();
+      });
+    },
+    { repeat: false },
+  );
+  const mat = new THREE.MeshStandardMaterial({ map, roughness: 0.9, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.1 });
+  ctx.glow.emissive(mat, 0.1, 0.5);
+  return mat;
+}
+
+function chainMat() {
+  const map = tex(64, 64, (g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    g.strokeStyle = "rgba(190,196,204,0.9)";
+    g.lineWidth = 2.2;
+    g.beginPath();
+    g.moveTo(0, 0);
+    g.lineTo(w, h);
+    g.moveTo(w, 0);
+    g.lineTo(0, h);
+    g.stroke();
+  });
+  return new THREE.MeshStandardMaterial({ map, transparent: true, alphaTest: 0.35, side: THREE.DoubleSide, roughness: 0.5, metalness: 0.6 });
+}
+
+function buildCourt(ctx: BuildCtx) {
+  const { cx, cz, halfW, halfL, rimY, rimIn } = COURT;
+  // Matte, so the art reads as painted boards at any hour and is never washed out by glare.
+  const surface = new THREE.MeshStandardMaterial({ map: courtTexture(), roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  // Dark boards to the fence on every side, the art laid over them.
+  ctx.ground.flat((halfW + 1.6) * 2, (halfL + 1.6) * 2, cx, Y0 + 0.004, cz, std(0x15120f, 0.7));
+  ctx.ground.flat(COURT_ART.w, COURT_ART.l, cx, Y0 + 0.008, cz, surface);
+
+  const hoops: Hoop[] = [];
+  const nets: THREE.Mesh[] = [];
+  const rims: THREE.Mesh[] = [];
+  const orange = new THREE.MeshStandardMaterial({ color: 0xff5a1e, emissive: 0xff3a00, emissiveIntensity: 0.25, roughness: 0.35, metalness: 0.5 });
+  const board = new THREE.MeshStandardMaterial({
+    map: tex(
+      256,
+      160,
+      (g, w, h) => {
+        g.fillStyle = "rgba(226,236,244,0.94)";
+        g.fillRect(0, 0, w, h);
+        g.strokeStyle = "#ff4a12";
+        g.lineWidth = 7;
+        g.strokeRect(4, 4, w - 8, h - 8);
+        g.strokeRect(w / 2 - 42, h - 76, 84, 62);
+        g.fillStyle = "#101010";
+        g.textAlign = "center";
+        g.font = '900 30px "Bebas Neue", Impact, sans-serif';
+        g.fillText("901 COURT", w / 2, 40);
+        g.fillStyle = "#1e8a2a";
+        g.font = 'italic 900 17px Georgia, serif';
+        g.fillText("$ackReligious", w / 2, 64);
+      },
+      { repeat: false },
+    ),
+    roughness: 0.15,
+    metalness: 0.1,
+    emissive: 0xffffff,
+    emissiveIntensity: 0.06,
+  });
+  ctx.glow.emissive(board, 0.05, 0.5);
+  const netMap = tex(64, 64, (g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    g.strokeStyle = "rgba(255,255,255,1)";
+    g.lineWidth = 9;
+    g.beginPath();
+    g.moveTo(0, 0);
+    g.lineTo(w, h);
+    g.moveTo(w, 0);
+    g.lineTo(0, h);
+    g.stroke();
+  });
+  netMap.repeat.set(9, 3);
+
+  for (const dir of [-1, 1] as const) {
+    const rimZ = cz + dir * (halfL - rimIn);
+    const boardZ = rimZ + dir * 0.38;
+    const poleZ = cz + dir * (halfL + 0.7);
+    ctx.solid.cyl(0.11, 0.13, 3.9, cx, Y0 + 1.95, poleZ, MAT.black(), 10);
+    ctx.solid.box(0.9, 0.5, 0.9, cx, Y0 + 0.25, poleZ, std(0x1a3a2a, 0.8));
+    ctx.solid.box(0.14, 0.14, Math.abs(poleZ - boardZ) + 0.1, cx, Y0 + 3.75, (poleZ + boardZ) / 2, MAT.black());
+    ctx.solid.box(1.86, 1.1, 0.06, cx, 3.44, boardZ + dir * 0.03, board);
+    ctx.solid.box(0.12, 0.1, 0.4, cx, rimY, rimZ + dir * 0.2, orange);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.23, 0.018, 8, 28), orange);
+    rim.rotation.x = Math.PI / 2;
+    rim.position.set(cx, rimY, rimZ);
+    rim.castShadow = true;
+    rims.push(rim);
+    const net = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.235, 0.14, 0.52, 16, 4, true),
+      new THREE.MeshBasicMaterial({ map: netMap, transparent: true, alphaTest: 0.35, side: THREE.DoubleSide, color: 0xf4f1ea, toneMapped: false }),
+    );
+    net.position.set(cx, rimY - 0.27, rimZ);
+    nets.push(net);
+    hoops.push({ x: cx, y: rimY, z: rimZ, dir, boardZ, boardHalfW: 0.93, boardMinY: 2.89, boardMaxY: 3.99, rimR: 0.23 });
+    addSolid(ctx, cx - 0.45, cx + 0.45, poleZ - 0.45, poleZ + 0.45);
+  }
+
+  // Fence, with a gate on the south side.
+  const chain = chainMat();
+  const post = MAT.steel();
+  const fx0 = cx - halfW - 1.6;
+  const fx1 = cx + halfW + 1.6;
+  const fz0 = cz - halfL - 1.6;
+  const fz1 = cz + halfL + 1.6;
+  const fence = (ax: number, az: number, bx: number, bz: number) => {
+    const len = Math.hypot(bx - ax, bz - az);
+    const yaw = Math.abs(bx - ax) > 0.1 ? 0 : Math.PI / 2;
+    ctx.solid.wall(len, 3.4, (ax + bx) / 2, Y0 + 1.7, (az + bz) / 2, chain, yaw, len / 0.5, 3.4 / 0.5);
+    ctx.solid.box(Math.abs(bx - ax) + 0.08, 0.08, Math.abs(bz - az) + 0.08, (ax + bx) / 2, Y0 + 3.4, (az + bz) / 2, post);
+    const n = Math.max(1, Math.round(len / 3.2));
+    for (let i = 0; i <= n; i++) ctx.solid.cyl(0.05, 0.05, 3.4, ax + ((bx - ax) * i) / n, Y0 + 1.7, az + ((bz - az) * i) / n, post, 6);
+    addSolid(ctx, Math.min(ax, bx) - 0.08, Math.max(ax, bx) + 0.08, Math.min(az, bz) - 0.08, Math.max(az, bz) + 0.08);
+  };
+  fence(fx0, fz0, fx1, fz0);
+  fence(fx0, fz0, fx0, fz1);
+  fence(fx1, fz0, fx1, fz1);
+  fence(fx0, fz1, cx - 2.2, fz1);
+  fence(cx + 2.2, fz1, fx1, fz1);
+
+  // Painted boards on the long sides, like the walls round every Memphis court.
+  ctx.solid.box(0.08, 3.1, 12.2, fx1 - 0.14, Y0 + 1.75, cz - 6.6, MAT.wood());
+  ctx.solid.wall(12, 3, fx1 - 0.2, Y0 + 1.75, cz - 6.6, graffitiMat(ctx, ["SACK", "RELIGIOUS"], ["#7dff3a", "#1e8a2a"], "#e0261c"), YAW.west);
+  ctx.solid.box(0.08, 3.1, 12.2, fx0 + 0.14, Y0 + 1.75, cz - 6.6, MAT.wood());
+  ctx.solid.wall(12, 3, fx0 + 0.2, Y0 + 1.75, cz - 6.6, graffitiMat(ctx, ["901 MEMPHIS"], ["#ff7ad8", "#b3267a"], "#35e0d0"), YAW.east);
+  ctx.solid.box(0.08, 3.1, 9.2, fx1 - 0.14, Y0 + 1.75, cz + 7.4, MAT.wood());
+  ctx.solid.wall(9, 3, fx1 - 0.2, Y0 + 1.75, cz + 7.4, graffitiMat(ctx, ["$ACKROW"], ["#ffe07a", "#c9962a"], "#101010"), YAW.west);
+
+  // Floodlights on the four corners.
+  for (const [lx, lz] of [
+    [fx0, fz0],
+    [fx1, fz0],
+    [fx0, fz1],
+    [fx1, fz1],
+  ] as const) {
+    ctx.solid.cyl(0.1, 0.14, 8.6, lx, Y0 + 4.3, lz, MAT.black(), 8);
+    ctx.solid.box(1.5, 0.5, 0.4, lx, Y0 + 8.7, lz, emissiveMat(ctx, 0xfff0d0, 0.2, 4));
+    ctx.lamps.push({ x: lx + (cx - lx) * 0.4, y: Y0 + 7.5, z: lz + (cz - lz) * 0.4, color: 0xfff0d0 });
+  }
+  ctx.flat.flat(22, 34, cx, Y0 + 0.03, cz, poolMat(ctx, 0xffe0b0, 0.36));
+
+  // Bleachers on the east side, outside the fence.
+  for (let i = 0; i < 4; i++) ctx.solid.box(1, 0.4 + i * 0.4, 16, fx1 + 1.2 + i, Y0 + (0.4 + i * 0.4) / 2, cz, std(0x3a3d42, 0.7, 0.4));
+  addSolid(ctx, fx1 + 0.6, fx1 + 4.8, cz - 8, cz + 8);
+  ctx.solid.wall(7, 1.5, cx, Y0 + 4.4, fz1 + 0.05, neon(ctx, "901 COURT", "#ff8a1e", { sub: "RIVERFRONT" }), YAW.south);
+  addGround({ minX: fx0, maxX: fx1, minZ: fz0, maxZ: fz1, y: Y0 });
+  // The sign-up table by the gate, against the fence. Court OG runs the court from the end of it.
+  const ox = cx + 4.6;
+  const table = std(0x121214, 0.6);
+  ctx.solid.box(2.8, 1.02, 0.1, ox, Y0 + 0.51, fz1 + 1.3, table);
+  for (const s of [-1, 1]) ctx.solid.box(0.1, 1.02, 1.2, ox + s * 1.4, Y0 + 0.51, fz1 + 0.7, table);
+  ctx.solid.box(2.9, 0.06, 0.46, ox, Y0 + 1.05, fz1 + 1.12, MAT.wood());
+  ctx.flat.wall(2.6, 0.8, ox, Y0 + 0.52, fz1 + 1.36, sign("901 COURT", "#ff8a1e", "#121214", { sub: "SHOOTOUT · PRACTICE · RUN ONE", w: 512, h: 160 }), YAW.south);
+  for (const bx of [-0.9, -0.55, 0.85]) ctx.solid.add(new THREE.SphereGeometry(0.17, 12, 10), std(0xc8611c, 0.7), ox + bx, Y0 + 1.25, fz1 + 1.12);
+  ctx.solid.box(0.34, 0.26, 0.24, ox + 0.3, Y0 + 1.21, fz1 + 1.12, std(0x1f6a3c, 0.6));
+  addSolid(ctx, ox - 1.5, ox + 1.5, fz1, fz1 + 1.4);
+  return { hoops, nets, rims, ogSpot: { x: ox, z: fz1 + 2.2 }, ogStand: { x: ox + 2.35, z: fz1 + 1.15 } };
+}
+
+function buildPier(ctx: BuildCtx) {
+  const { x, half, z0, z1 } = PIER;
+  const wood = MAT.wood();
+  const dark = MAT.darkWood();
+  const len = z0 - z1;
+  const plank = new THREE.MeshStandardMaterial({
+    map: tex(128, 128, (g, w, h) => {
+      g.fillStyle = "#6b4a2e";
+      g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 4; i++) {
+        g.fillStyle = `rgba(${40 + i * 12},${26 + i * 6},14,0.5)`;
+        g.fillRect(0, i * 32, w, 30);
+        g.fillStyle = "rgba(0,0,0,0.6)";
+        g.fillRect(0, i * 32 + 30, w, 2);
+      }
+    }),
+    roughness: 0.85,
+  });
+  ctx.solid.box(half * 2, 0.3, len, x, Y0 - 0.15, (z0 + z1) / 2, dark);
+  ctx.ground.flat(half * 2, len, x, Y0 + 0.004, (z0 + z1) / 2, plank, 0, 2);
+  for (let z = z0 - 2; z > z1; z -= 5) {
+    for (const s of [-1, 1]) ctx.solid.cyl(0.2, 0.2, 3.4, x + s * (half - 0.1), Y0 - 1.3, z, dark, 7);
+  }
+  for (const s of [-1, 1]) {
+    const rx = x + s * (half - 0.08);
+    ctx.solid.box(0.1, 0.1, len, rx, Y0 + 1.05, (z0 + z1) / 2, wood);
+    ctx.solid.box(0.07, 0.07, len, rx, Y0 + 0.55, (z0 + z1) / 2, wood);
+    for (let z = z0; z >= z1; z -= 2.6) ctx.solid.box(0.12, 1.1, 0.12, rx, Y0 + 0.55, z, wood);
+    addSolid(ctx, rx - 0.12, rx + 0.12 + (s > 0 ? 0.3 : 0), z1, z0);
+    if (s < 0) addSolid(ctx, rx - 0.42, rx + 0.12, z1, z0);
+  }
+  ctx.solid.box(half * 2, 0.1, 0.1, x, Y0 + 1.05, z1 + 0.08, wood);
+  ctx.solid.box(half * 2, 0.07, 0.07, x, Y0 + 0.55, z1 + 0.08, wood);
+  addSolid(ctx, x - half, x + half, z1 - 0.4, z1 + 0.14);
+  addGround({ minX: x - half, maxX: x + half, minZ: z1, maxZ: z0 + 0.5, y: Y0 });
+  globeLamp(ctx, x - half + 0.35, z1 + 0.6, Y0);
+  globeLamp(ctx, x + half - 0.35, (z0 + z1) / 2, Y0);
+  // A cooler and a tackle box where the regulars stand.
+  ctx.solid.box(0.7, 0.45, 0.45, x + 1.2, Y0 + 0.23, z1 + 3, std(0xc8402c, 0.6));
+  ctx.solid.box(0.72, 0.08, 0.47, x + 1.2, Y0 + 0.49, z1 + 3, MAT.white());
+  ctx.solid.box(0.4, 0.22, 0.24, x - 1.3, Y0 + 0.11, z1 + 5, std(0x2a4a3a, 0.6));
+
+  // Bait shack.
+  const bx = BAIT_SHOP.x;
+  const bz = BAIT_SHOP.z;
+  const f = new Frame(ctx, bx, bz, YAW.east);
+  f.box(5.4, 3.1, 4.2, 0, Y0 + 1.55, -2.1, MAT.wood());
+  f.add(new THREE.BoxGeometry(6.2, 0.14, 3), std(0x2f4a38, 0.8), 0, Y0 + 3.45, -0.9, ctx.solid, 0, 0.3);
+  f.add(new THREE.BoxGeometry(6.2, 0.14, 3), std(0x2f4a38, 0.8), 0, Y0 + 3.45, -3.3, ctx.solid, 0, -0.3);
+  // The serving hatch: the shop behind it, lit, with its rods, reels and tubs on show.
+  f.box(3.3, 1.4, 0.08, 0, Y0 + 1.9, 0, dark);
+  f.wall(3.2, 1.3, 0, Y0 + 1.9, 0.05, baitWindow(ctx), ctx.flat);
+  f.box(3.6, 0.12, 0.7, 0, Y0 + 1.2, 0.3, dark);
+  // A proper counter under the shelf. Unc J keeps shop from the end of it, out front.
+  f.box(3.6, 1.14, 0.1, 0, Y0 + 0.57, 0.6, MAT.wood());
+  for (const sx of [-1.8, 1.8]) f.box(0.1, 1.14, 0.62, sx, Y0 + 0.57, 0.3, MAT.wood());
+  f.wall(3.2, 0.6, 0, Y0 + 0.6, 0.66, sign("LIVE BAIT", "#35e0d0", "#17110e", { sub: "WORMS · MINNOWS · ICE", w: 512, h: 110 }), ctx.flat);
+  f.solid(-1.85, 1.85, 0, 0.7);
+  // The sign hangs off the front of the eave, clear of the roof boards that used to cut across it.
+  f.box(4.7, 1.12, 0.1, 0, Y0 + 3.0, 0.72, dark);
+  f.wall(4.4, 0.95, 0, Y0 + 3.0, 0.78, neon(ctx, "BAIT & TACKLE", "#35e0d0", { w: 512, h: 112 }), ctx.flat);
+  f.flat(5, 5, 0, Y0 + 0.02, 2.4, poolMat(ctx, 0xffb46a, 0.36), ctx.flat);
+  f.lamp(0, Y0 + 2.6, 1.2, 0xffc27a);
+  f.solid(-2.7, 2.7, -4.2, 0);
+  bench(ctx, bx + 6, bz - 6, YAW.north, Y0);
+  const baitCounter = { x: f.wx(0, 1.3), z: f.wz(0, 1.3) };
+  const castSpots = [
+    { x, z: z1 + 1.3 },
+    { x: x - half + 0.7, z: z1 + 7 },
+    { x: x + half - 0.7, z: z1 + 12 },
+  ];
+  return { baitCounter, castSpots, uncStand: { x: f.wx(-2.5, 1.05), z: f.wz(-2.5, 1.05), heading: Math.PI / 2 } };
+}
+
+/** What is seen through the bait shack's hatch: rods on the back wall, reels and lures on the shelves, tubs of bait along the bottom. */
+function baitWindow(ctx: BuildCtx) {
+  const map = tex(
+    512,
+    208,
+    (g, w, h) => {
+      const wall = g.createLinearGradient(0, 0, 0, h);
+      wall.addColorStop(0, "#5a3d22");
+      wall.addColorStop(1, "#33210f");
+      g.fillStyle = wall;
+      g.fillRect(0, 0, w, h);
+      // Planks.
+      g.strokeStyle = "rgba(0,0,0,0.28)";
+      g.lineWidth = 2;
+      for (let x = 0; x < w; x += 42) {
+        g.beginPath();
+        g.moveTo(x, 0);
+        g.lineTo(x, h);
+        g.stroke();
+      }
+      // A lamp's worth of light in the middle of it.
+      const lit = g.createRadialGradient(w / 2, h * 0.3, 10, w / 2, h * 0.3, w * 0.55);
+      lit.addColorStop(0, "rgba(255,214,150,0.55)");
+      lit.addColorStop(1, "rgba(255,214,150,0)");
+      g.fillStyle = lit;
+      g.fillRect(0, 0, w, h);
+      // Rods racked on the back wall, each with its reel.
+      const rods = ["#1d1d20", "#7a1f1f", "#23406a", "#2f5a3a", "#1d1d20", "#8a6a2c"];
+      rods.forEach((c, i) => {
+        const x = 26 + i * 30;
+        g.strokeStyle = c;
+        g.lineWidth = 4;
+        g.beginPath();
+        g.moveTo(x, h - 46);
+        g.lineTo(x + 5, 8);
+        g.stroke();
+        g.fillStyle = "#c9ccd2";
+        g.beginPath();
+        g.arc(x + 1, h - 62, 7, 0, Math.PI * 2);
+        g.fill();
+        g.fillStyle = "#3a3c42";
+        g.beginPath();
+        g.arc(x + 1, h - 62, 3, 0, Math.PI * 2);
+        g.fill();
+      });
+      // Two shelves on the right: floats, lures on cards, spools.
+      g.fillStyle = "#24160a";
+      g.fillRect(220, 70, w - 236, 7);
+      g.fillRect(220, 132, w - 236, 7);
+      for (let i = 0; i < 7; i++) {
+        const x = 240 + i * 38;
+        // Floats: red over white.
+        g.fillStyle = "#f4f1ea";
+        g.beginPath();
+        g.arc(x, 56, 9, 0, Math.PI * 2);
+        g.fill();
+        g.fillStyle = "#e23a2c";
+        g.beginPath();
+        g.arc(x, 56, 9, Math.PI, 0);
+        g.fill();
+        g.fillStyle = "#1d1d20";
+        g.fillRect(x - 1, 40, 2, 8);
+        // Lure cards.
+        g.fillStyle = ["#ffd23a", "#35e0d0", "#ff7ae0", "#f4f1ea"][i % 4]!;
+        g.fillRect(x - 11, 90, 22, 36);
+        g.fillStyle = ["#2f5a3a", "#7a1f1f", "#23406a"][i % 3]!;
+        g.beginPath();
+        g.ellipse(x, 110, 7, 3.5, 0.5, 0, Math.PI * 2);
+        g.fill();
+      }
+      // Tubs of bait and a stack of tackle boxes along the bottom.
+      for (let i = 0; i < 5; i++) {
+        const x = 232 + i * 52;
+        g.fillStyle = i % 2 ? "#e9e6de" : "#35a0d0";
+        g.fillRect(x, 150, 38, 38);
+        g.fillStyle = "#17110e";
+        g.fillRect(x, 150, 38, 6);
+        g.fillStyle = "#17110e";
+        g.font = "900 10px sans-serif";
+        g.textAlign = "center";
+        g.fillText(["WORMS", "SHAD", "MINNOW", "CRICKET", "ICE"][i]!, x + 19, 176);
+      }
+      // OPEN, in the corner of the glass.
+      g.strokeStyle = "#ff5a4a";
+      g.lineWidth = 3;
+      g.strokeRect(w - 96, 10, 80, 30);
+      g.fillStyle = "#ff8a7a";
+      g.font = "900 20px sans-serif";
+      g.textAlign = "center";
+      g.fillText("OPEN", w - 56, 33);
+      // The counter's shadow, and the hatch frame.
+      g.fillStyle = "rgba(0,0,0,0.35)";
+      g.fillRect(0, h - 14, w, 14);
+    },
+    { repeat: false },
+  );
+  const mat = new THREE.MeshStandardMaterial({ map, emissiveMap: map, emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.5 });
+  ctx.glow.emissive(mat, 0.22, 1.05);
+  return mat;
+}
+
+/** The menu board beside a truck: its own dishes at its own prices. */
+function menuBoard(truck: Truck) {
+  const items = FOOD.filter((f) => f.at === truck.id);
+  return new THREE.MeshBasicMaterial({
+    map: tex(384, 512, (g) => {
+      g.fillStyle = "#14100c";
+      g.fillRect(0, 0, 384, 512);
+      g.strokeStyle = truck.color;
+      g.lineWidth = 8;
+      g.strokeRect(8, 8, 368, 496);
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      g.fillStyle = truck.color;
+      g.font = `900 46px Impact, "Arial Narrow Bold", "Arial Black", sans-serif`;
+      g.fillText("MENU", 192, 52);
+      g.fillStyle = "#ffe9b8";
+      g.font = `800 20px ui-sans-serif, system-ui, sans-serif`;
+      g.fillText(truck.tag, 192, 92, 340);
+      const step = Math.min(120, 380 / Math.max(1, items.length));
+      items.forEach((it, i) => {
+        const y = 150 + i * step;
+        g.textAlign = "left";
+        g.fillStyle = "#ffffff";
+        g.font = `800 25px ui-sans-serif, system-ui, sans-serif`;
+        g.fillText(it.name, 28, y, 250);
+        g.textAlign = "right";
+        g.fillStyle = truck.color;
+        g.font = `900 28px "Arial Black", Impact, sans-serif`;
+        g.fillText(`$${it.cost}`, 356, y);
+        g.textAlign = "left";
+        g.fillStyle = "rgba(255,233,184,0.72)";
+        g.font = `500 16px ui-sans-serif, system-ui, sans-serif`;
+        g.fillText(it.line, 28, y + 28, 328);
+      });
+    }),
+    toneMapped: false,
+    color: 0xdedad0,
+  });
+}
+
+export type TruckLot = {
+  /** Where to stand to order, by truck. */
+  windows: Record<TruckId, { x: number; z: number }>;
+  /** The big screen at Veli's: the game puts the video on this material once it is playing. */
+  screen: { x: number; z: number; mat: THREE.MeshBasicMaterial };
+};
+
+function buildTrucks(ctx: BuildCtx): TruckLot {
+  lotSurface(ctx, rect(TRUCKS.x - 22, TRUCKS.x + 22, TRUCKS.z - 16, TRUCKS.z + 5.5), "concrete");
+  const windows = {} as TruckLot["windows"];
+  const offsets: Record<TruckId, number> = { catch: -13, velis: -1, brothers: 13 };
+  for (const truck of FOOD_TRUCKS) {
+    const off = offsets[truck.id];
+    const f = new Frame(ctx, TRUCKS.x + off, TRUCKS.z, YAW.north);
+    const body = std(truck.body, 0.55, 0.2);
+    const trim = std(truck.trim, 0.4, 0.5);
+    const logo = new THREE.MeshBasicMaterial({ map: cropTex(truck.logo, 0, 0, 1, 1, 512, 340), toneMapped: false, color: 0xe6e2da });
+    f.box(6.4, 2.7, 2.5, 0, Y0 + 1.95, 0, body);
+    f.box(1.9, 2, 2.4, 4, Y0 + 1.5, 0, body);
+    f.box(1.7, 0.8, 2.2, 4.1, Y0 + 2.05, 0, MAT.glassDark());
+    f.box(6.44, 0.12, 2.54, 0, Y0 + 0.72, 0, trim);
+    f.box(6.44, 0.1, 2.54, 0, Y0 + 3.26, 0, trim);
+    for (const wx of [-2.1, 3.7]) for (const wz of [-1.15, 1.15]) f.add(new THREE.CylinderGeometry(0.42, 0.42, 0.3, 12), MAT.black(), wx, Y0 + 0.42, wz, ctx.solid, 0, 0, Math.PI / 2);
+    // Serving window on the park side, awning, counter, and the truck's own art beside it.
+    f.box(3.2, 1.1, 0.08, -1.2, Y0 + 2.35, 1.27, emissiveMat(ctx, 0xffd9a0, 0.4, 1.2));
+    f.add(new THREE.BoxGeometry(3.8, 0.08, 1.5), std(truck.trim, 0.8), -1.2, Y0 + 3.1, 1.95, ctx.solid, 0, 0.22);
+    f.box(3.4, 0.1, 0.7, -1.2, Y0 + 1.75, 1.6, MAT.chrome());
+    // The counter is boxed in below the shelf: the crew stand behind it, in the window.
+    f.box(3.4, 1.14, 0.08, -1.2, Y0 + 1.13, 1.91, body);
+    for (const sx of [-2.9, 0.5]) f.box(0.08, 1.14, 0.66, sx, Y0 + 1.13, 1.6, body);
+    f.box(2.36, 1.62, 0.06, 1.85, Y0 + 2.12, 1.27, MAT.black());
+    f.wall(2.24, 1.5, 1.85, Y0 + 2.12, 1.31, logo, ctx.flat);
+    f.wall(2.24, 1.5, 0, Y0 + 2.05, -1.27, logo, ctx.flat, Math.PI);
+    f.wall(5.8, 1, 0, Y0 + 3.9, 1.28, neon(ctx, truck.tag, truck.color, { w: 640, h: 110 }), ctx.flat);
+    f.wall(3.2, 0.34, -1.2, Y0 + 1.36, 1.96, sign(truck.social.toUpperCase(), "#ffe9b8", "#17110e", { w: 640, h: 68 }), ctx.flat);
+    // Menu on a board by the window.
+    f.box(0.08, 2.1, 0.08, -3.9, Y0 + 1.05, 1.7, MAT.black());
+    f.box(1.34, 1.8, 0.06, -3.9, Y0 + 1.5, 1.74, MAT.black());
+    f.wall(1.26, 1.7, -3.9, Y0 + 1.5, 1.78, menuBoard(truck), ctx.flat);
+    f.solid(-4.5, -3.3, 1.5, 2);
+    f.flat(6.5, 5.5, 0, Y0 + 0.02, 3.4, poolMat(ctx, 0xffb46a, 0.42), ctx.flat);
+    f.lamp(0, Y0 + 2.8, 2.2, 0xffc27a);
+    f.solid(-3.3, 5, -1.3, 1.3);
+    f.solid(-2.95, 0.55, 1.3, 1.95);
+    windows[truck.id] = { x: f.wx(-1.2, 3), z: f.wz(-1.2, 3) };
+  }
+
+  // Veli's stage screen: the video plays here whenever someone is on the lot.
+  const vf = new Frame(ctx, TRUCKS.x + offsets.velis + 6.6, TRUCKS.z, YAW.north);
+  const screenMat = new THREE.MeshBasicMaterial({ map: cropTex("/game/food/velis-wings.webp", 0, 0, 1, 1, 512, 288), toneMapped: false });
+  for (const sx of [-1.75, 1.75]) vf.box(0.14, 4.1, 0.14, sx, Y0 + 2.05, 0.9, MAT.black());
+  vf.box(3.84, 2.24, 0.16, 0, Y0 + 2.95, 0.9, MAT.black());
+  vf.wall(3.64, 2.05, 0, Y0 + 2.95, 0.99, screenMat, ctx.flat);
+  vf.wall(3.6, 0.42, 0, Y0 + 1.56, 0.99, sign("NOW PLAYING  ·  YUNG VELI  ·  GO GIRL", "#d4af37", "#0b0a08", { w: 768, h: 84 }), ctx.flat);
+  vf.box(3.84, 0.06, 0.06, 0, Y0 + 4.1, 0.98, new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 1.6, 0.5), toneMapped: false }), ctx.flat);
+  for (const sx of [-1.75, 1.75]) vf.box(0.5, 0.9, 0.5, sx, Y0 + 0.45, 0.9, std(0x101012, 0.5));
+  vf.solid(-2, 2, 0.6, 1.2);
+  vf.lamp(0, Y0 + 2.6, 2.6, 0xd4af37);
+  const screen = { x: vf.wx(0, 3.2), z: vf.wz(0, 3.2), mat: screenMat };
+
+  // Picnic tables and string lights.
+  const bulb = emissiveMat(ctx, 0xffd9a0, 0.5, 3.6);
+  for (const tx of [-14, -4, 6, 16]) {
+    const z = TRUCKS.z - 9.5;
+    const x = TRUCKS.x + tx;
+    ctx.solid.box(2.2, 0.08, 0.9, x, Y0 + 0.78, z, MAT.wood());
+    for (const s of [-1, 1]) {
+      ctx.solid.box(2.2, 0.07, 0.34, x, Y0 + 0.46, z + s * 0.78, MAT.wood());
+      ctx.solid.box(0.1, 0.78, 1.7, x + s * 0.9, Y0 + 0.39, z, MAT.black());
+    }
+    addSolid(ctx, x - 1.1, x + 1.1, z - 0.9, z + 0.9);
+  }
+  for (const px of [-20, 20]) ctx.solid.cyl(0.07, 0.09, 4.6, TRUCKS.x + px, Y0 + 2.3, TRUCKS.z - 6, MAT.black(), 6);
+  for (let i = 0; i <= 26; i++) {
+    const t = i / 26;
+    const y = Y0 + 4.5 - Math.sin(t * Math.PI) * 0.9;
+    ctx.solid.add(new THREE.SphereGeometry(0.09, 6, 4), bulb, TRUCKS.x - 20 + t * 40, y, TRUCKS.z - 6);
+  }
+  ctx.flat.flat(40, 12, TRUCKS.x, Y0 + 0.025, TRUCKS.z - 7, poolMat(ctx, 0xffc98a, 0.28));
+  return { windows, screen };
+}
+
+/** The start gate over Riverside Drive by Nitro's corner: you can see where the racing is from blocks away. */
+function buildRaceGate(ctx: BuildCtx) {
+  const x = RACE_MEET.x;
+  const z = STREETS_Z[0];
+  const half = ROAD_HALF + 0.7;
+  for (const s of [-1, 1]) {
+    ctx.solid.cyl(0.2, 0.26, 7, x, Y0 + 3.5, z + s * half, MAT.black(), 10);
+    addSolid(ctx, x - 0.3, x + 0.3, z + s * half - 0.3, z + s * half + 0.3);
+  }
+  ctx.solid.box(0.6, 1.5, half * 2 + 0.6, x, Y0 + 7.2, z, MAT.black());
+  const board = neon(ctx, "STREET RACE", "#ff3b3b", { sub: "PULL UP · 3 LAPS OF DOWNTOWN", w: 768, h: 128 });
+  ctx.flat.wall(half * 2, 1.3, x + 0.32, Y0 + 7.2, z, board, YAW.east);
+  ctx.flat.wall(half * 2, 1.3, x - 0.32, Y0 + 7.2, z, board, YAW.west);
+  const check = new THREE.MeshBasicMaterial({
+    map: tex(64, 64, (g, w, h) => {
+      for (let i = 0; i < 4; i++)
+        for (let j = 0; j < 4; j++) {
+          g.fillStyle = (i + j) % 2 ? "#111" : "#eee";
+          g.fillRect((i * w) / 4, (j * h) / 4, w / 4, h / 4);
+        }
+    }),
+    polygonOffset: true,
+    polygonOffsetFactor: -3,
+    polygonOffsetUnits: -3,
+  });
+  ctx.flat.flat(1.6, ROAD_HALF * 2, x, 0.03, z, check, 0, 1.6);
+  ctx.lamps.push({ x, y: Y0 + 6, z, color: 0xff5a4a });
+  ctx.flat.flat(16, 16, x, 0.035, z, poolMat(ctx, 0xff6a4a, 0.4));
+}
+
+function buildMemphisSign(ctx: BuildCtx) {
+  const white = new THREE.MeshStandardMaterial({ color: 0xf3efe6, roughness: 0.5, emissive: 0xfff0d0, emissiveIntensity: 0.03 });
+  ctx.glow.emissive(white, 0.03, 0.3);
+  const z = -184;
+  const total = blockText(ctx, "MEMPHIS", -55, Y0 + 0.5, z, YAW.south, 0.5, white, 0.8);
+  ctx.solid.box(total + 1.4, 0.5, 1.6, -55, Y0 + 0.25, z, MAT.concrete());
+  addSolid(ctx, -55 - total / 2 - 0.7, -55 + total / 2 + 0.7, z - 0.8, z + 0.8);
+  ctx.flat.flat(total + 6, 8, -55, Y0 + 0.02, z + 4.4, poolMat(ctx, 0xfff0d0, 0.34));
+  void paintMat;
+}

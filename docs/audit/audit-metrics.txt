@@ -1,0 +1,35 @@
+intersection shot page.screenshot: Timeout 20000ms exceeded.
+Call log:
+  - taking page screenshot
+    - disabled all CSS animations
+  - waiting for fonts to load...
+  - fonts loaded
+
+{
+  "loadMs": 1355,
+  "mobileLoad": 1161,
+  "desktopFps": {
+    "avg": 6,
+    "worstFrameMs": 2400
+  },
+  "mobileFps": {
+    "avg": 3,
+    "worstFrameMs": 767
+  },
+  "before": {
+    "x": -30.2,
+    "z": 5.55,
+    "dollars": 240,
+    "respect": 12,
+    "mission": "Walk the block to SackReligious HQ",
+    "place": "street"
+  },
+  "after": null,
+  "reloadError": "page.reload: Timeout 20000ms exceeded.\nCall log:\n  - waiting for navigation until \"domcontentloaded\"\n",
+  "errors": [],
+  "warnings": [
+    "THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead."
+  ],
+  "failed": []
+}
+MET:0

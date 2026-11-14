@@ -1,6 +1,9 @@
 import type { FishingHud, FishingPhase } from "./types";
+import { TILE, WORLD_PX_H, WORLD_PX_W } from "./data";
+import { RIVER_TILE_Y } from "./worldTopology";
+import { halloweenOn } from "./season";
 
-export type FishId = "bluegill" | "crappie" | "catfish" | "bass" | "gar" | "sackfish";
+export type FishId = "bluegill" | "crappie" | "catfish" | "bass" | "gar" | "sackfish" | "ghostcat" | "pumpkinbass" | "midnightcarp" | "memphis_monster";
 
 export type FishKind = {
   id: FishId;
@@ -21,6 +24,10 @@ export const FISH: FishKind[] = [
   { id: "bass", name: "Largemouth Bass", minLb: 2.0, maxLb: 7.2, weight: 14, minCash: 28, maxCash: 48, respect: 1 },
   { id: "gar", name: "Alligator Gar", minLb: 12, maxLb: 28, weight: 6, minCash: 64, maxCash: 96, respect: 2 },
   { id: "sackfish", name: "901 Sack Fish", minLb: 9, maxLb: 16, weight: 2, minCash: 120, maxCash: 160, respect: 4, legendary: true },
+  { id: "ghostcat", name: "Ghost Catfish", minLb: 3, maxLb: 9, weight: 0, minCash: 36, maxCash: 64, respect: 2 },
+  { id: "pumpkinbass", name: "Pumpkin Bass", minLb: 2.2, maxLb: 6.4, weight: 0, minCash: 32, maxCash: 54, respect: 1 },
+  { id: "midnightcarp", name: "Midnight Carp", minLb: 4, maxLb: 11, weight: 0, minCash: 40, maxCash: 70, respect: 2 },
+  { id: "memphis_monster", name: "Memphis Monster Fish", minLb: 18, maxLb: 36, weight: 0, minCash: 140, maxCash: 200, respect: 5, legendary: true },
 ];
 
 export type FishingState = {
@@ -65,25 +72,53 @@ export function idleFishing(): FishingState {
   };
 }
 
-function pickFish(caught: number, roll: number): FishKind {
+function rng(seed: number) {
+  const x = Math.sin(seed * 12.9898) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+const RIVER_Y = RIVER_TILE_Y * TILE;
+
+export type WaterSpot = "shallows" | "channel" | "dropoff";
+
+export function waterSpot(y: number): WaterSpot {
+  const depth = (y - RIVER_Y) / Math.max(40, WORLD_PX_H - RIVER_Y);
+  if (depth < 0.28) return "shallows";
+  if (depth < 0.62) return "channel";
+  return "dropoff";
+}
+
+function spotName(spot: WaterSpot) {
+  if (spot === "shallows") return "shallows";
+  if (spot === "channel") return "channel";
+  return "drop-off";
+}
+
+function pickFish(caught: number, roll: number, spot: WaterSpot): FishKind {
+  const table: Record<WaterSpot, Partial<Record<FishId, number>>> = {
+    shallows: { bluegill: 42, crappie: 30, bass: 16, catfish: 10, gar: 2 },
+    channel: { bluegill: 8, crappie: 16, catfish: 28, bass: 28, gar: 14, sackfish: 6 },
+    dropoff: { crappie: 4, catfish: 14, bass: 12, gar: 42, sackfish: 28 },
+  };
   const boosted = FISH.map((f) => {
-    let w = f.weight;
-    if (f.id === "sackfish") w += Math.min(6, caught * 0.45);
-    if (f.id === "gar") w += Math.min(4, caught * 0.2);
+    let w = table[spot][f.id] ?? 0;
+    if (halloweenOn()) {
+      if (f.id === "pumpkinbass" && spot === "shallows") w += 14;
+      if (f.id === "ghostcat" && spot !== "dropoff") w += 8;
+      if (f.id === "midnightcarp" && spot === "channel") w += 10;
+      if (f.id === "memphis_monster" && spot === "dropoff") w += 5;
+    }
+    if (f.id === "sackfish") w += Math.min(8, caught * 0.35);
+    if (f.id === "gar" && spot !== "shallows") w += Math.min(6, caught * 0.2);
     return { f, w };
   });
-  const total = boosted.reduce((s, x) => s + x.w, 0);
+  const total = boosted.reduce((s, x) => s + x.w, 0) || 1;
   let t = roll * total;
   for (const row of boosted) {
     t -= row.w;
     if (t <= 0) return row.f;
   }
   return FISH[0]!;
-}
-
-function rng(seed: number) {
-  const x = Math.sin(seed * 12.9898) * 43758.5453;
-  return x - Math.floor(x);
 }
 
 export function beginFishing(s: FishingState, px: number, py: number): FishingState {
@@ -114,7 +149,8 @@ export function cancelFishing(s: FishingState): FishingState {
 export type FishEvent = "splash" | "nibble" | "strike" | "catch" | "fail" | "snap" | null;
 
 function hookFish(next: FishingState, clock: number): FishingState {
-  const fish = pickFish(next.caught, rng(clock * 9.4 + next.caught * 3.1));
+  const spot = waterSpot(next.bobY);
+  const fish = pickFish(next.caught, rng(clock * 9.4 + next.caught * 3.1), spot);
   const span = fish.maxLb - fish.minLb;
   next.fish = fish;
   next.weightLb = Math.round((fish.minLb + rng(clock * 5.2) * span) * 10) / 10;
@@ -123,7 +159,7 @@ function hookFish(next: FishingState, clock: number): FishingState {
   next.phase = "reel";
   next.tension = 0.38;
   next.progress = 0.08;
-  next.pull = 0.7 + (fish.legendary ? 0.55 : fish.id === "gar" ? 0.4 : 0.15);
+  next.pull = 0.7 + (fish.legendary ? 0.55 : fish.id === "gar" ? 0.4 : 0.15) + (spot === "dropoff" ? 0.18 : 0);
   next.window = 0;
   return next;
 }
@@ -144,11 +180,12 @@ export function tickFishing(
   if (next.phase === "cast") {
     if (hold) next.power = Math.min(1, next.power + dt * 0.72);
     if (released) {
-      const dist = 70 + next.power * 210;
-      next.bobX = px + (rng(clock * 1.7) - 0.5) * 36;
-      next.bobY = s.bobY + dist * 0.42;
+      const shore = RIVER_Y + 28;
+      const far = WORLD_PX_H - 48;
+      next.bobX = Math.max(48, Math.min(WORLD_PX_W - 48, px + (rng(clock * 1.7) - 0.5) * 90));
+      next.bobY = shore + next.power * (far - shore);
       next.phase = "wait";
-      next.wait = 1.35 + rng(clock * 3.1) * 2.6;
+      next.wait = 1.15 + (waterSpot(next.bobY) === "dropoff" ? 1.35 : waterSpot(next.bobY) === "channel" ? 0.45 : 0) + rng(clock * 3.1) * 2.2;
       next.power = 0;
       event = "splash";
     }
@@ -243,13 +280,17 @@ export function tickFishing(
 }
 
 export function fishingPrompt(s: FishingState, tap: boolean): string {
+  const spot = spotName(waterSpot(s.bobY));
   if (!s.active) return tap ? "TAP · fish the Mississippi" : "E · fish the Mississippi";
-  if (s.phase === "cast") return tap ? "Hold CAST · release to throw" : "Hold Space · release to cast";
-  if (s.phase === "wait") return "Wait on it…";
-  if (s.phase === "nibble") return "Nibble…";
+  if (s.phase === "cast") {
+    const aim = s.power < 0.34 ? "shallows" : s.power < 0.7 ? "channel" : "drop-off";
+    return tap ? `Hold CAST · ${aim}` : `Hold Space · ${aim}`;
+  }
+  if (s.phase === "wait") return `${spot} · wait on it…`;
+  if (s.phase === "nibble") return `${spot} · nibble…`;
   if (s.phase === "strike") return tap ? "TAP · SET THE HOOK" : "Space · SET THE HOOK";
   if (s.phase === "reel") return tap ? "Hold CAST · ease off in red" : "Hold Space to reel · ease off in red";
-  if (s.phase === "catch") return s.fish ? `${s.fish.name} · ${s.weightLb} lb` : "Got one";
+  if (s.phase === "catch") return s.fish ? `${s.fish.name} · ${s.weightLb} lb · ${spot}` : "Got one";
   if (s.phase === "fail") return s.result ?? "Got away";
   return "Fish";
 }

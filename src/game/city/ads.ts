@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { ART_REV, TILE } from "../data";
 import type { BuildingRef } from "./signage";
+import { BILLBOARD_FALLBACKS, sponsorArt } from "../halloween";
+import { halloweenOn } from "../season";
 
 const S = 1 / 16;
 function wx(x: number) {
@@ -41,27 +43,63 @@ export const FREE_ADS: { x: number; y: number; yaw: number; w: number; h: number
   { x: 47.4 * TILE, y: 17.6 * TILE, yaw: 0, w: 4.1, h: 5.7, lift: 3.1 },
 ];
 
-function framedPoster(mat: THREE.Material, w: number, h: number) {
+const NEUTRAL = "/game/ads/901-emblem.webp";
+const texCache = new Map<string, THREE.Texture>();
+
+function textureFor(url: string) {
+  const cached = texCache.get(url);
+  if (cached) return cached;
+  const map = new THREE.Texture();
+  map.colorSpace = THREE.SRGBColorSpace;
+  const img = new Image();
+  img.onload = () => {
+    map.image = img;
+    map.needsUpdate = true;
+  };
+  img.src = `${url}${url.includes("?") ? "&" : "?"}v=${ART_REV}`;
+  texCache.set(url, map);
+  return map;
+}
+
+function slotUrl(index: number) {
+  const id = `sponsor_billboard_${String(index + 1).padStart(2, "0")}`;
+  const fallback = halloweenOn() ? BILLBOARD_FALLBACKS[index % BILLBOARD_FALLBACKS.length]! : NEUTRAL;
+  return sponsorArt(id, fallback);
+}
+
+function framedPoster(url: string, w: number, h: number, name: string) {
   const g = new THREE.Group();
-  g.name = "sacks-giving-ad";
-  const paper = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+  g.name = name;
+  const paper = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, h),
+    new THREE.MeshBasicMaterial({ map: textureFor(url), color: 0xfff4e8, toneMapped: false, side: THREE.DoubleSide }),
+  );
   paper.position.z = 0.05;
+  paper.name = name;
   g.add(paper);
   const frame = new THREE.Mesh(
     new THREE.BoxGeometry(w + 0.12, h + 0.12, 0.08),
-    new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.65, roughness: 0.32, emissive: 0x5a4310, emissiveIntensity: 0.45 }),
+    new THREE.MeshStandardMaterial({
+      color: halloweenOn() ? 0xe07a1a : 0xd4af37,
+      metalness: 0.55,
+      roughness: 0.35,
+      emissive: halloweenOn() ? 0x6a2208 : 0x5a4310,
+      emissiveIntensity: 0.45,
+    }),
   );
   g.add(frame);
   return g;
 }
 
-function place(scene: THREE.Scene, buildings: BuildingRef[], mat: THREE.Material) {
+function place(scene: THREE.Scene, buildings: BuildingRef[]) {
   const byId = new Map(buildings.map((b) => [b.id, b]));
   let n = 0;
+  const ids: string[] = [];
   for (const ad of BUILDING_ADS) {
     const b = byId.get(ad.buildingId);
     if (!b) continue;
-    const poster = framedPoster(mat, ad.w, ad.h);
+    const id = `sponsor_billboard_${String(n + 1).padStart(2, "0")}`;
+    const poster = framedPoster(slotUrl(n), ad.w, ad.h, id);
     poster.rotation.y = FACE_YAW[ad.face];
     const lift = ad.lift ?? Math.max(2.4, b.height * 0.55);
     const hx = b.width / 2 + 0.08;
@@ -71,38 +109,23 @@ function place(scene: THREE.Scene, buildings: BuildingRef[], mat: THREE.Material
     else if (ad.face === "east") poster.position.set(hx, lift, 0);
     else poster.position.set(-hx, lift, 0);
     b.group.add(poster);
+    ids.push(id);
     n++;
   }
   for (const ad of FREE_ADS) {
-    const poster = framedPoster(mat, ad.w, ad.h);
+    const id = `sponsor_billboard_${String(n + 1).padStart(2, "0")}`;
+    const poster = framedPoster(slotUrl(n), ad.w, ad.h, id);
     poster.position.set(wx(ad.x), ad.lift, wz(ad.y));
     poster.rotation.y = ad.yaw;
     scene.add(poster);
+    ids.push(id);
     n++;
   }
-  (window as typeof window & { __SACK_ADS__?: { n: number; ids: string[] } }).__SACK_ADS__ = {
-    n,
-    ids: [...byId.keys()],
-  };
+  (window as typeof window & { __SACK_ADS__?: { n: number; ids: string[] } }).__SACK_ADS__ = { n, ids };
 }
 
-export function mountCityAds(scene: THREE.Scene, buildings: BuildingRef[], tex?: THREE.Texture) {
-  const apply = (map: THREE.Texture) => {
-    map.colorSpace = THREE.SRGBColorSpace;
-    map.anisotropy = 8;
-    map.needsUpdate = true;
-    place(scene, buildings, new THREE.MeshBasicMaterial({ map, toneMapped: false, side: THREE.DoubleSide }));
-  };
-  if (tex) {
-    apply(tex);
-    return;
-  }
-  const img = new Image();
-  img.crossOrigin = "anonymous";
-  img.onload = () => {
-    const map = new THREE.Texture(img);
-    map.needsUpdate = true;
-    apply(map);
-  };
-  img.src = `/game/ads/sacks-giving.webp?v=${ART_REV}`;
+/** Sponsor slots. The old Sacks Giving / 901 Ballers / luxury boards are not mounted. */
+export function mountCityAds(scene: THREE.Scene, buildings: BuildingRef[], _legacy?: THREE.Texture) {
+  void _legacy;
+  place(scene, buildings);
 }
