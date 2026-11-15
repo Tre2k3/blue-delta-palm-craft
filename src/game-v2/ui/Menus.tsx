@@ -542,7 +542,7 @@ export function MapScreen({ game, hud }: { game: Game; hud: HudState }) {
       const g = el?.getContext("2d");
       if (!el || !g) return;
       const l = game.live;
-      drawMap(g, el.width, el.height, { cx: 0, cz: -48, scale: el.width / 330 }, { x: l.x, z: l.z, heading: l.heading, car: hud.car, target: hud.target, time: performance.now() / 1000, friends: game.crew.hud().friends }, true);
+      drawMap(g, el.width, el.height, { cx: 120, cz: 112, scale: el.height / 960 }, { x: l.x, z: l.z, heading: l.heading, car: hud.car, target: hud.target, time: performance.now() / 1000, friends: game.crew.hud().friends }, true);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
@@ -566,7 +566,7 @@ export function MapScreen({ game, hud }: { game: Game; hud: HudState }) {
           {!canRide && <div className="text-xs text-white/50">Rides pick up on the street, on foot.</div>}
           <div className="mt-1 rounded-xl border border-[#ff4646]/40 bg-[#ff4646]/10 p-3 text-xs text-white/80">
             <div className="mb-1 font-extrabold uppercase tracking-widest text-[#ff8a8a]">Street race</div>
-            Nitro waits by the red dot on Riverside Drive, a block west of the boutique. Walk up to him to race three laps of the red circuit round downtown.
+            Nitro waits by the red dot on Riverside Drive, a block south of the boutique. Walk up to him to race three laps of the red circuit round downtown.
           </div>
         </div>
       </div>

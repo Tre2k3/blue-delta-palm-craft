@@ -1,14 +1,33 @@
 import type { TableId } from "../core/types";
 
 /**
- * The city plan. X runs east, Z runs south, the Mississippi is north.
+ * The city plan: downtown Memphis as it lies on the river, drawn about half size, and Orange
+ * Mound out east.
+ *
+ * The Mississippi is along the top (-Z), the way it is along the west side of downtown, so the
+ * map is real Memphis turned a quarter so the river is up: +X is north, +Z is east, away from
+ * the river. The streets that run beside the river (Riverside, Front, Main, 2nd, B.B. King, 4th,
+ * Danny Thomas) are the ones at a fixed Z; the cross streets that run from the river inland
+ * (Beale, Union, Madison, Poplar and the rest) are the ones at a fixed X, in their real order
+ * from south to north.
+ *
  * Everything that needs to agree on where a street or a door is reads it from here:
  * the builder, collision, traffic, the race, the minimap.
  */
-export const STREETS_X = [-128, -64, 0, 64, 128] as const;
-export const STREETS_Z = [-140, -76, -12, 52, 116] as const;
-export const STREET_NAMES_X = ["Front St", "Main St", "2nd St", "B.B. King Blvd", "Danny Thomas"] as const;
-export const STREET_NAMES_Z = ["Riverside Dr", "Beale St", "Union Ave", "Lamar Ave", "Park Ave"] as const;
+export const STREETS_X = [-256, -192, -128, -64, 0, 64, 128, 192, 256, 320, 384] as const;
+export const STREETS_Z = [-140, -76, -12, 52, 116, 180, 260, 324, 388] as const;
+export const STREET_NAMES_X = ["Butler Ave", "Vance Ave", "MLK Ave", "Beale St", "Peabody Pl", "Union Ave", "Monroe Ave", "Madison Ave", "Jefferson Ave", "Adams Ave", "Poplar Ave"] as const;
+export const STREET_NAMES_Z = ["Riverside Dr", "Front St", "Main St", "2nd St", "B.B. King Blvd", "4th St", "Danny Thomas Blvd", "Lamar Ave", "Park Ave"] as const;
+/** Past Danny Thomas the cross streets are Orange Mound's own. */
+export const STREET_NAMES_X_EAST = ["Hays Rd", "Semmes St", "Carnes Ave", "Spottswood Ave", "Saratoga Ave", "Marechal Ave", "Grand St", "Pendleton St", "Douglass Ave", "Airways Blvd", "Kimball Ave"] as const;
+/** Where Orange Mound starts, east of Danny Thomas. */
+export const EAST_Z = 290;
+/** The neighbourhood blocks were laid out nearer the river first. They moved this far east, to Orange Mound proper. */
+export const OM = 272;
+/** The first row of blocks that is Orange Mound (between Lamar and Park Ave and on). */
+export const OM_ROW = 7;
+/** Which street a cross street is called where it is. */
+export const crossName = (i: number, z: number) => (z > EAST_Z ? STREET_NAMES_X_EAST[i]! : STREET_NAMES_X[i]!);
 
 /** Asphalt half-width, sidewalk width, curb height. */
 export const ROAD_HALF = 5.5;
@@ -23,7 +42,7 @@ export const RIVER_Z = -200;
 export const FAR_BANK_Z = -332;
 
 /** Where Benji may stand. The river and the pier are handled by their own solids. */
-export const WORLD = { minX: -151, maxX: 151, minZ: -230, maxZ: 139 };
+export const WORLD = { minX: -282, maxX: 500, minZ: -230, maxZ: 412 };
 
 export type Rect = { minX: number; maxX: number; minZ: number; maxZ: number };
 
@@ -74,30 +93,30 @@ export const TRUCKS = { x: 104, z: -158 };
 export const BOWL = { ...rect(79, 113, 3, 31), doorX: 96, frontZ: 31 };
 export const ARENA = { cx: 32, cz: 20, r: 19 };
 
-export const HOME = { x: -34, z: 74, w: 11, d: 8.5 };
+export const HOME = { x: -34, z: 74 + OM, w: 11, d: 8.5 };
 /** The Fun House takes the whole block: the hall on Lamar, the kart track behind it. */
-export const FUN = { ...rect(75, 117, 63, 84), doorX: 96, frontZ: 63 };
-export const KART_TRACK = { cx: 96, cz: 96, halfX: 19, halfZ: 8.2, width: 5.2 };
+export const FUN = { ...rect(75, 117, 63 + OM, 84 + OM), doorX: 96, frontZ: 63 + OM };
+export const KART_TRACK = { cx: 96, cz: 96 + OM, halfX: 19, halfZ: 8.2, width: 5.2 };
 
-/** Orange Mound Park takes block (0, 3), across Main Street from Benji's house. */
-export const PARK = { minX: -119, maxX: -73, minZ: 61, maxZ: 107, cx: -96, cz: 84 };
+/** Orange Mound Park, between Lamar and Park Avenue, a block from Benji's house. */
+export const PARK = { minX: -119, maxX: -73, minZ: 61 + OM, maxZ: 107 + OM, cx: -96, cz: 84 + OM };
 /**
  * The playground in the park's south-west corner. The swing Benji rides hangs from `top` on
  * chains `len` long and swings north and south; the slide's chute runs south off the deck.
  * What is built and what is played both read these.
  */
-export const SWING = { x: -112.95, z: 93, top: 2.72, len: 2.08 };
-export const SLIDE = { x: -105.5, z: 97.5, deck: 1.6, top: { z: 0.614, y: 1.578 }, foot: { z: 3.586, y: 0.142 } };
+export const SWING = { x: -112.95, z: 93 + OM, top: 2.72, len: 2.08 };
+export const SLIDE = { x: -105.5, z: 97.5 + OM, deck: 1.6, top: { z: 0.614, y: 1.578 }, foot: { z: 3.586, y: 0.142 } };
 /** The paved corner with the game tables, north-east of the fountain. */
-export const PARK_TERRACE = { minX: -93.5, maxX: -75, minZ: 63, maxZ: 81 };
+export const PARK_TERRACE = { minX: -93.5, maxX: -75, minZ: 63 + OM, maxZ: 81 + OM };
 /** One table per game. The regular has the north seat; Benji walks up from the south. */
 export const PARK_TABLES: { id: TableId; name: string; x: number; z: number; seats: 2 | 4; color: string }[] = [
-  { id: "chess", name: "Chess", x: -90, z: 68, seats: 2, color: "#f4f1ea" },
-  { id: "checkers", name: "Checkers", x: -84, z: 68, seats: 2, color: "#ff5a4a" },
-  { id: "connect4", name: "Four in a Row", x: -78, z: 68, seats: 2, color: "#ffd166" },
-  { id: "dominoes", name: "Dominoes", x: -90, z: 75.5, seats: 2, color: "#f4f1ea" },
-  { id: "spades", name: "Spades", x: -84, z: 75.5, seats: 4, color: "#39ff14" },
-  { id: "tictactoe", name: "Tic-Tac-Toe", x: -78, z: 75.5, seats: 2, color: "#5ac8ff" },
+  { id: "chess", name: "Chess", x: -90, z: 68 + OM, seats: 2, color: "#f4f1ea" },
+  { id: "checkers", name: "Checkers", x: -84, z: 68 + OM, seats: 2, color: "#ff5a4a" },
+  { id: "connect4", name: "Four in a Row", x: -78, z: 68 + OM, seats: 2, color: "#ffd166" },
+  { id: "dominoes", name: "Dominoes", x: -90, z: 75.5 + OM, seats: 2, color: "#f4f1ea" },
+  { id: "spades", name: "Spades", x: -84, z: 75.5 + OM, seats: 4, color: "#39ff14" },
+  { id: "tictactoe", name: "Tic-Tac-Toe", x: -78, z: 75.5 + OM, seats: 2, color: "#5ac8ff" },
 ];
 
 /** Interiors live far from the city so they never show through a wall. */
@@ -128,16 +147,41 @@ export const RACE_LOOP: { x: number; z: number }[] = [
 export const RACE_MEET = { x: -104, z: -151 };
 
 /** `arrive` is where a ride lets Benji out and which way he faces, when the spot itself is not the place to stand. */
-/** The Memphian's doors on Union Avenue: the front of the old picture house faces south. */
+/** The Memphian's doors on Main Street, a block up from the Orpheum: the front of the old picture house faces Main. */
 export const MEMPHIAN = { x: -40, z: -21 };
-/** The stage in Handy Park: the middle of its boards, how big they are and how high. It faces north, up the square to Beale. */
-export const BEALE_STAGE = { x: 32, z: -27, w: 16, d: 8, top: CURB + 1 };
+/** W.C. Handy Park, on Beale between 2nd and B.B. King. */
+export const HANDY = { col: 3, row: 3 };
+/** The stage in Handy Park: the middle of its boards, how big they are and how high. It faces 2nd Street, up the square. */
+export const BEALE_STAGE = { x: -32, z: 101, w: 16, d: 8, top: CURB + 1 };
 
 /**
  * The cypher in Handy Park: a sheet of lino taped down inside the Beale Street arch, a speaker,
  * and whoever is jookin on it. `r` is how far the lino reaches from its middle.
  */
-export const CYPHER = { x: 22.5, z: -55.5, r: 2.7 };
+export const CYPHER = { x: -41.5, z: 72.5, r: 2.7 };
+
+/**
+ * Memphis landmarks, each in its real block: FedExForum south of Beale between B.B. King and
+ * 4th; the Peabody on Union between 2nd and B.B. King; AutoZone Park on Union between B.B. King
+ * and 4th; the Orpheum on the corner of Main and Beale; the Lorraine Motel, now the National
+ * Civil Rights Museum, by Mulberry and Butler; Court Square between Madison and Jefferson; the
+ * Cotton Exchange on Front; the Pyramid on the river at the north end; Tom Lee Park on the river
+ * south of Beale; Mud Island across the harbour. Middles of the buildings, on the ground.
+ */
+export const LANDMARKS = {
+  fedex: { x: -96, z: 148 },
+  peabody: { x: 32, z: 84 },
+  ballpark: { x: 96, z: 148 },
+  orpheum: { x: -84, z: -36 },
+  lorraine: { x: -224, z: 16 },
+  courtSquare: { x: 224, z: 20 },
+  cotton: { x: 160, z: -44 },
+  /** Past the north end of the walkable riverfront, on the water at the head of Front Street. */
+  pyramid: { x: 568, z: -170, base: 92, height: 60 },
+  tomLee: { x: -200, z: -176 },
+  /** Across the Wolf River Harbor, north of where the boat goes. */
+  mudIsland: { minX: 300, maxX: 545, minZ: -272, maxZ: -228 },
+} as const;
 
 export type Poi = { id: string; name: string; x: number; z: number; color: string; arrive?: { x: number; z: number; heading: number } };
 
@@ -154,28 +198,34 @@ export const POIS: Poi[] = [
   { id: "home", name: "Home", x: HOME.x, z: HOME.z - HOME.d / 2 - 3, color: "#e0b33a" },
   { id: "fun", name: "The Fun House", x: FUN.doorX, z: FUN.frontZ - 2, color: "#b48cff" },
   // Let out on the terrace, facing the tables.
-  { id: "park", name: "Orange Mound Park", x: PARK.cx, z: PARK.cz, color: "#7ddc6a", arrive: { x: -84, z: 79.6, heading: Math.PI } },
+  { id: "park", name: "Orange Mound Park", x: PARK.cx, z: PARK.cz, color: "#7ddc6a", arrive: { x: -84, z: 79.6 + OM, heading: Math.PI } },
   // The rec grounds on Park Avenue: let out at the hut, and at the gate between the court and the cornhole boards.
-  { id: "putt", name: "Sack Putt", x: -32, z: 96, color: "#39ff14", arrive: { x: -32, z: 105.8, heading: Math.PI } },
-  { id: "courts", name: "Park Avenue Courts", x: 32, z: 96, color: "#5ac8ff", arrive: { x: 17.9, z: 104.6, heading: Math.PI } },
-  { id: "cornhole", name: "Cornhole Lawn", x: 14, z: 97.5, color: "#f3e9c8", arrive: { x: 14.6, z: 104.4, heading: Math.PI } },
-  // The old picture house on Union, and the stage in Handy Park: live music at both.
+  { id: "putt", name: "Sack Putt", x: -32, z: 96 + OM, color: "#39ff14", arrive: { x: -32, z: 105.8 + OM, heading: Math.PI } },
+  { id: "courts", name: "Park Avenue Courts", x: 32, z: 96 + OM, color: "#5ac8ff", arrive: { x: 17.9, z: 104.6 + OM, heading: Math.PI } },
+  { id: "cornhole", name: "Cornhole Lawn", x: 14, z: 97.5 + OM, color: "#f3e9c8", arrive: { x: 14.6, z: 104.4 + OM, heading: Math.PI } },
+  // The old picture house on Main, and the stage in Handy Park on Beale: live music at both.
   { id: "memphian", name: "The Memphian Blues Club", x: MEMPHIAN.x, z: MEMPHIAN.z + 2, color: "#ffb400", arrive: { x: MEMPHIAN.x, z: MEMPHIAN.z + 2.5, heading: Math.PI } },
   { id: "bealestage", name: "Live on Beale", x: BEALE_STAGE.x, z: BEALE_STAGE.z - 8, color: "#ff4fd8", arrive: { x: BEALE_STAGE.x, z: BEALE_STAGE.z - 12, heading: 0 } },
+  // Memphis itself: places to see, on the map and a ride away.
+  { id: "fedex", name: "FedExForum", x: LANDMARKS.fedex.x, z: LANDMARKS.fedex.z, color: "#5a8cff", arrive: { x: STREETS_X[3] - ROAD_HALF - 1.8, z: LANDMARKS.fedex.z, heading: -Math.PI / 2 } },
+  { id: "pyramid", name: "The Pyramid", x: LANDMARKS.pyramid.x, z: LANDMARKS.pyramid.z, color: "#bfe0ff", arrive: { x: WORLD.maxX - 6, z: LANDMARKS.pyramid.z, heading: Math.PI / 2 } },
+  { id: "museum", name: "Civil Rights Museum", x: LANDMARKS.lorraine.x, z: LANDMARKS.lorraine.z, color: "#e8d9b0", arrive: { x: LANDMARKS.lorraine.x, z: LANDMARKS.lorraine.z - 14, heading: 0 } },
+  { id: "ballpark", name: "AutoZone Park", x: LANDMARKS.ballpark.x, z: LANDMARKS.ballpark.z, color: "#ff8a3c", arrive: { x: STREETS_X[5] + ROAD_HALF + 1.8, z: LANDMARKS.ballpark.z, heading: -Math.PI / 2 + Math.PI } },
+  { id: "tomlee", name: "Tom Lee Park", x: LANDMARKS.tomLee.x, z: LANDMARKS.tomLee.z, color: "#7ddc6a" },
   // Let out on the open side of the ring, turned to the dancers.
   { id: "cypher", name: "Jookin Cypher", x: CYPHER.x, z: CYPHER.z, color: "#ff3b3b", arrive: { x: CYPHER.x + 0.6, z: CYPHER.z + 6.2, heading: Math.PI } },
-  { id: "playground", name: "Swings and Slide", x: -109, z: 96, color: "#ff8a5c", arrive: { x: -109.5, z: 90.4, heading: 0 } },
+  { id: "playground", name: "Swings and Slide", x: -109, z: 96 + OM, color: "#ff8a5c", arrive: { x: -109.5, z: 90.4 + OM, heading: 0 } },
 ];
 
 export function districtAt(x: number, z: number) {
   if (z < RIVER_Z + 1) return "On the River";
-  if (z < STREETS_Z[0] - ROAD_HALF) return "Riverfront";
-  if (z < STREETS_Z[1] - 20) return "Downtown";
-  if (z < STREETS_Z[1] + 20) return "Beale Street";
-  if (z < STREETS_Z[2] - ROAD_HALF) return "Downtown";
-  if (z < STREETS_Z[3] - ROAD_HALF) return "Midtown";
-  void x;
-  return "Orange Mound";
+  if (z < STREETS_Z[0] - ROAD_HALF) return x < -100 ? "Tom Lee Park" : x > 400 ? "The Pyramid" : "Riverfront";
+  if (z > EAST_Z) return "Orange Mound";
+  if (z > STREETS_Z[5] + ROAD_HALF) return "Medical District";
+  if (Math.abs(x - STREETS_X[3]) < 22 && z > STREETS_Z[2] && z < STREETS_Z[5] + 12) return "Beale Street";
+  if (x < STREETS_X[3] - 22) return "South Main";
+  if (x > STREETS_X[7]) return "Uptown";
+  return "Downtown";
 }
 
 export function nearestStreet(x: number, z: number) {
@@ -185,7 +235,7 @@ export function nearestStreet(x: number, z: number) {
     const d = Math.abs(x - sx);
     if (d < bestD) {
       bestD = d;
-      best = STREET_NAMES_X[i]!;
+      best = crossName(i, z);
     }
   });
   STREETS_Z.forEach((sz, i) => {

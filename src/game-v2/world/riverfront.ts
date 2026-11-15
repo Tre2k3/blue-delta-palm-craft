@@ -4,7 +4,7 @@ import { cropTex, glyphCells, paintMat, tex } from "../gfx/tex";
 import { addGround } from "./ground";
 import { lotSurface } from "./buildings";
 import { MAT, Frame, YAW, addSolid, bench, bush, emissiveMat, globeLamp, neon, poolMat, sign, std, tree, type BuildCtx } from "./kit";
-import { BAIT_SHOP, COURT, CURB, HQ, PIER, PLAZA, RACE_MEET, RIVER_Z, ROAD_HALF, STREETS_Z, TRUCKS, rect } from "./map";
+import { BAIT_SHOP, COURT, CURB, HQ, PIER, PLAZA, RACE_MEET, RIVER_Z, ROAD_HALF, STREETS_Z, TRUCKS, WORLD, rect } from "./map";
 import { FOOD, FOOD_TRUCKS, type Truck, type TruckId } from "../play/goods";
 
 const Y0 = CURB;
@@ -42,17 +42,20 @@ export function buildRiverfront(ctx: BuildCtx): Riverfront {
   const inner = north - 3.5;
 
   // Surfaces. The promenade and the HQ plaza are the dark wet stone from the concept art.
-  lotSurface(ctx, rect(-230, 230, RIVER_Z, RIVER_Z + 6), "plaza");
+  // The walk runs the whole riverfront, from Tom Lee Park in the south to the Pyramid in the north.
+  const W0 = WORLD.minX - 30;
+  const W1 = WORLD.maxX + 14;
+  lotSurface(ctx, rect(W0, W1, RIVER_Z, RIVER_Z + 6), "plaza");
   lotSurface(ctx, rect(PLAZA.minX, PLAZA.maxX, RIVER_Z + 6, north), "plaza");
-  lotSurface(ctx, rect(-230, -112, RIVER_Z + 6, inner), "grass");
+  lotSurface(ctx, rect(W0, -112, RIVER_Z + 6, inner), "grass");
   lotSurface(ctx, rect(-112, -70, RIVER_Z + 6, inner), "concrete");
   lotSurface(ctx, rect(-70, PLAZA.minX, RIVER_Z + 6, inner), "grass");
   lotSurface(ctx, rect(PLAZA.maxX, 50, RIVER_Z + 6, inner), "grass");
   lotSurface(ctx, rect(50, 78, RIVER_Z + 6, inner), "concrete");
-  lotSurface(ctx, rect(78, 230, RIVER_Z + 6, inner), "grass");
+  lotSurface(ctx, rect(78, W1, RIVER_Z + 6, inner), "grass");
 
   // River wall and railing with a gap at the pier.
-  ctx.solid.wall(460, 2.2, 0, Y0 - 1.1, RIVER_Z, MAT.brick("#3a3632", 5), YAW.north, 60, 1);
+  ctx.solid.wall(W1 - W0, 2.2, (W0 + W1) / 2, Y0 - 1.1, RIVER_Z, MAT.brick("#3a3632", 5), YAW.north, Math.round((W1 - W0) / 7.7), 1);
   const rail = MAT.black();
   const railZ = RIVER_Z + 0.5;
   const span = (a: number, b: number) => {
@@ -61,9 +64,9 @@ export function buildRiverfront(ctx: BuildCtx): Riverfront {
     for (let x = a; x <= b + 0.01; x += 2.4) ctx.solid.box(0.1, 1.1, 0.1, x, Y0 + 0.55, railZ, rail);
     addSolid(ctx, a, b, RIVER_Z - 0.4, railZ + 0.12);
   };
-  span(-200, PIER.x - PIER.half);
-  span(PIER.x + PIER.half, 200);
-  for (let x = -146; x <= 146; x += 18) {
+  span(WORLD.minX - 2, PIER.x - PIER.half);
+  span(PIER.x + PIER.half, WORLD.maxX + 2);
+  for (let x = WORLD.minX + 4; x <= WORLD.maxX - 4; x += 18) {
     if (Math.abs(x - PIER.x) < 6) continue;
     globeLamp(ctx, x, RIVER_Z + 1.5, Y0, 0xffd9a0);
     ctx.solid.cyl(0.24, 0.3, 0.9, x + 9, Y0 + 0.45, RIVER_Z + 1.2, MAT.black(), 8);

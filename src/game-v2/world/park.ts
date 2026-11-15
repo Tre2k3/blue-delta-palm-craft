@@ -3,7 +3,7 @@ import type { TableId } from "../core/types";
 import { tex } from "../gfx/tex";
 import { lotSurface } from "./buildings";
 import { MAT, YAW, addSolid, bench, bush, emissiveMat, globeLamp, poolMat, sign, std, trashCan, tree, type BuildCtx } from "./kit";
-import { CURB, PARK, PARK_TABLES, PARK_TERRACE } from "./map";
+import { CURB, OM, PARK, PARK_TABLES, PARK_TERRACE } from "./map";
 
 const Y0 = CURB;
 /** Random draws the bungalows that stood on this block used to take. They are spent again so the rest of the city falls exactly where it did. */
@@ -59,31 +59,31 @@ export function buildPark(ctx: BuildCtx) {
 
   terrace(ctx, paving, stone);
   playground(ctx);
-  gazebo(ctx, -108, 71.5);
-  picnic(ctx, -86, 93.5, 0.3);
-  picnic(ctx, -79.5, 100, -0.5);
-  trashCan(ctx, -93.4, 87, Y0);
-  trashCan(ctx, -98.6, 81, Y0);
-  bench(ctx, P.cx - 2.3, 68, Math.PI / 2, Y0);
-  bench(ctx, P.cx + 2.3, 99, -Math.PI / 2, Y0);
+  gazebo(ctx, -108, 71.5 + OM);
+  picnic(ctx, -86, 93.5 + OM, 0.3);
+  picnic(ctx, -79.5, 100 + OM, -0.5);
+  trashCan(ctx, -93.4, 87 + OM, Y0);
+  trashCan(ctx, -98.6, 81 + OM, Y0);
+  bench(ctx, P.cx - 2.3, 68 + OM, Math.PI / 2, Y0);
+  bench(ctx, P.cx + 2.3, 99 + OM, -Math.PI / 2, Y0);
   bench(ctx, -108, P.cz + 2.3, Math.PI, Y0);
   bench(ctx, -83, P.cz + 2.3, Math.PI, Y0);
 
   // Shade. Clear of the paths, the terrace and anything a kid climbs on.
   for (const [x, z, s] of [
-    [-116, 64, 1.5],
-    [-101, 64.5, 1.3],
-    [-116.5, 79, 1.4],
-    [-100.5, 78.5, 1.2],
-    [-116, 89.5, 1.3],
-    [-116.5, 104, 1.5],
-    [-100.5, 104.5, 1.4],
-    [-100, 89.5, 1.1],
-    [-91.5, 104, 1.4],
-    [-76, 104.5, 1.5],
-    [-75.5, 90, 1.3],
-    [-84.5, 99.5, 1.2],
-    [-91, 89.5, 1.1],
+    [-116, 64 + OM, 1.5],
+    [-101, 64.5 + OM, 1.3],
+    [-116.5, 79 + OM, 1.4],
+    [-100.5, 78.5 + OM, 1.2],
+    [-116, 89.5 + OM, 1.3],
+    [-116.5, 104 + OM, 1.5],
+    [-100.5, 104.5 + OM, 1.4],
+    [-100, 89.5 + OM, 1.1],
+    [-91.5, 104 + OM, 1.4],
+    [-76, 104.5 + OM, 1.5],
+    [-75.5, 90 + OM, 1.3],
+    [-84.5, 99.5 + OM, 1.2],
+    [-91, 89.5 + OM, 1.1],
   ] as const)
     tree(ctx, x, z, s, Y0, false);
 
@@ -165,7 +165,7 @@ function terrace(ctx: BuildCtx, paving: THREE.Material, stone: THREE.Material) {
   ctx.ground.flat(T.maxX - T.minX, T.maxZ - T.minZ, cx, Y0 + 0.012, cz, paving, 0, 6);
   // Short walks from the two paths.
   ctx.ground.flat(2.4, PARK.cz - 1.4 - T.maxZ, -84, Y0 + 0.012, (T.maxZ + PARK.cz - 1.4) / 2, paving, 0, 6);
-  ctx.ground.flat(T.minX - (PARK.cx + 1.4), 2.4, (T.minX + PARK.cx + 1.4) / 2, Y0 + 0.012, 71.75, paving, 0, 6);
+  ctx.ground.flat(T.minX - (PARK.cx + 1.4), 2.4, (T.minX + PARK.cx + 1.4) / 2, Y0 + 0.012, 71.75 + OM, paving, 0, 6);
 
   // Strings of bulbs from pole to pole.
   const bulb = emissiveMat(ctx, 0xffd08a, 0.5, 2.6);
@@ -389,11 +389,11 @@ function playground(ctx: BuildCtx) {
   const yellow = std(0xe8b730, 0.5, 0.2);
   const steel = MAT.steel();
   // Wood chips under all of it.
-  ctx.ground.flat(17, 15, -109.5, Y0 + 0.012, 96.5, chips(), 0, 0);
+  ctx.ground.flat(17, 15, -109.5, Y0 + 0.012, 96.5 + OM, chips(), 0, 0);
 
   // Swings: two frames, a bar across, two seats.
   const sx = -112;
-  const sz = 93;
+  const sz = 93 + OM;
   for (const side of [-1, 1]) {
     for (const lean of [-1, 1]) ctx.solid.add(new THREE.CylinderGeometry(0.05, 0.05, 2.9, 6), red, sx + side * 2, Y0 + 1.38, sz + lean * 0.55, 0, -lean * 0.38);
     addSolid(ctx, sx + side * 2 - 0.15, sx + side * 2 + 0.15, sz - 1.1, sz + 1.1);
@@ -408,7 +408,7 @@ function playground(ctx: BuildCtx) {
 
   // Slide: a deck on four legs, a ladder up the north side and the chute down the south.
   const lx = -105.5;
-  const lz = 97.5;
+  const lz = 97.5 + OM;
   for (const [dx, dz] of [[-0.6, -0.6], [0.6, -0.6], [-0.6, 0.6], [0.6, 0.6]] as const) ctx.solid.box(0.1, 2.5, 0.1, lx + dx, Y0 + 1.25, lz + dz, blue);
   ctx.solid.box(1.4, 0.1, 1.4, lx, Y0 + 1.55, lz, yellow);
   ctx.solid.box(1.4, 0.08, 0.08, lx, Y0 + 2.5, lz - 0.6, blue);
@@ -419,7 +419,7 @@ function playground(ctx: BuildCtx) {
 
   // Sandbox.
   const bx = -113;
-  const bz = 101.5;
+  const bz = 101.5 + OM;
   ctx.ground.flat(3.6, 3.6, bx, Y0 + 0.02, bz, std(0xd9c48f, 1));
   for (const [w, d, dx, dz] of [
     [4, 0.2, 0, -1.9],
@@ -430,7 +430,7 @@ function playground(ctx: BuildCtx) {
     ctx.solid.box(w, 0.26, d, bx + dx, Y0 + 0.13, bz + dz, MAT.wood());
   ctx.solid.add(new THREE.SphereGeometry(0.22, 10, 8), red, bx + 0.7, Y0 + 0.24, bz - 0.5);
   ctx.solid.cyl(0.16, 0.12, 0.22, bx - 0.6, Y0 + 0.13, bz + 0.5, blue, 8);
-  globeLamp(ctx, -101.5, 92, Y0);
+  globeLamp(ctx, -101.5, 92 + OM, Y0);
 }
 
 let chipMat: THREE.Material | null = null;

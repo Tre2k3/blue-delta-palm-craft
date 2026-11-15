@@ -49,7 +49,7 @@ import { OPEN_SPOTS } from "./world/openspots";
 import { buildClubRoom, type ClubRoom } from "./world/club";
 import { buildFunRoom, buildLaserRoom, type FunRoom, type LaserRoom } from "./world/funhouse";
 import { CORNHOLE, HOLES, PUTT_PAR, PUTT_STAND, TENNIS_GATE } from "./world/rec-map";
-import { BEALE_STAGE, BOWL, CYPHER, FUN, HQ, MEMPHIAN, PARK, PARK_TABLES, POIS, RACE_MEET, RIVER_Z, ROAD_HALF, ROOM, SLIDE, STREETS_X, STREETS_Z, SWING, TRUCKS, WALK, districtAt, nearestStreet } from "./world/map";
+import { BEALE_STAGE, BOWL, CYPHER, FUN, HQ, MEMPHIAN, OM, PARK, PARK_TABLES, POIS, RACE_MEET, RIVER_Z, ROAD_HALF, ROOM, SLIDE, STREETS_X, STREETS_Z, SWING, TRUCKS, WALK, districtAt, nearestStreet } from "./world/map";
 import { LANE, buildBowlRoom, buildHomeRoom, buildHqRoom, type BowlRoom, type HomeRoom, type HqRoom, type Room } from "./world/rooms";
 
 
@@ -422,12 +422,12 @@ export class Game {
     this.car = this.buildCar(this.save.ride);
     // Enough on the grid that there is something coming on every street: about a car to every block of lane.
     // Only the ones near him are drawn, and on the lighter settings "near" is nearer.
-    this.traffic = new Traffic(this.stage.quality === "high" ? 60 : this.stage.quality === "medium" ? 46 : 28);
+    this.traffic = new Traffic(this.stage.quality === "high" ? 110 : this.stage.quality === "medium" ? 84 : 48);
     this.traffic.reach = this.stage.quality === "high" ? 190 : this.stage.quality === "medium" ? 165 : 135;
     this.city.exterior.add(this.traffic.group);
     this.coins = new Sacks(this.save.flags);
     this.city.exterior.add(this.coins.mesh);
-    this.people = new People(this.stage.quality === "low" ? 22 : 34, this.stage.quality !== "low");
+    this.people = new People(this.stage.quality === "low" ? 40 : 64, this.stage.quality !== "low");
     this.city.exterior.add(this.people.group);
 
     this.beam = new THREE.Mesh(
@@ -695,17 +695,17 @@ export class Game {
       const w = who();
       st.roam(w.art, w.height, rail);
     }
-    // Beale Street: every block has its regulars, working along the storefronts and dancing outside the clubs.
-    const beale = STREETS_Z[1];
-    for (let bx = 0; bx < 4; bx++) {
+    // Beale Street, from 2nd to 4th: every block has its regulars, working along the storefronts and dancing outside the clubs.
+    const beale = STREETS_X[3];
+    for (let row = 3; row < 5; row++) {
       for (const side of [-1, 1]) {
-        const x0 = STREETS_X[bx]! + ROAD_HALF + WALK + 3;
-        const x1 = STREETS_X[bx + 1]! - ROAD_HALF - WALK - 3;
-        const z = beale + side * (ROAD_HALF + 1.7);
+        const z0 = STREETS_Z[row]! + ROAD_HALF + WALK + 3;
+        const z1 = STREETS_Z[row + 1]! - ROAD_HALF - WALK - 3;
+        const x = beale + side * (ROAD_HALF + 1.7);
         const block: Stop[] = [0.1, 0.36, 0.64, 0.9].map((t, i) => {
-          const x = x0 + (x1 - x0) * t;
+          const z = z0 + (z1 - z0) * t;
           // Odd stops look across the street, even ones at the windows behind them.
-          return at(x, z, x + (i % 2 ? 1.5 : -1.5), i % 2 ? beale : z + side * 8, (i + bx) % 3 === 1 ? "dance" : "watch", { stay: [4, 10] });
+          return at(x, z, i % 2 ? beale : x + side * 8, z + (i % 2 ? 1.5 : -1.5), (i + row) % 3 === 1 ? "dance" : "watch", { stay: [4, 10] });
         });
         st.stops(block);
         for (let i = 0; i < (few ? 1 : 2); i++) {
@@ -792,9 +792,9 @@ export class Game {
       at(PARK.cx, PARK.maxZ - 4, PARK.cx, PARK.cz, "watch", { stay: [3, 6] }),
       at(PARK.minX + 4, PARK.cz, PARK.cx, PARK.cz, "watch", { stay: [3, 6] }),
       at(PARK.maxX - 4, PARK.cz, PARK.cx, PARK.cz, "watch", { stay: [3, 6] }),
-      at(-104.5, 76.2, -108, 71.5, "dance", { stay: [6, 12] }),
-      at(-108.5, 92.4, -112, 96, "cheer", { stay: [5, 10] }),
-      at(-87.6, 92, -86, 93.5, "eat", { stay: [8, 16] }),
+      at(-104.5, 76.2 + OM, -108, 71.5 + OM, "dance", { stay: [6, 12] }),
+      at(-108.5, 92.4 + OM, -112, 96 + OM, "cheer", { stay: [5, 10] }),
+      at(-87.6, 92 + OM, -86, 93.5 + OM, "eat", { stay: [8, 16] }),
     ];
     st.stops(park);
     for (let i = 0; i < (few ? 4 : 8); i++) {
@@ -834,7 +834,7 @@ export class Game {
     });
     this.spot("fun", fun.exit.x, fun.exit.z, 1.6, "Step outside", () => this.leave(FUN.doorX, FUN.frontZ - 2.6, Math.PI));
 
-    // Live music: the old picture house on Union, and the stage in Handy Park.
+    // Live music: the old picture house on Main, and the stage in Handy Park on Beale.
     const club = this.rooms.club;
     this.spot("street", MEMPHIAN.x, MEMPHIAN.z + 1.3, 2.4, "Enter The Memphian", () => this.enter("club"));
     this.spot("club", club.exit.x, club.exit.z, 1.5, "Step outside", () => this.leave(MEMPHIAN.x, MEMPHIAN.z + 2.4, 0));
@@ -1108,8 +1108,8 @@ export class Game {
     const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
     this.intro = {
       t: 0,
-      path: new THREE.CatmullRomCurve3([V(-275, 17, -240), V(-196, 21, -238), V(-122, 26, -226), V(-76, 15, -178), V(-45, 10, -158), V(-28, 4.4, -147), end], false, "centripetal"),
-      aim: new THREE.CatmullRomCurve3([V(-100, 24, -262), V(0, 26, -300), V(132, 30, -394), V(-18, 8, -180), V(-17, 6, -174), V(this.pos.x, 2, this.pos.z - 0.5), eye], false, "centripetal"),
+      path: new THREE.CatmullRomCurve3([V(470, 30, -214), V(360, 30, -222), V(220, 26, -220), V(90, 18, -198), V(20, 10, -170), V(-6, 4.6, -152), end], false, "centripetal"),
+      aim: new THREE.CatmullRomCurve3([V(600, 30, -176), V(568, 26, -178), V(300, 16, -150), V(40, 10, -168), V(-12, 6, -162), V(this.pos.x, 2, this.pos.z - 0.5), eye], false, "centripetal"),
       card: -1,
     };
     this.cinema = { title: "", sub: "" };
@@ -1806,7 +1806,7 @@ export class Game {
     }
     if (this.stepId() === "meet") {
       this.save.flags.carrying = true;
-      this.say("K Blanco", "Fresh off the press. Run this box to Court OG at the 901 Court, east on the river.", CAST.kBlanco.portrait, "k-fresh-off-the-press");
+      this.say("K Blanco", "Fresh off the press. Run this box to Court OG at the 901 Court, up the riverfront.", CAST.kBlanco.portrait, "k-fresh-off-the-press");
       this.say("K Blanco", "And Benji, everything on these walls is real. Pick a piece, wear it out.", CAST.kBlanco.portrait, "k-on-these-walls");
       this.emit("met_k");
       return;

@@ -2,7 +2,11 @@ import * as THREE from "three";
 import { paintMat } from "../gfx/tex";
 import { addGround } from "./ground";
 import { MAT, Frame, YAW, bench, hydrant, streetLamp, streetSign, trashCan, tree, type BuildCtx } from "./kit";
-import { CURB, EDGE, RIVER_Z, ROAD_HALF, STREETS_X, STREETS_Z, STREET_NAMES_X, STREET_NAMES_Z, WALK, slab } from "./map";
+import { CURB, EDGE, LANDMARKS, RIVER_Z, ROAD_HALF, STREETS_X, STREETS_Z, STREET_NAMES_Z, WALK, WORLD, crossName, slab } from "./map";
+
+/** Columns and rows of blocks. */
+const COLS = STREETS_X.length - 1;
+const ROWS = STREETS_Z.length - 1;
 
 /** Traffic lights run on one city-wide clock: north-south green, then east-west. */
 export type SignalMats = {
@@ -18,9 +22,10 @@ export function buildStreets(ctx: BuildCtx): SignalMats {
   const asphalt = MAT.asphalt(ctx.glow);
   const yellow = paintMat(0xd9a521, 0.85);
   const white = paintMat(0xe8e6de, 0.8);
-  const X0 = -230;
-  const X1 = 230;
-  const Z1 = 200;
+  // The streets beside the river run from past Butler to just short of the Pyramid.
+  const X0 = WORLD.minX - 30;
+  const X1 = LANDMARKS.pyramid.x - LANDMARKS.pyramid.base / 2 - 8;
+  const Z1 = WORLD.maxZ + 40;
   const north = STREETS_Z[0] - ROAD_HALF;
 
   // Base under the city, so a gap never shows sky. It stops at the bank: the river is water, not floor.
@@ -82,18 +87,18 @@ export function buildStreets(ctx: BuildCtx): SignalMats {
     ctx.ground.wall(d, CURB, minX, CURB / 2, (minZ + maxZ) / 2, curb, YAW.west);
     addGround({ minX, maxX, minZ, maxZ, y: CURB });
   };
-  for (let col = 0; col < 4; col++) {
-    for (let row = 0; row < 4; row++) {
+  for (let col = 0; col < COLS; col++) {
+    for (let row = 0; row < ROWS; row++) {
       const s = slab(col, row);
       slabAt(s.minX, s.maxX, s.minZ, s.maxZ);
     }
   }
-  // Riverfront, the outer edges and the strip south of Park Avenue.
+  // Riverfront, the outer edges and the strip past Park Avenue.
   slabAt(X0, X1, RIVER_Z, north);
   const westEdge = STREETS_X[0] - ROAD_HALF;
-  const eastEdge = STREETS_X[4] + ROAD_HALF;
-  const southEdge = STREETS_Z[4] + ROAD_HALF;
-  for (let row = 0; row < 4; row++) {
+  const eastEdge = STREETS_X[COLS]! + ROAD_HALF;
+  const southEdge = STREETS_Z[ROWS]! + ROAD_HALF;
+  for (let row = 0; row < ROWS; row++) {
     const a = STREETS_Z[row]! + ROAD_HALF;
     const b = STREETS_Z[row + 1]! - ROAD_HALF;
     slabAt(X0, westEdge, a, b);
@@ -101,38 +106,40 @@ export function buildStreets(ctx: BuildCtx): SignalMats {
   }
   slabAt(X0, westEdge, southEdge, Z1);
   slabAt(eastEdge, X1, southEdge, Z1);
-  for (let col = 0; col < 4; col++) slabAt(STREETS_X[col]! + ROAD_HALF, STREETS_X[col + 1]! - ROAD_HALF, southEdge, Z1);
+  for (let col = 0; col < COLS; col++) slabAt(STREETS_X[col]! + ROAD_HALF, STREETS_X[col + 1]! - ROAD_HALF, southEdge, Z1);
 
-  // Lamps, trees and street furniture along every block face.
+  // Lamps, trees and street furniture along every block face. Beale's own faces have its globe lamps and neon instead of trees.
   const y0 = CURB;
-  for (let col = 0; col < 4; col++) {
-    for (let row = 0; row < 4; row++) {
+  const bealeX = STREETS_X[3];
+  const onBeale = (x: number, z: number) => Math.abs(x - bealeX) < EDGE + 1 && z > STREETS_Z[3] && z < STREETS_Z[5];
+  for (let col = 0; col < COLS; col++) {
+    for (let row = 0; row < ROWS; row++) {
       const s = slab(col, row);
-      const beale = row === 0 || row === 1;
       const along = (t: number, a: number, b: number) => a + (b - a) * t;
-      // North and south faces.
-      for (const [z, yaw, isBeale] of [
-        [s.minZ + 0.8, YAW.north, row === 1],
-        [s.maxZ - 0.8, YAW.south, row === 0],
+      // Faces on the streets beside the river.
+      for (const [z, yaw] of [
+        [s.minZ + 0.8, YAW.north],
+        [s.maxZ - 0.8, YAW.south],
       ] as const) {
         for (const t of [0.2, 0.8]) streetLamp(ctx, along(t, s.minX, s.maxX), z, yaw, y0);
-        if (!isBeale) for (const t of [0.36, 0.64]) tree(ctx, along(t, s.minX, s.maxX), z + (yaw === YAW.north ? 0.5 : -0.5), 0.9, y0, col === 1 && row === 3);
+        for (const t of [0.36, 0.64]) tree(ctx, along(t, s.minX, s.maxX), z + (yaw === YAW.north ? 0.5 : -0.5), 0.9, y0, row === 7 && col === 3);
         if (ctx.rand() > 0.4) trashCan(ctx, along(0.5, s.minX, s.maxX), z, y0);
         if (ctx.rand() > 0.55) bench(ctx, along(0.44, s.minX, s.maxX), z + (yaw === YAW.north ? 1.4 : -1.4), yaw, y0);
       }
-      void beale;
+      // Faces on the cross streets.
       for (const [x, yaw] of [
         [s.minX + 0.8, YAW.west],
         [s.maxX - 0.8, YAW.east],
       ] as const) {
-        for (const t of [0.25, 0.75]) streetLamp(ctx, x, along(t, s.minZ, s.maxZ), yaw, y0);
-        for (const t of [0.5]) tree(ctx, x + (yaw === YAW.west ? 0.5 : -0.5), along(t, s.minZ, s.maxZ), 0.9, y0);
+        const beale = onBeale(x, (s.minZ + s.maxZ) / 2);
+        if (!beale) for (const t of [0.25, 0.75]) streetLamp(ctx, x, along(t, s.minZ, s.maxZ), yaw, y0);
+        if (!beale) for (const t of [0.5]) tree(ctx, x + (yaw === YAW.west ? 0.5 : -0.5), along(t, s.minZ, s.maxZ), 0.9, y0);
         if (ctx.rand() > 0.5) hydrant(ctx, x, along(0.12, s.minZ, s.maxZ), y0);
       }
     }
   }
   // Riverside Drive, river side.
-  for (let x = -140; x <= 140; x += 28) streetLamp(ctx, x, north - 0.8, YAW.south, y0);
+  for (let x = X0 + 14; x <= X1 - 6; x += 28) streetLamp(ctx, x, north - 0.8, YAW.south, y0);
 
   return buildSignals(ctx);
 }
@@ -166,7 +173,7 @@ function buildSignals(ctx: BuildCtx): SignalMats {
           f.add(new THREE.CircleGeometry(0.14, 10), set.green, hx, y0 + 5.12, 0.16, ctx.flat);
         }
       }
-      streetSign(ctx, x + EDGE - 1.4, z + EDGE - 1.4, STREET_NAMES_X[i]!, STREET_NAMES_Z[j]!, y0);
+      streetSign(ctx, x + EDGE - 1.4, z + EDGE - 1.4, crossName(i, z), STREET_NAMES_Z[j]!, y0);
     });
   });
   return mats;

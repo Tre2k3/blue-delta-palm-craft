@@ -5,8 +5,10 @@
  */
 
 /** The two lawns: the Park Avenue half of each of the two middle neighbourhood blocks. */
-export const PUTT_LOT = { minX: -55, maxX: -9, minZ: 85.6, maxZ: 107 };
-export const COURTS_LOT = { minX: 9, maxX: 55, minZ: 85.6, maxZ: 107 };
+import { OM } from "./map";
+
+export const PUTT_LOT = { minX: -55, maxX: -9, minZ: 85.6 + OM, maxZ: 107 + OM };
+export const COURTS_LOT = { minX: 9, maxX: 55, minZ: 85.6 + OM, maxZ: 107 + OM };
 
 // ------------------------------------------------------------------ putt-putt
 
@@ -55,8 +57,8 @@ const block = (x: number, z: number, w: number, d: number): Seg[] => [
 ];
 
 const COLS = [-50.4, -41.2, -32, -22.8, -13.6] as const;
-const NORTH = 90.6;
-const SOUTH = 101.6;
+const NORTH = 90.6 + OM;
+const SOUTH = 101.6 + OM;
 
 /** The same hole played the other way: everything north of its middle goes south. */
 function turned(h: Hole): Hole {
@@ -257,7 +259,7 @@ export function wallsOf(h: Hole): Seg[] {
  */
 export const TENNIS = {
   cx: 38.1,
-  cz: 96,
+  cz: 96 + OM,
   half: 11.885,
   wide: 4.115,
   /** Net to a service line. */
@@ -288,8 +290,8 @@ export const TENNIS_GATE = { x: TENNIS_FENCE.minX - 1.2, z: TENNIS.cz + 6.2 };
 export const CORNHOLE = {
   x: 14,
   /** Front edge of the board that is thrown at, and of the one thrown from. */
-  farZ: 93.4,
-  nearZ: 101.6,
+  farZ: 93.4 + OM,
+  nearZ: 101.6 + OM,
   len: 1.22,
   wide: 0.61,
   front: 0.08,

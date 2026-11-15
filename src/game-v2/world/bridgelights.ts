@@ -3,7 +3,8 @@ import { lerp, smooth } from "../core/util";
 import { FAR_BANK_Z, RIVER_Z } from "./map";
 
 /** Where the M bridge crosses, and the shape of it. The steel in `landmarks.ts` is built from the same numbers. */
-export const BRIDGE = { x: -196, z0: RIVER_Z - 4, z1: FAR_BANK_Z + 6, deckY: 13, side: 7.6, rise: 30 };
+/** The Hernando de Soto Bridge, the M, just north of the Pyramid. */
+export const BRIDGE = { x: 660, z0: RIVER_Z - 4, z1: FAR_BANK_Z + 6, deckY: 13, side: 7.6, rise: 30 };
 
 export type BridgeShow = {
   group: THREE.Group;

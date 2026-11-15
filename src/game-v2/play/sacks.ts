@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { rng } from "../core/util";
 import { tex } from "../gfx/tex";
 import { standHeight } from "../world/ground";
-import { ROAD_HALF, STREETS_X, STREETS_Z, WALK, slab } from "../world/map";
+import { ROAD_HALF, STREETS_X, STREETS_Z, WALK, WORLD, slab } from "../world/map";
 
 /**
  * Gold coins hung in the air all over town: on every sidewalk, down the middle of the streets
@@ -24,8 +24,10 @@ export class Sacks {
     const rand = rng(901);
     const add = (x: number, z: number) => this.spots.push({ x, z, y: standHeight(x, z) + 1.05, seed: rand() * 6.28 });
     // Sidewalks: a few on each side of every block.
-    for (let c = 0; c < 4; c++) {
-      for (let r = 0; r < 4; r++) {
+    const NC = STREETS_X.length - 1;
+    const NR = STREETS_Z.length - 1;
+    for (let c = 0; c < NC; c++) {
+      for (let r = 0; r < NR; r++) {
         const sl = slab(c, r);
         const inset = WALK / 2;
         for (const t of [0.22, 0.5, 0.78]) {
@@ -37,10 +39,10 @@ export class Sacks {
       }
     }
     // Streets: lines of three down the right-hand lane, for the car.
-    for (const z of STREETS_Z) for (let c = 0; c < 4; c++) for (const t of [0.4, 0.5, 0.6]) add(STREETS_X[c]! + (STREETS_X[c + 1]! - STREETS_X[c]!) * t, z + ROAD_HALF * 0.45);
-    for (const x of STREETS_X) for (let r = 0; r < 4; r++) for (const t of [0.4, 0.5, 0.6]) add(x - ROAD_HALF * 0.45, STREETS_Z[r]! + (STREETS_Z[r + 1]! - STREETS_Z[r]!) * t);
+    for (const z of STREETS_Z) for (let c = 0; c < NC; c++) for (const t of [0.4, 0.5, 0.6]) add(STREETS_X[c]! + (STREETS_X[c + 1]! - STREETS_X[c]!) * t, z + ROAD_HALF * 0.45);
+    for (const x of STREETS_X) for (let r = 0; r < NR; r++) for (const t of [0.4, 0.5, 0.6]) add(x - ROAD_HALF * 0.45, STREETS_Z[r]! + (STREETS_Z[r + 1]! - STREETS_Z[r]!) * t);
     // The riverfront walk.
-    for (let x = -120; x <= 120; x += 12) add(x, -194 + Math.sin(x * 0.2) * 2.5);
+    for (let x = WORLD.minX + 12; x <= WORLD.maxX - 12; x += 12) add(x, -194 + Math.sin(x * 0.2) * 2.5);
     this.total = this.spots.length;
     this.taken = this.spots.map((_, i) => !!flags[`coin${i}`]);
 

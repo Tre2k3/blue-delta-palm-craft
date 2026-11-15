@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { tex } from "../gfx/tex";
 import { MAT, addSolid, bench, bush, emissiveMat, globeLamp, neon, sign, std, trashCan, tree, type BuildCtx } from "./kit";
 import { addGround } from "./ground";
-import { CURB } from "./map";
+import { CURB, OM } from "./map";
 import { CORNHOLE, COURTS_LOT, CUP_R, HOLES, PUTT_HUT, PUTT_LOT, TENNIS, TENNIS_FENCE, TENNIS_GATE, feltHeight, playDir, wallsOf, type Hole } from "./rec-map";
 
 const Y0 = CURB;
@@ -52,9 +52,9 @@ function hedge(ctx: BuildCtx, x0: number, z0: number, x1: number, z1: number) {
 function buildPutt(ctx: BuildCtx) {
   const L = PUTT_LOT;
   // The walk between the two rows, and the way in from Park Avenue round the hut.
-  strip(ctx, L.minX + 1.5, L.maxX - 1.5, 95.35, 96.95);
-  strip(ctx, PUTT_HUT.x - 4.4, PUTT_HUT.x - 2.6, 96.95, 106.2);
-  strip(ctx, PUTT_HUT.x - 4.4, PUTT_HUT.x + 4.4, 104.2, L.maxZ);
+  strip(ctx, L.minX + 1.5, L.maxX - 1.5, 95.35 + OM, 96.95 + OM);
+  strip(ctx, PUTT_HUT.x - 4.4, PUTT_HUT.x - 2.6, 96.95 + OM, 106.2 + OM);
+  strip(ctx, PUTT_HUT.x - 4.4, PUTT_HUT.x + 4.4, 104.2 + OM, L.maxZ);
 
   hut(ctx);
   HOLES.forEach((h, i) => hole(ctx, h, i + 1));
@@ -64,17 +64,17 @@ function buildPutt(ctx: BuildCtx) {
   hedge(ctx, L.minX + 0.8, L.maxZ - 0.8, PUTT_HUT.x - 5.2, L.maxZ - 0.8);
   hedge(ctx, PUTT_HUT.x + 5.2, L.maxZ - 0.8, L.maxX - 0.8, L.maxZ - 0.8);
   for (const [x, z] of [
-    [-45.8, 96.15],
-    [-27.4, 96.15],
-    [-18.2, 96.15],
-    [-36.6, 96.15],
-    [PUTT_HUT.x - 5.6, 105.4],
-    [PUTT_HUT.x + 5.6, 105.4],
+    [-45.8, 96.15 + OM],
+    [-27.4, 96.15 + OM],
+    [-18.2, 96.15 + OM],
+    [-36.6, 96.15 + OM],
+    [PUTT_HUT.x - 5.6, 105.4 + OM],
+    [PUTT_HUT.x + 5.6, 105.4 + OM],
   ] as const)
     globeLamp(ctx, x, z + (z < 100 ? 1.25 : 0), Y0, 0xfff0c8);
-  bench(ctx, -27.4, 97.5, Math.PI, Y0);
-  bench(ctx, -45.8, 94.9, 0, Y0);
-  trashCan(ctx, PUTT_HUT.x + 3.6, 103.9, Y0);
+  bench(ctx, -27.4, 97.5 + OM, Math.PI, Y0);
+  bench(ctx, -45.8, 94.9 + OM, 0, Y0);
+  trashCan(ctx, PUTT_HUT.x + 3.6, 103.9 + OM, Y0);
 }
 
 /** The hut where putters are handed out: a counter under a striped awning and the course's name in lights. */
@@ -412,8 +412,8 @@ function buildCourts(ctx: BuildCtx) {
   cornhole(ctx);
 
   // The way in from Park Avenue, hedges on the street side, and shade.
-  strip(ctx, 16.6, 19.4, 99.4, L.maxZ);
-  strip(ctx, 11.2, 16.6, 103.6, 105.4);
+  strip(ctx, 16.6, 19.4, 99.4 + OM, L.maxZ);
+  strip(ctx, 11.2, 16.6, 103.6 + OM, 105.4 + OM);
   hedge(ctx, L.minX + 0.8, L.minZ + 1.6, L.minX + 0.8, L.maxZ - 0.8);
   hedge(ctx, L.minX + 0.8, L.maxZ - 0.8, 15.6, L.maxZ - 0.8);
   hedge(ctx, 20.4, L.maxZ - 0.8, L.maxX - 0.8, L.maxZ - 0.8);
@@ -421,9 +421,9 @@ function buildCourts(ctx: BuildCtx) {
   globeLamp(ctx, 17.4, 98.6, Y0, 0xfff0c8);
   globeLamp(ctx, 11, 97.4, Y0, 0xfff0c8);
   globeLamp(ctx, 17.4, 89.4, Y0, 0xfff0c8);
-  tree(ctx, 11.2, 87.6, 1.2, Y0, false);
-  tree(ctx, 18.6, 86.9, 1, Y0, false);
-  trashCan(ctx, 16.2, 105.9, Y0);
+  tree(ctx, 11.2, 87.6 + OM, 1.2, Y0, false);
+  tree(ctx, 18.6, 86.9 + OM, 1, Y0, false);
+  trashCan(ctx, 16.2, 105.9 + OM, Y0);
 }
 
 /** Two boards on the lawn, a bench to watch from and a board that says what the game is to. */

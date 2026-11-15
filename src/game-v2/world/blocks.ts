@@ -2,7 +2,8 @@ import * as THREE from "three";
 import { paintMat, tex } from "../gfx/tex";
 import { garage, house, lotSurface, midrise, mural, shopRow, tower } from "./buildings";
 import { MAT, Frame, YAW, addSolid, bench, bush, emissiveMat, facade, globeLamp, neon, poolMat, sign, std, storefront, tree, type BuildCtx, makeCtx } from "./kit";
-import { ARENA, BOWL, CURB, CYPHER, HOME, lot, rect, STREETS_X } from "./map";
+import { ARENA, BOWL, CURB, CYPHER, HANDY, HOME, lot, OM, OM_ROW, rect } from "./map";
+import { buildMemphis } from "./memphis";
 import { blockText } from "./riverfront";
 import { buildFunExterior } from "./funhouse";
 import { buildPark, resetPark, resetParkArt } from "./park";
@@ -18,20 +19,31 @@ export type BlockAnchors = {
   diner: { x: number; z: number };
 };
 
-/** Every block between Riverside Drive and Park Avenue. Designed, not rolled. */
+/**
+ * The blocks the game's own places stand in, designed one by one: the towers on Front, the
+ * Orpheum and the Memphian on Main, the diner, the arena and the bowl between Main and 2nd,
+ * Handy Park on Beale, and Orange Mound out east. Memphis around them is built by `buildMemphis`.
+ *
+ * Columns here are counted from MLK Avenue north (`C`), so the four middle columns are the
+ * blocks between MLK and Monroe.
+ */
+const C = 2;
+/** Orange Mound's row: between Lamar and Park Avenue. */
+
 export function buildBlocks(ctx: BuildCtx): BlockAnchors {
   downtown(ctx);
-  const stage = bealeSouth(ctx);
+  bealeSouth(ctx);
+  const stage = handyPark(ctx);
   const mid = midtown(ctx);
   const home = neighborhood(ctx);
-  edges(ctx);
+  buildMemphis(ctx);
   return { ...home, ...mid, stage };
 }
 
-/** Row 0: the towers, with the north side of Beale along their feet. */
+/** Riverside to Front, MLK to Monroe: the towers along the river. */
 function downtown(ctx: BuildCtx) {
   for (let c = 0; c < 4; c++) {
-    const L = lot(c, 0);
+    const L = lot(C + c, 0);
     lotSurface(ctx, L, "concrete");
     shopRow(ctx, L.minX, L.maxX, L.maxZ, "south", 12, c * 5);
   }
@@ -46,15 +58,15 @@ function downtown(ctx: BuildCtx) {
   garage(ctx, rect(99, 119, -131, -103), 5);
 }
 
-/** Row 1: south side of Beale, the lofts behind it, the park and the smokehouse. */
+/** Front to Main, MLK to Monroe: shops on Front, the Orpheum on the corner of Main and Beale, the Memphian, the smokehouse. */
 function bealeSouth(ctx: BuildCtx) {
-  for (const c of [0, 1, 3]) {
-    const L = lot(c, 1);
+  for (const c of [0, 1, 2, 3]) {
+    const L = lot(C + c, 1);
     lotSurface(ctx, L, "concrete");
     shopRow(ctx, L.minX, L.maxX, L.minZ, "north", 12, 20 + c * 5);
   }
-  midrise(ctx, rect(-119, -99, -51, -21), 22, "brickRed", { shops: ["west", "south"], accent: 0x1f4a2c, variant: 0 });
-  midrise(ctx, rect(-95, -73, -51, -25), 30, "brickCream", { shops: ["south", "east"], accent: 0x5a3a12, variant: 1, sign: { text: "SOUTH MAIN LOFTS", color: "#ffd23a", face: "east", y: 6 } });
+  midrise(ctx, rect(-119, -99, -51, -21), 30, "brickCream", { shops: ["west", "south"], accent: 0x5a3a12, variant: 1, sign: { text: "SOUTH MAIN LOFTS", color: "#ffd23a", face: "south", y: 6 } });
+  orpheum(ctx);
 
   // The Memphian: old movie palace on Union.
   const theater = rect(-55, -25, -51, -21);
@@ -88,8 +100,52 @@ function bealeSouth(ctx: BuildCtx) {
   tf.wall(1.5, 8.8, 0, Y0 + 13, 1.16, vertMat, ctx.flat);
   midrise(ctx, rect(-21, -9, -51, -21), 26, "concrete", { shops: ["east", "south"], accent: 0x1d2f55, variant: 1 });
 
+  // Where Handy Park stood before it moved to Beale: lofts over shops.
+  midrise(ctx, rect(9, 29, -51, -21), 24, "brickRed", { shops: ["south", "west"], accent: 0x2b2b2e, variant: 2 });
+  midrise(ctx, rect(33, 55, -51, -21), 18, "tan", { shops: ["south", "east"], accent: 0x1d2f55, variant: 0 });
+
+  // Smokehouse and its mural on Union.
+  const bbq = rect(73, 101, -51, -21);
+  midrise(ctx, bbq, 11, "brickBrown", { shops: ["south"], accent: 0x7a1f1f, variant: 2, sign: { text: "CHARCOAL ALLEY BBQ", color: "#ff3b3b", face: "south", y: 7.4, w: 14 } });
+  ctx.solid.cyl(0.6, 0.7, 6, 78, Y0 + 14, -46, MAT.brick("#5c3a2a", 3), 8);
+  ctx.solid.add(new THREE.SphereGeometry(0.5, 8, 6), emissiveMat(ctx, 0xff5a1e, 0.6, 3), 78, Y0 + 17.1, -46);
+  midrise(ctx, rect(105, 119, -51, -21), 17, "brickRed", { shops: ["east"], accent: 0x2b2b2e, variant: 0 });
+  mural(ctx, 112, -21 + 0.08, YAW.south, 13, 6.5, "soul");
+}
+
+/** The Orpheum, on the corner of Main and Beale: the old movie palace, its blade sign and its marquee on Main. */
+function orpheum(ctx: BuildCtx) {
+  const r = rect(-95, -73, -51, -23);
+  midrise(ctx, r, 26, "brickCream", { variant: 0 });
+  const f = new Frame(ctx, (r.minX + r.maxX) / 2, r.maxZ, YAW.south);
+  f.box(18, 2, 3.2, 0, Y0 + 5.4, 1.6, MAT.black());
+  f.wall(17.6, 1.8, 0, Y0 + 5.4, 3.22, neon(ctx, "ORPHEUM", "#ffd23a", { sub: "BROADWAY · MEMPHIS", w: 768, h: 192 }), ctx.flat);
+  f.box(17, 0.12, 3, 0, Y0 + 4.35, 1.6, emissiveMat(ctx, 0xffe2b0, 0.5, 3));
+  f.wall(14, 3.8, 0, Y0 + 1.9, 0.06, storefront(ctx, 4, "#3a1a10", true), ctx.solid, 0, 2, 1);
+  f.flat(18, 9, 0, Y0 + 0.02, 4, poolMat(ctx, 0xffc46a, 0.5), ctx.flat);
+  f.lamp(0, Y0 + 3.8, 3, 0xffd08a);
+  // The tall blade on the Beale corner.
+  f.box(1.8, 12, 0.6, 9.4, Y0 + 15, 1, MAT.black());
+  const blade = tex(96, 640, (g, w, h) => {
+    g.fillStyle = "#120c08";
+    g.fillRect(0, 0, w, h);
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.font = '900 64px "Bebas Neue", Impact, sans-serif';
+    g.shadowColor = "#ffb400";
+    g.shadowBlur = 18;
+    g.fillStyle = "#fff1c8";
+    [..."ORPHEUM"].forEach((ch, i) => g.fillText(ch, w / 2, 52 + i * 84));
+  }, { repeat: false });
+  const bm = new THREE.MeshBasicMaterial({ map: blade, toneMapped: false });
+  ctx.glow.basic(bm, 0.7, 2.2);
+  f.wall(1.7, 11.8, 9.4, Y0 + 15, 1.32, bm, ctx.flat);
+}
+
+/** W.C. Handy Park, on Beale between 2nd and B.B. King: the square, its stage, the horn player and the cypher. */
+function handyPark(ctx: BuildCtx) {
   // Handy Park: open square on Beale with a stage.
-  const P = lot(2, 1);
+  const P = lot(HANDY.col, HANDY.row);
   lotSurface(ctx, P, "plaza");
   const sx = (P.minX + P.maxX) / 2;
   const sz = P.maxZ - 6;
@@ -126,24 +182,18 @@ function bealeSouth(ctx: BuildCtx) {
     [P.minX + 2, P.maxZ - 12],
     [P.maxX - 2, P.maxZ - 12],
   ] as const) globeLamp(ctx, lx, lz, Y0);
-  // Arch over the Beale side.
+  // Arch over the way in from 2nd Street.
   const arch = MAT.black();
   for (const s of [-1, 1]) ctx.solid.cyl(0.18, 0.2, 5.6, sx + s * 8, Y0 + 2.8, P.minZ + 0.6, arch, 8);
   ctx.solid.box(16.6, 0.3, 0.3, sx, Y0 + 5.6, P.minZ + 0.6, arch);
-  ctx.flat.wall(12, 1.5, sx, Y0 + 6.5, P.minZ + 0.6, neon(ctx, "BEALE STREET", "#39ff14", { w: 768, h: 112, border: false }), YAW.north);
-  ctx.flat.wall(12, 1.5, sx, Y0 + 6.5, P.minZ + 0.58, neon(ctx, "BEALE STREET", "#39ff14", { w: 768, h: 112, border: false }), YAW.south);
+  ctx.flat.wall(12, 1.5, sx, Y0 + 6.5, P.minZ + 0.6, neon(ctx, "W.C. HANDY PARK", "#39ff14", { w: 768, h: 112, border: false }), YAW.north);
+  ctx.flat.wall(12, 1.5, sx, Y0 + 6.5, P.minZ + 0.58, neon(ctx, "W.C. HANDY PARK", "#39ff14", { w: 768, h: 112, border: false }), YAW.south);
 
   cypher(ctx);
 
-  // Smokehouse and its mural on Union.
-  const bbq = rect(73, 101, -51, -21);
-  midrise(ctx, bbq, 11, "brickBrown", { shops: ["south"], accent: 0x7a1f1f, variant: 2, sign: { text: "CHARCOAL ALLEY BBQ", color: "#ff3b3b", face: "south", y: 7.4, w: 14 } });
-  ctx.solid.cyl(0.6, 0.7, 6, 78, Y0 + 14, -46, MAT.brick("#5c3a2a", 3), 8);
-  ctx.solid.add(new THREE.SphereGeometry(0.5, 8, 6), emissiveMat(ctx, 0xff5a1e, 0.6, 3), 78, Y0 + 17.1, -46);
-  midrise(ctx, rect(105, 119, -51, -21), 17, "brickRed", { shops: ["east"], accent: 0x2b2b2e, variant: 0 });
-  mural(ctx, 112, -21 + 0.08, YAW.south, 13, 6.5, "soul");
   return { x: sx, z: sz - 6 };
 }
+
 
 /**
  * The cypher: a sheet of checked lino taped to the plaza just inside the arch, a speaker cabinet
@@ -296,10 +346,10 @@ function pinGeo(scale: number) {
   return new THREE.LatheGeometry(pts, 14);
 }
 
-/** Row 2: diner and gas, the studio corner, the arena, the bowl. */
+/** Main to 2nd, MLK to Monroe: diner and gas, the studio corner, the arena, the bowl. */
 function midtown(ctx: BuildCtx) {
   // Diner and gas station.
-  const D = lot(0, 2);
+  const D = lot(C, 2);
   lotSurface(ctx, D, "parking");
   const diner = rect(-119, -95, -3, 12);
   const dcx = (diner.minX + diner.maxX) / 2;
@@ -335,7 +385,7 @@ function midtown(ctx: BuildCtx) {
   midrise(ctx, rect(-119, -105, 27, 43), 4.6, "brickCream", { shops: ["east"], accent: 0x1f4a2c, variant: 0, sign: { text: "GAS & GO", color: "#39ff14", face: "east", y: 4.4, w: 8 } });
 
   // Soul Studio, the record shop and the mural building.
-  const S = lot(1, 2);
+  const S = lot(C + 1, 2);
   lotSurface(ctx, S, "grass");
   midrise(ctx, rect(-55, -37, -3, 15), 9, "brickRed", { shops: ["north", "west"], accent: 0x2b2b2e, variant: 1, sign: { text: "SOUL STUDIO", color: "#ffd23a", face: "north", y: 6.2, w: 12 } });
   const guitar = guitarSign(ctx);
@@ -357,7 +407,7 @@ function midtown(ctx: BuildCtx) {
   for (let i = 0; i < 8; i++) bush(ctx, -23 + ctx.rand() * 12, 16 + ctx.rand() * 24, 1, Y0);
 
   // 901 Arena.
-  const A = lot(2, 2);
+  const A = lot(C + 2, 2);
   lotSurface(ctx, A, "plaza");
   const af = facade(ctx, "glassBlue", 2);
   const drum = new THREE.CylinderGeometry(ARENA.r, ARENA.r, 20, 40, 1, true);
@@ -384,7 +434,7 @@ function midtown(ctx: BuildCtx) {
   ] as const) globeLamp(ctx, lx, lz, Y0, 0xbfe0ff);
 
   // 901 Bowl.
-  const B = lot(3, 2);
+  const B = lot(C + 3, 2);
   lotSurface(ctx, B, "parking");
   const bw = BOWL.maxX - BOWL.minX;
   const bd = BOWL.maxZ - BOWL.minZ;
@@ -421,13 +471,13 @@ function midtown(ctx: BuildCtx) {
   return { bowlDoor: { x: BOWL.doorX, z: BOWL.frontZ + 1.2 }, diner: { x: dcx, z: diner.minZ - 2 } };
 }
 
-/** Row 3: Orange Mound. Bungalows on both streets, Benji's place, the church, the corner store. */
+/** Orange Mound, between Lamar and Park Avenue. Bungalows on both streets, Benji's place, the church, the corner store. */
 function neighborhood(ctx: BuildCtx) {
   let homeDoor = { x: HOME.x, z: HOME.z };
   let homeWalk = { x: HOME.x, z: HOME.z };
   let n = 0;
   for (let c = 0; c < 4; c++) {
-    const L = lot(c, 3);
+    const L = lot(C + c, OM_ROW);
     if (c === 3) {
       // The Fun House has the whole block: hall on Lamar, karts behind.
       lotSurface(ctx, L, "concrete");
@@ -446,25 +496,25 @@ function neighborhood(ctx: BuildCtx) {
     // are still dreamt up, in their old order, so every other house and tree in the city is where
     // it was. They are just not built.
     const south = c === 1 || c === 2 ? { ...makeCtx(0), rand: ctx.rand } : ctx;
-    for (const x of xs) house(south, x, 97.4, YAW.south, n++);
+    for (const x of xs) house(south, x, 97.4 + OM, YAW.south, n++);
     // Back fences and yard trees.
     for (let x = L.minX + 3; x < L.maxX - 2; x += 7) {
-      if (ctx.rand() > 0.35) tree(ctx, x + ctx.rand() * 3, 83 + ctx.rand() * 3, 1.1 + ctx.rand() * 0.4, Y0, c === 1);
+      if (ctx.rand() > 0.35) tree(ctx, x + ctx.rand() * 3, 83 + OM + ctx.rand() * 3, 1.1 + ctx.rand() * 0.4, Y0, c === 1);
     }
-    ctx.solid.box(L.maxX - L.minX - 2, 1.5, 0.1, (L.minX + L.maxX) / 2, Y0 + 0.75, 84.5, MAT.wood());
-    addSolid(ctx, L.minX + 1, L.maxX - 1, 84.4, 84.6);
+    ctx.solid.box(L.maxX - L.minX - 2, 1.5, 0.1, (L.minX + L.maxX) / 2, Y0 + 0.75, 84.5 + OM, MAT.wood());
+    addSolid(ctx, L.minX + 1, L.maxX - 1, 84.4 + OM, 84.6 + OM);
     if (c === 1) {
-      house(ctx, xs[0]!, 70.6, YAW.north, n++);
+      house(ctx, xs[0]!, 70.6 + OM, YAW.north, n++);
       const h = house(ctx, HOME.x, HOME.z, YAW.north, 4, { w: HOME.w, d: HOME.d, hero: true });
       homeDoor = h.door;
       homeWalk = h.walk;
-      house(ctx, xs[2]!, 70.6, YAW.north, n++);
+      house(ctx, xs[2]!, 70.6 + OM, YAW.north, n++);
       // Driveway beside the house, where the coupe lives.
-      ctx.ground.flat(4, 12, HOME.x + 8.6, Y0 + 0.008, 67, lotDrive());
+      ctx.ground.flat(4, 12, HOME.x + 8.6, Y0 + 0.008, 67 + OM, lotDrive());
     }
     if (c === 2) {
-      midrise(ctx, rect(9, 25, 61, 75), 5, "brickCream", { shops: ["north", "west"], accent: 0x7a1f1f, variant: 2, sign: { text: "LAMAR MART", color: "#ff8a1e", face: "north", y: 4.6, w: 10 } });
-      church(ctx, 42, 72);
+      midrise(ctx, rect(9, 25, 61 + OM, 75 + OM), 5, "brickCream", { shops: ["north", "west"], accent: 0x7a1f1f, variant: 2, sign: { text: "LAMAR MART", color: "#ff8a1e", face: "north", y: 4.6, w: 10 } });
+      church(ctx, 42, 72 + OM);
     }
   }
   buildRec(ctx);
@@ -511,30 +561,4 @@ function church(ctx: BuildCtx, x: number, z: number) {
   f.wall(4.4, 1, 0, Y0 + 4.4, 11.36, sign("NEW HOPE", "#17110e", "#f1ede4", { sub: "ALL ARE WELCOME", w: 384, h: 96 }), ctx.flat);
   f.flat(6, 6, 0, Y0 + 0.02, 14, poolMat(ctx, 0xffb46a, 0.32), ctx.flat);
   f.solid(-5.5, 5.5, -8.5, 11.3);
-}
-
-/** What stands past the last streets: a wall of buildings west and east, houses to the south. */
-function edges(ctx: BuildCtx) {
-  const west = STREETS_X[0] - 9;
-  const east = STREETS_X[4] + 9;
-  const styles = ["brickBrown", "brickRed", "concrete", "brickCream", "tan"];
-  let n = 0;
-  for (let row = 0; row < 4; row++) {
-    const L = lot(0, row);
-    const mid = (L.minZ + L.maxZ) / 2;
-    for (const [a, b] of [
-      [L.minZ, mid - 1],
-      [mid + 1, L.maxZ],
-    ] as const) {
-      const hW = row === 3 ? 6 + ctx.rand() * 4 : 12 + ctx.rand() * 16;
-      midrise(ctx, rect(west - 26, west, a, b), hW, styles[n++ % styles.length]!, { shops: ["east"], accent: [0x1f4a2c, 0x7a1f1f, 0x1d2f55][n % 3]!, variant: n % 3 });
-      const hE = row === 3 ? 6 + ctx.rand() * 4 : 12 + ctx.rand() * 16;
-      midrise(ctx, rect(east, east + 26, a, b), hE, styles[n++ % styles.length]!, { shops: ["west"], accent: [0x5a3a12, 0x2b2b2e, 0x6a1f4a][n % 3]!, variant: n % 3 });
-    }
-  }
-  let k = 20;
-  for (let x = -148; x <= 148; x += 15.5) {
-    if (STREETS_X.some((sx) => Math.abs(x - sx) < 13)) continue;
-    house(ctx, x, 132, YAW.north, k++);
-  }
 }

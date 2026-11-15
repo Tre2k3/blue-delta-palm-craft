@@ -1,10 +1,13 @@
 import { COURTS_LOT, HOLES, PUTT_LOT, TENNIS, TENNIS_FENCE } from "../world/rec-map";
-import { ARENA, BOWL, COURT, FAR_BANK_Z, FUN, HOME, HQ, KART_TRACK, PARK, PARK_TERRACE, PIER, POIS, RACE_LOOP, RIVER_Z, ROAD_HALF, STREETS_X, STREETS_Z, STREET_NAMES_X, STREET_NAMES_Z, TRUCKS, slab } from "../world/map";
+import { ARENA, BOWL, COURT, EAST_Z, FAR_BANK_Z, FUN, HOME, HQ, KART_TRACK, LANDMARKS, OM_ROW, PARK, PARK_TERRACE, PIER, POIS, RACE_LOOP, RIVER_Z, ROAD_HALF, STREETS_X, STREETS_Z, STREET_NAMES_X, STREET_NAMES_X_EAST, STREET_NAMES_Z, TRUCKS, WORLD, slab } from "../world/map";
 
 export type MapView = { cx: number; cz: number; scale: number };
 export type MapDots = { x: number; z: number; heading: number; car: { x: number; z: number }; target: { id: string; x: number; z: number } | null; time: number; friends?: { name: string; x: number; z: number; street: boolean; link: string }[] };
 
-/** North-up plan of the city. Used small in the corner and large on the map screen. */
+/**
+ * North-up plan of the city. Used small in the corner and large on the map screen. The world's +X
+ * is real north and +Z real east, so the plan is drawn a quarter turn round: the river on the left.
+ */
 export function drawMap(g: CanvasRenderingContext2D, w: number, h: number, v: MapView, d: MapDots, labels: boolean) {
   const X = (x: number) => w / 2 + (x - v.cx) * v.scale;
   const Z = (z: number) => h / 2 + (z - v.cz) * v.scale;
@@ -13,18 +16,44 @@ export function drawMap(g: CanvasRenderingContext2D, w: number, h: number, v: Ma
     g.fillStyle = fill;
     g.fillRect(X(x0), Z(z0), (x1 - x0) * S, (z1 - z0) * S);
   };
+  /** Writing stays level on screen: turned back against the plan, then nudged by (dx, dy) in screen terms. */
+  const text = (str: string, px: number, py: number, dx = 0, dy = 0, turn = 0) => {
+    g.save();
+    g.translate(px, py);
+    g.rotate(Math.PI / 2 + turn);
+    g.fillText(str, dx, dy);
+    g.restore();
+  };
   g.fillStyle = "#0d1114";
   g.fillRect(0, 0, w, h);
-  box(-420, FAR_BANK_Z, 420, RIVER_Z, "#12384f");
-  box(-420, FAR_BANK_Z - 200, 420, FAR_BANK_Z, "#141a1e");
-  box(-160, RIVER_Z, 160, STREETS_Z[0] - ROAD_HALF, "#20262c");
+  g.save();
+  g.translate(w / 2, h / 2);
+  g.rotate(-Math.PI / 2);
+  g.translate(-w / 2, -h / 2);
+  const N0 = WORLD.minX - 400;
+  const N1 = WORLD.maxX + 400;
+  box(N0, FAR_BANK_Z, N1, RIVER_Z, "#12384f");
+  box(N0, FAR_BANK_Z - 300, N1, FAR_BANK_Z, "#141a1e");
+  box(WORLD.minX - 30, RIVER_Z, WORLD.maxX + 14, STREETS_Z[0] - ROAD_HALF, "#20262c");
+  // Mud Island and the Pyramid, north along the river.
+  const mud = LANDMARKS.mudIsland;
+  box(mud.minX, mud.minZ, mud.maxX, mud.maxZ, "#1f3a26");
+  const py = LANDMARKS.pyramid;
+  box(py.x - py.base / 2, py.z - py.base / 2, py.x + py.base / 2, py.z + py.base / 2, "#5a6470");
   // Streets as one slab, blocks cut out of it.
-  box(STREETS_X[0] - ROAD_HALF, STREETS_Z[0] - ROAD_HALF, STREETS_X[4] + ROAD_HALF, STREETS_Z[4] + ROAD_HALF, "#3b424b");
-  for (let c = 0; c < 4; c++)
-    for (let r = 0; r < 4; r++) {
+  const nc = STREETS_X.length - 1;
+  const nr = STREETS_Z.length - 1;
+  box(STREETS_X[0] - ROAD_HALF, STREETS_Z[0] - ROAD_HALF, STREETS_X[nc] + ROAD_HALF, STREETS_Z[nr] + ROAD_HALF, "#3b424b");
+  for (let c = 0; c < nc; c++)
+    for (let r = 0; r < nr; r++) {
       const s = slab(c, r);
-      box(s.minX, s.minZ, s.maxX, s.maxZ, r === 3 ? "#1d2a22" : r === 2 ? "#1f2329" : "#1a1e24");
+      box(s.minX, s.minZ, s.maxX, s.maxZ, r >= OM_ROW ? "#1d2a22" : r === OM_ROW - 1 ? "#1f2329" : "#1a1e24");
     }
+  // The big places downtown.
+  for (const k of ["fedex", "peabody", "ballpark", "orpheum", "lorraine", "courtSquare", "cotton"] as const) {
+    const m = LANDMARKS[k];
+    box(m.x - 9, m.z - 9, m.x + 9, m.z + 9, k === "courtSquare" ? "#245c2e" : "#2c333c");
+  }
   box(HQ.minX, HQ.minZ, HQ.maxX, HQ.maxZ, "#1e7a14");
   box(COURT.cx - COURT.halfW, COURT.cz - COURT.halfL, COURT.cx + COURT.halfW, COURT.cz + COURT.halfL, "#9a5a22");
   box(PIER.x - PIER.half, PIER.z1, PIER.x + PIER.half, PIER.z0, "#6b4a2e");
@@ -72,17 +101,15 @@ export function drawMap(g: CanvasRenderingContext2D, w: number, h: number, v: Ma
     g.font = `700 ${Math.max(9, 5.2 * S)}px ui-sans-serif, system-ui, sans-serif`;
     g.textAlign = "center";
     g.textBaseline = "middle";
-    STREETS_Z.forEach((z, i) => g.fillText(STREET_NAMES_Z[i]!.toUpperCase(), X(-32), Z(z)));
+    // Streets along the river run up the page; the names read along them.
+    STREETS_Z.forEach((z, i) => text(STREET_NAMES_Z[i]!.toUpperCase(), X(-32), Z(z), 0, 0, -Math.PI / 2));
     STREETS_X.forEach((x, i) => {
-      g.save();
-      g.translate(X(x), Z(84));
-      g.rotate(-Math.PI / 2);
-      g.fillText(STREET_NAMES_X[i]!.toUpperCase(), 0, 0);
-      g.restore();
+      text(STREET_NAMES_X[i]!.toUpperCase(), X(x), Z(84));
+      text(STREET_NAMES_X_EAST[i]!.toUpperCase(), X(x), Z(EAST_Z + 60));
     });
     g.fillStyle = "rgba(160,210,255,0.5)";
     g.font = `italic 700 ${Math.max(11, 9 * S)}px ui-sans-serif, system-ui, sans-serif`;
-    g.fillText("MISSISSIPPI RIVER", X(0), Z(-262));
+    text("MISSISSIPPI RIVER", X(110), Z((RIVER_Z + FAR_BANK_Z) / 2), 0, 0, -Math.PI / 2);
   }
 
   // The street race: the circuit it runs, which way round, and the line it starts from.
@@ -127,9 +154,9 @@ export function drawMap(g: CanvasRenderingContext2D, w: number, h: number, v: Ma
     g.textAlign = "center";
     g.textBaseline = "middle";
     g.fillStyle = "#06080a";
-    g.fillText("RACE CIRCUIT  ·  3 LAPS", X(0) + 1, Z(-12) - 12);
+    text("RACE CIRCUIT  ·  3 LAPS", X(0), Z(-12), 1, -12);
     g.fillStyle = "#ff8a8a";
-    g.fillText("RACE CIRCUIT  ·  3 LAPS", X(0), Z(-12) - 13);
+    text("RACE CIRCUIT  ·  3 LAPS", X(0), Z(-12), 0, -13);
   }
   g.restore();
 
@@ -158,9 +185,9 @@ export function drawMap(g: CanvasRenderingContext2D, w: number, h: number, v: Ma
       g.textAlign = "left";
       g.textBaseline = "middle";
       g.fillStyle = "#06080a";
-      g.fillText(p.name, X(p.x) + 11, Z(p.z) + 1);
+      text(p.name, X(p.x), Z(p.z), 11, 1);
       g.fillStyle = "#fff";
-      g.fillText(p.name, X(p.x) + 10, Z(p.z));
+      text(p.name, X(p.x), Z(p.z), 10, 0);
     }
   }
 
@@ -209,9 +236,9 @@ export function drawMap(g: CanvasRenderingContext2D, w: number, h: number, v: Ma
       g.textAlign = "left";
       g.textBaseline = "middle";
       g.fillStyle = "#06080a";
-      g.fillText(f.name, fx + 10, fz + 1);
+      text(f.name, fx, fz, 10, 1);
       g.fillStyle = "#bfe8ff";
-      g.fillText(f.name, fx + 9, fz);
+      text(f.name, fx, fz, 9, 0);
     }
   }
 
@@ -229,5 +256,6 @@ export function drawMap(g: CanvasRenderingContext2D, w: number, h: number, v: Ma
   g.closePath();
   g.stroke();
   g.fill();
+  g.restore();
   g.restore();
 }

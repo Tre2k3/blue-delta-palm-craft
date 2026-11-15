@@ -2,60 +2,70 @@ import * as THREE from "three";
 import { tex } from "../gfx/tex";
 import { MAT, emissiveMat, facade, lambert, std, type BuildCtx } from "./kit";
 import { BRIDGE } from "./bridgelights";
-import { FAR_BANK_Z } from "./map";
+import { FAR_BANK_Z, LANDMARKS, WORLD } from "./map";
 
 /**
- * The far bank: the skyline, the Pyramid and the bridge that say Memphis from anywhere on the river.
+ * Across the river is Arkansas: low, flat and dark, a line of shore lights, warehouses, trees and a
+ * few lit billboards. Memphis is on this side. The Pyramid stands at the north end of the
+ * riverfront and the M bridge crosses just past it.
  * It is scenery. Nothing here is walkable, so it is cheap: lit boxes and a few big shapes.
  */
 export function buildFarBank(ctx: BuildCtx) {
   const z0 = FAR_BANK_Z;
-  ctx.ground.flat(1400, 260, 0, 0.3, z0 - 130, lambert(0x14161a));
-  // Bluff wall and a line of shore lights.
-  ctx.solid.box(1400, 3, 2, 0, -0.6, z0, lambert(0x23201c));
+  ctx.ground.flat(1600, 260, 0, 0.3, z0 - 130, lambert(0x14161a));
+  // Levee and a line of shore lights.
+  ctx.solid.box(1600, 3, 2, 0, -0.6, z0, lambert(0x23201c));
   const shore = emissiveMat(ctx, 0xffc27a, 0.1, 3.2);
-  for (let x = -330; x <= 330; x += 11) ctx.solid.box(0.5, 0.5, 0.5, x + (ctx.rand() - 0.5) * 3, 1.4, z0 + 0.6, shore);
-
+  for (let x = -480; x <= 720; x += 13) ctx.solid.box(0.5, 0.5, 0.5, x + (ctx.rand() - 0.5) * 3, 1.4, z0 + 0.6, shore);
+  // Tree line along the levee, low warehouses behind it, and a couple of billboards facing Memphis.
+  const leaf = lambert(0x1c2a1e);
+  for (let x = -470; x <= 710; x += 9) {
+    const h = 6 + ctx.rand() * 7;
+    ctx.solid.add(new THREE.ConeGeometry(3 + ctx.rand() * 2, h, 6), leaf, x + ctx.rand() * 4, 0.3 + h / 2, z0 - 6 - ctx.rand() * 8);
+  }
   const far = facade(ctx, "far", 0);
-  const far2 = facade(ctx, "far", 1);
-  const towers: [number, number, number, number, number][] = [
-    // x, depth offset, width, depth, height
-    [-250, 30, 26, 22, 34],
-    [-214, 18, 20, 20, 52],
-    [-128, 34, 30, 24, 40],
-    [-96, 14, 22, 22, 78],
-    [-66, 30, 26, 22, 56],
-    [-38, 10, 24, 24, 118],
-    [-8, 28, 28, 24, 66],
-    [20, 12, 22, 22, 96],
-    [46, 32, 26, 22, 48],
-    [70, 16, 20, 20, 70],
-    [200, 26, 30, 24, 38],
-    [240, 14, 24, 22, 58],
-    [286, 30, 28, 24, 32],
-  ];
-  towers.forEach(([x, off, w, d, h], i) => {
-    const f = i % 2 ? far : far2;
-    const z = z0 - 14 - off;
-    ctx.solid.walls(w, h, d, x, 0.3, z, f.mat, f.tileW, f.tileH, i * 0.31);
+  for (let x = -440; x <= 680; x += 52 + ctx.rand() * 40) {
+    const w = 30 + ctx.rand() * 40;
+    const d = 18 + ctx.rand() * 20;
+    const h = 6 + ctx.rand() * 9;
+    const z = z0 - 30 - ctx.rand() * 40;
+    ctx.solid.walls(w, h, d, x, 0.3, z, far.mat, far.tileW, far.tileH, ctx.rand());
     ctx.solid.flat(w, d, x, 0.3 + h, z, MAT.roof());
-    if (h > 90) {
-      ctx.solid.add(new THREE.ConeGeometry(w * 0.5, 16, 4), lambert(0x2a2c30), x, h + 8.3, z, Math.PI / 4);
-      ctx.solid.cyl(0.25, 0.25, 16, x, h + 24, z, MAT.steel(), 5);
-      ctx.solid.add(new THREE.SphereGeometry(0.9, 8, 6), emissiveMat(ctx, 0xff2a1a, 0.8, 4), x, h + 32.6, z);
-    } else if (h > 60) {
-      ctx.solid.box(w + 0.4, 1.6, d + 0.4, x, h - 1.4, z, emissiveMat(ctx, i % 3 === 0 ? 0x39ff14 : 0xffc878, 0.1, 1.6));
-    }
+  }
+  const boards = [
+    ["WEST MEMPHIS", "#ffd23a"],
+    ["ARKANSAS WELCOMES YOU", "#5ac8ff"],
+    ["TRUCK STOP · OPEN 24 HRS", "#ff3b3b"],
+  ] as const;
+  boards.forEach(([text, color], i) => {
+    const x = -260 + i * 330;
+    const z = z0 - 22;
+    ctx.solid.cyl(0.4, 0.4, 12, x, 6, z, MAT.steel(), 6);
+    ctx.solid.box(24, 7, 0.6, x, 15, z, MAT.black());
+    const map = tex(512, 160, (g, w, h) => {
+      g.fillStyle = "#0b0b0d";
+      g.fillRect(0, 0, w, h);
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      g.font = '900 64px "Bebas Neue", Impact, sans-serif';
+      g.shadowColor = color;
+      g.shadowBlur = 20;
+      g.fillStyle = color;
+      g.fillText(text, w / 2, h / 2);
+    }, { repeat: false });
+    const m = new THREE.MeshBasicMaterial({ map, toneMapped: false });
+    ctx.glow.basic(m, 0.6, 2.2);
+    ctx.flat.add(new THREE.PlaneGeometry(23.4, 6.6), m, x, 15, z + 0.32);
   });
 
-  buildPyramid(ctx, 132, z0 - 62);
+  buildPyramid(ctx, LANDMARKS.pyramid.x, LANDMARKS.pyramid.z);
   buildBridge(ctx);
 }
 
-/** The glass pyramid on the river. */
+/** The Pyramid: the glass pyramid on the river at the north end of downtown. */
 function buildPyramid(ctx: BuildCtx, x: number, z: number) {
-  const base = 92;
-  const height = 60;
+  const base = LANDMARKS.pyramid.base;
+  const height = LANDMARKS.pyramid.height;
   const map = tex(
     512,
     512,
@@ -177,12 +187,15 @@ export function buildHorizon(ctx: BuildCtx) {
     ctx.solid.walls(w, h, d, x, 0, z, far.mat, far.tileW, far.tileH, r());
     ctx.solid.flat(w, d, x, h, z, MAT.roof());
   };
-  for (let z = -120; z <= 190; z += 38) {
-    put(-232 - r() * 10, z);
-    put(196 + r() * 10, z);
-    if (r() > 0.4) put(-272, z + 14);
-    if (r() > 0.4) put(240, z + 14);
+  // South past Butler, north past the Pyramid, and east past Park Avenue.
+  for (let z = -120; z <= WORLD.maxZ + 40; z += 38) {
+    put(WORLD.minX - 30 - r() * 10, z);
+    if (r() > 0.4) put(WORLD.minX - 70, z + 14);
+    if (z > LANDMARKS.pyramid.z + LANDMARKS.pyramid.base / 2 + 20) {
+      put(WORLD.maxX + 40 + r() * 10, z);
+      if (r() > 0.4) put(WORLD.maxX + 80, z + 14);
+    }
   }
-  for (let x = -160; x <= 160; x += 40) put(x, 186 + r() * 12);
+  for (let x = WORLD.minX - 20; x <= WORLD.maxX + 40; x += 40) put(x, WORLD.maxZ + 42 + r() * 12);
   void std;
 }

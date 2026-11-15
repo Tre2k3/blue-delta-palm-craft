@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { PEDS } from "../assets/cast";
 import { rng } from "../core/util";
-import { COURT, KART_TRACK, PIER, RACE_MEET, WALK, slab, type Rect } from "../world/map";
+import { COURT, KART_TRACK, PIER, RACE_MEET, STREETS_X, STREETS_Z, WALK, slab, type Rect } from "../world/map";
 import { Card } from "./card";
 import { stepClear, type Moving, type Talker } from "./crowd";
 
@@ -56,8 +56,10 @@ export class People {
     this.reach = dense ? 150 : 115;
     const rand = rng(1968);
     for (let i = 0; i < walkers; i++) {
-      const col = Math.floor(rand() * 4);
-      const row = Math.floor(rand() * 4);
+      // Most of them downtown, where the game is; the rest anywhere on the grid.
+      const busy = rand() < 0.7;
+      const col = busy ? 1 + Math.floor(rand() * 6) : Math.floor(rand() * (STREETS_X.length - 1));
+      const row = busy ? Math.floor(rand() * 5) : Math.floor(rand() * (STREETS_Z.length - 1));
       const sl = slab(col, row);
       const inset = WALK / 2;
       const ring = { minX: sl.minX + inset, maxX: sl.maxX - inset, minZ: sl.minZ + inset, maxZ: sl.maxZ - inset };
