@@ -13,25 +13,6 @@ https://github.com/Tre2k3/blue-delta-palm-craft. The main branch is out of date.
 
 ---
 
-## 0. Before anything: the rights
-
-*The Last Dragon*, its title, its characters (Bruce Leroy, Sho'nuff, Laura Charles, Eddie
-Arkadian, Johnny Pizza and the rest), its story and its songs belong to the film's rights holders.
-A game that uses them publicly needs a licence from them. For a private or fan project, keep that
-in mind before anything is sold, sponsored or put on a store.
-
-Two things follow for the build itself:
-
-- **Write new words.** Do not copy the film's lines, lyrics or soundtrack into the game. Write
-  original dialogue in the spirit of the characters.
-- **Make new art.** Draw the characters fresh. Do not trace or lift frames from the film, posters
-  or the cover.
-
-Nothing from SackReligious carries over either: Benji, the brand, the real food trucks, Mikey's
-products and Yung Veli all belong to them. Reuse how this game is *built*, not what is *in* it.
-
----
-
 ## 1. What this game is, in one paragraph
 
 A browser game, no download, that runs on phones and computers. A 3D city built in code (Three.js),
@@ -93,7 +74,7 @@ event when something worth counting happens. `play/jook.ts` and `play/hoops.ts` 
 
 | Last Dragon idea | Built from | Notes |
 | --- | --- | --- |
-| **Bruce Leroy**, the player | Benji's card and walking (`actors/card.ts`, `updateWalk` in `game.ts`) | New drawings: gi, straw hat for some outfits, front/back/side, strides, and fight poses. |
+| **Bruce Leroy**, the player | Benji's card and walking (`actors/card.ts`, `updateWalk` in `game.ts`) | Bruce's existing sprites go in Benji's place: front, back and side, strides, and fight poses, listed in the card's `CardArt`. |
 | **Harlem, mid-1980s** | `world/` (Memphis city) | Avenues and cross streets on the same grid; brownstones from `facade()`/`storefront()`; neon from `neon()`. Landmarks: a movie theater, a pizza parlor, a dojo, a video dance club, a TV studio, a rooftop. |
 | **Sho'nuff and his gang** | The rivals in `hoops.ts` / `race.ts`, plus `story.ts` | A gang that turns up on the street and calls him out; bosses at the end of each chapter. |
 | **Laura Charles and her video show** | The live band and stage (`actors/stageband.ts`, `world/club.ts`) and the TV screen on Beale | A dance club with a big video wall; her show plays on screens around the city. |
@@ -124,7 +105,7 @@ enemies that circle and wait for openings. More work, more depth.
 
 Whichever you choose:
 
-- **Drawn poses for every move**, front and back at least, using the card's `poses`.
+- **A sprite for every move**, front and back at least, hooked up through the card's `poses`.
 - **Hit feedback:** a flash, a short pause on contact, a shake, a sound. `gfx/fx.ts` has the
   slow-motion and burst effects to borrow.
 - **Difficulty that rises** as the story goes, the way the four basketball rivals do.
@@ -157,7 +138,7 @@ Between chapters: daily jobs, side fights, postcards of the city, collectables, 
    the "get in the game" screen, the Memphis landmarks.
 3. **Lay out Harlem** in `world/` with the same kit: streets first, then the five key places
    (dojo, pizza parlor, theater, club, TV studio), then the dressing.
-4. **Draw Bruce** and swap him in for Benji: standing, walking, then fight poses.
+4. **Put Bruce's sprites in** for Benji's: standing, walking, then fight poses.
 5. **Build the fight** (section 5) as one `Activity`, against one opponent, until it feels right.
 6. **Add Sho'nuff and the gang**, the Glow meter, and the first boss fight.
 7. **Write chapter one** in `story.ts` and its lines in `chatter.ts`; wire the cast so each one
@@ -194,4 +175,4 @@ Paste this to the AI that will build the new game:
 > (work from that branch). Read `docs/LAST-DRAGON-GUIDE.md` there first. Reuse the engine in
 > `src/game-v2/` (`game.ts`, `actors/card.ts`, `world/kit.ts`, `core/`, `gfx/`, `ui/`), replace
 > all SackReligious and Memphis content, and build the fight system described in section 5 of
-> the guide. Write all dialogue and music new; do not copy lines, songs or frames from the film.
+> the guide. Bruce and the cast already have sprites: use them.
