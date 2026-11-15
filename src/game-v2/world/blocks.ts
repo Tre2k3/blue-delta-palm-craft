@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { paintMat, tex } from "../gfx/tex";
 import { garage, house, lotSurface, midrise, mural, shopRow, tower } from "./buildings";
 import { MAT, Frame, YAW, addSolid, bench, bush, emissiveMat, facade, globeLamp, neon, poolMat, sign, std, storefront, tree, type BuildCtx, makeCtx } from "./kit";
-import { ARENA, BOWL, CURB, CYPHER, HANDY, HOME, lot, OM, OM_ROW, rect } from "./map";
+import { ARENA, BOWL, CURB, CYPHER, EDGE, HANDY, HOME, lot, OM, OM_ROW, rect, type Rect } from "./map";
 import { buildMemphis } from "./memphis";
 import { blockText } from "./riverfront";
 import { buildFunExterior } from "./funhouse";
@@ -28,6 +28,17 @@ export type BlockAnchors = {
  * blocks between MLK and Monroe.
  */
 const C = 2;
+/**
+ * The designed blocks were drawn on the first, even grid, with MLK, Beale, Peabody Place, Union
+ * and Monroe 64 apart. The real streets around them were then measured in, and each moved out
+ * past them rather than through them, so what was built on a block of the first grid still
+ * stands on the real one. `old(c, row)` is that first block.
+ */
+const OLD_X = [-128, -64, 0, 64, 128];
+function old(c: number, row: number): Rect {
+  const z = lot(C, row);
+  return rect(OLD_X[c]! + EDGE, OLD_X[c + 1]! - EDGE, z.minZ, z.maxZ);
+}
 /** Orange Mound's row: between Lamar and Park Avenue. */
 
 export function buildBlocks(ctx: BuildCtx): BlockAnchors {
@@ -43,7 +54,7 @@ export function buildBlocks(ctx: BuildCtx): BlockAnchors {
 /** Riverside to Front, MLK to Monroe: the towers along the river. */
 function downtown(ctx: BuildCtx) {
   for (let c = 0; c < 4; c++) {
-    const L = lot(C + c, 0);
+    const L = old(c, 0);
     lotSurface(ctx, L, "concrete");
     shopRow(ctx, L.minX, L.maxX, L.maxZ, "south", 12, c * 5);
   }
@@ -61,7 +72,7 @@ function downtown(ctx: BuildCtx) {
 /** Front to Main, MLK to Monroe: shops on Front, the Orpheum on the corner of Main and Beale, the Memphian, the smokehouse. */
 function bealeSouth(ctx: BuildCtx) {
   for (const c of [0, 1, 2, 3]) {
-    const L = lot(C + c, 1);
+    const L = old(c, 1);
     lotSurface(ctx, L, "concrete");
     shopRow(ctx, L.minX, L.maxX, L.minZ, "north", 12, 20 + c * 5);
   }
@@ -349,7 +360,7 @@ function pinGeo(scale: number) {
 /** Main to 2nd, MLK to Monroe: diner and gas, the studio corner, the arena, the bowl. */
 function midtown(ctx: BuildCtx) {
   // Diner and gas station.
-  const D = lot(C, 2);
+  const D = old(0, 2);
   lotSurface(ctx, D, "parking");
   const diner = rect(-119, -95, -3, 12);
   const dcx = (diner.minX + diner.maxX) / 2;
@@ -385,7 +396,7 @@ function midtown(ctx: BuildCtx) {
   midrise(ctx, rect(-119, -105, 27, 43), 4.6, "brickCream", { shops: ["east"], accent: 0x1f4a2c, variant: 0, sign: { text: "GAS & GO", color: "#39ff14", face: "east", y: 4.4, w: 8 } });
 
   // Soul Studio, the record shop and the mural building.
-  const S = lot(C + 1, 2);
+  const S = old(1, 2);
   lotSurface(ctx, S, "grass");
   midrise(ctx, rect(-55, -37, -3, 15), 9, "brickRed", { shops: ["north", "west"], accent: 0x2b2b2e, variant: 1, sign: { text: "SOUL STUDIO", color: "#ffd23a", face: "north", y: 6.2, w: 12 } });
   const guitar = guitarSign(ctx);
@@ -407,7 +418,7 @@ function midtown(ctx: BuildCtx) {
   for (let i = 0; i < 8; i++) bush(ctx, -23 + ctx.rand() * 12, 16 + ctx.rand() * 24, 1, Y0);
 
   // 901 Arena.
-  const A = lot(C + 2, 2);
+  const A = old(2, 2);
   lotSurface(ctx, A, "plaza");
   const af = facade(ctx, "glassBlue", 2);
   const drum = new THREE.CylinderGeometry(ARENA.r, ARENA.r, 20, 40, 1, true);
@@ -434,7 +445,7 @@ function midtown(ctx: BuildCtx) {
   ] as const) globeLamp(ctx, lx, lz, Y0, 0xbfe0ff);
 
   // 901 Bowl.
-  const B = lot(C + 3, 2);
+  const B = old(3, 2);
   lotSurface(ctx, B, "parking");
   const bw = BOWL.maxX - BOWL.minX;
   const bd = BOWL.maxZ - BOWL.minZ;
@@ -477,7 +488,7 @@ function neighborhood(ctx: BuildCtx) {
   let homeWalk = { x: HOME.x, z: HOME.z };
   let n = 0;
   for (let c = 0; c < 4; c++) {
-    const L = lot(C + c, OM_ROW);
+    const L = old(c, OM_ROW);
     if (c === 3) {
       // The Fun House has the whole block: hall on Lamar, karts behind.
       lotSurface(ctx, L, "concrete");

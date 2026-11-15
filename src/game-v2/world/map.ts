@@ -1,7 +1,7 @@
 import type { TableId } from "../core/types";
 
 /**
- * The city plan: downtown Memphis as it lies on the river, drawn about half size, and Orange
+ * The city plan: downtown Memphis as it lies on the river, drawn half size, and Orange
  * Mound out east.
  *
  * The Mississippi is along the top (-Z), the way it is along the west side of downtown, so the
@@ -14,16 +14,23 @@ import type { TableId } from "../core/types";
  * Everything that needs to agree on where a street or a door is reads it from here:
  * the builder, collision, traffic, the race, the minimap.
  */
-export const STREETS_X = [-256, -192, -128, -64, 0, 64, 128, 192, 256, 320, 384] as const;
-export const STREETS_Z = [-140, -76, -12, 52, 116, 180, 260, 324, 388] as const;
+/**
+ * Measured from the US Census Bureau's street lines for Shelby County (TIGER/Line 2023, public
+ * domain): each street's distance along the downtown grid, at one game unit to two metres. Three
+ * stay where the game's designed blocks need them: Riverside is the riverfront promenade, Beale
+ * is about twenty metres north of the real one, and Lamar and Park Avenue are Orange Mound's
+ * streets brought in next to downtown.
+ */
+export const STREETS_X = [-392, -241, -140, -64, 0, 130, 185, 245, 360, 420, 535] as const;
+export const STREETS_Z = [-140, -76, -12, 52, 116, 231, 399, 463, 527] as const;
 export const STREET_NAMES_X = ["Butler Ave", "Vance Ave", "MLK Ave", "Beale St", "Peabody Pl", "Union Ave", "Monroe Ave", "Madison Ave", "Jefferson Ave", "Adams Ave", "Poplar Ave"] as const;
 export const STREET_NAMES_Z = ["Riverside Dr", "Front St", "Main St", "2nd St", "B.B. King Blvd", "4th St", "Danny Thomas Blvd", "Lamar Ave", "Park Ave"] as const;
 /** Past Danny Thomas the cross streets are Orange Mound's own. */
 export const STREET_NAMES_X_EAST = ["Hays Rd", "Semmes St", "Carnes Ave", "Spottswood Ave", "Saratoga Ave", "Marechal Ave", "Grand St", "Pendleton St", "Douglass Ave", "Airways Blvd", "Kimball Ave"] as const;
 /** Where Orange Mound starts, east of Danny Thomas. */
-export const EAST_Z = 290;
+export const EAST_Z = 429;
 /** The neighbourhood blocks were laid out nearer the river first. They moved this far east, to Orange Mound proper. */
-export const OM = 272;
+export const OM = 411;
 /** The first row of blocks that is Orange Mound (between Lamar and Park Ave and on). */
 export const OM_ROW = 7;
 /** Which street a cross street is called where it is. */
@@ -42,7 +49,7 @@ export const RIVER_Z = -200;
 export const FAR_BANK_Z = -332;
 
 /** Where Benji may stand. The river and the pier are handled by their own solids. */
-export const WORLD = { minX: -282, maxX: 500, minZ: -230, maxZ: 412 };
+export const WORLD = { minX: -418, maxX: 600, minZ: -230, maxZ: 551 };
 
 export type Rect = { minX: number; maxX: number; minZ: number; maxZ: number };
 
@@ -131,18 +138,18 @@ export const ROOM = {
 
 /** Street circuit. Clockwise from the grid on Riverside Drive. */
 export const RACE_LOOP: { x: number; z: number }[] = [
-  { x: -96, z: -140 },
+  { x: -112, z: -140 },
   { x: 0, z: -140 },
-  { x: 100, z: -140 },
-  { x: 128, z: -112 },
-  { x: 128, z: -76 },
-  { x: 128, z: -40 },
-  { x: 100, z: -12 },
+  { x: 157, z: -140 },
+  { x: 185, z: -112 },
+  { x: 185, z: -76 },
+  { x: 185, z: -40 },
+  { x: 157, z: -12 },
   { x: 0, z: -12 },
-  { x: -100, z: -12 },
-  { x: -128, z: -40 },
-  { x: -128, z: -76 },
-  { x: -128, z: -112 },
+  { x: -112, z: -12 },
+  { x: -140, z: -40 },
+  { x: -140, z: -76 },
+  { x: -140, z: -112 },
 ];
 export const RACE_MEET = { x: -104, z: -151 };
 
@@ -169,18 +176,18 @@ export const CYPHER = { x: -41.5, z: 72.5, r: 2.7 };
  * south of Beale; Mud Island across the harbour. Middles of the buildings, on the ground.
  */
 export const LANDMARKS = {
-  fedex: { x: -96, z: 148 },
-  peabody: { x: 32, z: 84 },
-  ballpark: { x: 96, z: 148 },
+  fedex: { x: -102, z: 173 },
+  peabody: { x: 105, z: 84 },
+  ballpark: { x: 157, z: 173 },
   orpheum: { x: -84, z: -36 },
-  lorraine: { x: -224, z: 16 },
-  courtSquare: { x: 224, z: 20 },
-  cotton: { x: 160, z: -44 },
-  /** Past the north end of the walkable riverfront, on the water at the head of Front Street. */
-  pyramid: { x: 568, z: -170, base: 92, height: 60 },
-  tomLee: { x: -200, z: -176 },
-  /** Across the Wolf River Harbor, north of where the boat goes. */
-  mudIsland: { minX: 300, maxX: 545, minZ: -272, maxZ: -228 },
+  lorraine: { x: -372, z: 8 },
+  courtSquare: { x: 302, z: 20 },
+  cotton: { x: 157, z: -44 },
+  /** Past the north end of the walkable riverfront, on the water north of the I-40 bridge. */
+  pyramid: { x: 710, z: -178, base: 92, height: 60 },
+  tomLee: { x: -270, z: -176 },
+  /** Across the Wolf River Harbor, from about Adams up to the bridge. */
+  mudIsland: { minX: 360, maxX: 610, minZ: -272, maxZ: -228 },
 } as const;
 
 export type Poi = { id: string; name: string; x: number; z: number; color: string; arrive?: { x: number; z: number; heading: number } };

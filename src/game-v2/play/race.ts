@@ -4,12 +4,13 @@ import type { HudState } from "../core/types";
 import { clamp, formatClock, wrapAngle } from "../core/util";
 import type { Activity, Game } from "../game";
 import { tex } from "../gfx/tex";
+import { STREETS_X, STREETS_Z } from "../world/map";
 
-/** The circuit: Riverside, Danny Thomas, Union, Front. Rounded at the four junctions. */
-const X0 = -128;
-const X1 = 128;
-const Z0 = -140;
-const Z1 = -12;
+/** The circuit: Riverside Drive, Monroe, Main Street and MLK. Rounded at the four junctions. */
+const X0 = STREETS_X[2];
+const X1 = STREETS_X[6];
+const Z0 = STREETS_Z[0];
+const Z1 = STREETS_Z[2];
 const R = 8;
 const START_X = -96;
 

@@ -542,7 +542,7 @@ export function MapScreen({ game, hud }: { game: Game; hud: HudState }) {
       const g = el?.getContext("2d");
       if (!el || !g) return;
       const l = game.live;
-      drawMap(g, el.width, el.height, { cx: 120, cz: 112, scale: el.height / 960 }, { x: l.x, z: l.z, heading: l.heading, car: hud.car, target: hud.target, time: performance.now() / 1000, friends: game.crew.hud().friends }, true);
+      drawMap(g, el.width, el.height, { cx: 150, cz: 120, scale: el.height / 1260 }, { x: l.x, z: l.z, heading: l.heading, car: hud.car, target: hud.target, time: performance.now() / 1000, friends: game.crew.hud().friends }, true);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);

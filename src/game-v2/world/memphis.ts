@@ -18,7 +18,7 @@ const Y0 = CURB;
 
 /** Blocks built by `blocks.ts`: the four middle columns from the river to 2nd, Handy Park, and Orange Mound's four. */
 const DESIGNED = new Set<string>();
-for (let c = 2; c <= 5; c++) for (const r of [0, 1, 2, 7]) DESIGNED.add(`${c},${r}`);
+for (let c = 2; c <= 4; c++) for (const r of [0, 1, 2, 7]) DESIGNED.add(`${c},${r}`);
 DESIGNED.add("3,3");
 
 export function buildMemphis(ctx: BuildCtx) {
@@ -30,7 +30,7 @@ export function buildMemphis(ctx: BuildCtx) {
     "5,4": (L) => ballpark(ctx, L),
     "7,2": (L) => courtSquare(ctx, L),
     "0,2": (L) => lorraine(ctx, L),
-    "6,1": (L) => cottonExchange(ctx, L),
+    "5,1": (L) => cottonExchange(ctx, L),
     "8,1": (L) => hundredNorthMain(ctx, L),
   };
   for (let c = 0; c < STREETS_X.length - 1; c++) {
@@ -509,7 +509,7 @@ function riverfrontReach(ctx: BuildCtx) {
   }
   for (let x = 170; x <= WORLD.maxX - 10; x += 34) bench(ctx, x, RIVER_Z + 4.6, YAW.north, Y0);
   // The monorail out to Mud Island, on its tall legs over the harbour.
-  const mx = 330;
+  const mx = 420;
   const m = LANDMARKS.mudIsland;
   const legs = std(0xc8c2b4, 0.6);
   for (let z = RIVER_Z + 18; z >= m.minZ + 10; z -= 15) {
@@ -531,11 +531,11 @@ function mudIsland(ctx: BuildCtx) {
     tree(ctx, x + ctx.rand() * 4, m.minZ + 6 + ctx.rand() * (m.maxZ - m.minZ - 12), 1.3 + ctx.rand() * 0.5, 0.4);
   }
   // The amphitheatre's shell, facing the city.
-  ctx.solid.add(new THREE.SphereGeometry(9, 16, 8, 0, Math.PI, 0, Math.PI / 2), std(0xf1ede4, 0.6), 400, 0.4, (m.minZ + m.maxZ) / 2, Math.PI);
+  ctx.solid.add(new THREE.SphereGeometry(9, 16, 8, 0, Math.PI, 0, Math.PI / 2), std(0xf1ede4, 0.6), m.minX + 70, 0.4, (m.minZ + m.maxZ) / 2, Math.PI);
   const board = sign("MUD ISLAND", "#f3e9c8", "#1d3b24", { sub: "RIVER PARK", w: 512, h: 128 });
-  ctx.flat.wall(8, 2, 340, 4, m.maxZ + 0.4, board, YAW.south);
-  ctx.solid.box(8.4, 2.4, 0.3, 340, 4, m.maxZ + 0.2, MAT.black());
-  ctx.solid.box(0.3, 4, 0.3, 340, 2, m.maxZ + 0.2, MAT.black());
+  ctx.flat.wall(8, 2, m.minX + 30, 4, m.maxZ + 0.4, board, YAW.south);
+  ctx.solid.box(8.4, 2.4, 0.3, m.minX + 30, 4, m.maxZ + 0.2, MAT.black());
+  ctx.solid.box(0.3, 4, 0.3, m.minX + 30, 2, m.maxZ + 0.2, MAT.black());
 }
 
 /** The I-55 bridge to the south, past Tom Lee Park: a steel truss on its piers. Scenery only. */

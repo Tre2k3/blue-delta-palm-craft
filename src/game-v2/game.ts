@@ -1108,8 +1108,8 @@ export class Game {
     const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
     this.intro = {
       t: 0,
-      path: new THREE.CatmullRomCurve3([V(470, 30, -214), V(360, 30, -222), V(220, 26, -220), V(90, 18, -198), V(20, 10, -170), V(-6, 4.6, -152), end], false, "centripetal"),
-      aim: new THREE.CatmullRomCurve3([V(600, 30, -176), V(568, 26, -178), V(300, 16, -150), V(40, 10, -168), V(-12, 6, -162), V(this.pos.x, 2, this.pos.z - 0.5), eye], false, "centripetal"),
+      path: new THREE.CatmullRomCurve3([V(590, 32, -212), V(450, 30, -222), V(260, 26, -220), V(100, 18, -198), V(20, 10, -170), V(-6, 4.6, -152), end], false, "centripetal"),
+      aim: new THREE.CatmullRomCurve3([V(740, 30, -176), V(710, 26, -178), V(320, 16, -150), V(40, 10, -168), V(-12, 6, -162), V(this.pos.x, 2, this.pos.z - 0.5), eye], false, "centripetal"),
       card: -1,
     };
     this.cinema = { title: "", sub: "" };

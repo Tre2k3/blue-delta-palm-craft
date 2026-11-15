@@ -1214,7 +1214,7 @@ try {
     g.taxi("park");
     run(120);
     out.ride = { x: +g.pos.x.toFixed(1), z: +g.pos.z.toFixed(1), heading: +g.heading.toFixed(2) };
-    g.warp(-84, 348.7, Math.PI);
+    g.warp(-84, 487.7, Math.PI);
     run(20);
     out.prompt = g.prompt;
     g.input.press("interact");
@@ -1359,7 +1359,7 @@ try {
     g.warp(0, -160, Math.PI);
     return out;
   });
-  check(Math.hypot(park.ride.x + 84, park.ride.z - 351.6) < 1.5 && Math.abs(park.ride.heading - Math.PI) < 0.01, "a ride to the park lets him out on the terrace, facing the tables", park.ride);
+  check(Math.hypot(park.ride.x + 84, park.ride.z - 490.6) < 1.5 && Math.abs(park.ride.heading - Math.PI) < 0.01, "a ride to the park lets him out on the terrace, facing the tables", park.ride);
   check(/Sit down: Spades/.test(park.prompt) && park.sat.overlay === "table" && park.sat.id === "spades" && park.pickButtons === 3, "the open seat at a park table offers the game, at three levels", { prompt: park.prompt, sat: park.sat, buttons: park.pickButtons });
   check(park.chess.opening.join() === "20,400,8902" && park.chess.middle.join() === "48,2039" && park.chess.mate?.winner === 1 && park.chess.illegal === false, "chess plays by the book: the move counts match the published ones, mate is mate and an illegal move is refused", park.chess);
   check(park.checkers.hops === 1 && park.checkers.jump && park.checkers.took, "in checkers a jump on offer has to be taken", park.checkers);
@@ -1767,7 +1767,7 @@ try {
 
     // ---- the swing: on from the prompt, pumped up by holding only on the way forward, and off it for distance.
     g.save.best.swing = 0;
-    g.warp(-112.95, 365, 0);
+    g.warp(-112.95, 504, 0);
     run(4);
     const swingAsk = g.prompt;
     g.input.press("interact");
@@ -1801,7 +1801,7 @@ try {
     const settled = { before: +still.toFixed(3), after: +(Math.abs(sw.state.a) + Math.abs(sw.state.w)).toFixed(3) };
 
     // ---- the slide: up the ladder, a push, down the chute and off the end on his feet.
-    g.warp(-105.5, 367.8, 0);
+    g.warp(-105.5, 506.8, 0);
     run(4);
     const slideAsk = g.prompt;
     g.input.press("interact");
@@ -1906,7 +1906,7 @@ try {
     run(4);
 
     // ---- whoever holds a park table is sat at it, and the new faces are out on the street.
-    g.warp(-84, 352.5, Math.PI);
+    g.warp(-84, 491.5, Math.PI);
     run(12);
     const seats = g.street.members.filter((m) => m.posted && m.stop.act === "sit");
     const sat = { n: seats.length, posed: seats.filter((m) => m.card.pose === "sit").length, sunk: seats.filter((m) => m.card.lift !== 0).length };
