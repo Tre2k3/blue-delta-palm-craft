@@ -36,7 +36,7 @@ Everything that matters is in `src/game-v2/`. Art is in `public/game-v2/`.
 | `actors/people.ts`, `crowd.ts` | People who walk the streets and do things at stops (watch, eat, queue, dance). | **Keep.** Fill them with Harlem locals. |
 | `actors/traffic.ts`, `vehicle.ts` | Cars on a signal clock, and the car you drive. | **Keep** if the new game has driving; swap the car models for 1980s ones. |
 | `play/` | One file per mini-game or system: `hoops.ts`, `bowling.ts`, `fishing.ts`, `race.ts`, `lasertag.ts`, `jook.ts` (a rhythm dance game), `story.ts` (the chapters), `chatter.ts` (what people say), `garage.ts`, `store.ts`. | **Keep `story.ts` and `chatter.ts`** as the pattern; rewrite their content. **`jook.ts` is the closest thing to a fight game here** (see section 5). Drop what doesn't fit. |
-| `core/` | Input (keyboard, gamepad, touch), audio, the live band (`band.ts`), shared types and maths. | **Keep all of it.** `band.ts` can be retuned to play 1980s funk and R&B. |
+| `core/` | Input (keyboard, gamepad, touch), audio, the live band (`band.ts`), shared types and maths. | **Keep all of it.** `audio.ts` plays a recording wherever one is filed under a tune's name, so the game's existing music drops straight in (see the soundtrack row in section 4). |
 | `gfx/` | Rendering: sky and time of day, water, rain, fireworks and confetti, graphics levels for slow phones. | **Keep all of it.** |
 | `ui/` | The screens: HUD, menus, map, photo mode, the dance game's lanes, the first-person view. | **Keep the pieces**, restyle to the new look. |
 | `net/` | Accounts, cloud saves, playing with friends, the "get in the game" requests. | **Optional.** Keep accounts and friends if wanted; drop the business requests. |
@@ -84,7 +84,7 @@ event when something worth counting happens. `play/jook.ts` and `play/hoops.ts` 
 | **The Glow** | The "on fire" streak in `hoops.ts` and the win effects in `gfx/fx.ts` | A meter that fills with clean, on-time moves. Full, Bruce glows gold and his moves land harder. The final fight is won by finding it. |
 | **Kung fu movie nights at the theater** | Photo mode and the arcade cabinets (`ui/Photo.tsx`, `ui/WebCabinet.tsx`) | Bruce watching martial-arts films: a place to learn new moves. |
 | **Reputation on the street** | The Respect ladder (`RANKS` in `story.ts`) | New names, from "New in Harlem" up to "The Last Dragon". |
-| **The soundtrack** | `core/band.ts` | Retune the band to 80s funk, R&B and boogie. Write original tunes; do not recreate the film's songs. |
+| **The soundtrack** | `core/audio.ts` and `scripts/audio-install.mjs` | Use the music you already have. Name each track after the place or moment it is for (the city by day and by night, the club, the dojo, a fight, the title screen), put the files in `public/game-v2/audio/music/`, and run `scripts/audio-install.mjs` to trim, level and loop them. A recording filed under a tune's name plays instead of the made-up band; `core/band.ts` lists the names. |
 
 ---
 
@@ -143,7 +143,7 @@ Between chapters: daily jobs, side fights, postcards of the city, collectables, 
 6. **Add Sho'nuff and the gang**, the Glow meter, and the first boss fight.
 7. **Write chapter one** in `story.ts` and its lines in `chatter.ts`; wire the cast so each one
    talks about the job in hand (see "The job in hand comes first" below).
-8. **Retune the music** in `band.ts`.
+8. **Put the music in**: file the tracks under the tune names (section 4) and run `scripts/audio-install.mjs`.
 9. **Chapters two and three**, then side content.
 10. **Checks for every feature** in a copy of `scripts/memphis-smoke.mjs`, then put it live.
 
