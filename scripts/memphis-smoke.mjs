@@ -5526,6 +5526,36 @@ try {
     };
     g.activity?.quit();
     run(1);
+    // Every court: a pickup game going on it, and a game Benji can pick up there himself.
+    out.courts = {};
+    for (const key of ["river", "moriah", "halle2", "tomlee"]) {
+      const c = g.courts[key];
+      const pick = g.pickups.find((x) => x.key === key).game;
+      g.warp(c.shape.cx + c.shape.halfW + 3, c.shape.cz, 0);
+      let shots = 0;
+      let last = pick.phase;
+      for (let i = 0; i < 900; i++) {
+        g.tick(1 / 30);
+        if (pick.phase === "air" && last !== "air") shots++;
+        last = pick.phase;
+      }
+      const players = pick.players.length;
+      const shown = pick.group.visible;
+      g.courtAt = key;
+      g.playBall("practice");
+      run(2);
+      const north = c.hoops.reduce((a, b) => (b.z < a.z ? b : a));
+      out.courts[key] = {
+        players,
+        shown,
+        shots,
+        mode: g.mode,
+        benched: !pick.group.visible,
+        near: Math.hypot(g.pos.x - north.x, g.pos.z - north.z) < 8,
+      };
+      g.activity?.quit();
+      run(1);
+    }
     // The Crystal Palace: in through the door, skates on, pushes add speed, off the floor again.
     g.leave(-345, 124, 0);
     run(2);
@@ -5654,6 +5684,15 @@ try {
       added.halle.z < 580,
     "Mt. Moriah: a game of ball is played on the court beside Halle's track",
     added.halle,
+  );
+  check(
+    Object.values(added.courts).length === 4 &&
+      Object.values(added.courts).every(
+        (c) =>
+          c.players >= 2 && c.shown && c.shots >= 2 && c.mode === "hoops" && c.benched && c.near,
+      ),
+    "Every court: people already playing on it, and Benji can play there too (they step off)",
+    added.courts,
   );
   check(
     added.rinkIn.place === "rink" &&

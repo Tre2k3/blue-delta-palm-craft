@@ -212,9 +212,9 @@ export class Hoops implements Activity {
     g.city.exterior.add(this.group);
   }
 
-  /** Move the game to another court: its shape, the hoop played at (the north one), and that hoop's net. */
+  /** Move the game to another court: its shape, the hoop played at (the north one), and that hoop's net. A half court has only the one. */
   useCourt(court: CourtShape, hoops: Hoop[], nets: THREE.Mesh[]) {
-    const i = hoops[0]!.z < hoops[1]!.z ? 0 : 1;
+    const i = hoops.length > 1 && hoops[1]!.z < hoops[0]!.z ? 1 : 0;
     this.court = court;
     this.hoop = hoops[i]!;
     this.net = nets[i]!;

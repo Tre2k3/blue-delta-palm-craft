@@ -60,6 +60,7 @@ import { CABINETS, FOOD, FOOD_TRUCKS, PRIZES, type TruckId } from "./play/goods"
 import { Hoops } from "./play/hoops";
 import { RinkCrowd, Skate } from "./play/skate";
 import { Floaters, Geronimo, HighDive, LazyRiver, RaftRide, Twister } from "./play/waterslide";
+import { Pickup, type PickupCourt } from "./play/pickup";
 import {
   BullRide,
   BumperCars,
@@ -116,7 +117,6 @@ import {
   COURT,
   CYPHER,
   HALLE,
-  MORIAH_COURT,
   RINK,
   FUN,
   HQ,
@@ -316,6 +316,9 @@ const TINT: Record<Phase, THREE.Color> = {
 const INDOOR_TINT = new THREE.Color(0.96, 0.94, 0.9);
 const _v = new THREE.Vector3();
 const _look = new THREE.Vector3();
+
+/** The courts a game can be picked up on. "moriah" is the north court at Halle. */
+export type CourtKey = "river" | "moriah" | "halle2" | "tomlee";
 
 export class Game {
   readonly input = new Input();
@@ -577,8 +580,12 @@ export class Game {
   private fairFolk!: Troupe;
   /** Out past downtown: Halle, Adventure River, the new riverfront. Swimmers, fans and loungers. */
   private outskirts!: Troupe;
-  /** Which court the basketball menu was opened at. */
-  courtAt: "river" | "moriah" = "river";
+  /** Which court the basketball menu was opened at. "moriah" is the north court at Halle. */
+  courtAt: CourtKey = "river";
+  /** Every court in the city, by name: where a game is played when Benji picks one up there. */
+  private courts!: Record<CourtKey, PickupCourt>;
+  /** The pickup games already going on each court. */
+  private pickups: { key: CourtKey; game: Pickup }[] = [];
   private bowling: Bowling;
   private fishing: Fishing;
   /** The blimp and the searchlights. */
@@ -1656,19 +1663,39 @@ export class Game {
       },
     );
 
-    // The courts at Halle Stadium on Mt. Moriah: the same games, a different crowd.
+    // The courts at Halle Stadium on Mt. Moriah and the half court in Tom Lee Park: the same
+    // games, a different crowd. Every court has somebody already running a game on it.
     const halle = this.city.halle;
-    this.spot(
-      "street",
-      halle.gate.x,
-      halle.gate.z,
-      2.4,
-      "Hoop at Halle: shootout, a game to 11, or practice",
-      () => {
-        this.courtAt = "moriah";
+    const tomLee = this.city.riverside.court;
+    this.courts = {
+      river: { shape: COURT, hoops: this.city.hoops, nets: this.city.nets },
+      moriah: halle.courts[0]!,
+      halle2: halle.courts[1]!,
+      tomlee: tomLee,
+    };
+    const baller = (i: number) => ({ art: BALLERS[i]!, height: [1.78, 1.82, 1.84, 1.8][i]! });
+    // Two-on-two on the river; one-on-one everywhere else, nobody on two courts in sight of each other.
+    const lineups: [CourtKey, number[]][] = [
+      ["river", [0, 1, 2, 3]],
+      ["moriah", [2, 3]],
+      ["halle2", [0, 1]],
+      ["tomlee", [1, 3]],
+    ];
+    lineups.forEach(([key, who], k) => {
+      const game = new Pickup(this.courts[key], who.map(baller), 101 + k * 37);
+      this.city.exterior.add(game.group);
+      this.pickups.push({ key, game });
+    });
+    const courtSpots: [CourtKey, { x: number; z: number }, string][] = [
+      ["moriah", halle.gate, "Hoop at Halle: run it with them, a shootout, or practice"],
+      ["halle2", halle.courts[1]!.gate, "Hoop at Halle: run it with them, a shootout, or practice"],
+      ["tomlee", tomLee.gate, "Hoop in Tom Lee Park: run it with them, a shootout, or practice"],
+    ];
+    for (const [key, at, label] of courtSpots)
+      this.spot("street", at.x, at.z, 2.4, label, () => {
+        this.courtAt = key;
         this.open("court");
-      },
-    );
+      });
 
     // River.
     this.spot(
@@ -2376,9 +2403,8 @@ export class Game {
   playBall(kind: HoopsKind) {
     this.close();
     this.transition(() => {
-      if (this.courtAt === "moriah")
-        this.hoops.useCourt(MORIAH_COURT, this.city.halle.hoops, this.city.halle.nets);
-      else this.hoops.useCourt(COURT, this.city.hoops, this.city.nets);
+      const c = this.courts[this.courtAt];
+      this.hoops.useCourt(c.shape, c.hoops, c.nets);
       this.begin(this.hoops, "hoops");
       this.hoops.start(kind);
     });
@@ -4156,6 +4182,11 @@ export class Game {
           nearPark,
           this.activity === this.lazy ? this.pos : null,
         );
+        // Pickup on every court; the regulars step off the one Benji is playing on.
+        for (const p of this.pickups) {
+          p.game.benched = this.activity === this.hoops && this.courtAt === p.key;
+          p.game.update(dt, this.time, cam, this.tint);
+        }
         // The wave horn: everyone at the park hears it.
         if (wpk.horn && nearPark) {
           this.sound.horn();

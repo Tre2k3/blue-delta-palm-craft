@@ -497,12 +497,13 @@ export function chainMat() {
   });
 }
 
-/** Two hoops facing down a full court: poles, boards, rims and nets. */
+/** Two hoops facing down a full court (or the north one alone, on a half court): poles, boards, rims and nets. */
 export function buildHoops(
   ctx: BuildCtx,
   court: { cx: number; cz: number; halfL: number; rimY: number; rimIn: number },
   title: string,
   sub: string,
+  ends: readonly (1 | -1)[] = [-1, 1],
 ) {
   const { cx, cz, halfL, rimY, rimIn } = court;
   const hoops: Hoop[] = [];
@@ -555,7 +556,7 @@ export function buildHoops(
   });
   netMap.repeat.set(9, 3);
 
-  for (const dir of [-1, 1] as const) {
+  for (const dir of ends) {
     const rimZ = cz + dir * (halfL - rimIn);
     const boardZ = rimZ + dir * 0.38;
     const poleZ = cz + dir * (halfL + 0.7);

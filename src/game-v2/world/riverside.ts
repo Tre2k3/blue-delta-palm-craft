@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import type { Hoop } from "../core/types";
+import { buildHoops } from "./riverfront";
 import { MAT, YAW, addSolid, bench, neon, sign, std, tree, type BuildCtx } from "./kit";
 import { CROSSING, CURB, FAR_BANK_Z, LANDING, RIVER_Z, STREETS_Z, ROAD_HALF, WALK } from "./map";
 
@@ -13,6 +15,14 @@ export type Riverside = {
     fz: number;
     act: "watch" | "cheer" | "play" | "eat" | "dance";
   }[];
+  /** The half court in Tom Lee Park: its shape, its one hoop at the north end, and that hoop's rim and net. */
+  court: {
+    shape: { cx: number; cz: number; halfW: number; halfL: number; rimY: number; rimIn: number };
+    hoops: Hoop[];
+    nets: THREE.Mesh[];
+    rims: THREE.Mesh[];
+    gate: { x: number; z: number };
+  };
   /** The Big River Crossing's lights, cycling colour after dark. */
   update(dt: number, time: number): void;
 };
@@ -156,22 +166,14 @@ export function buildRiverside(ctx: BuildCtx): Riverside {
     mid + 7,
     new THREE.MeshBasicMaterial({ color: 0xf4f1ea }),
   );
-  ctx.solid.cyl(0.1, 0.12, 3.6, sx - 8, Y0 + 1.8, mid - 7.6, MAT.black(), 8);
-  ctx.solid.box(1.8, 1.05, 0.06, sx - 8, Y0 + 3.45, mid - 7.2, std(0xf4f1ea, 0.3));
-  ctx.solid.add(
-    new THREE.TorusGeometry(0.23, 0.02, 6, 16),
-    std(0xff5a1e, 0.4),
-    sx - 8,
-    Y0 + 3.05,
-    mid - 6.9,
-    0,
-    Math.PI / 2,
-  );
-  addSolid(ctx, sx - 8.3, sx - 7.7, mid - 7.9, mid - 7.3);
-  stops.push(
-    { x: sx - 9, z: mid - 2, fx: sx - 8, fz: mid - 7, act: "play" },
-    { x: sx - 6, z: mid + 1, fx: sx - 8, fz: mid - 7, act: "play" },
-  );
+  // A real hoop at the north end, rim and net and all: it is played on like any other court.
+  const courtShape = { cx: sx - 8, cz: mid, halfW: 6.6, halfL: 7.5, rimY: 3.05, rimIn: 1.6 };
+  const half = buildHoops(ctx, courtShape, "TOM LEE", "ON THE RIVER", [-1]);
+  const court: Riverside["court"] = {
+    shape: courtShape,
+    ...half,
+    gate: { x: courtShape.cx + courtShape.halfW + 1.4, z: mid + 4 },
+  };
   ctx.ground.flat(10, 16, sx + 6, Y0 + 0.012, mid, std(0xe8d4a0, 0.95));
   for (const s of [-1, 1])
     ctx.solid.cyl(0.06, 0.06, 2.5, sx + 6 + s * 5.2, Y0 + 1.25, mid, MAT.steel(), 6);
@@ -334,6 +336,7 @@ export function buildRiverside(ctx: BuildCtx): Riverside {
   const c = new THREE.Color();
   return {
     stops,
+    court,
     update(_dt: number, time: number) {
       c.setHSL((time * 0.05) % 1, 0.9, 0.6);
       lightMat.color.copy(c);

@@ -78,7 +78,14 @@ export function buildCity(): City {
   ctx.solid.build(exterior, { cast: true, receive: true, name: "city" });
   for (const mesh of ctx.flat.build(exterior, { cast: false, receive: false, name: "flat" }))
     mesh.renderOrder = 2;
-  for (const m of [...river.nets, ...river.rims, ...halle.meshes]) exterior.add(m);
+  for (const m of [
+    ...river.nets,
+    ...river.rims,
+    ...halle.meshes,
+    ...riverside.court.nets,
+    ...riverside.court.rims,
+  ])
+    exterior.add(m);
   exterior.add(waterpark.group);
   exterior.add(fair.group);
 

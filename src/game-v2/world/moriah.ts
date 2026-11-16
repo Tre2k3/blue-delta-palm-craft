@@ -27,6 +27,13 @@ export type Halle = {
   meshes: THREE.Mesh[];
   /** Where a game is picked up: the gate of the north court. */
   gate: { x: number; z: number };
+  /** Both courts: the shape, the hoops and nets, and the gate at the north end of each. */
+  courts: {
+    shape: (typeof HALLE.courts)[number];
+    hoops: Hoop[];
+    nets: THREE.Mesh[];
+    gate: { x: number; z: number };
+  }[];
   /** Seats on the stand, looking at the field. */
   seats: { x: number; z: number; y: number }[];
   /** Spots round the track where people stretch, walk and watch. */
@@ -303,6 +310,7 @@ export function buildHalle(ctx: BuildCtx): Halle {
   const post = MAT.steel();
   const meshes: THREE.Mesh[] = [];
   let first: { hoops: Hoop[]; nets: THREE.Mesh[] } | null = null;
+  const courts: Halle["courts"] = [];
   HALLE.courts.forEach((c, k) => {
     ctx.ground.flat(
       (c.halfW + 1.6) * 2,
@@ -316,6 +324,12 @@ export function buildHalle(ctx: BuildCtx): Halle {
     const built = buildHoops(ctx, c, "HALLE", "MT. MORIAH");
     meshes.push(...built.nets, ...built.rims);
     if (!first) first = { hoops: built.hoops, nets: built.nets };
+    courts.push({
+      shape: c,
+      hoops: built.hoops,
+      nets: built.nets,
+      gate: { x: c.cx, z: c.cz - c.halfL - 2.6 },
+    });
     // The fence, open on the west side to the track and with a gate on the north end.
     const x0 = c.cx - c.halfW - 1.6;
     const x1 = c.cx + c.halfW + 1.6;
@@ -393,6 +407,7 @@ export function buildHalle(ctx: BuildCtx): Halle {
     nets: first!.nets,
     meshes,
     gate: { x: north.cx, z: north.cz - north.halfL - 2.6 },
+    courts,
     seats,
     trackside,
   };
