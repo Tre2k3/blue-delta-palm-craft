@@ -582,6 +582,7 @@ export class BullRide extends FairThing {
     const bull = this.fair.bull;
     if (this.thrown) {
       this.landT += dt;
+      g.benji.sink = 0;
       g.benji.lift = Math.max(0, 2 - this.landT * 4);
       if (this.landT > 1.6) return this.done();
       return this.frame(dt, false);
@@ -623,9 +624,11 @@ export class BullRide extends FairThing {
     g.pos.x = p.x + Math.sin(bull.rotation.y) * 0.3;
     g.pos.z = p.z + Math.cos(bull.rotation.y) * 0.3;
     g.heading = bull.rotation.y;
-    g.benji.lift = 2 + Math.abs(Math.sin(this.t * 7.3)) * 0.3;
+    // Astride him: the bull's back hides everything below the waist.
+    g.benji.pose = null;
+    g.benji.sink = 0.62;
+    g.benji.lift = 1.36 + Math.abs(Math.sin(this.t * 7.3)) * 0.3;
     g.benji.tilt = this.bal * 0.6;
-    g.benji.pose = g.benji.has("swing") ? "swing" : null;
     this.frame(dt, false);
   }
 
