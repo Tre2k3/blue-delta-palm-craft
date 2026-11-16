@@ -1,8 +1,33 @@
 import * as THREE from "three";
 import { paintMat } from "../gfx/tex";
 import { addGround } from "./ground";
-import { MAT, Frame, YAW, bench, hydrant, streetLamp, streetSign, trashCan, tree, type BuildCtx } from "./kit";
-import { CURB, EDGE, LANDMARKS, RIVER_Z, ROAD_HALF, STREETS_X, STREETS_Z, STREET_NAMES_Z, WALK, WORLD, crossName, slab } from "./map";
+import {
+  MAT,
+  Frame,
+  YAW,
+  bench,
+  hydrant,
+  streetLamp,
+  streetSign,
+  trashCan,
+  tree,
+  type BuildCtx,
+} from "./kit";
+import {
+  CURB,
+  EDGE,
+  LANDMARKS,
+  RIVER_Z,
+  ROAD_HALF,
+  STREETS_X,
+  STREETS_Z,
+  MEMPHIAN,
+  STREET_NAMES_Z,
+  WALK,
+  WORLD,
+  crossName,
+  slab,
+} from "./map";
 
 /** Columns and rows of blocks. */
 const COLS = STREETS_X.length - 1;
@@ -10,8 +35,16 @@ const ROWS = STREETS_Z.length - 1;
 
 /** Traffic lights run on one city-wide clock: north-south green, then east-west. */
 export type SignalMats = {
-  ns: { red: THREE.MeshBasicMaterial; amber: THREE.MeshBasicMaterial; green: THREE.MeshBasicMaterial };
-  ew: { red: THREE.MeshBasicMaterial; amber: THREE.MeshBasicMaterial; green: THREE.MeshBasicMaterial };
+  ns: {
+    red: THREE.MeshBasicMaterial;
+    amber: THREE.MeshBasicMaterial;
+    green: THREE.MeshBasicMaterial;
+  };
+  ew: {
+    red: THREE.MeshBasicMaterial;
+    amber: THREE.MeshBasicMaterial;
+    green: THREE.MeshBasicMaterial;
+  };
 };
 
 function lens(on: number) {
@@ -48,16 +81,18 @@ export function buildStreets(ctx: BuildCtx): SignalMats {
   const dashGap = 0.16;
   for (const z of STREETS_Z) {
     for (let i = -1; i < STREETS_X.length; i++) {
-      const a = (i < 0 ? X0 : STREETS_X[i]! + EDGE + 1.2);
-      const b = (i === STREETS_X.length - 1 ? X1 : STREETS_X[i + 1]! - EDGE - 1.2);
-      for (const off of [-dashGap, dashGap]) ctx.flat.flat(b - a, 0.12, (a + b) / 2, 0.012, z + off, yellow);
+      const a = i < 0 ? X0 : STREETS_X[i]! + EDGE + 1.2;
+      const b = i === STREETS_X.length - 1 ? X1 : STREETS_X[i + 1]! - EDGE - 1.2;
+      for (const off of [-dashGap, dashGap])
+        ctx.flat.flat(b - a, 0.12, (a + b) / 2, 0.012, z + off, yellow);
     }
   }
   for (const x of STREETS_X) {
     for (let j = 0; j < STREETS_Z.length; j++) {
       const a = STREETS_Z[j]! + EDGE + 1.2;
       const b = j === STREETS_Z.length - 1 ? Z1 : STREETS_Z[j + 1]! - EDGE - 1.2;
-      for (const off of [-dashGap, dashGap]) ctx.flat.flat(0.12, b - a, x + off, 0.012, (a + b) / 2, yellow);
+      for (const off of [-dashGap, dashGap])
+        ctx.flat.flat(0.12, b - a, x + off, 0.012, (a + b) / 2, yellow);
     }
   }
   for (const x of STREETS_X) {
@@ -66,10 +101,24 @@ export function buildStreets(ctx: BuildCtx): SignalMats {
         // Crossings over the east-west street (walkers go north-south) sit either side in X.
         const cx = x + s * (ROAD_HALF + 1.9);
         for (let k = -3; k <= 3; k++) ctx.flat.flat(2.4, 0.55, cx, 0.012, z + k * 1.45, white);
-        ctx.flat.flat(0.4, ROAD_HALF - 0.3, x + s * (ROAD_HALF + 3.9), 0.012, z + s * (ROAD_HALF / 2 + 0.1) * -1, white);
+        ctx.flat.flat(
+          0.4,
+          ROAD_HALF - 0.3,
+          x + s * (ROAD_HALF + 3.9),
+          0.012,
+          z + s * (ROAD_HALF / 2 + 0.1) * -1,
+          white,
+        );
         const cz = z + s * (ROAD_HALF + 1.9);
         for (let k = -3; k <= 3; k++) ctx.flat.flat(0.55, 2.4, x + k * 1.45, 0.012, cz, white);
-        ctx.flat.flat(ROAD_HALF - 0.3, 0.4, x + s * (ROAD_HALF / 2 + 0.1), 0.012, z + s * (ROAD_HALF + 3.9), white);
+        ctx.flat.flat(
+          ROAD_HALF - 0.3,
+          0.4,
+          x + s * (ROAD_HALF / 2 + 0.1),
+          0.012,
+          z + s * (ROAD_HALF + 3.9),
+          white,
+        );
       }
     }
   }
@@ -106,12 +155,14 @@ export function buildStreets(ctx: BuildCtx): SignalMats {
   }
   slabAt(X0, westEdge, southEdge, Z1);
   slabAt(eastEdge, X1, southEdge, Z1);
-  for (let col = 0; col < COLS; col++) slabAt(STREETS_X[col]! + ROAD_HALF, STREETS_X[col + 1]! - ROAD_HALF, southEdge, Z1);
+  for (let col = 0; col < COLS; col++)
+    slabAt(STREETS_X[col]! + ROAD_HALF, STREETS_X[col + 1]! - ROAD_HALF, southEdge, Z1);
 
   // Lamps, trees and street furniture along every block face. Beale's own faces have its globe lamps and neon instead of trees.
   const y0 = CURB;
   const bealeX = STREETS_X[3];
-  const onBeale = (x: number, z: number) => Math.abs(x - bealeX) < EDGE + 1 && z > STREETS_Z[3] && z < STREETS_Z[5];
+  const onBeale = (x: number, z: number) =>
+    Math.abs(x - bealeX) < EDGE + 1 && z > STREETS_Z[3] && z < STREETS_Z[5];
   for (let col = 0; col < COLS; col++) {
     for (let row = 0; row < ROWS; row++) {
       const s = slab(col, row);
@@ -122,9 +173,16 @@ export function buildStreets(ctx: BuildCtx): SignalMats {
         [s.maxZ - 0.8, YAW.south],
       ] as const) {
         for (const t of [0.2, 0.8]) streetLamp(ctx, along(t, s.minX, s.maxX), z, yaw, y0);
-        for (const t of [0.36, 0.64]) tree(ctx, along(t, s.minX, s.maxX), z + (yaw === YAW.north ? 0.5 : -0.5), 0.9, y0, row === 7 && col === 3);
+        for (const t of [0.36, 0.64]) {
+          const tx = along(t, s.minX, s.maxX);
+          const tz = z + (yaw === YAW.north ? 0.5 : -0.5);
+          // Nothing grows up through the Memphian's marquee or stands in its doors.
+          if (Math.abs(tx - MEMPHIAN.x) < 9 && Math.abs(tz - MEMPHIAN.z) < 5) continue;
+          tree(ctx, tx, tz, 0.9, y0, row === 7 && col === 3);
+        }
         if (ctx.rand() > 0.4) trashCan(ctx, along(0.5, s.minX, s.maxX), z, y0);
-        if (ctx.rand() > 0.55) bench(ctx, along(0.44, s.minX, s.maxX), z + (yaw === YAW.north ? 1.4 : -1.4), yaw, y0);
+        if (ctx.rand() > 0.55)
+          bench(ctx, along(0.44, s.minX, s.maxX), z + (yaw === YAW.north ? 1.4 : -1.4), yaw, y0);
       }
       // Faces on the cross streets.
       for (const [x, yaw] of [
@@ -132,8 +190,11 @@ export function buildStreets(ctx: BuildCtx): SignalMats {
         [s.maxX - 0.8, YAW.east],
       ] as const) {
         const beale = onBeale(x, (s.minZ + s.maxZ) / 2);
-        if (!beale) for (const t of [0.25, 0.75]) streetLamp(ctx, x, along(t, s.minZ, s.maxZ), yaw, y0);
-        if (!beale) for (const t of [0.5]) tree(ctx, x + (yaw === YAW.west ? 0.5 : -0.5), along(t, s.minZ, s.maxZ), 0.9, y0);
+        if (!beale)
+          for (const t of [0.25, 0.75]) streetLamp(ctx, x, along(t, s.minZ, s.maxZ), yaw, y0);
+        if (!beale)
+          for (const t of [0.5])
+            tree(ctx, x + (yaw === YAW.west ? 0.5 : -0.5), along(t, s.minZ, s.maxZ), 0.9, y0);
         if (ctx.rand() > 0.5) hydrant(ctx, x, along(0.12, s.minZ, s.maxZ), y0);
       }
     }

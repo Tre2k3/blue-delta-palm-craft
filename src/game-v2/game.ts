@@ -2977,7 +2977,7 @@ export class Game {
     this.close();
     this.transition(() => {
       this.pos.x = p.arrive?.x ?? p.x;
-      this.pos.z = p.arrive?.z ?? p.z + (p.id === "fun" ? -1.5 : 2);
+      this.pos.z = p.arrive?.z ?? p.z + 2;
       if (p.arrive) {
         this.heading = p.arrive.heading;
         this.camYaw = p.arrive.heading;

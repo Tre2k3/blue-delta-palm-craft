@@ -273,29 +273,65 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
     floats.push(t);
   }
 
-  // ---- The slide tower and its slides.
+  // ---- The slide tower and its slides. Four slides, each on its own line into the splash pool:
+  // Geronimo (red) straight off the top, the Twister (blue) spiralling round its own column on
+  // the north side, the Black Hole (a closed yellow tube) corkscrewing down the south-west, and
+  // a white body slide off the middle deck. None of them cross; all of them land in the pool.
   const T = P.tower;
-  const steel = std(0xc9a87a, 0.7, 0.1);
+  const steel = std(0xf2f0ea, 0.45, 0.35);
+  const deckMat = std(0x2a6ad0, 0.6);
   for (const [dx, dz] of [
     [-2.4, -2.4],
     [2.4, -2.4],
     [-2.4, 2.4],
     [2.4, 2.4],
   ] as const) {
-    ctx.solid.box(0.4, T.top, 0.4, T.x + dx, Y0 + T.top / 2, T.z + dz, steel);
+    ctx.solid.cyl(0.22, 0.22, T.top + 2, T.x + dx, Y0 + (T.top + 2) / 2, T.z + dz, steel, 10);
   }
-  for (let y = 4; y <= T.top; y += 4)
-    ctx.solid.box(5.6, 0.3, 5.6, T.x, Y0 + y, T.z, std(0x2a6ad0, 0.6));
+  for (let y = 4; y <= T.top; y += 4) {
+    ctx.solid.box(5.6, 0.3, 5.6, T.x, Y0 + y, T.z, deckMat);
+    // Safety rails round each deck.
+    for (const s of [-2.75, 2.75]) {
+      ctx.solid.box(5.6, 0.06, 0.06, T.x, Y0 + y + 1.05, T.z + s, steel);
+      ctx.solid.box(0.06, 0.06, 5.6, T.x + s, Y0 + y + 1.05, T.z, steel);
+    }
+  }
+  // Cross-bracing on every face, bay by bay.
+  const bay = Math.hypot(4.8, 4);
+  const tilt = Math.atan2(4.8, 4);
+  for (let y = 0; y < T.top; y += 4)
+    for (const sgn of [-1, 1]) {
+      for (const s of [-2.4, 2.4]) {
+        ctx.solid.add(
+          new THREE.BoxGeometry(0.07, bay, 0.07),
+          steel,
+          T.x,
+          Y0 + y + 2,
+          T.z + s,
+          0,
+          0,
+          sgn * tilt,
+        );
+        ctx.solid.add(
+          new THREE.BoxGeometry(0.07, bay, 0.07),
+          steel,
+          T.x + s,
+          Y0 + y + 2,
+          T.z,
+          Math.PI / 2,
+          0,
+          sgn * tilt,
+        );
+      }
+    }
   ctx.solid.add(
     new THREE.ConeGeometry(4.6, 2.6, 4),
     std(0xffd23a, 0.6),
     T.x,
-    Y0 + T.top + 2.8,
+    Y0 + T.top + 3.3,
     T.z,
     Math.PI / 4,
   );
-  for (const s of [-2.4, 2.4])
-    ctx.solid.cyl(0.08, 0.08, 2.6, T.x + s, Y0 + T.top + 1.3, T.z - 2.4, steel, 6);
   // Stairs up the west side.
   for (let i = 0; i < 16; i++)
     ctx.solid.box(
@@ -312,13 +348,13 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
     );
   addSolid(ctx, T.x - 4.4, T.x + 2.8, T.z - 2.8, T.z + 2.8);
   ctx.flat.wall(
-    5.4,
-    1.4,
-    T.x,
-    Y0 + T.top + 0.9,
-    T.z - 2.65,
+    4.6,
+    1.2,
+    T.x + 2.95,
+    Y0 + T.top + 2.7,
+    T.z,
     neon(ctx, "GERONIMO", "#ff3b3b", { w: 512, h: 128 }),
-    YAW.north,
+    YAW.east,
   );
 
   // The splash pool the slides land in.
@@ -331,6 +367,181 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
   splash.position.set(scx, wy, scz);
   splash.renderOrder = 3;
   group.add(splash);
+
+  // Glossy fibreglass, and a skin of water running down the open ones.
+  const glass = (color: number) =>
+    new THREE.MeshPhysicalMaterial({
+      color,
+      roughness: 0.22,
+      metalness: 0,
+      clearcoat: 1,
+      clearcoatRoughness: 0.12,
+      side: THREE.DoubleSide,
+    });
+  const flowMap = tex(64, 128, (g, w, h) => {
+    g.fillStyle = "#3aa8ff";
+    g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 18; i++) {
+      g.fillStyle = `rgba(255,255,255,${0.15 + (i % 3) * 0.12})`;
+      g.fillRect((i * 23) % w, (i * 41) % h, 2 + (i % 3), 14 + (i % 4) * 6);
+    }
+  });
+  flowMap.wrapS = flowMap.wrapT = THREE.RepeatWrapping;
+  const flows: THREE.MeshStandardMaterial[] = [];
+  const _sp = new THREE.Vector3();
+  const _st = new THREE.Vector3();
+  const _up = new THREE.Vector3(0, 1, 0);
+  const _sn = new THREE.Vector3();
+  /** Posts every few metres under a run of chute, each with a cradle under the chute. */
+  const posts = (
+    curve: THREE.Curve<THREE.Vector3>,
+    r: number,
+    skip: (x: number, z: number) => boolean,
+  ) => {
+    const len = curve.getLength();
+    for (let d = 2; d < len - 1; d += 3.2) {
+      curve.getPointAt(d / len, _sp);
+      curve.getTangentAt(d / len, _st);
+      // The cradle hugs the underside of the chute, tipped to its slope, so on the steep parts it
+      // stays under the floor instead of poking up through it.
+      const side = _sn.crossVectors(_st, _up).normalize();
+      const n = side.crossVectors(side, _st).normalize();
+      const cx = _sp.x - n.x * (r + 0.1);
+      const cy = _sp.y - n.y * (r + 0.1);
+      const cz = _sp.z - n.z * (r + 0.1);
+      const h = cy - Y0;
+      if (h < 0.8 || skip(cx, cz)) continue;
+      ctx.solid.cyl(0.12, 0.12, h, cx, Y0 + h / 2, cz, steel, 8);
+      ctx.solid.add(
+        new THREE.BoxGeometry(r * 1.7, 0.12, 0.3),
+        steel,
+        cx,
+        cy,
+        cz,
+        Math.atan2(_st.x, _st.z),
+        -Math.asin(Math.max(-1, Math.min(1, _st.y))),
+        0,
+      );
+    }
+  };
+  const slide = (curve: THREE.CatmullRomCurve3, r: number, color: number, open: boolean) => {
+    const len = curve.getLength();
+    const steps = Math.ceil(len * 3);
+    const mesh = new THREE.Mesh(
+      open ? trough(curve, r, steps) : new THREE.TubeGeometry(curve, steps, r, 22, false),
+      glass(color),
+    );
+    mesh.castShadow = true;
+    group.add(mesh);
+    if (open) {
+      // Water down the bottom of the chute.
+      const pos: number[] = [];
+      const idx: number[] = [];
+      const ring = 6;
+      for (let i = 0; i <= steps; i++) {
+        curve.getPointAt(i / steps, _sp);
+        curve.getTangentAt(i / steps, _st);
+        const side = new THREE.Vector3().crossVectors(_st, _up).normalize();
+        const n = new THREE.Vector3().crossVectors(side, _st).normalize();
+        for (let j = 0; j <= ring; j++) {
+          const ang = -0.75 + (1.5 * j) / ring;
+          const rr = r * 0.94;
+          pos.push(
+            _sp.x + side.x * Math.sin(ang) * rr - n.x * Math.cos(ang) * rr,
+            _sp.y + side.y * Math.sin(ang) * rr - n.y * Math.cos(ang) * rr,
+            _sp.z + side.z * Math.sin(ang) * rr - n.z * Math.cos(ang) * rr,
+          );
+        }
+      }
+      const uv: number[] = [];
+      for (let i = 0; i <= steps; i++)
+        for (let j = 0; j <= ring; j++) uv.push(j / ring, (i / steps) * len * 0.5);
+      for (let i = 0; i < steps; i++)
+        for (let j = 0; j < ring; j++) {
+          const q = i * (ring + 1) + j;
+          idx.push(q, q + ring + 1, q + 1, q + ring + 1, q + ring + 2, q + 1);
+        }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+      geo.setIndex(idx);
+      geo.computeVertexNormals();
+      const m = new THREE.MeshStandardMaterial({
+        map: flowMap.clone(),
+        color: 0x9ad8ff,
+        transparent: true,
+        opacity: 0.7,
+        roughness: 0.1,
+        emissive: 0x1a6ad0,
+        emissiveIntensity: 0.35,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      m.map!.wrapS = m.map!.wrapT = THREE.RepeatWrapping;
+      m.map!.needsUpdate = true;
+      flows.push(m);
+      const w = new THREE.Mesh(geo, m);
+      w.renderOrder = 4;
+      group.add(w);
+    } else {
+      // The flanges where the sections of tube bolt together.
+      const flange = new THREE.TorusGeometry(r + 0.02, 0.06, 6, 22);
+      const fm = std(color, 0.4);
+      for (let d = 1.5; d < len - 0.5; d += 2.2) {
+        curve.getPointAt(d / len, _sp);
+        curve.getTangentAt(d / len, _st);
+        const f = new THREE.Mesh(flange, fm);
+        f.position.copy(_sp);
+        f.lookAt(_sp.x + _st.x, _sp.y + _st.y, _sp.z + _st.z);
+        group.add(f);
+      }
+    }
+  };
+  /** A slide that spirals round a column: arms from the column hold it up every eighth of a turn. */
+  const spiral = (
+    cx: number,
+    cz: number,
+    R: number,
+    a0: number,
+    turns: number,
+    y0: number,
+    y1: number,
+    before: THREE.Vector3[],
+    after: THREE.Vector3[],
+  ) => {
+    const pts = [...before];
+    const n = Math.ceil(turns * 16);
+    for (let k = 0; k <= n; k++) {
+      const u = k / n;
+      const ang = a0 + u * turns * Math.PI * 2;
+      pts.push(
+        new THREE.Vector3(cx + Math.cos(ang) * R, y0 + (y1 - y0) * u, cz + Math.sin(ang) * R),
+      );
+    }
+    pts.push(...after);
+    // The column, and its arms.
+    ctx.solid.cyl(0.32, 0.32, y0 - Y0 + 0.6, cx, (y0 + Y0 + 0.6) / 2, cz, steel, 12);
+    addSolid(ctx, cx - 0.4, cx + 0.4, cz - 0.4, cz + 0.4);
+    for (let k = 0; k <= turns * 8; k++) {
+      const u = k / (turns * 8);
+      const ang = a0 + u * turns * Math.PI * 2;
+      const y = y0 + (y1 - y0) * u - 0.9;
+      if (y - Y0 < 0.6) continue;
+      ctx.solid.box(
+        R - 0.6,
+        0.12,
+        0.16,
+        cx + Math.cos(ang) * (R - 0.6) * 0.5,
+        y,
+        cz + Math.sin(ang) * (R - 0.6) * 0.5,
+        steel,
+        -ang,
+      );
+    }
+    return new THREE.CatmullRomCurve3(pts, false, "centripetal");
+  };
+  const inPool = (x: number, z: number) => x > S.minX && x < S.maxX && z > S.minZ && z < S.maxZ;
+  const nearTower = (x: number, z: number) => Math.abs(x - T.x) < 3.4 && Math.abs(z - T.z) < 3.4;
 
   // Geronimo: off the top, one hump, and a straight drop to the pool.
   const top = Y0 + T.top + 0.6;
@@ -347,78 +558,102 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
     false,
     "centripetal",
   );
-  const chute = (
-    curve: THREE.Curve<THREE.Vector3>,
-    radius: number,
-    color: number,
-    open: boolean,
-  ) => {
-    const geo = open
-      ? trough(curve, radius, 90)
-      : new THREE.TubeGeometry(curve, 80, radius, 12, false);
-    const mesh = new THREE.Mesh(
-      geo,
-      new THREE.MeshStandardMaterial({
-        color,
-        roughness: 0.35,
-        metalness: 0.1,
-        side: open ? THREE.DoubleSide : THREE.FrontSide,
-      }),
-    );
-    mesh.castShadow = true;
-    group.add(mesh);
-    // Legs under it every few metres.
-    for (let i = 1; i < 10; i++) {
-      const p = curve.getPoint(i / 10);
-      if (p.y - Y0 < 1.4) continue;
-      ctx.solid.cyl(0.1, 0.1, p.y - radius - Y0, p.x, Y0 + (p.y - radius - Y0) / 2, p.z, steel, 6);
-    }
-  };
-  chute(geronimo, 0.75, 0xd8262a, true);
-  // The rest: spirals off each face of the tower into the pool, in their colours.
-  const TWISTER = 3;
-  let twister: THREE.CatmullRomCurve3 | null = null;
-  const colors = [
-    0xf4f1ea, 0xe8e2d0, 0xf4f1ea, 0x2a8aff, 0xf4f1ea, 0xe8e2d0, 0xffd23a, 0xf4f1ea, 0xe8e2d0,
-    0xf4f1ea, 0x2a8aff,
-  ];
-  colors.forEach((c, i) => {
-    const turns = 0.8 + (i % 4) * 0.35;
-    const startY = Y0 + 4 + (i % 4) * 4;
-    const rr = 5 + (i % 3) * 1.6;
-    const a0 = (i / colors.length) * Math.PI * 2;
-    const pts: THREE.Vector3[] = [];
-    const n = 14;
-    for (let k = 0; k <= n; k++) {
-      const u = k / n;
-      const a = a0 + u * turns * Math.PI * 2;
-      const r = rr * (1 - u * 0.35);
-      pts.push(
-        new THREE.Vector3(
-          T.x + Math.cos(a) * r * (u < 0.9 ? 1 : 0.6),
-          startY - (startY - wy - 0.2) * u,
-          T.z + Math.sin(a) * r * 0.75,
-        ),
-      );
-    }
-    // Every one ends in the splash pool.
-    pts.push(new THREE.Vector3(scx - 6 + (i % 4) * 3.5, wy + 0.15, S.minZ + 2 + (i % 3) * 3));
-    const curve = new THREE.CatmullRomCurve3(pts, false, "centripetal");
-    if (i === TWISTER) twister = curve;
-    chute(curve, i === TWISTER ? 1 : 0.55, i === TWISTER ? 0x2a8aff : c, i % 3 === 0);
-  });
-  const tw0 = twister!.getPointAt(0);
-  // A platform at its mouth and the name over it.
-  ctx.solid.box(2.6, 0.25, 2.6, tw0.x, tw0.y - 0.6, tw0.z, std(0x2a6ad0, 0.6));
+  slide(geronimo, 0.75, 0xd8262a, true);
+  posts(geronimo, 0.75, (x, z) => nearTower(x, z) || inPool(x, z));
+
+  // The Twister: out the north side of the top deck, two and a quarter turns round its column,
+  // and out east into the pool.
+  const TW = { x: T.x + 6.5, z: T.z - 11, r: 4.6 };
+  const twister = spiral(
+    TW.x,
+    TW.z,
+    TW.r,
+    Math.PI,
+    2.25,
+    top - 0.6,
+    Y0 + 1.5,
+    [
+      new THREE.Vector3(T.x - 1.2, top, T.z - 2.2),
+      new THREE.Vector3(TW.x - TW.r - 0.3, top - 0.3, T.z - 6.8),
+    ],
+    [
+      new THREE.Vector3(TW.x + 3.6, Y0 + 1.1, TW.z - TW.r + 0.2),
+      new THREE.Vector3(TW.x + 7, wy + 0.4, TW.z - TW.r + 0.8),
+      new THREE.Vector3(TW.x + 10, wy + 0.1, TW.z - TW.r + 1.2),
+    ],
+  );
+  slide(twister, 1, 0x2a8aff, true);
+  posts(
+    twister,
+    1,
+    (x, z) => nearTower(x, z) || inPool(x, z) || Math.hypot(x - TW.x, z - TW.z) < TW.r + 1.5,
+  );
+  const tw0 = twister.getPointAt(0);
   ctx.flat.wall(
     4.4,
     1.1,
-    tw0.x,
-    tw0.y + 1.6,
-    tw0.z,
+    T.x,
+    Y0 + T.top + 2.7,
+    T.z - 2.95,
     neon(ctx, "TWISTER", "#5ae0ff", { w: 512, h: 128 }),
     YAW.north,
   );
+  void tw0;
+
+  // The Black Hole: a closed yellow tube off the third deck, round its column on the south-west
+  // corner, along the south fence and into the far end of the pool.
+  const BH = { x: T.x - 9, z: T.z + 6.5, r: 3.4 };
+  const blackHole = spiral(
+    BH.x,
+    BH.z,
+    BH.r,
+    Math.PI / 2,
+    1.75,
+    Y0 + 12.4,
+    Y0 + 1.5,
+    [
+      new THREE.Vector3(T.x - 2.2, Y0 + 12.7, T.z + 2.6),
+      new THREE.Vector3(T.x - 4.5, Y0 + 12.6, BH.z + BH.r - 0.3),
+    ],
+    [
+      new THREE.Vector3(BH.x + BH.r + 1.1, Y0 + 1.25, BH.z + 3),
+      new THREE.Vector3(BH.x + BH.r + 7, Y0 + 1.1, BH.z + 3.9),
+      new THREE.Vector3(BH.x + BH.r + 15, Y0 + 0.95, BH.z + 3.3),
+      new THREE.Vector3(S.minX + 2.5, wy + 0.3, S.maxZ - 2.6),
+      new THREE.Vector3(S.minX + 5, wy + 0.12, S.maxZ - 3),
+    ],
+  );
+  slide(blackHole, 0.8, 0xffc21a, false);
+  posts(
+    blackHole,
+    0.8,
+    (x, z) => nearTower(x, z) || inPool(x, z) || Math.hypot(x - BH.x, z - BH.z) < BH.r + 1.5,
+  );
+  ctx.flat.wall(
+    4.4,
+    1.1,
+    T.x,
+    Y0 + T.top + 2.7,
+    T.z + 2.95,
+    neon(ctx, "BLACK HOLE", "#ffd23a", { w: 512, h: 128 }),
+    YAW.south,
+  );
+
+  // The white body slide off the second deck: a short, steep run into the pool.
+  const white = new THREE.CatmullRomCurve3(
+    [
+      new THREE.Vector3(T.x + 2.4, Y0 + 8.6, T.z + 1.8),
+      new THREE.Vector3(T.x + 6, Y0 + 7, T.z + 2.6),
+      new THREE.Vector3(T.x + 9, Y0 + 4.6, T.z + 3.3),
+      new THREE.Vector3(T.x + 12, Y0 + 2.2, T.z + 3.6),
+      new THREE.Vector3(T.x + 15, wy + 0.5, T.z + 3.4),
+      new THREE.Vector3(T.x + 19, wy + 0.12, T.z + 3),
+    ],
+    false,
+    "centripetal",
+  );
+  slide(white, 0.6, 0xf4f1ea, true);
+  posts(white, 0.6, (x, z) => nearTower(x, z) || inPool(x, z));
 
   // ---- The gate on Park Avenue, the fence round the park, a snack hut and the tube rack.
   const G = P.gate;
@@ -546,7 +781,7 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
     lounge,
     floats,
     rafts,
-    twister: twister!,
+    twister,
     twisterStart: { x: T.x - 3.6, z: T.z + 4.4 },
     beach: { x: wcx, z: W.minZ + 2.5 },
     get surge() {
@@ -585,6 +820,7 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
       });
       blue.map!.offset.set(time * 0.02, time * 0.03);
       riverMat.map!.offset.set(0, -time * 0.05);
+      for (const f of flows) f.map!.offset.set(0, -time * 1.6);
       floats.forEach((t, i) => {
         const u = (time * 0.012 + i / floats.length) % 1;
         river.getPoint(u, t.position);

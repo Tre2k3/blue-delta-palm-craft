@@ -108,10 +108,8 @@ export class Geronimo implements Activity {
     g.pos.x = _p.x;
     g.pos.z = _p.z;
     g.heading = Math.atan2(_t.x, _t.z);
-    g.benji.lift = Math.max(0, _p.y - Y0 - 0.15);
-    g.benji.speed = 0;
-    g.benji.pose = null;
-    // Lying back down the chute; sitting up when he is not tucked.
+    // Sat down in the chute, the water up round him: the sides hide him from the waist.
+    seatIn(g.benji, _p.y - 0.75 + 0.5, standHeight(_p.x, _p.z), 0.55);
     g.benji.tilt = 0;
   }
 
@@ -216,8 +214,14 @@ export class Geronimo implements Activity {
       _eye.set(_p.x + _t.x * 7, _p.y + 2.8, _p.z + _t.z * 7);
       _at.set(_p.x, _p.y + 0.3, _p.z);
     } else {
-      _eye.set(_p.x - _t.x * 3.6, _p.y + 1.7 - _t.y * 2, _p.z - _t.z * 3.6);
+      // Up on the tower, close in over his shoulder, so the deck and the roof stay out of the shot.
+      const T = WATERPARK.tower;
+      const onTop = Math.abs(_p.x - T.x) < 5 && Math.abs(_p.z - T.z) < 5;
+      const back = onTop ? 2.2 : 3.6;
+      _eye.set(_p.x - _t.x * back, _p.y + 1.7 - _t.y * 2, _p.z - _t.z * back);
       _at.set(_p.x + _t.x * 4, _p.y + _t.y * 4 + 0.4, _p.z + _t.z * 4);
+      if (Math.abs(_eye.x - T.x) < 5 && Math.abs(_eye.z - T.z) < 5)
+        _eye.y = Math.min(_eye.y, Y0 + T.top + 1.85);
     }
     const k = snap ? 1 : damp(this.phase === "down" ? 10 : 4, dt);
     g.camera.position.lerp(_eye, k);
@@ -575,6 +579,23 @@ export function seatIn(card: Card, rimY: number, groundY: number, show = 0.56) {
   card.lift = rimY - groundY - card.sink;
 }
 
+/** A soft round drop, so spray reads as water and not as squares. */
+let drop: THREE.Texture | null = null;
+function dropTex() {
+  if (drop) return drop;
+  const c = document.createElement("canvas");
+  c.width = c.height = 32;
+  const x = c.getContext("2d")!;
+  const gr = x.createRadialGradient(16, 16, 0, 16, 16, 16);
+  gr.addColorStop(0, "rgba(255,255,255,1)");
+  gr.addColorStop(0.5, "rgba(235,248,255,0.8)");
+  gr.addColorStop(1, "rgba(235,248,255,0)");
+  x.fillStyle = gr;
+  x.fillRect(0, 0, 32, 32);
+  drop = new THREE.CanvasTexture(c);
+  return drop;
+}
+
 /** White water thrown up behind a rider and out of a splash: a pool of drops under gravity. */
 export class Spray {
   private pos: Float32Array;
@@ -596,7 +617,9 @@ export class Spray {
       this.geo,
       new THREE.PointsMaterial({
         color: 0xf2fbff,
-        size: 0.07,
+        map: dropTex(),
+        alphaTest: 0.05,
+        size: 0.09,
         transparent: true,
         opacity: 0.9,
         depthWrite: false,

@@ -398,8 +398,23 @@ export const POIS: Poi[] = [
     color: "#ff3b3b",
     arrive: { x: RACE_MEET.x + 2.6, z: RACE_MEET.z + 1.2, heading: -Math.PI / 2 - 0.4 },
   },
-  { id: "home", name: "Home", x: HOME.x, z: HOME.z - HOME.d / 2 - 3, color: "#e0b33a" },
-  { id: "fun", name: "The Fun House", x: FUN.doorX, z: FUN.frontZ - 2, color: "#b48cff" },
+  // Out on the front lawn and at the Fun House doors, turned to them.
+  {
+    id: "home",
+    name: "Home",
+    x: HOME.x,
+    z: HOME.z - HOME.d / 2 - 3,
+    color: "#e0b33a",
+    arrive: { x: HOME.x, z: HOME.z - HOME.d / 2 - 4.25, heading: 0 },
+  },
+  {
+    id: "fun",
+    name: "The Fun House",
+    x: FUN.doorX,
+    z: FUN.frontZ - 2,
+    color: "#b48cff",
+    arrive: { x: FUN.doorX, z: FUN.frontZ - 5, heading: 0 },
+  },
   // Let out on the terrace, facing the tables.
   {
     id: "park",
@@ -458,7 +473,8 @@ export const POIS: Poi[] = [
     x: LANDMARKS.fedex.x,
     z: LANDMARKS.fedex.z,
     color: "#5a8cff",
-    arrive: { x: STREETS_X[3] - ROAD_HALF - 1.8, z: LANDMARKS.fedex.z, heading: -Math.PI / 2 },
+    // On the corner of B.B. King and Beale, looking at the glass corner and its name.
+    arrive: { x: STREETS_X[3] + 2, z: STREETS_Z[4] + 2, heading: -0.9 },
   },
   {
     id: "pyramid",
@@ -466,7 +482,8 @@ export const POIS: Poi[] = [
     x: LANDMARKS.pyramid.x,
     z: LANDMARKS.pyramid.z,
     color: "#bfe0ff",
-    arrive: { x: WORLD.maxX - 6, z: LANDMARKS.pyramid.z, heading: Math.PI / 2 },
+    // Down the riverside road, the Pyramid standing up past the I-40 bridge.
+    arrive: { x: WORLD.maxX - 47, z: LANDMARKS.pyramid.z + 38, heading: 2.0 },
   },
   {
     id: "museum",
@@ -483,8 +500,8 @@ export const POIS: Poi[] = [
     z: LANDMARKS.ballpark.z,
     color: "#ff8a3c",
     arrive: {
-      x: STREETS_X[5] + ROAD_HALF + 1.8,
-      z: LANDMARKS.ballpark.z,
+      x: STREETS_X[5] - ROAD_HALF - 3,
+      z: LANDMARKS.ballpark.z + 3,
       heading: -Math.PI / 2 + Math.PI,
     },
   },
