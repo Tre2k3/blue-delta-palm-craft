@@ -21,6 +21,7 @@ import {
 } from "./kit";
 import {
   CURB,
+  FAIR,
   LANDMARKS,
   RIVER_Z,
   ROAD_HALF,
@@ -255,6 +256,11 @@ function beyond(ctx: BuildCtx) {
   const z = STREETS_Z[STREETS_Z.length - 1]! + ROAD_HALF + 3.5 + 10;
   for (let x = WORLD.minX + 10; x <= WORLD.maxX - 6; x += 15.5) {
     if (STREETS_X.some((sx) => Math.abs(x - sx) < 13)) continue;
+    // The Fairgrounds have that stretch.
+    if (x > FAIR.minX - 9 && x < FAIR.maxX + 9) {
+      k++;
+      continue;
+    }
     house(ctx, x, z, YAW.north, k++);
   }
 }

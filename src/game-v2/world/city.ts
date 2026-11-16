@@ -13,6 +13,7 @@ import { buildRiverfront, type Riverfront } from "./riverfront";
 import { buildHalle, type Halle } from "./moriah";
 import { buildWaterpark, type Waterpark } from "./waterpark";
 import { buildRiverside, type Riverside } from "./riverside";
+import { buildFair, type Fair } from "./fair";
 import {
   applySignals,
   buildStreets,
@@ -42,6 +43,8 @@ export type City = {
   waterpark: Waterpark;
   /** The new Tom Lee Park, Beale Street Landing and the Big River Crossing. */
   riverside: Riverside;
+  /** The Mid-South Fair on the Fairgrounds. */
+  fair: Fair;
   anchors: BlockAnchors & Omit<Riverfront, "hoops" | "nets" | "rims">;
   signals: SignalState;
   update(dt: number, time: number): void;
@@ -65,6 +68,7 @@ export function buildCity(): City {
   const halle = buildHalle(ctx);
   const waterpark = buildWaterpark(ctx);
   const riverside = buildRiverside(ctx);
+  const fair = buildFair(ctx);
   buildOpenSpots(ctx);
   buildFarBank(ctx);
   buildHorizon(ctx);
@@ -75,6 +79,7 @@ export function buildCity(): City {
     mesh.renderOrder = 2;
   for (const m of [...river.nets, ...river.rims, ...halle.meshes]) exterior.add(m);
   exterior.add(waterpark.group);
+  exterior.add(fair.group);
 
   const water = makeWater(-1000, 1100, FAR_BANK_Z - 4, RIVER_Z + 0.2, FAR_BANK_Z, BRIDGE);
   exterior.add(water.mesh);
@@ -109,6 +114,7 @@ export function buildCity(): City {
     halle,
     waterpark,
     riverside,
+    fair,
     anchors: {
       ...blocks,
       hqDoor: river.hqDoor,
@@ -126,6 +132,7 @@ export function buildCity(): City {
       boat.update(dt);
       waterpark.update(dt, time);
       riverside.update(dt, time);
+      fair.update(dt, time);
     },
   };
   return city;

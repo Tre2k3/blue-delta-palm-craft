@@ -85,7 +85,7 @@ export const RIVER_Z = -200;
 export const FAR_BANK_Z = -332;
 
 /** Where Benji may stand. The river and the pier are handled by their own solids. */
-export const WORLD = { minX: -418, maxX: 600, minZ: -230, maxZ: 664 };
+export const WORLD = { minX: -418, maxX: 600, minZ: -230, maxZ: 852 };
 
 export type Rect = { minX: number; maxX: number; minZ: number; maxZ: number };
 
@@ -284,6 +284,45 @@ export const WATERPARK = {
   pool: rect(454, 478, 602, 628),
   waterY: 0.5,
 };
+
+/**
+ * The Mid-South Fair on the old Fairgrounds, past Mt. Moriah Road: the gate and the midway down
+ * the middle, Libertyland on the west side (the Zippin Pippin, the Grand Carousel, the log
+ * flume, the Liberty Bell), the big rides on the east (the Ferris wheel, bumper cars, teacups,
+ * the swings, the drop tower), and at the back the rodeo arena, the barns and the stage.
+ */
+export const FAIR = {
+  ...rect(-130, 250, 656, 832),
+  gate: { x: 60, z: 657 },
+  midway: rect(50, 70, 660, 830),
+  bell: { x: 26, z: 672 },
+  carousel: { x: 4, z: 694, r: 9 },
+  pippin: { station: { x: -48, z: 706 }, area: rect(-128, -40, 698, 828) },
+  flume: rect(-32, 34, 752, 828),
+  ferris: { x: 112, z: 702, r: 16, hub: 19 },
+  bumper: rect(132, 172, 668, 700),
+  teacups: { x: 198, z: 686, r: 8 },
+  swings: { x: 230, z: 692, r: 9 },
+  drop: { x: 232, z: 734, h: 40 },
+  kiddie: { x: 100, z: 742 },
+  stage: { x: 224, z: 768, w: 16, d: 9 },
+  pigs: { x: 132, z: 756, halfX: 11, halfZ: 5.5 },
+  rodeo: rect(92, 162, 782, 828),
+  barns: rect(176, 246, 802, 828),
+  zoo: rect(176, 202, 784, 798),
+  food: [
+    { id: "turkey", name: "Smoked Turkey Legs", price: 6, z: 682 },
+    { id: "pronto", name: "Pronto Pups", price: 4, z: 698 },
+    { id: "funnel", name: "Funnel Cakes", price: 5, z: 714 },
+    { id: "cotton", name: "Cotton Candy", price: 3, z: 730 },
+    { id: "apple", name: "Candied Apples", price: 3, z: 746 },
+    { id: "lemon", name: "Fresh-Squeezed Lemonade", price: 3, z: 762 },
+  ],
+  striker: { x: 78, z: 684 },
+  /** The show ring: the stunt dogs, with the clowns and the magic and puppet booth beside it. */
+  shows: { x: 182, z: 730, r: 8 },
+  krystal: { x: 80, z: 722 },
+} as const;
 
 /** Beale Street Landing, at the foot of Beale on the river, with a riverboat tied up beside it. */
 export const LANDING = { x: -54, z0: RIVER_Z, z1: -222, w: 18, boat: { x: -38, z: -238, len: 44 } };
@@ -515,6 +554,7 @@ export const POIS: Poi[] = [
 export function districtAt(x: number, z: number) {
   if (z < RIVER_Z + 1) return "On the River";
   if (inRect(WATERPARK.lot, x, z, 2)) return "Adventure River";
+  if (inRect(FAIR, x, z, 1)) return x < 40 ? "Libertyland" : "Mid-South Fair";
   if (z > STREETS_Z[8] + ROAD_HALF && x < STREETS_X[3]) return "Mt. Moriah";
   if (x < STREETS_X[1] && z > STREETS_Z[3] && z < STREETS_Z[6]) return "South Memphis";
   if (z < STREETS_Z[0] - ROAD_HALF)

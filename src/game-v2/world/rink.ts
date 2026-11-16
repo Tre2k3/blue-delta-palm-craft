@@ -39,132 +39,201 @@ export type RinkRoom = Room & {
 };
 
 /**
- * The Crystal Palace from Third Street: a long, low hall in tan block and brick, flat roofed, the
- * name up on the roof in lights where it could be read from both ways down Third, a canopy over
- * the doors and the parking lot beside it.
+ * The Crystal Palace from Third Street, as it stood: a long, low hall with cream walls under a
+ * red standing-seam metal roof band, ROLLER SKATING in big white letters across it, the band
+ * carried out over a covered walk on square white columns. At the east end the band rises
+ * higher, and on it hangs the sign: "the Crystal Palace" in white on maroon, framed in gold
+ * bulbs with white scrolls and a medallion on top. A lettered board beside it, a tall light pole,
+ * and the lot out front with its yellow lines.
  */
 export function buildRinkExterior(ctx: BuildCtx, L: Rect) {
   lotSurface(ctx, L, "parking");
   const r = RINK;
-  const w = r.maxX - r.minX;
-  const d = r.maxZ - r.minZ;
-  const cx = (r.minX + r.maxX) / 2;
-  const cz = (r.minZ + r.maxZ) / 2;
-  const h = r.height;
-  const block = std(0xc9b48e, 0.9);
-  ctx.solid.box(w, h, d, cx, Y0 + h / 2, cz, block);
-  // A band of brown brick along the bottom, and a dark cap round the roof.
-  ctx.solid.box(w + 0.2, 1.4, d + 0.2, cx, Y0 + 0.7, cz, MAT.brick("#5a3420", 6));
-  ctx.solid.box(w + 0.6, 0.8, d + 0.6, cx, Y0 + h + 0.2, cz, std(0x3a2a22, 0.8));
-  // Stripes down the front: the old purple and gold.
-  for (const [y, c] of [
-    [h - 1.6, 0x5a2a8a],
-    [h - 2.3, 0xe0b030],
-  ] as const)
-    ctx.solid.box(w + 0.1, 0.45, 0.1, cx, Y0 + y, r.minZ - 0.06, std(c, 0.6));
-  addSolid(ctx, r.minX, r.maxX, r.minZ, r.maxZ);
+  const zf = r.minZ;
+  const walk = 3.2;
+  const wallZ = zf + walk;
+  const wallH = 4.6;
+  const cream = std(0xe8e2cc, 0.85);
+  const red = std(0xa8221e, 0.55, 0.35);
+  const signX0 = r.maxX - 15;
 
-  // The doors and the canopy over them.
-  const f = new Frame(ctx, r.doorX, r.frontZ, YAW.north);
-  f.box(7, 3.1, 0.12, 0, Y0 + 1.55, 0.06, MAT.black());
-  for (const s of [-1.6, -0.55, 0.55, 1.6])
-    f.box(
-      0.95,
-      2.6,
-      0.06,
-      s,
-      Y0 + 1.35,
-      0.14,
-      new THREE.MeshStandardMaterial({
-        color: 0x1b2a3a,
-        roughness: 0.1,
-        metalness: 0.6,
-        emissive: 0xff7ad8,
-        emissiveIntensity: 0.25,
-      }),
-    );
-  f.box(9, 0.35, 3.4, 0, Y0 + 3.5, 1.7, std(0x5a2a8a, 0.6));
-  f.box(9, 0.12, 0.1, 0, Y0 + 3.3, 3.42, emissiveMat(ctx, 0xffd23a, 0.5, 3), ctx.flat);
-  for (const s of [-4.2, 4.2]) {
-    f.box(0.18, 3.4, 0.18, s, Y0 + 1.7, 3.3, MAT.steel());
-    f.solid(s - 0.2, s + 0.2, 3.1, 3.5);
-  }
-  f.wall(
-    6.4,
-    1.1,
-    0,
-    Y0 + 4.6,
-    0.12,
-    neon(ctx, "SKATE NIGHT", "#ff4fd8", { sub: "ADULT NIGHT FRI · SAT", w: 640, h: 160 }),
-    ctx.flat,
+  // The hall: cream block walls set back behind the walk, a flat dark roof over it.
+  ctx.solid.box(
+    r.maxX - r.minX,
+    wallH + 0.4,
+    r.maxZ - wallZ,
+    (r.minX + r.maxX) / 2,
+    Y0 + (wallH + 0.4) / 2,
+    (wallZ + r.maxZ) / 2,
+    cream,
   );
-  f.flat(10, 8, 0, Y0 + 0.02, 3.6, poolMat(ctx, 0xff7ad8, 0.45), ctx.flat);
-  f.lamp(0, Y0 + 3, 2.4, 0xff9ae0);
+  ctx.solid.box(
+    r.maxX - r.minX,
+    0.3,
+    r.maxZ - wallZ,
+    (r.minX + r.maxX) / 2,
+    Y0 + 7.1,
+    (wallZ + r.maxZ) / 2,
+    std(0x4a4a4e, 0.8),
+  );
+  ctx.solid.box(
+    r.maxX - r.minX,
+    7.2 - wallH,
+    r.maxZ - wallZ - 3,
+    (r.minX + r.maxX) / 2,
+    Y0 + (wallH + 7.2) / 2,
+    (wallZ + 3 + r.maxZ) / 2,
+    cream,
+  );
+  // A dark band of glass doors and windows along the front wall.
+  ctx.solid.box(
+    r.maxX - r.minX - 8,
+    2.4,
+    0.08,
+    (r.minX + r.maxX) / 2,
+    Y0 + 1.6,
+    wallZ - 0.05,
+    new THREE.MeshStandardMaterial({
+      color: 0x14161a,
+      roughness: 0.15,
+      metalness: 0.5,
+      emissive: 0x3a2a1a,
+      emissiveIntensity: 0.25,
+    }),
+  );
+  addSolid(ctx, r.minX, r.maxX, wallZ, r.maxZ);
 
-  // The sign up on the roof: CRYSTAL PALACE in lights on a frame of steel, lit from both sides.
-  const sy = Y0 + h + 0.6;
-  const signW = 26;
-  const signH = 5;
-  const name = neon(ctx, "CRYSTAL PALACE", "#5ae0ff", {
-    sub: "SKATING RINK",
-    w: 1024,
-    h: 224,
-    border: true,
-  });
-  ctx.solid.box(signW + 0.6, signH + 0.6, 0.5, cx, sy + 1.6 + signH / 2, r.minZ + 4, MAT.black());
-  ctx.flat.wall(signW, signH, cx, sy + 1.6 + signH / 2, r.minZ + 3.73, name, YAW.north);
-  ctx.flat.wall(signW, signH, cx, sy + 1.6 + signH / 2, r.minZ + 4.27, name, YAW.south);
-  for (const s of [-signW / 2 + 1.5, -signW / 6, signW / 6, signW / 2 - 1.5])
-    ctx.solid.box(0.25, 1.8, 0.25, cx + s, sy + 0.9, r.minZ + 4, MAT.steel());
-  // A star at each end, the way the old signs did it.
-  for (const s of [-1, 1]) {
-    const star = new THREE.Shape();
-    for (let i = 0; i < 10; i++) {
-      const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
-      const rr = i % 2 ? 0.7 : 1.6;
-      if (i === 0) star.moveTo(Math.cos(a) * rr, -Math.sin(a) * rr);
-      else star.lineTo(Math.cos(a) * rr, -Math.sin(a) * rr);
-    }
-    const geo = new THREE.ShapeGeometry(star);
-    ctx.flat.add(
-      geo,
-      emissiveMat(ctx, 0xffd23a, 1.2, 3.4),
-      cx + s * (signW / 2 + 2.2),
-      sy + 1.6 + signH / 2,
-      r.minZ + 3.72,
-      Math.PI,
+  // The red band: a mansard of standing-seam metal leaning back over the walk, from one end to the other.
+  const mansard = (x0: number, x1: number, y0: number, y1: number, face: THREE.Material) => {
+    const run = (y1 - y0) * 0.42;
+    const s = new THREE.Shape();
+    s.moveTo(0, y0);
+    s.lineTo(run, y1);
+    s.lineTo(run + walk + 0.4, y1);
+    s.lineTo(run + walk + 0.4, y0);
+    s.lineTo(0, y0);
+    const geo = new THREE.ExtrudeGeometry(s, { depth: x1 - x0, bevelEnabled: false });
+    geo.rotateY(-Math.PI / 2);
+    geo.translate(x1, Y0, zf);
+    ctx.solid.add(geo, red, 0, 0, 0);
+    // The lettered face, laid on the slope.
+    const h = Math.hypot(run, y1 - y0);
+    const plane = new THREE.PlaneGeometry(x1 - x0, h);
+    plane.rotateX(-Math.atan2(run, y1 - y0));
+    plane.rotateY(Math.PI);
+    ctx.solid.add(plane, face, (x0 + x1) / 2, Y0 + (y0 + y1) / 2, zf + run / 2 - 0.03);
+    // Its underside over the walk.
+    ctx.solid.box(
+      x1 - x0,
+      0.2,
+      walk + 0.4,
+      (x0 + x1) / 2,
+      Y0 + y0 - 0.1,
+      zf + (walk + 0.4) / 2,
+      std(0x8a1a16, 0.7),
     );
-    ctx.flat.add(
-      geo,
-      emissiveMat(ctx, 0xffd23a, 1.2, 3.4),
-      cx + s * (signW / 2 + 2.2),
-      sy + 1.6 + signH / 2,
-      r.minZ + 4.28,
-      0,
+  };
+  mansard(r.minX, signX0, wallH, 7.2, seamMat(signX0 - r.minX, "ROLLER SKATING"));
+  mansard(signX0, r.maxX, wallH, 9.2, seamMat(r.maxX - signX0, ""));
+  // Square white columns under the walk.
+  for (let x = r.minX + 1; x <= r.maxX - 0.5; x += 7.5) {
+    ctx.solid.box(0.7, wallH, 0.7, x, Y0 + wallH / 2, zf + 0.6, std(0xf4f1ea, 0.7));
+    addSolid(ctx, x - 0.4, x + 0.4, zf + 0.2, zf + 1);
+  }
+  // A railing along the walk at the sign end.
+  for (let x = signX0 + 1; x < r.maxX - 1; x += 1.2)
+    ctx.solid.box(0.05, 1, 0.05, x, Y0 + 0.5, zf + 1.6, MAT.black());
+  ctx.solid.box(
+    r.maxX - signX0 - 2,
+    0.06,
+    0.06,
+    (signX0 + r.maxX) / 2,
+    Y0 + 1,
+    zf + 1.6,
+    MAT.black(),
+  );
+
+  // The sign, standing proud of the high end of the band.
+  const sx = (signX0 + r.maxX) / 2;
+  const signMat = new THREE.MeshStandardMaterial({
+    map: palaceSign(),
+    transparent: true,
+    alphaTest: 0.5,
+    roughness: 0.6,
+    emissive: 0xffffff,
+    emissiveMap: palaceSign(true),
+    emissiveIntensity: 0.2,
+  });
+  ctx.glow.emissive(signMat, 0.15, 1.6);
+  const sw = 11;
+  const sh = 7.2;
+  ctx.solid.add(new THREE.PlaneGeometry(sw, sh), signMat, sx, Y0 + 7.9, zf - 0.35, Math.PI);
+  ctx.solid.add(new THREE.PlaneGeometry(sw, sh), signMat, sx, Y0 + 7.9, zf - 0.3, 0);
+  ctx.lamps.push({ x: sx, y: Y0 + 8, z: zf - 2, color: 0xffd890 });
+  // The lettered board beside it.
+  ctx.solid.box(4.2, 1.6, 0.25, signX0 - 3.4, Y0 + 6.6, zf + 0.25, std(0xf4f1ea, 0.6));
+  ctx.flat.wall(
+    4,
+    1.4,
+    signX0 - 3.4,
+    Y0 + 6.6,
+    zf + 0.1,
+    sign("SKATE TONIGHT", "#1a1a1a", "#f4f1ea", { sub: "ADULT NIGHT FRI 9-1", w: 512, h: 176 }),
+    YAW.north,
+  );
+  ctx.flat.flat(16, 6, sx, Y0 + 0.02, zf - 3, poolMat(ctx, 0xffd890, 0.35));
+
+  // The lot: yellow lines, the blue spaces, a tall light pole.
+  const yellow = new THREE.MeshBasicMaterial({ color: 0xe8c040 });
+  for (let x = r.minX + 2; x < L.maxX - 3; x += 3.2)
+    ctx.ground.flat(0.14, 5, x, Y0 + 0.012, L.minZ + 3.2, yellow);
+  for (let x = r.maxX + 4; x < L.maxX - 3; x += 3.2)
+    ctx.ground.flat(0.14, 5, x, Y0 + 0.012, L.minZ + 26, yellow);
+  ctx.ground.flat(L.maxX - r.minX - 4, 0.14, (r.minX + L.maxX) / 2, Y0 + 0.012, zf - 1.6, yellow);
+  for (const x of [sx - 2, sx + 2]) {
+    ctx.ground.flat(
+      2.6,
+      4.6,
+      x,
+      Y0 + 0.013,
+      L.minZ + 3.2,
+      new THREE.MeshBasicMaterial({ color: 0x2a6ad0 }),
+    );
+    ctx.ground.flat(
+      1,
+      1,
+      x,
+      Y0 + 0.016,
+      L.minZ + 3.2,
+      new THREE.MeshBasicMaterial({ color: 0xf4f1ea }),
     );
   }
-  ctx.lamps.push({ x: cx, y: sy + 4, z: r.minZ + 2, color: 0x5ae0ff });
-
-  // The lot: stripes, lamps, a few trees along Third.
-  for (let x = r.maxX + 4; x < L.maxX - 3; x += 3.2)
-    ctx.ground.flat(
-      0.14,
-      5,
-      x,
-      Y0 + 0.012,
-      L.minZ + 14,
-      new THREE.MeshBasicMaterial({ color: 0xe8e4dc }),
+  ctx.solid.cyl(0.05, 0.05, 2.2, sx - 4.4, Y0 + 1.1, zf - 2.2, MAT.steel(), 6);
+  ctx.flat.wall(
+    0.5,
+    0.7,
+    sx - 4.4,
+    Y0 + 2,
+    zf - 2.25,
+    sign("P", "#f4f1ea", "#2a6ad0", { w: 64, h: 96 }),
+    YAW.north,
+  );
+  const px = r.maxX + 18;
+  ctx.solid.cyl(0.25, 0.32, 16, px, Y0 + 8, L.minZ + 18, MAT.steel(), 8);
+  ctx.solid.box(2.2, 0.3, 0.3, px, Y0 + 15.6, L.minZ + 18, MAT.steel());
+  for (const s of [-0.9, 0, 0.9])
+    ctx.solid.box(
+      0.4,
+      0.2,
+      0.6,
+      px + s,
+      Y0 + 15.4,
+      L.minZ + 18,
+      emissiveMat(ctx, 0xfff0d0, 0.3, 3),
     );
-  for (let x = r.maxX + 4; x < L.maxX - 3; x += 3.2)
-    ctx.ground.flat(
-      0.14,
-      5,
-      x,
-      Y0 + 0.012,
-      L.minZ + 26,
-      new THREE.MeshBasicMaterial({ color: 0xe8e4dc }),
-    );
-  for (const x of [r.maxX + 12, r.maxX + 34, r.maxX + 56]) {
+  ctx.lamps.push({ x: px, y: Y0 + 15, z: L.minZ + 18, color: 0xfff0d0 });
+  addSolid(ctx, px - 0.35, px + 0.35, L.minZ + 17.65, L.minZ + 18.35);
+  for (const x of [r.maxX + 34, r.maxX + 56]) {
     if (x > L.maxX - 4) continue;
     globeLamp(ctx, x, L.minZ + 20, Y0, 0xfff0d0);
     addSolid(ctx, x - 0.2, x + 0.2, L.minZ + 19.8, L.minZ + 20.2);
@@ -172,20 +241,117 @@ export function buildRinkExterior(ctx: BuildCtx, L: Rect) {
   // Trees only along the lot: the hall itself faces Third Street with nothing in front of it.
   for (let x = r.maxX + 8; x < L.maxX - 2; x += 12)
     tree(ctx, x, L.minZ + 1.2, 1 + ctx.rand() * 0.3, Y0);
-  // A sign on a pole at the street, for whoever is driving down Third.
-  const px = r.maxX + 3;
-  ctx.solid.cyl(0.2, 0.22, 7, px, Y0 + 3.5, L.minZ + 2.5, MAT.steel(), 8);
-  ctx.solid.box(5.4, 2.6, 0.4, px, Y0 + 8, L.minZ + 2.5, MAT.black());
-  ctx.flat.wall(
-    5.2,
-    2.4,
-    px,
-    Y0 + 8,
-    L.minZ + 2.28,
-    sign("CRYSTAL PALACE", "#5ae0ff", "#1a0e2a", { sub: "SKATE · PARTY · DJ", w: 512, h: 240 }),
-    YAW.north,
-  );
-  addSolid(ctx, px - 0.3, px + 0.3, L.minZ + 2.2, L.minZ + 2.8);
+}
+
+/** The red standing-seam metal, its seams catching the light, and the letters on it. */
+function seamMat(w: number, text: string) {
+  const px = Math.min(2048, Math.round(w * 40));
+  const map = tex(px, 128, (g, cw, ch) => {
+    g.fillStyle = "#a8221e";
+    g.fillRect(0, 0, cw, ch);
+    const n = Math.round(w * 1.4);
+    for (let i = 0; i < n; i++) {
+      const x = (i / n) * cw;
+      g.fillStyle = "rgba(255,190,180,0.22)";
+      g.fillRect(x, 0, 2, ch);
+      g.fillStyle = "rgba(60,0,0,0.25)";
+      g.fillRect(x + 2, 0, 2, ch);
+    }
+    if (text) {
+      g.fillStyle = "#f6f2ea";
+      g.font = `900 ${Math.round(ch * 0.58)}px "Arial Black", Arial, sans-serif`;
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      const spaced = text.split("").join(String.fromCharCode(8202));
+      g.fillText(spaced, cw * 0.58, ch * 0.56, cw * 0.78);
+    }
+  });
+  return new THREE.MeshStandardMaterial({
+    map,
+    roughness: 0.5,
+    metalness: 0.3,
+    side: THREE.DoubleSide,
+  });
+}
+
+/**
+ * The sign: a maroon board with a scalloped top, a gold rope of bulbs round it, white scrolls
+ * curling off either side under a medallion, and "the Crystal Palace" in white. `lit` draws only
+ * the bulbs and the letters, for the glow.
+ */
+function palaceSign(lit = false) {
+  return tex(512, 336, (g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    const cx = w / 2;
+    const board = () => {
+      g.beginPath();
+      g.moveTo(cx - 200, 110);
+      g.bezierCurveTo(cx - 200, 70, cx - 120, 64, cx - 60, 86);
+      g.bezierCurveTo(cx - 20, 64, cx + 20, 64, cx + 60, 86);
+      g.bezierCurveTo(cx + 120, 64, cx + 200, 70, cx + 200, 110);
+      g.lineTo(cx + 196, 280);
+      g.quadraticCurveTo(cx + 194, 322, cx + 150, 322);
+      g.lineTo(cx - 150, 322);
+      g.quadraticCurveTo(cx - 194, 322, cx - 196, 280);
+      g.closePath();
+    };
+    if (!lit) {
+      board();
+      g.fillStyle = "#7a1418";
+      g.fill();
+    }
+    // The gold rope round the edge, dotted with bulbs.
+    board();
+    g.lineWidth = 12;
+    g.strokeStyle = lit ? "rgba(255,210,90,0.9)" : "#d8a832";
+    g.stroke();
+    g.fillStyle = lit ? "#fff4c0" : "#fff2c8";
+    for (let i = 0; i < 64; i++) {
+      const t = i / 64;
+      const x = cx - 198 + 396 * (t < 0.5 ? t * 2 : 2 - t * 2);
+      const y = t < 0.5 ? 104 : 316;
+      g.beginPath();
+      g.arc(x, y + (t < 0.5 ? Math.sin(t * Math.PI * 6) * 6 : 0), 3.4, 0, Math.PI * 2);
+      g.fill();
+    }
+    for (let i = 0; i < 12; i++) {
+      for (const sx of [cx - 198, cx + 198]) {
+        g.beginPath();
+        g.arc(sx, 120 + i * 16, 3.4, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+    // White scrolls and the medallion on top.
+    g.strokeStyle = lit ? "rgba(255,255,255,0.7)" : "#f4f1ea";
+    g.lineWidth = 16;
+    g.lineCap = "round";
+    for (const s of [-1, 1]) {
+      g.beginPath();
+      g.moveTo(cx + s * 30, 40);
+      g.bezierCurveTo(cx + s * 120, 20, cx + s * 210, 40, cx + s * 220, 90);
+      g.bezierCurveTo(cx + s * 226, 130, cx + s * 180, 140, cx + s * 170, 110);
+      g.stroke();
+    }
+    g.fillStyle = lit ? "rgba(255,255,255,0.8)" : "#f4f1ea";
+    g.beginPath();
+    g.ellipse(cx, 30, 22, 28, 0, 0, Math.PI * 2);
+    g.fill();
+    if (!lit) {
+      g.fillStyle = "#c8c0b0";
+      g.beginPath();
+      g.ellipse(cx, 30, 13, 18, 0, 0, Math.PI * 2);
+      g.fill();
+    }
+    // The name.
+    g.fillStyle = "#f6f2ea";
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.font = 'italic 700 34px "Cooper Black", "Bookman Old Style", Georgia, serif';
+    g.fillText("the", cx, 132);
+    g.font = '900 58px "Cooper Black", "Bookman Old Style", Georgia, serif';
+    g.fillText("CRYSTAL", cx, 190, 360);
+    g.fillText("PALACE", cx, 256, 330);
+  });
 }
 
 /** A rounded oblong as a flat shape, lying on the floor. */

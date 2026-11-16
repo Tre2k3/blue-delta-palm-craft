@@ -1,14 +1,57 @@
 import { COURTS_LOT, HOLES, PUTT_LOT, TENNIS, TENNIS_FENCE } from "../world/rec-map";
-import { ARENA, BOWL, COURT, EAST_Z, FAR_BANK_Z, FUN, HOME, HQ, KART_TRACK, LANDMARKS, OM_ROW, PARK, PARK_TERRACE, PIER, POIS, RACE_LOOP, RIVER_Z, ROAD_HALF, STREETS_X, STREETS_Z, STREET_NAMES_X, STREET_NAMES_X_EAST, STREET_NAMES_Z, TRUCKS, WORLD, slab } from "../world/map";
+import {
+  ARENA,
+  BOWL,
+  COURT,
+  EAST_Z,
+  FAIR,
+  FAR_BANK_Z,
+  FUN,
+  HOME,
+  HQ,
+  KART_TRACK,
+  LANDMARKS,
+  OM_ROW,
+  PARK,
+  PARK_TERRACE,
+  PIER,
+  POIS,
+  RACE_LOOP,
+  RIVER_Z,
+  ROAD_HALF,
+  STREETS_X,
+  STREETS_Z,
+  STREET_NAMES_X,
+  STREET_NAMES_X_EAST,
+  STREET_NAMES_Z,
+  TRUCKS,
+  WORLD,
+  slab,
+} from "../world/map";
 
 export type MapView = { cx: number; cz: number; scale: number };
-export type MapDots = { x: number; z: number; heading: number; car: { x: number; z: number }; target: { id: string; x: number; z: number } | null; time: number; friends?: { name: string; x: number; z: number; street: boolean; link: string }[] };
+export type MapDots = {
+  x: number;
+  z: number;
+  heading: number;
+  car: { x: number; z: number };
+  target: { id: string; x: number; z: number } | null;
+  time: number;
+  friends?: { name: string; x: number; z: number; street: boolean; link: string }[];
+};
 
 /**
  * North-up plan of the city. Used small in the corner and large on the map screen. The world's +X
  * is real north and +Z real east, so the plan is drawn a quarter turn round: the river on the left.
  */
-export function drawMap(g: CanvasRenderingContext2D, w: number, h: number, v: MapView, d: MapDots, labels: boolean) {
+export function drawMap(
+  g: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  v: MapView,
+  d: MapDots,
+  labels: boolean,
+) {
   const X = (x: number) => w / 2 + (x - v.cx) * v.scale;
   const Z = (z: number) => h / 2 + (z - v.cz) * v.scale;
   const S = v.scale;
@@ -43,19 +86,60 @@ export function drawMap(g: CanvasRenderingContext2D, w: number, h: number, v: Ma
   // Streets as one slab, blocks cut out of it.
   const nc = STREETS_X.length - 1;
   const nr = STREETS_Z.length - 1;
-  box(STREETS_X[0] - ROAD_HALF, STREETS_Z[0] - ROAD_HALF, STREETS_X[nc] + ROAD_HALF, STREETS_Z[nr] + ROAD_HALF, "#3b424b");
+  box(
+    STREETS_X[0] - ROAD_HALF,
+    STREETS_Z[0] - ROAD_HALF,
+    STREETS_X[nc] + ROAD_HALF,
+    STREETS_Z[nr] + ROAD_HALF,
+    "#3b424b",
+  );
   for (let c = 0; c < nc; c++)
     for (let r = 0; r < nr; r++) {
       const s = slab(c, r);
-      box(s.minX, s.minZ, s.maxX, s.maxZ, r >= OM_ROW ? "#1d2a22" : r === OM_ROW - 1 ? "#1f2329" : "#1a1e24");
+      box(
+        s.minX,
+        s.minZ,
+        s.maxX,
+        s.maxZ,
+        r >= OM_ROW ? "#1d2a22" : r === OM_ROW - 1 ? "#1f2329" : "#1a1e24",
+      );
     }
+  // The Mid-South Fair: the grounds, the midway down the middle, Libertyland's coaster on the west side.
+  box(FAIR.minX, FAIR.minZ, FAIR.maxX, FAIR.maxZ, "#2a3a26");
+  box(FAIR.midway.minX, FAIR.midway.minZ, FAIR.midway.maxX, FAIR.midway.maxZ, "#4a4640");
+  box(
+    FAIR.pippin.area.minX,
+    FAIR.pippin.area.minZ,
+    FAIR.pippin.area.maxX,
+    FAIR.pippin.area.maxZ,
+    "#5a4a3a",
+  );
+  box(FAIR.rodeo.minX, FAIR.rodeo.minZ, FAIR.rodeo.maxX, FAIR.rodeo.maxZ, "#7a5a3a");
+  g.fillStyle = "#c0262a";
+  g.beginPath();
+  g.arc(X(FAIR.ferris.x), Z(FAIR.ferris.z), Math.max(2, FAIR.ferris.r * S), 0, Math.PI * 2);
+  g.fill();
   // The big places downtown.
-  for (const k of ["fedex", "peabody", "ballpark", "orpheum", "lorraine", "courtSquare", "cotton"] as const) {
+  for (const k of [
+    "fedex",
+    "peabody",
+    "ballpark",
+    "orpheum",
+    "lorraine",
+    "courtSquare",
+    "cotton",
+  ] as const) {
     const m = LANDMARKS[k];
     box(m.x - 9, m.z - 9, m.x + 9, m.z + 9, k === "courtSquare" ? "#245c2e" : "#2c333c");
   }
   box(HQ.minX, HQ.minZ, HQ.maxX, HQ.maxZ, "#1e7a14");
-  box(COURT.cx - COURT.halfW, COURT.cz - COURT.halfL, COURT.cx + COURT.halfW, COURT.cz + COURT.halfL, "#9a5a22");
+  box(
+    COURT.cx - COURT.halfW,
+    COURT.cz - COURT.halfL,
+    COURT.cx + COURT.halfW,
+    COURT.cz + COURT.halfL,
+    "#9a5a22",
+  );
   box(PIER.x - PIER.half, PIER.z1, PIER.x + PIER.half, PIER.z0, "#6b4a2e");
   box(BOWL.minX, BOWL.minZ, BOWL.maxX, BOWL.maxZ, "#8a2a72");
   box(FUN.minX, FUN.minZ, FUN.maxX, FUN.maxZ, "#5a3a9a");
@@ -69,17 +153,41 @@ export function drawMap(g: CanvasRenderingContext2D, w: number, h: number, v: Ma
   for (const h of HOLES) {
     const xs = h.outline.map((q) => q[0]);
     const zs = h.outline.map((q) => q[1]);
-    box(h.at[0] + Math.min(...xs), h.at[1] + Math.min(...zs), h.at[0] + Math.max(...xs), h.at[1] + Math.max(...zs), "#2fae5c");
+    box(
+      h.at[0] + Math.min(...xs),
+      h.at[1] + Math.min(...zs),
+      h.at[0] + Math.max(...xs),
+      h.at[1] + Math.max(...zs),
+      "#2fae5c",
+    );
   }
   box(COURTS_LOT.minX, COURTS_LOT.minZ, COURTS_LOT.maxX, COURTS_LOT.maxZ, "#245c2e");
   box(TENNIS_FENCE.minX, TENNIS_FENCE.minZ, TENNIS_FENCE.maxX, TENNIS_FENCE.maxZ, "#2f7d52");
-  box(TENNIS.cx - TENNIS.half, TENNIS.cz - TENNIS.wide - TENNIS.alley, TENNIS.cx + TENNIS.half, TENNIS.cz + TENNIS.wide + TENNIS.alley, "#2a5ea8");
-  box(TENNIS.cx - 0.25, TENNIS.cz - TENNIS.wide - TENNIS.alley - 0.6, TENNIS.cx + 0.25, TENNIS.cz + TENNIS.wide + TENNIS.alley + 0.6, "#f4f1ea");
+  box(
+    TENNIS.cx - TENNIS.half,
+    TENNIS.cz - TENNIS.wide - TENNIS.alley,
+    TENNIS.cx + TENNIS.half,
+    TENNIS.cz + TENNIS.wide + TENNIS.alley,
+    "#2a5ea8",
+  );
+  box(
+    TENNIS.cx - 0.25,
+    TENNIS.cz - TENNIS.wide - TENNIS.alley - 0.6,
+    TENNIS.cx + 0.25,
+    TENNIS.cz + TENNIS.wide + TENNIS.alley + 0.6,
+    "#f4f1ea",
+  );
   g.fillStyle = "#3aa6d0";
   g.beginPath();
   g.arc(X(PARK.cx), Z(PARK.cz), 3.2 * S, 0, Math.PI * 2);
   g.fill();
-  box(HOME.x - HOME.w / 2, HOME.z - HOME.d / 2, HOME.x + HOME.w / 2, HOME.z + HOME.d / 2, "#8a6a1e");
+  box(
+    HOME.x - HOME.w / 2,
+    HOME.z - HOME.d / 2,
+    HOME.x + HOME.w / 2,
+    HOME.z + HOME.d / 2,
+    "#8a6a1e",
+  );
   box(TRUCKS.x - 16, TRUCKS.z - 2, TRUCKS.x + 16, TRUCKS.z + 2, "#8a7a2a");
   g.fillStyle = "#2a3038";
   g.beginPath();
@@ -102,7 +210,9 @@ export function drawMap(g: CanvasRenderingContext2D, w: number, h: number, v: Ma
     g.textAlign = "center";
     g.textBaseline = "middle";
     // Streets along the river run up the page; the names read along them.
-    STREETS_Z.forEach((z, i) => text(STREET_NAMES_Z[i]!.toUpperCase(), X(-32), Z(z), 0, 0, -Math.PI / 2));
+    STREETS_Z.forEach((z, i) =>
+      text(STREET_NAMES_Z[i]!.toUpperCase(), X(-32), Z(z), 0, 0, -Math.PI / 2),
+    );
     STREETS_X.forEach((x, i) => {
       text(STREET_NAMES_X[i]!.toUpperCase(), X(x), Z(84));
       text(STREET_NAMES_X_EAST[i]!.toUpperCase(), X(x), Z(EAST_Z + 60));

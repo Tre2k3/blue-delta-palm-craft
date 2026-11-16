@@ -385,3 +385,152 @@ export class LazyRiver implements Activity {
     return { on: this.on, u: this.u, went: this.went };
   }
 }
+
+/**
+ * The high dive at the wave pool. Out to the end of the board; Space jumps, and holding it in the
+ * air tucks him into flips. Every full turn before the water counts.
+ */
+export class HighDive implements Activity {
+  hints: [string, string][] = [
+    ["Space", "Jump, then hold to flip"],
+    ["Q", "Climb back down"],
+  ];
+  private phase: "top" | "air" | "splash" = "top";
+  private t = 0;
+  private p = new THREE.Vector3();
+  private v = new THREE.Vector3();
+  private spin = 0;
+  private turns = 0;
+  private ring = splashRing();
+  private look = new THREE.Vector3();
+  private call = "";
+
+  constructor(
+    private g: Game,
+    private park: Waterpark,
+  ) {
+    park.group.add(this.ring);
+  }
+
+  start() {
+    const b = this.park.dive.board;
+    this.phase = "top";
+    this.t = 0;
+    this.spin = 0;
+    this.turns = 0;
+    this.p.set(b.x + 0.4, b.y, b.z);
+    this.call = "Space to jump";
+    this.place();
+    this.frame(0, true);
+    this.g.push();
+  }
+
+  /** Off the board. Also what the tests call. */
+  jump() {
+    if (this.phase !== "top") return;
+    this.phase = "air";
+    this.t = 0;
+    this.v.set(-2.4, 4.2, 0);
+    this.call = "";
+    this.g.sound.whoosh();
+  }
+
+  private place() {
+    const g = this.g;
+    g.pos.x = this.p.x;
+    g.pos.z = this.p.z;
+    g.heading = -Math.PI / 2 + this.spin;
+    g.benji.lift = Math.max(0, this.p.y - Y0);
+    g.benji.pose = this.phase === "air" && g.benji.has("cheer") ? "cheer" : null;
+    g.benji.speed = 0;
+  }
+
+  update(dt: number) {
+    const g = this.g;
+    this.t += dt;
+    if (this.phase === "top") {
+      if (g.input.hit("action")) this.jump();
+    } else if (this.phase === "air") {
+      this.v.y -= 9.8 * dt;
+      this.p.addScaledVector(this.v, dt);
+      if (g.input.down("action")) {
+        this.spin += dt * 11;
+        this.turns = Math.floor(this.spin / (Math.PI * 2));
+      }
+      if (this.p.y <= Y0 + WATERPARK.waterY) {
+        this.phase = "splash";
+        this.t = 0;
+        this.ring.position.set(this.p.x, Y0 + WATERPARK.waterY + 0.03, this.p.z);
+        this.ring.visible = true;
+        g.sound.crash(0.4);
+        g.buzz([40, 30, 50]);
+        const clean =
+          Math.abs(((this.spin % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) < 0.9 ||
+          Math.abs((this.spin % (Math.PI * 2)) - Math.PI * 2) < 0.9;
+        this.call =
+          this.turns > 0
+            ? `${this.turns} ${this.turns === 1 ? "FLIP" : "FLIPS"}${clean ? " · CLEAN" : " · BELLY FLOP"}`
+            : "SPLASH";
+        const pay = this.turns > 0 ? this.turns * 3 + (clean ? 3 : 0) : 1;
+        g.earn(pay, this.turns >= 2 && clean ? 1 : 0, { quiet: true });
+        const best = g.save.best.dive ?? 0;
+        if (clean && this.turns > best) g.save.best.dive = this.turns;
+        g.emit("dive", this.turns);
+        g.push();
+      }
+    } else {
+      const k = clamp(this.t / 1.2, 0, 1);
+      this.ring.scale.setScalar(1 + k * 5);
+      (this.ring.material as THREE.MeshBasicMaterial).opacity = 0.8 * (1 - k);
+      this.p.y = Y0;
+      if (this.t > 1.6) return this.out();
+    }
+    this.place();
+    this.frame(dt, false);
+  }
+
+  private frame(dt: number, snap: boolean) {
+    const g = this.g;
+    _eye.set(this.p.x - 4, Y0 + 5.5, this.p.z - 9);
+    _at.set(this.p.x - 1, this.p.y, this.p.z);
+    const k = snap ? 1 : damp(5, dt);
+    g.camera.position.lerp(_eye, k);
+    if (snap) this.look.copy(_at);
+    else this.look.lerp(_at, k);
+    g.camera.lookAt(this.look);
+  }
+
+  private out() {
+    const g = this.g;
+    this.ring.visible = false;
+    const d = this.park.dive;
+    g.pos.x = d.x;
+    g.pos.z = d.z;
+    g.benji.lift = 0;
+    g.benji.pose = null;
+    g.end("walk");
+    if (this.call) g.toast(this.call, 3);
+  }
+
+  quit() {
+    this.call = "";
+    this.out();
+  }
+
+  hud(h: HudState) {
+    h.machine = {
+      name: "High Dive",
+      stats: [
+        ["Flips", `${this.turns}`, "#39ff14"],
+        ["Best", `${this.g.save.best.dive ?? 0}`, "#f4d77a"],
+      ],
+      call: this.call,
+      meter: false,
+      act: this.phase === "top" ? "Jump" : "Flip",
+    };
+  }
+
+  get state() {
+    return { phase: this.phase, turns: this.turns, y: this.p.y };
+  }
+}

@@ -14,6 +14,8 @@ export type Waterpark = {
   river: THREE.CatmullRomCurve3;
   /** Where Benji climbs the tower, where he gets a tube, and the gate in from Park Avenue. */
   stairs: { x: number; z: number };
+  /** The high dive: where its ladder is, and the end of the board. */
+  dive: { x: number; z: number; board: { x: number; y: number; z: number } };
   tubes: { x: number; z: number };
   gate: { x: number; z: number };
   /** Spots in the water and on the deck for people. */
@@ -48,7 +50,7 @@ function ring(cx: number, cz: number, hs: number, r0: number, r1: number) {
 }
 
 /** An open flume along a curve: the bottom of a pipe, sides up past halfway, open to the sky. */
-function trough(curve: THREE.Curve<THREE.Vector3>, r: number, steps: number) {
+export function trough(curve: THREE.Curve<THREE.Vector3>, r: number, steps: number) {
   const ring = 12;
   const pos: number[] = [];
   const idx: number[] = [];
@@ -165,16 +167,20 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
   wave.renderOrder = 3;
   group.add(wave);
   const base = (waveGeo.attributes.position as THREE.BufferAttribute).array.slice() as Float32Array;
-  ctx.solid.box(ww + 0.8, 4.6, 3.4, wcx, Y0 + 2.3, W.maxZ + 2.1, std(0x2a6ad0, 0.6));
-  ctx.flat.wall(
-    16,
-    2,
+  // The wave house at the deep end, as the old photographs have it: white, a blue roof band, a
+  // red and white striped awning along the bottom, and the Adventure River sign across its face.
+  ctx.solid.box(ww + 0.8, 5.4, 3.4, wcx, Y0 + 2.7, W.maxZ + 2.1, std(0xf4f1ea, 0.7));
+  ctx.solid.box(ww + 1.2, 0.9, 3.8, wcx, Y0 + 5.6, W.maxZ + 2.1, std(0x2a6ad0, 0.6));
+  ctx.solid.add(
+    new THREE.PlaneGeometry(ww + 0.8, 1),
+    striped(),
     wcx,
-    Y0 + 3.4,
-    W.maxZ + 0.38,
-    neon(ctx, "WAVE POOL", "#ffd23a", { w: 640, h: 128 }),
-    YAW.north,
+    Y0 + 1.2,
+    W.maxZ + 0.2,
+    Math.PI,
+    -0.5,
   );
+  ctx.flat.wall(17, 3.6, wcx, Y0 + 3.6, W.maxZ + 0.38, logoMat(), YAW.north);
   addSolid(ctx, W.minX - 0.4, W.maxX + 0.4, W.maxZ + 0.4, W.maxZ + 3.8);
 
   // ---- The lazy river round its island.
@@ -205,8 +211,8 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
     const z = R.cz - hs + 2 + i * ((hs * 2 - 4) / 4);
     ctx.solid.cyl(0.05, 0.05, 2.4, x, Y0 + 1.2, z, MAT.white(), 6);
     ctx.solid.add(
-      new THREE.ConeGeometry(1.5, 0.6, 10),
-      std(umbrellas[i % 5]!, 0.7),
+      new THREE.ConeGeometry(1.5, 0.6, 12),
+      i % 2 ? striped() : std(umbrellas[i % 5]!, 0.7),
       x,
       Y0 + 2.5,
       z,
@@ -255,7 +261,7 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
 
   // ---- The slide tower and its slides.
   const T = P.tower;
-  const steel = std(0x9aa3ad, 0.5, 0.6);
+  const steel = std(0xc9a87a, 0.7, 0.1);
   for (const [dx, dz] of [
     [-2.4, -2.4],
     [2.4, -2.4],
@@ -357,8 +363,8 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
   chute(geronimo, 0.75, 0xd8262a, true);
   // The rest: spirals off each face of the tower into the pool, in their colours.
   const colors = [
-    0xffd23a, 0x2a8aff, 0x39c86a, 0xff7ad8, 0xff8a1e, 0x8a5aff, 0x35e0d0, 0xf4f1ea, 0xff3b3b,
-    0x1a6a3a, 0xffb400,
+    0xf4f1ea, 0xe8e2d0, 0xf4f1ea, 0x2a8aff, 0xf4f1ea, 0xe8e2d0, 0xffd23a, 0xf4f1ea, 0xe8e2d0,
+    0xf4f1ea, 0x2a8aff,
   ];
   colors.forEach((c, i) => {
     const turns = 0.8 + (i % 4) * 0.35;
@@ -389,15 +395,7 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
   ctx.solid.box(0.8, 6, 0.8, G.x - 7, Y0 + 3, G.z, std(0x2a6ad0, 0.6));
   ctx.solid.box(0.8, 6, 0.8, G.x + 7, Y0 + 3, G.z, std(0x2a6ad0, 0.6));
   ctx.solid.box(15.6, 2.4, 0.6, G.x, Y0 + 6.6, G.z, std(0x2a6ad0, 0.6));
-  ctx.flat.wall(
-    15,
-    2.2,
-    G.x,
-    Y0 + 6.6,
-    G.z - 0.32,
-    sign("ADVENTURE RIVER", "#ffd23a", "#0a4a8a", { sub: "WATER PARK · MEMPHIS", w: 1024, h: 160 }),
-    YAW.north,
-  );
+  ctx.flat.wall(15, 2.2, G.x, Y0 + 6.6, G.z - 0.32, logoMat(), YAW.north);
   addSolid(ctx, G.x - 7.4, G.x - 6.6, G.z - 0.4, G.z + 0.4);
   addSolid(ctx, G.x + 6.6, G.x + 7.4, G.z - 0.4, G.z + 0.4);
   const fence = std(0x2a6ad0, 0.6);
@@ -452,9 +450,37 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
     );
   addSolid(ctx, rackX - 0.9, rackX + 0.5, rackZ - 2.2, rackZ + 2.2);
   // Loungers along the wave pool's beach.
-  for (let x = W.minX + 2; x < W.maxX - 1; x += 3.4) {
-    ctx.solid.box(0.7, 0.3, 1.9, x, Y0 + 0.3, W.minZ - 2.4, std(0xf4f1ea, 0.7));
+  for (let x = W.minX + 2; x < W.maxX - 1; x += 2.2) {
+    for (const row of [0, 1]) {
+      ctx.solid.box(0.7, 0.3, 1.9, x, Y0 + 0.3, W.minZ - 2.4 - row * 3.6, std(0xf4f1ea, 0.7));
+      ctx.solid.box(0.7, 0.6, 0.1, x, Y0 + 0.6, W.minZ - 1.5 - row * 3.6, std(0xf4f1ea, 0.7), 0);
+    }
     lounge.push({ x, z: W.minZ - 3.8, fx: wcx, fz: wcz });
+  }
+  for (let x = W.minX + 4; x < W.maxX - 2; x += 7) {
+    ctx.solid.cyl(0.05, 0.05, 2.6, x, Y0 + 1.3, W.minZ - 4.2, MAT.white(), 6);
+    ctx.solid.add(new THREE.ConeGeometry(1.7, 0.7, 12), striped(), x, Y0 + 2.75, W.minZ - 4.2);
+  }
+  // The high dive at the side of the wave pool: a concrete tower, a ladder, a board out over the water.
+  const HD = { x: W.maxX + 3.2, z: W.minZ + 30 };
+  ctx.solid.box(2.2, 8, 2.2, HD.x, Y0 + 4, HD.z, std(0xd8d2c4, 0.8));
+  ctx.solid.box(4.2, 0.3, 1.6, HD.x - 2.6, Y0 + 8.1, HD.z, std(0xf4f1ea, 0.6));
+  for (let y = 0.6; y < 8; y += 0.5)
+    ctx.solid.box(0.06, 0.06, 0.9, HD.x + 1.18, Y0 + y, HD.z, MAT.steel());
+  for (const s of [-0.45, 0.45])
+    ctx.solid.box(0.06, 8.6, 0.06, HD.x + 1.2, Y0 + 4.3, HD.z + s, MAT.steel());
+  for (const s of [-0.75, 0.75])
+    ctx.solid.box(2.2, 0.9, 0.05, HD.x, Y0 + 8.7, HD.z + s, MAT.steel());
+  addSolid(ctx, HD.x - 1.1, HD.x + 1.1, HD.z - 1.1, HD.z + 1.1);
+  // Rafts and tubes, yellow and blue, all over the wave pool.
+  const raftGeo = new THREE.TorusGeometry(0.6, 0.24, 8, 16);
+  raftGeo.rotateX(Math.PI / 2);
+  const rafts: THREE.Mesh[] = [];
+  for (let i = 0; i < 26; i++) {
+    const m = new THREE.Mesh(raftGeo, std(i % 4 === 3 ? 0x2a6ad0 : 0xffd23a, 0.5));
+    m.position.set(W.minX + 2 + ((i * 7.3) % (ww - 4)), wy, W.minZ + 7 + ((i * 11.7) % (wd - 10)));
+    group.add(m);
+    rafts.push(m);
   }
   ctx.lamps.push({ x: wcx, y: Y0 + 6, z: wcz, color: 0xbfe8ff });
   ctx.lamps.push({ x: T.x, y: Y0 + T.top, z: T.z, color: 0xffe0b0 });
@@ -469,6 +495,7 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
     geronimo,
     river,
     stairs: { x: T.x - 3.6, z: T.z - 4.2 },
+    dive: { x: HD.x + 1.9, z: HD.z, board: { x: HD.x - 4.4, y: Y0 + 8.25, z: HD.z } },
     tubes: { x: rackX + 1.4, z: rackZ },
     gate: { x: G.x, z: G.z + 2 },
     swim,
@@ -483,6 +510,11 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
         arr[i * 3 + 1] = Math.sin(z * 0.55 + time * 2.4) * 0.22 * toBeach;
       }
       pos.needsUpdate = true;
+      rafts.forEach((r, i) => {
+        const z = r.position.z - wcz;
+        r.position.y = wy + 0.1 + Math.sin(z * 0.55 + time * 2.4) * 0.22 * ((z + wd / 2) / wd);
+        r.rotation.y = time * 0.1 + i;
+      });
       blue.map!.offset.set(time * 0.02, time * 0.03);
       riverMat.map!.offset.set(0, -time * 0.05);
       floats.forEach((t, i) => {
@@ -492,4 +524,67 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
       });
     },
   };
+}
+
+/** Red and white awning stripes. */
+let stripes: THREE.MeshStandardMaterial | null = null;
+function striped() {
+  if (!stripes)
+    stripes = new THREE.MeshStandardMaterial({
+      map: tex(64, 32, (g, w, h) => {
+        for (let i = 0; i < 8; i++) {
+          g.fillStyle = i % 2 ? "#d8262a" : "#f6f2ea";
+          g.fillRect((i * w) / 8, 0, w / 8 + 1, h);
+        }
+      }),
+      roughness: 0.8,
+      side: THREE.DoubleSide,
+    });
+  return stripes;
+}
+
+/**
+ * The Adventure River sign: a yellow sun behind a blue wave crest, a rider on a tube on top of it,
+ * and "Adventure River" in red script with a white edge.
+ */
+let logo: THREE.MeshBasicMaterial | null = null;
+function logoMat() {
+  if (logo) return logo;
+  const map = tex(1024, 256, (g, w, h) => {
+    g.fillStyle = "#1e2a36";
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = "#f6c232";
+    g.beginPath();
+    g.arc(w * 0.5, h * 0.5, h * 0.42, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = "#2a6ad0";
+    g.beginPath();
+    g.moveTo(w * 0.2, h * 0.62);
+    g.bezierCurveTo(w * 0.32, h * 0.2, w * 0.5, h * 0.08, w * 0.62, h * 0.3);
+    g.bezierCurveTo(w * 0.55, h * 0.22, w * 0.5, h * 0.36, w * 0.58, h * 0.44);
+    g.bezierCurveTo(w * 0.7, h * 0.5, w * 0.8, h * 0.6, w * 0.82, h * 0.72);
+    g.lineTo(w * 0.2, h * 0.72);
+    g.closePath();
+    g.fill();
+    g.fillStyle = "#d8262a";
+    g.beginPath();
+    g.ellipse(w * 0.6, h * 0.24, 26, 9, -0.3, 0, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    g.arc(w * 0.6, h * 0.14, 9, 0, Math.PI * 2);
+    g.fill();
+    g.font = 'italic 900 118px "Brush Script MT", "Segoe Script", "Comic Sans MS", cursive';
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.lineWidth = 16;
+    g.strokeStyle = "#f6f2ea";
+    g.strokeText("Adventure River", w / 2, h * 0.64, w * 0.92);
+    g.fillStyle = "#d8262a";
+    g.fillText("Adventure River", w / 2, h * 0.64, w * 0.92);
+    g.font = "700 20px Arial, sans-serif";
+    g.fillStyle = "#f6f2ea";
+    g.fillText("MEMPHIS, TN", w * 0.86, h * 0.92);
+  });
+  logo = new THREE.MeshBasicMaterial({ map, toneMapped: false });
+  return logo;
 }

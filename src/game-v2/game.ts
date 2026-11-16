@@ -59,7 +59,18 @@ import { BLASTERS, LaserTag, RANKS as TAG_RANKS } from "./play/lasertag";
 import { CABINETS, FOOD, FOOD_TRUCKS, PRIZES, type TruckId } from "./play/goods";
 import { Hoops } from "./play/hoops";
 import { RinkCrowd, Skate } from "./play/skate";
-import { Geronimo, LazyRiver } from "./play/waterslide";
+import { Geronimo, HighDive, LazyRiver } from "./play/waterslide";
+import {
+  BullRide,
+  BumperCars,
+  EatingContest,
+  FairRide,
+  HighStriker,
+  PigRace,
+  PRICE,
+  TalentShow,
+  type RideKind,
+} from "./play/fair";
 import { PinballTable, PrizeWheel, SkeeLane } from "./play/floor";
 import {
   POSTCARDS,
@@ -99,6 +110,7 @@ import { buildFunRoom, buildLaserRoom, type FunRoom, type LaserRoom } from "./wo
 import { CORNHOLE, HOLES, PUTT_PAR, PUTT_STAND, TENNIS_GATE } from "./world/rec-map";
 import {
   BEALE_STAGE,
+  FAIR,
   BOWL,
   COURT,
   CYPHER,
@@ -548,6 +560,16 @@ export class Game {
   /** Adventure River: the big slide and the lazy river. */
   readonly geronimo: Geronimo;
   readonly lazy: LazyRiver;
+  readonly dive: HighDive;
+  /** The Mid-South Fair: the rides, and the games and shows. */
+  readonly fairRide: FairRide;
+  readonly bumper: BumperCars;
+  readonly bull: BullRide;
+  readonly pigRace: PigRace;
+  readonly krystal: EatingContest;
+  readonly striker: HighStriker;
+  readonly talent: TalentShow;
+  private fairFolk!: Troupe;
   /** Out past downtown: Halle, Adventure River, the new riverfront. Swimmers, fans and loungers. */
   private outskirts!: Troupe;
   /** Which court the basketball menu was opened at. */
@@ -679,9 +701,18 @@ export class Game {
     }
 
     this.hoops = new Hoops(this);
-    this.skate = new Skate(this, this.rooms.rink.floor);
+    this.skate = new Skate(this, this.rooms.rink.floor, this.rooms.rink.group);
     this.geronimo = new Geronimo(this, this.city.waterpark);
     this.lazy = new LazyRiver(this, this.city.waterpark);
+    this.dive = new HighDive(this, this.city.waterpark);
+    const fairWorld = this.city.fair;
+    this.fairRide = new FairRide(this, fairWorld);
+    this.bumper = new BumperCars(this, fairWorld);
+    this.bull = new BullRide(this, fairWorld);
+    this.pigRace = new PigRace(this, fairWorld);
+    this.krystal = new EatingContest(this, fairWorld);
+    this.striker = new HighStriker(this, fairWorld);
+    this.talent = new TalentShow(this, fairWorld);
     this.rinkCrowd = new RinkCrowd(
       this.rooms.rink.group,
       this.rooms.rink.floor,
@@ -1248,6 +1279,28 @@ export class Game {
       const w = pick();
       ot.roam(w.art, w.height, river);
     }
+    // The fair: folks in every booth, a crowd at every ride, the stands at the rodeo, a lawn in front of the stage.
+    const ff = (this.fairFolk = new Troupe(this.city.exterior, this.city.solids, null, 61));
+    const fairStops: Stop[] = [];
+    for (const st of this.city.fair.stops) {
+      const stop = at(
+        st.x,
+        st.z,
+        st.fx,
+        st.fz,
+        st.act,
+        st.lift ? { lift: st.lift } : { stay: [10, 28] },
+      );
+      if (st.act === "serve") {
+        const w = pick();
+        ff.post(w.art, w.height, stop);
+      } else fairStops.push(stop);
+    }
+    ff.stops(fairStops);
+    for (let i = 0; i < (few ? 14 : 30); i++) {
+      const w = pick();
+      ff.roam(w.art, w.height, fairStops);
+    }
     const wpk = this.city.waterpark;
     const pool: Stop[] = [
       ...wpk.swim.map((p) => at(p.x, p.z, p.x, p.z - 3, "wade", { stay: [14, 30] })),
@@ -1387,10 +1440,70 @@ export class Game {
       this.snackBar(),
     );
 
+    // The Mid-South Fair.
+    const fs = this.city.fair.spots;
+    const rides: [RideKind, string][] = [
+      ["pippin", "Ride the Zippin Pippin"],
+      ["flume", "Ride the Log Flume"],
+      ["ferris", "Ride the Ferris wheel"],
+      ["carousel", "Ride the Grand Carousel"],
+      ["drop", "Ride the Free Fall"],
+    ];
+    for (const [k, label] of rides)
+      this.spot("street", fs[k]!.x, fs[k]!.z, 2.4, `${label} · $${PRICE[k]}`, () =>
+        this.rideFair(k),
+      );
+    this.spot("street", fs.bumper!.x, fs.bumper!.z, 2.6, "Bumper cars · $3", () =>
+      this.playFair("bumper"),
+    );
+    this.spot("street", fs.rodeo!.x, fs.rodeo!.z, 2.6, "Ride the bull at the rodeo · $5", () =>
+      this.playFair("bull"),
+    );
+    this.spot("street", fs.pigs!.x, fs.pigs!.z, 2.6, "Bet on the pig races", () =>
+      this.playFair("pigs"),
+    );
+    this.spot(
+      "street",
+      fs.krystal!.x,
+      fs.krystal!.z,
+      2.4,
+      "Enter the Krystal eating contest · $4",
+      () => this.playFair("krystal"),
+    );
+    this.spot("street", fs.striker!.x, fs.striker!.z, 2, "Test your strength · $2", () =>
+      this.playFair("striker"),
+    );
+    this.spot("street", fs.stage!.x, fs.stage!.z, 2.6, "Perform in the Youth Talent Contest", () =>
+      this.playFair("talent"),
+    );
+    this.spot("street", fs.dogs!.x, fs.dogs!.z, 2.6, "Watch the stunt dog show", () => {
+      this.city.fair.showtime();
+      this.cheer(FAIR.shows.x, FAIR.shows.z, 16, 3);
+      this.toast(
+        "Showtime! Over the bars, through the hoop, over the ramp. The clown's juggling for the crowd.",
+        4,
+      );
+    });
+    this.spot("street", fs.bell!.x, fs.bell!.z, 2.2, "Ring the Liberty Bell", () => {
+      this.sound.board();
+      this.buzz(40);
+      this.toast("BONG. The whole of Libertyland turns round.", 3);
+    });
+    for (const f of FAIR.food) {
+      const stand = fs[`food-${f.id}`]!;
+      this.spot("street", stand.x, stand.z, 2, `${f.name} · $${f.price}`, () => this.eatFair(f.id));
+    }
+
     // Adventure River.
     const wp = this.city.waterpark;
     this.spot("street", wp.stairs.x, wp.stairs.z, 2.2, "Climb the tower and ride Geronimo", () =>
       this.rideGeronimo(),
+    );
+    this.spot("street", wp.dive.x, wp.dive.z, 1.8, "Climb the high dive", () =>
+      this.transition(() => {
+        this.begin(this.dive, "whack");
+        this.dive.start();
+      }),
     );
     this.spot("street", wp.tubes.x, wp.tubes.z, 2.2, "Grab a tube: float the lazy river", () =>
       this.transition(() => {
@@ -3169,6 +3282,51 @@ export class Game {
     this.push();
   }
 
+  /** A ticket for a ride at the fair, and on. */
+  rideFair(kind: RideKind) {
+    if (!this.spend(PRICE[kind])) return;
+    this.transition(() => {
+      this.begin(this.fairRide, "whack");
+      this.fairRide.start(kind);
+    });
+  }
+
+  /** The games and shows at the fair. */
+  playFair(what: "bumper" | "bull" | "pigs" | "krystal" | "striker" | "talent") {
+    const cost = { bumper: 3, bull: 5, pigs: 0, krystal: 4, striker: 2, talent: 0 }[what];
+    if (!this.spend(cost)) return;
+    const act = {
+      bumper: this.bumper,
+      bull: this.bull,
+      pigs: this.pigRace,
+      krystal: this.krystal,
+      striker: this.striker,
+      talent: this.talent,
+    }[what];
+    this.transition(() => {
+      this.begin(act, "whack");
+      act.start();
+    });
+  }
+
+  /** Fair food: paid for, eaten, and good for a while. */
+  eatFair(id: string) {
+    const f = FAIR.food.find((q) => q.id === id);
+    if (!f || !this.spend(f.price)) return;
+    this.fedUntil = Math.max(this.fedUntil, this.time + 150);
+    this.fairFolk.serveAt(this.pos.x, this.pos.z);
+    const lines: Record<string, string> = {
+      turkey: "A smoked turkey leg the size of your forearm. Caveman rules.",
+      pronto: "A Pronto Pup, mustard down the side. Not a corn dog. A Pronto Pup.",
+      funnel: "A funnel cake under a snowdrift of powdered sugar. It's on your shirt now.",
+      cotton: "Pink cotton candy, gone the second it hits your tongue.",
+      apple: "A candied apple. Crack the shell, mind your teeth.",
+      lemon: "Fresh-squeezed lemonade, shaken in front of you. Ice cold.",
+    };
+    this.toast(lines[id] ?? `${f.name}.`, 4);
+    this.push();
+  }
+
   /** Up the tower and off the top of Geronimo. */
   rideGeronimo() {
     this.transition(() => {
@@ -3936,6 +4094,7 @@ export class Game {
           wheels,
         );
         this.outskirts.update(dt, cam, this.tint, afoot, this.time, -1, reach, wheels);
+        this.fairFolk.update(dt, cam, this.tint, afoot, this.time, -1, reach, wheels);
         // The band in Handy Park, and everyone who came out for it.
         const gb = this.beatOf("beale");
         this.bealeBand.update(
