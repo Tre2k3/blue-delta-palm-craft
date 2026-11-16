@@ -325,7 +325,15 @@ export const FAIR = {
 } as const;
 
 /** Beale Street Landing, at the foot of Beale on the river, with a riverboat tied up beside it. */
-export const LANDING = { x: -54, z0: RIVER_Z, z1: -222, w: 18, boat: { x: -38, z: -238, len: 44 } };
+// South of the MEMPHIS letters and the bait shop at the foot of Beale, so the sign stands clear;
+// the riverboat moors downstream of it, away from the fishing pier.
+export const LANDING = {
+  x: -116,
+  z0: RIVER_Z,
+  z1: -222,
+  w: 18,
+  boat: { x: -140, z: -238, len: 44 },
+};
 /** The Big River Crossing: the walk and bike path on the Harahan Bridge, just north of the I-55 bridge. */
 export const CROSSING = { x: WORLD.minX - 34 };
 

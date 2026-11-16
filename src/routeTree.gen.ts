@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiAccountRouteImport } from './routes/api/account'
 import { Route as ApiItchRouteImport } from './routes/api/itch'
 import { Route as ApiPartnersRouteImport } from './routes/api/partners'
+import { Route as ApiPaypalRouteImport } from './routes/api/paypal'
 import { Route as ApiRtcRouteImport } from './routes/api/rtc'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
@@ -36,6 +37,11 @@ const ApiPartnersRoute = ApiPartnersRouteImport.update({
   path: '/api/partners',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPaypalRoute = ApiPaypalRouteImport.update({
+  id: '/api/paypal',
+  path: '/api/paypal',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiRtcRoute = ApiRtcRouteImport.update({
   id: '/api/rtc',
   path: '/api/rtc',
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/api/account': typeof ApiAccountRoute
   '/api/itch': typeof ApiItchRoute
   '/api/partners': typeof ApiPartnersRoute
+  '/api/paypal': typeof ApiPaypalRoute
   '/api/rtc': typeof ApiRtcRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -60,6 +67,7 @@ export interface FileRoutesByTo {
   '/api/account': typeof ApiAccountRoute
   '/api/itch': typeof ApiItchRoute
   '/api/partners': typeof ApiPartnersRoute
+  '/api/paypal': typeof ApiPaypalRoute
   '/api/rtc': typeof ApiRtcRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -69,6 +77,7 @@ export interface FileRoutesById {
   '/api/account': typeof ApiAccountRoute
   '/api/itch': typeof ApiItchRoute
   '/api/partners': typeof ApiPartnersRoute
+  '/api/paypal': typeof ApiPaypalRoute
   '/api/rtc': typeof ApiRtcRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -79,6 +88,7 @@ export interface FileRouteTypes {
     | '/api/account'
     | '/api/itch'
     | '/api/partners'
+    | '/api/paypal'
     | '/api/rtc'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
@@ -87,6 +97,7 @@ export interface FileRouteTypes {
     | '/api/account'
     | '/api/itch'
     | '/api/partners'
+    | '/api/paypal'
     | '/api/rtc'
     | '/api/auth/$'
   id:
@@ -95,6 +106,7 @@ export interface FileRouteTypes {
     | '/api/account'
     | '/api/itch'
     | '/api/partners'
+    | '/api/paypal'
     | '/api/rtc'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
@@ -104,6 +116,7 @@ export interface RootRouteChildren {
   ApiAccountRoute: typeof ApiAccountRoute
   ApiItchRoute: typeof ApiItchRoute
   ApiPartnersRoute: typeof ApiPartnersRoute
+  ApiPaypalRoute: typeof ApiPaypalRoute
   ApiRtcRoute: typeof ApiRtcRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -138,6 +151,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPartnersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/paypal': {
+      id: '/api/paypal'
+      path: '/api/paypal'
+      fullPath: '/api/paypal'
+      preLoaderRoute: typeof ApiPaypalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/rtc': {
       id: '/api/rtc'
       path: '/api/rtc'
@@ -160,6 +180,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAccountRoute: ApiAccountRoute,
   ApiItchRoute: ApiItchRoute,
   ApiPartnersRoute: ApiPartnersRoute,
+  ApiPaypalRoute: ApiPaypalRoute,
   ApiRtcRoute: ApiRtcRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }

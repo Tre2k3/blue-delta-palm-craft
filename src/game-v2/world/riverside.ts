@@ -383,7 +383,8 @@ function riverboat(ctx: BuildCtx, x: number, z: number, len: number) {
     2,
     0.2,
     Math.abs(z - LANDING.z1) - 4.8,
-    LANDING.x + LANDING.w / 2 - 2,
+    // On whichever side of the dock the boat is moored.
+    LANDING.x + Math.sign(LANDING.boat.x - LANDING.x) * (LANDING.w / 2 - 2),
     y + 1.6,
     (z + 5 + LANDING.z1) / 2,
     MAT.steel(),

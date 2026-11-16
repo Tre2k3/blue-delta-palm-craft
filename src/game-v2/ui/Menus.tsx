@@ -8,6 +8,7 @@ import { CATALOG, productById } from "../play/catalog";
 import { RIDES } from "../play/garage";
 import { FOOD, FOOD_TRUCKS, PRIZES } from "../play/goods";
 import { paypalButtons } from "../play/paypal";
+import { FREE_SHIPPING_AT, TN_TAX_RATE, quote, usd } from "../play/pricing";
 import { buyReal, inStorePage, openStore } from "../play/store";
 import { POIS } from "../world/map";
 import { drawMap } from "./map";
@@ -875,6 +876,7 @@ export function Shop({ game, hud }: { game: Game; hud: HudState }) {
     setNote("");
   }, [p]);
   const owned = hud.owned.includes(p.id);
+  const q = quote(p);
   const wearing = p.wear && hud.wearing === p.wear;
   return (
     <Sheet
@@ -994,8 +996,23 @@ export function Shop({ game, hud }: { game: Game; hud: HudState }) {
               </button>
             ) : (
               <>
-                <div className="mt-3 text-[11px] font-bold text-white/60">
-                  Pay ${p.usd} with PayPal or a card. PayPal asks where to ship it.
+                <div className="mt-3 space-y-0.5 text-[11px] font-bold text-white/60">
+                  <div className="flex justify-between">
+                    <span>{p.name}</span>
+                    <span>${usd(q.item)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Shipping</span>
+                    <span>{q.shipping ? `$${usd(q.shipping)}` : "Free"}</span>
+                  </div>
+                  <div className="flex justify-between text-white/85">
+                    <span>Total</span>
+                    <span>${usd(q.total)}</span>
+                  </div>
+                  <div className="pt-1 text-white/45">
+                    Tennessee orders add {(TN_TAX_RATE * 100).toFixed(2)}% sales tax. Free shipping
+                    at ${FREE_SHIPPING_AT}. Pay with PayPal or a card; PayPal asks where to ship it.
+                  </div>
                 </div>
                 <PaypalBox key={`${p.id}:${size}`} p={p} size={size} onNote={setNote} />
                 <button
@@ -1053,9 +1070,10 @@ function PaypalBox({
         );
       },
       cancelled: () => onNote("Checkout closed. Nothing was charged."),
-      failed: () =>
+      failed: (why) =>
         onNote(
-          "PayPal had a problem. Nothing was charged; try again, or buy it on 10letters.store.",
+          why ??
+            "PayPal had a problem. Nothing was charged; try again, or buy it on 10letters.store.",
         ),
     })
       .then((f) => {
