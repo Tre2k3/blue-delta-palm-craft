@@ -17,11 +17,29 @@ export function initStore() {
 export function buyReal(p: Product, size: string): "cart" | "tab" {
   if (isEmbedded()) {
     const known = commerce.catalog.byId(p.id);
-    commerce.addToCart(known ?? { id: p.id, slug: p.id, name: p.name, imageUrl: p.image, price: p.usd, currency: "USD", sizes: p.sizes, available: true, storeUrl: storeProductUrl(p.storePath) }, size);
+    commerce.addToCart(
+      known ?? {
+        id: p.id,
+        slug: p.id,
+        name: p.name,
+        imageUrl: p.image,
+        price: p.usd,
+        currency: "USD",
+        sizes: p.sizes,
+        available: true,
+        storeUrl: storeProductUrl(p.storePath),
+      },
+      size,
+    );
     return "cart";
   }
   window.open(storeProductUrl(p.storePath), "_blank", "noopener,noreferrer");
   return "tab";
+}
+
+/** True inside the store's own page, where pieces go in its kart and its checkout. */
+export function inStorePage() {
+  return isEmbedded();
 }
 
 /** The whole store, same tab. */
