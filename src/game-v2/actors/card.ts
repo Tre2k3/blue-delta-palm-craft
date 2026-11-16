@@ -106,7 +106,15 @@ const unit = new THREE.PlaneGeometry(1, 1);
 unit.translate(0, 0.5, 0);
 const blob = new THREE.CircleGeometry(0.5, 18);
 blob.rotateX(-Math.PI / 2);
-const blobMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.42, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+const blobMat = new THREE.MeshBasicMaterial({
+  color: 0x000000,
+  transparent: true,
+  opacity: 0.42,
+  depthWrite: false,
+  polygonOffset: true,
+  polygonOffsetFactor: -4,
+  polygonOffsetUnits: -4,
+});
 const _world = new THREE.Vector3();
 
 /**
@@ -131,6 +139,12 @@ export class Card {
   /** Seconds into a song playing nearby, or -1. Standing still, the character bops to it. */
   groove = -1;
   visible = true;
+  /**
+   * How much of the drawing, in metres up from the soles, is out of sight: below the water, in
+   * a tube, down in a car. 0 shows all of them. Nothing below the line is drawn.
+   */
+  sink = 0;
+  private clip = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private phase = 0;
   private art: CardArt;
   private current = "";
@@ -141,7 +155,11 @@ export class Card {
     public height: number,
   ) {
     this.art = art;
-    this.mat = new THREE.MeshBasicMaterial({ map: cutout(art.front), alphaTest: 0.4, side: THREE.DoubleSide });
+    this.mat = new THREE.MeshBasicMaterial({
+      map: cutout(art.front),
+      alphaTest: 0.4,
+      side: THREE.DoubleSide,
+    });
     this.mesh = new THREE.Mesh(unit, this.mat);
     this.mesh.castShadow = true;
     this.mesh.renderOrder = 3;
@@ -161,8 +179,18 @@ export class Card {
 
   private preload() {
     const a = this.art;
-    const poses = Object.values(a.poses ?? {}).flatMap((p) => (typeof p === "string" ? [p] : Object.values(p)));
-    for (const src of [a.front, a.back, a.left, a.right, ...Object.values(a.walk ?? {}).flat(), ...poses]) if (src) cutout(src);
+    const poses = Object.values(a.poses ?? {}).flatMap((p) =>
+      typeof p === "string" ? [p] : Object.values(p),
+    );
+    for (const src of [
+      a.front,
+      a.back,
+      a.left,
+      a.right,
+      ...Object.values(a.walk ?? {}).flat(),
+      ...poses,
+    ])
+      if (src) cutout(src);
   }
 
   /** The drawing of them from in front: what a talk card shows of them. */
@@ -192,10 +220,19 @@ export class Card {
     const rel = wrapAngle(toCam - this.heading);
     const abs = Math.abs(rel);
     // The side the camera is on. A pose can have a drawing for a side the standing art has none for.
-    const seen: View = !this.art.back ? "front" : abs < 0.8 ? "front" : abs > 2.3 ? "back" : rel > 0 ? "left" : "right";
+    const seen: View = !this.art.back
+      ? "front"
+      : abs < 0.8
+        ? "front"
+        : abs > 2.3
+          ? "back"
+          : rel > 0
+            ? "left"
+            : "right";
     let view = seen;
     // No side drawing: whichever of front and back is nearer the truth.
-    if ((view === "left" || view === "right") && !this.art[view]) view = this.art.back && abs > Math.PI / 2 ? "back" : "front";
+    if ((view === "left" || view === "right") && !this.art[view])
+      view = this.art.back && abs > Math.PI / 2 ? "back" : "front";
     if (view !== "front" && !this.art[view]) view = "front";
 
     const moving = this.speed > 0.35;
@@ -206,7 +243,15 @@ export class Card {
     const strides = this.art.walk?.[view];
     const pose = this.pose ? this.art.poses?.[this.pose] : undefined;
     // A pose drawn for some sides only is not shown from the others.
-    const posed = typeof pose === "string" ? pose : pose ? (pose[seen] ?? (seen === "left" || seen === "right" ? pose[abs > Math.PI / 2 ? "back" : "front"] : undefined)) : undefined;
+    const posed =
+      typeof pose === "string"
+        ? pose
+        : pose
+          ? (pose[seen] ??
+            (seen === "left" || seen === "right"
+              ? pose[abs > Math.PI / 2 ? "back" : "front"]
+              : undefined))
+          : undefined;
     if (posed) src = posed;
     else if (moving && strides?.length) {
       // Alternate the standing drawing with each stride frame: stand, step, stand, step.
@@ -223,17 +268,35 @@ export class Card {
     const step = moving ? Math.abs(Math.sin(this.phase * Math.PI)) : 0;
     const breathe = moving ? 0 : Math.sin(this.idle * 1.6) * 0.006;
     // About 95 beats a minute: dip on the beat, sway across two.
-    const bop = !moving && this.groove >= 0 ? Math.pow(Math.abs(Math.sin(this.groove * Math.PI * 1.58)), 1.6) : 0;
-    const sway = bop > 0 || (!moving && this.groove >= 0) ? Math.sin(this.groove * Math.PI * 1.58) * 0.05 : 0;
-    const h = this.height * (this.art.scale?.[src] ?? 1) * (1 + breathe - step * 0.012 - bop * 0.035);
+    const bop =
+      !moving && this.groove >= 0
+        ? Math.pow(Math.abs(Math.sin(this.groove * Math.PI * 1.58)), 1.6)
+        : 0;
+    const sway =
+      bop > 0 || (!moving && this.groove >= 0) ? Math.sin(this.groove * Math.PI * 1.58) * 0.05 : 0;
+    const h =
+      this.height * (this.art.scale?.[src] ?? 1) * (1 + breathe - step * 0.012 - bop * 0.035);
     this.mesh.scale.set(h * aspect, h, 1);
     this.mesh.position.y = this.lift + step * 0.055;
-    this.mesh.rotation.set(0, toCam - g.rotation.y, (moving ? Math.sin(this.phase * Math.PI) * 0.035 : Math.sin(this.idle * 1.3) * 0.008 + sway) + this.tilt);
+    this.mesh.rotation.set(
+      0,
+      toCam - g.rotation.y,
+      (moving ? Math.sin(this.phase * Math.PI) * 0.035 : Math.sin(this.idle * 1.3) * 0.008 + sway) +
+        this.tilt,
+    );
     // Pull the card a touch toward the lens so a curb never clips the shoes.
     this.mesh.position.x = Math.sin(toCam) * 0.1;
     this.mesh.position.z = Math.cos(toCam) * 0.1;
     this.mat.color.copy(tint);
-    const s = 1 - Math.min(0.6, this.lift * 0.25);
+    // In a tube, a seat or the water: everything below the line goes, and so does the shadow.
+    const sunk = this.sink > 0;
+    if (sunk) this.clip.constant = -(_world.y + this.lift + this.sink);
+    if (sunk !== !!this.mat.clippingPlanes?.length) {
+      this.mat.clippingPlanes = sunk ? [this.clip] : [];
+      this.mat.needsUpdate = true;
+    }
+    this.shadow.visible = !sunk;
+    const s = 1 - Math.min(0.6, Math.max(0, this.lift) * 0.25);
     this.shadow.scale.set(this.height * 0.5 * s, 1, this.height * 0.32 * s);
     this.shadow.position.y = 0.02;
   }

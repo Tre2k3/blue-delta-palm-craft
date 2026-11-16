@@ -427,6 +427,7 @@ export class BoatRide implements Activity {
     g.benji.pose = null;
     g.benji.tilt = 0;
     g.benji.lift = this.boat.position.y + 0.25 - standHeight(g.pos.x, g.pos.z);
+    g.benji.sink = 0.4;
   }
 
   /** What the camera follows. */

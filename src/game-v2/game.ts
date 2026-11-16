@@ -59,7 +59,7 @@ import { BLASTERS, LaserTag, RANKS as TAG_RANKS } from "./play/lasertag";
 import { CABINETS, FOOD, FOOD_TRUCKS, PRIZES, type TruckId } from "./play/goods";
 import { Hoops } from "./play/hoops";
 import { RinkCrowd, Skate } from "./play/skate";
-import { Geronimo, HighDive, LazyRiver } from "./play/waterslide";
+import { Floaters, Geronimo, HighDive, LazyRiver, RaftRide, Twister } from "./play/waterslide";
 import {
   BullRide,
   BumperCars,
@@ -111,6 +111,7 @@ import { CORNHOLE, HOLES, PUTT_PAR, PUTT_STAND, TENNIS_GATE } from "./world/rec-
 import {
   BEALE_STAGE,
   FAIR,
+  WATERPARK,
   BOWL,
   COURT,
   CYPHER,
@@ -561,6 +562,10 @@ export class Game {
   readonly geronimo: Geronimo;
   readonly lazy: LazyRiver;
   readonly dive: HighDive;
+  readonly twister: Twister;
+  readonly raft: RaftRide;
+  /** Everybody else in a tube or a raft. */
+  private floaters!: Floaters;
   /** The Mid-South Fair: the rides, and the games and shows. */
   readonly fairRide: FairRide;
   readonly bumper: BumperCars;
@@ -705,6 +710,8 @@ export class Game {
     this.geronimo = new Geronimo(this, this.city.waterpark);
     this.lazy = new LazyRiver(this, this.city.waterpark);
     this.dive = new HighDive(this, this.city.waterpark);
+    this.twister = new Twister(this, this.city.waterpark);
+    this.raft = new RaftRide(this, this.city.waterpark);
     const fairWorld = this.city.fair;
     this.fairRide = new FairRide(this, fairWorld);
     this.bumper = new BumperCars(this, fairWorld);
@@ -915,6 +922,7 @@ export class Game {
       1.5,
       at(fun.pit.minX + 2.6, fun.pit.minZ + 2.4, fun.pit.maxX, fun.pit.maxZ, "wade", {
         lift: -0.42,
+        sink: 0.97,
       }),
     );
     const cook = PEDS[6]!;
@@ -1303,10 +1311,31 @@ export class Game {
     }
     const wpk = this.city.waterpark;
     const pool: Stop[] = [
-      ...wpk.swim.map((p) => at(p.x, p.z, p.x, p.z - 3, "wade", { stay: [14, 30] })),
+      ...wpk.swim.map((p) =>
+        at(p.x, p.z, p.x, p.z - 3, "wade", { stay: [14, 30], lift: -0.55, sink: 1.05 }),
+      ),
       ...wpk.lounge.map((p) => at(p.x, p.z, p.fx, p.fz, "watch", { stay: [10, 26] })),
     ];
     ot.stops(pool);
+    // The wave pool, the splash pool and the lazy river: in the water, people are in the water.
+    {
+      const W = WATERPARK.wave;
+      const S = WATERPARK.pool;
+      const R = WATERPARK.river;
+      const hs = R.halfZ - R.halfX;
+      ot.wet = (x, z) => {
+        if (x > W.minX && x < W.maxX && z > W.minZ + 4 && z < W.maxZ) return true;
+        if (x > S.minX && x < S.maxX && z > S.minZ && z < S.maxZ) return true;
+        // Round the river's loop: within the channel's width of its middle line.
+        const dz = Math.max(0, Math.abs(z - R.cz) - hs);
+        const d = Math.hypot(x - R.cx, dz);
+        return d > R.halfX - R.width && d < R.halfX;
+      };
+    }
+    this.floaters = new Floaters(
+      wpk,
+      Array.from({ length: few ? 12 : 23 }, () => pick()),
+    );
     for (let i = 0; i < (few ? 6 : 12); i++) {
       const w = pick();
       ot.roam(w.art, w.height, pool);
@@ -1503,6 +1532,20 @@ export class Game {
       this.transition(() => {
         this.begin(this.dive, "whack");
         this.dive.start();
+      }),
+    );
+    this.spot(
+      "street",
+      wp.twisterStart.x,
+      wp.twisterStart.z,
+      2,
+      "Climb up and ride the Twister",
+      () => this.rideTwister(),
+    );
+    this.spot("street", wp.beach.x, wp.beach.z, 3, "Grab a raft: ride the wave pool", () =>
+      this.transition(() => {
+        this.begin(this.raft, "whack");
+        this.raft.start();
       }),
     );
     this.spot("street", wp.tubes.x, wp.tubes.z, 2.2, "Grab a tube: float the lazy river", () =>
@@ -2210,6 +2253,7 @@ export class Game {
     this.benji.pose = null;
     this.benji.lift = 0;
     this.benji.tilt = 0;
+    this.benji.sink = 0;
     this.benji.visible = mode !== "drive";
     this.stage.setPunch(0);
     this.sound.duck(false);
@@ -3328,6 +3372,14 @@ export class Game {
   }
 
   /** Up the tower and off the top of Geronimo. */
+  /** Up the tower and into a tube at the top of the Twister. */
+  rideTwister() {
+    this.transition(() => {
+      this.begin(this.twister, "whack");
+      this.twister.start();
+    });
+  }
+
   rideGeronimo() {
     this.transition(() => {
       this.begin(this.geronimo, "whack");
@@ -4094,6 +4146,22 @@ export class Game {
           wheels,
         );
         this.outskirts.update(dt, cam, this.tint, afoot, this.time, -1, reach, wheels);
+        const wpk = this.city.waterpark;
+        const nearPark = Math.hypot(cam.x - wpk.gate.x, cam.z - (wpk.gate.z + 45)) < 160;
+        this.floaters.update(
+          dt,
+          cam,
+          this.tint,
+          this.time,
+          nearPark,
+          this.activity === this.lazy ? this.pos : null,
+        );
+        // The wave horn: everyone at the park hears it.
+        if (wpk.horn && nearPark) {
+          this.sound.horn();
+          if (this.mode === "walk")
+            this.toast("WAVE HORN! Big waves in the wave pool for ten seconds.", 3);
+        }
         this.fairFolk.update(dt, cam, this.tint, afoot, this.time, -1, reach, wheels);
         // The band in Handy Park, and everyone who came out for it.
         const gb = this.beatOf("beale");

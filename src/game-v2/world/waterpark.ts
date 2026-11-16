@@ -21,6 +21,20 @@ export type Waterpark = {
   /** Spots in the water and on the deck for people. */
   swim: { x: number; z: number }[];
   lounge: { x: number; z: number; fx: number; fz: number }[];
+  /** The tubes going round the lazy river and the rafts on the wave pool: somebody can ride each. */
+  floats: THREE.Mesh[];
+  rafts: THREE.Mesh[];
+  /** The Twister: the tallest of the spirals, wide enough for a tube, three turns into the splash pool. */
+  twister: THREE.CatmullRomCurve3;
+  /** Where to climb to the Twister, where to grab a raft on the beach. */
+  twisterStart: { x: number; z: number };
+  beach: { x: number; z: number };
+  /** 0 calm, 1 the big waves: every forty seconds the horn goes and the wave pool comes alive. */
+  surge: number;
+  /** True for the frame the horn sounds. */
+  horn: boolean;
+  /** The height of the wave pool's surface at a point, this frame. */
+  waveY(x: number, z: number): number;
   update(dt: number, time: number): void;
 };
 
@@ -362,6 +376,8 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
   };
   chute(geronimo, 0.75, 0xd8262a, true);
   // The rest: spirals off each face of the tower into the pool, in their colours.
+  const TWISTER = 3;
+  let twister: THREE.CatmullRomCurve3 | null = null;
   const colors = [
     0xf4f1ea, 0xe8e2d0, 0xf4f1ea, 0x2a8aff, 0xf4f1ea, 0xe8e2d0, 0xffd23a, 0xf4f1ea, 0xe8e2d0,
     0xf4f1ea, 0x2a8aff,
@@ -387,8 +403,22 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
     }
     // Every one ends in the splash pool.
     pts.push(new THREE.Vector3(scx - 6 + (i % 4) * 3.5, wy + 0.15, S.minZ + 2 + (i % 3) * 3));
-    chute(new THREE.CatmullRomCurve3(pts, false, "centripetal"), 0.55, c, i % 3 === 0);
+    const curve = new THREE.CatmullRomCurve3(pts, false, "centripetal");
+    if (i === TWISTER) twister = curve;
+    chute(curve, i === TWISTER ? 1 : 0.55, i === TWISTER ? 0x2a8aff : c, i % 3 === 0);
   });
+  const tw0 = twister!.getPointAt(0);
+  // A platform at its mouth and the name over it.
+  ctx.solid.box(2.6, 0.25, 2.6, tw0.x, tw0.y - 0.6, tw0.z, std(0x2a6ad0, 0.6));
+  ctx.flat.wall(
+    4.4,
+    1.1,
+    tw0.x,
+    tw0.y + 1.6,
+    tw0.z,
+    neon(ctx, "TWISTER", "#5ae0ff", { w: 512, h: 128 }),
+    YAW.north,
+  );
 
   // ---- The gate on Park Avenue, the fence round the park, a snack hut and the tube rack.
   const G = P.gate;
@@ -485,6 +515,20 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
   ctx.lamps.push({ x: wcx, y: Y0 + 6, z: wcz, color: 0xbfe8ff });
   ctx.lamps.push({ x: T.x, y: Y0 + T.top, z: T.z, color: 0xffe0b0 });
 
+  // The surge: calm for thirty seconds, then the horn and ten seconds of big rollers.
+  const CYCLE = 40;
+  const BIG = 10;
+  let lastCycle = -1;
+  const park = { surge: 0, horn: false };
+  const amp = () => 0.22 + 0.62 * park.surge;
+  let clock = 0;
+  const waveY = (x: number, z: number) => {
+    void x;
+    const zz = z - wcz;
+    const toBeach = clamp01((zz + wd / 2) / wd);
+    return wy + Math.sin(zz * 0.55 + clock * (2.4 + park.surge * 0.8)) * amp() * toBeach;
+  };
+
   const swim: Waterpark["swim"] = [];
   for (let i = 0; i < 9; i++)
     swim.push({ x: W.minX + 4 + ((i * 7) % (ww - 8)), z: W.minZ + 8 + ((i * 11) % (wd - 12)) });
@@ -500,20 +544,44 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
     gate: { x: G.x, z: G.z + 2 },
     swim,
     lounge,
+    floats,
+    rafts,
+    twister: twister!,
+    twisterStart: { x: T.x - 3.6, z: T.z + 4.4 },
+    beach: { x: wcx, z: W.minZ + 2.5 },
+    get surge() {
+      return park.surge;
+    },
+    get horn() {
+      return park.horn;
+    },
+    waveY,
     update(_dt: number, time: number) {
+      clock = time;
+      const c = Math.floor(time / CYCLE);
+      const into = time - c * CYCLE;
+      park.horn = into >= CYCLE - BIG && c !== lastCycle;
+      if (park.horn) lastCycle = c;
+      // Up over two seconds, down over three.
+      const k =
+        into < CYCLE - BIG ? 0 : Math.min(1, (into - (CYCLE - BIG)) / 2, (CYCLE - into) / 3);
+      park.surge = Math.max(0, k);
       // Waves roll in from the machine house at the south end and die on the beach.
       const pos = waveGeo.attributes.position as THREE.BufferAttribute;
       const arr = pos.array as Float32Array;
       for (let i = 0; i < pos.count; i++) {
         const z = base[i * 3 + 2]!;
         const toBeach = (z + wd / 2) / wd;
-        arr[i * 3 + 1] = Math.sin(z * 0.55 + time * 2.4) * 0.22 * toBeach;
+        arr[i * 3 + 1] = Math.sin(z * 0.55 + time * (2.4 + park.surge * 0.8)) * amp() * toBeach;
       }
       pos.needsUpdate = true;
       rafts.forEach((r, i) => {
-        const z = r.position.z - wcz;
-        r.position.y = wy + 0.1 + Math.sin(z * 0.55 + time * 2.4) * 0.22 * ((z + wd / 2) / wd);
+        if (r.userData.held) return;
+        r.position.y = waveY(r.position.x, r.position.z) + 0.1;
         r.rotation.y = time * 0.1 + i;
+        // Tipped by the slope of the wave under it.
+        r.rotation.x =
+          (waveY(r.position.x, r.position.z + 0.6) - waveY(r.position.x, r.position.z - 0.6)) * 0.9;
       });
       blue.map!.offset.set(time * 0.02, time * 0.03);
       riverMat.map!.offset.set(0, -time * 0.05);
@@ -588,3 +656,5 @@ function logoMat() {
   logo = new THREE.MeshBasicMaterial({ map, toneMapped: false });
   return logo;
 }
+
+const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);

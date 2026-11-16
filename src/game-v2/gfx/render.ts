@@ -61,10 +61,16 @@ export function pickQuality(): Quality {
 }
 
 export function makeStage(canvas: HTMLCanvasElement, scene: THREE.Scene, start: Quality): Stage {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: false,
+    powerPreference: "high-performance",
+  });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.shadowMap.type = THREE.PCFShadowMap;
+  // Characters in tubes, cars and water are cut off at the waterline or the seat.
+  renderer.localClippingEnabled = true;
   const camera = new THREE.PerspectiveCamera(42, 1, 0.3, 1400);
 
   let composer: EffectComposer;
@@ -75,12 +81,20 @@ export function makeStage(canvas: HTMLCanvasElement, scene: THREE.Scene, start: 
   let h = 0;
 
   let scale = 1;
-  const ratio = () => (quality === "high" ? Math.min(window.devicePixelRatio, 1.5) : quality === "medium" ? Math.min(window.devicePixelRatio, 1.1) : 1) * scale;
+  const ratio = () =>
+    (quality === "high"
+      ? Math.min(window.devicePixelRatio, 1.5)
+      : quality === "medium"
+        ? Math.min(window.devicePixelRatio, 1.1)
+        : 1) * scale;
 
   const build = () => {
     renderer.setPixelRatio(ratio());
     renderer.shadowMap.enabled = quality !== "low";
-    const target = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: quality === "high" ? 4 : 0 });
+    const target = new THREE.WebGLRenderTarget(4, 4, {
+      type: THREE.HalfFloatType,
+      samples: quality === "high" ? 4 : 0,
+    });
     composer = new EffectComposer(renderer, target);
     composer.addPass(new RenderPass(scene, camera));
     bloom = null;

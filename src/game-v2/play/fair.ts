@@ -4,6 +4,7 @@ import { clamp, damp, rng, wrapAngle } from "../core/util";
 import type { Activity, Game } from "../game";
 import { placeTrain, type Fair, type Track } from "../world/fair";
 import { CURB, FAIR } from "../world/map";
+import { seatIn } from "./waterslide";
 
 const Y0 = CURB;
 const _p = new THREE.Vector3();
@@ -219,6 +220,8 @@ export class FairRide extends FairThing {
       tr.curve.getTangentAt(u, _t);
       _p.copy(front.position);
       this.sit(_p, Math.atan2(_t.x, _t.z), k === "pippin" ? 1 : 0.8);
+      // Down in the car or the log: the side hides him from the waist.
+      seatIn(g.benji, _p.y + (k === "pippin" ? 0.86 : 0.6), Y0);
       _eye.set(_p.x - _t.x * 4.6, _p.y + 2.6 - _t.y * 2, _p.z - _t.z * 4.6);
       _at.set(_p.x + _t.x * 6, _p.y + _t.y * 6 + 0.6, _p.z + _t.z * 6);
       this.aim(_eye, _at, dt, snap, 62 + clamp(this.v / 20, 0, 1) * 12, 9);
@@ -465,8 +468,8 @@ export class BumperCars extends FairThing {
     g.pos.x = me.position.x;
     g.pos.z = me.position.z;
     g.heading = this.heading;
-    g.benji.lift = 0.5;
-    g.benji.pose = g.benji.has("swing") ? "swing" : null;
+    // Sat in the car, the bumper round his middle.
+    seatIn(g.benji, Y0 + 0.8, Y0);
     g.benji.speed = 0;
     this.frame(dt, false);
   }

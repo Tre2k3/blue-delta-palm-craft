@@ -5575,14 +5575,78 @@ try {
     g.begin(g.lazy, "whack");
     g.lazy.start();
     run(4);
-    out.lazy = { mode: g.mode, went: +g.lazy.state.went.toFixed(3) };
+    out.lazy = {
+      mode: g.mode,
+      went: +g.lazy.state.went.toFixed(3),
+      // Sat down in the tube: only the waist up shows.
+      sink: +g.benji.sink.toFixed(2),
+    };
     g.lazy.quit();
     run(1);
     out.lazyOff = g.mode;
+    out.sinkOff = g.benji.sink;
+    // The Twister: in a tube, three turns, spins, into the splash pool with a card.
+    const ts = g.city.waterpark.twisterStart;
+    g.warp(ts.x, ts.z, 0);
+    run(1);
+    g.rideTwister();
+    run(2);
+    g.twister.go();
+    g.input.hold("left", true);
+    for (let i = 0; i < 40 * 30 && g.overlay !== "results"; i++) g.tick(1 / 30);
+    g.input.hold("left", false);
+    out.twister = {
+      overlay: g.overlay,
+      top: +g.twister.state.top.toFixed(1),
+      spins: g.twister.state.spins,
+      best: g.save.best.twister ?? 0,
+    };
+    if (g.overlay) g.close();
+    run(1);
+    // A raft on the wave pool, through the big waves when the horn goes.
+    const bch = g.city.waterpark.beach;
+    g.warp(bch.x, bch.z, 0);
+    run(1);
+    g.begin(g.raft, "whack");
+    g.raft.start();
+    for (let i = 0; i < 45 * 30 && g.city.waterpark.surge < 0.9; i++) g.tick(1 / 30);
+    run(6);
+    out.raft = {
+      mode: g.mode,
+      held: g.raft.state.held,
+      ridden: g.raft.state.ridden,
+      sink: +g.benji.sink.toFixed(2),
+    };
+    g.raft.quit();
+    run(1);
+    out.raftOff = { mode: g.mode, free: !g.city.waterpark.rafts.some((r) => r.userData.held) };
     g.warp(0, -150, 0);
     run(1);
     return out;
   });
+  check(
+    added.lazy.sink > 0.5 && added.sinkOff === 0,
+    "Adventure River: sat down inside the tube on the lazy river, and stood up again after",
+    { sink: added.lazy.sink, after: added.sinkOff },
+  );
+  check(
+    added.twister.overlay === "results" &&
+      added.twister.top > 8 &&
+      added.twister.spins > 0 &&
+      added.twister.best > 0,
+    "Adventure River: the Twister, in a tube, spinning, all the way to the splash pool",
+    added.twister,
+  );
+  check(
+    added.raft.mode === "whack" &&
+      added.raft.held &&
+      added.raft.ridden > 0 &&
+      added.raft.sink > 0.5 &&
+      added.raftOff.mode === "walk" &&
+      added.raftOff.free,
+    "Adventure River: a raft on the wave pool rides the big waves when the horn goes",
+    { ...added.raft, off: added.raftOff },
+  );
   check(
     added.halle.mode === "hoops" &&
       Math.abs(added.halle.x - -164) < 1 &&

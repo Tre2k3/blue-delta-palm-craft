@@ -14,7 +14,18 @@ import { Card, type CardArt } from "./card";
  *  throw  one go at something (a bowling ball), then off again
  *  sit    sat down at a table, on the stool drawn with them
  */
-export type Act = "watch" | "play" | "eat" | "dance" | "cheer" | "serve" | "bounce" | "wade" | "inside" | "throw" | "sit";
+export type Act =
+  | "watch"
+  | "play"
+  | "eat"
+  | "dance"
+  | "cheer"
+  | "serve"
+  | "bounce"
+  | "wade"
+  | "inside"
+  | "throw"
+  | "sit";
 
 export type Stop = {
   x: number;
@@ -27,6 +38,8 @@ export type Stop = {
   stay?: [number, number];
   /** Height of whatever they stand on here, above the floor. */
   lift?: number;
+  /** Once they are here, how much of them is out of sight from the soles up: water, balls, a seat. */
+  sink?: number;
   /** Called once when someone gets here. */
   on?: () => void;
   taken?: boolean;
@@ -89,7 +102,8 @@ export function stepClear(p: { x: number; z: number }, car: Moving, dt: number) 
   const lx = car.vx * 0.8;
   const lz = car.vz * 0.8;
   const len2 = lx * lx + lz * lz;
-  const t = len2 > 0 ? Math.max(-0.1, Math.min(1, ((p.x - car.x) * lx + (p.z - car.z) * lz) / len2)) : 0;
+  const t =
+    len2 > 0 ? Math.max(-0.1, Math.min(1, ((p.x - car.x) * lx + (p.z - car.z) * lz) / len2)) : 0;
   let dx = p.x - (car.x + lx * t);
   let dz = p.z - (car.z + lz * t);
   const d = Math.hypot(dx, dz);
@@ -116,6 +130,8 @@ export class Troupe {
   private members: Member[] = [];
   private rand: () => number;
   private clock = 0;
+  /** Outdoors near pools: true where a point is in water, so whoever walks in is cut off at the surface. */
+  wet: ((x: number, z: number) => boolean) | null = null;
 
   constructor(
     private group: THREE.Group,
@@ -136,7 +152,8 @@ export class Troupe {
     for (const s of list) {
       _pos.x = s.x;
       _pos.z = s.z;
-      if (s.act !== "bounce" && s.act !== "wade" && s.act !== "serve") pushOut(_pos, 0.34, this.solids);
+      if (s.act !== "bounce" && s.act !== "wade" && s.act !== "serve")
+        pushOut(_pos, 0.34, this.solids);
       s.x = _pos.x;
       s.z = _pos.z;
     }
@@ -166,7 +183,12 @@ export class Troupe {
     let bestD = r;
     this.members.forEach((m, i) => {
       const act = m.stop.act;
-      if (!m.card.visible || (!m.going && (act === "inside" || act === "bounce" || act === "wade")) || (m.posted && (act === "serve" || act === "play" || act === "sit"))) return;
+      if (
+        !m.card.visible ||
+        (!m.going && (act === "inside" || act === "bounce" || act === "wade")) ||
+        (m.posted && (act === "serve" || act === "play" || act === "sit"))
+      )
+        return;
       const d = Math.hypot(m.x - x, m.z - z);
       if (d < bestD) {
         bestD = d;
@@ -174,7 +196,9 @@ export class Troupe {
       }
     });
     const m = this.members[best];
-    return m ? { key: `${tag}${best}`, card: m.card, x: m.x, z: m.z, doing: m.going ? "walk" : m.stop.act } : null;
+    return m
+      ? { key: `${tag}${best}`, card: m.card, x: m.x, z: m.z, doing: m.going ? "walk" : m.stop.act }
+      : null;
   }
 
   /** They stop what they are doing for a few seconds and turn to him. */
@@ -188,7 +212,10 @@ export class Troupe {
     m.serving = seconds;
     m.rest = 5 + this.rand() * 5;
     m.served = this.clock;
-    if (m.team) for (const o of this.members) if (o !== m && o.team === m.team) o.rest = Math.max(o.rest, seconds + 1.5 + this.rand() * 2);
+    if (m.team)
+      for (const o of this.members)
+        if (o !== m && o.team === m.team)
+          o.rest = Math.max(o.rest, seconds + 1.5 + this.rand() * 2);
   }
 
   /** Benji ordered at (x, z): whoever at that window served longest ago hands it over. */
@@ -202,13 +229,42 @@ export class Troupe {
     return !!pick;
   }
 
-  private add(art: CardArt, height: number, stops: Stop[], stop: Stop, posted: boolean, order: boolean) {
+  private add(
+    art: CardArt,
+    height: number,
+    stops: Stop[],
+    stop: Stop,
+    posted: boolean,
+    order: boolean,
+  ) {
     const card = new Card(art, height);
     this.group.add(card.group);
     stop.taken = true;
     const seed = this.rand() * 10;
     const stay = stop.stay ?? STAY[stop.act];
-    const m: Member = { card, stops, stop, going: false, t: stay[0] + this.rand() * (stay[1] - stay[0]), x: stop.x, z: stop.z, pace: 1.25 + this.rand() * 0.5, seed, hop: 0, checkT: 0, checkX: stop.x, checkZ: stop.z, posted, order, at: Math.max(0, stops.indexOf(stop)), serving: 0, rest: 2 + this.rand() * 4, team: "", served: -1, hail: 0 };
+    const m: Member = {
+      card,
+      stops,
+      stop,
+      going: false,
+      t: stay[0] + this.rand() * (stay[1] - stay[0]),
+      x: stop.x,
+      z: stop.z,
+      pace: 1.25 + this.rand() * 0.5,
+      seed,
+      hop: 0,
+      checkT: 0,
+      checkX: stop.x,
+      checkZ: stop.z,
+      posted,
+      order,
+      at: Math.max(0, stops.indexOf(stop)),
+      serving: 0,
+      rest: 2 + this.rand() * 4,
+      team: "",
+      served: -1,
+      hail: 0,
+    };
     card.heading = Math.atan2(stop.fx - stop.x, stop.fz - stop.z);
     this.members.push(m);
     return card;
@@ -216,7 +272,9 @@ export class Troupe {
 
   /** Everyone within `r` of a point jumps for a moment. */
   cheer(x: number, z: number, r: number, seconds = 1.3) {
-    for (const m of this.members) if (!m.going && m.stop.act !== "inside" && Math.hypot(m.x - x, m.z - z) < r) m.hop = seconds * (0.7 + ((m.seed * 7) % 1) * 0.6);
+    for (const m of this.members)
+      if (!m.going && m.stop.act !== "inside" && Math.hypot(m.x - x, m.z - z) < r)
+        m.hop = seconds * (0.7 + ((m.seed * 7) % 1) * 0.6);
   }
 
   private next(m: Member) {
@@ -246,7 +304,16 @@ export class Troupe {
    * `beat` is seconds into a song playing nearby, or -1. `reach` hides anyone further than that
    * from the camera (outdoors).
    */
-  update(dt: number, camera: THREE.Vector3, tint: THREE.Color, player: { x: number; z: number } | null, time: number, beat = -1, reach = 0, car: Moving | null = null) {
+  update(
+    dt: number,
+    camera: THREE.Vector3,
+    tint: THREE.Color,
+    player: { x: number; z: number } | null,
+    time: number,
+    beat = -1,
+    reach = 0,
+    car: Moving | null = null,
+  ) {
     this.clock = time;
     for (const m of this.members) {
       const c = m.card;
@@ -284,6 +351,7 @@ export class Troupe {
         c.pose = null;
         c.heading = dampAngle(c.heading, Math.atan2(player.x - m.x, player.z - m.z), damp(8, dt));
         c.lift = m.going ? 0 : (s.lift ?? 0);
+        c.sink = m.going ? 0 : (s.sink ?? 0);
         c.place(m.x, m.z);
         c.update(dt, camera, tint, this.floorY);
         continue;
@@ -349,27 +417,44 @@ export class Troupe {
         const act = s.act;
         c.visible = act !== "inside";
         // Turn to Benji when he is close enough to be talking to; otherwise mind your business.
-        const facePlayer = player && pd < (act === "serve" ? 4 : 1.7) && act !== "bounce" && act !== "play" && act !== "sit";
-        const want = facePlayer ? Math.atan2(player.x - m.x, player.z - m.z) : Math.atan2(s.fx - m.x, s.fz - m.z);
+        const facePlayer =
+          player &&
+          pd < (act === "serve" ? 4 : 1.7) &&
+          act !== "bounce" &&
+          act !== "play" &&
+          act !== "sit";
+        const want = facePlayer
+          ? Math.atan2(player.x - m.x, player.z - m.z)
+          : Math.atan2(s.fx - m.x, s.fz - m.z);
         c.heading = dampAngle(c.heading, want, damp(5, dt));
         lift = s.lift ?? 0;
         let up = false;
         if (act === "bounce") lift += Math.abs(Math.sin((time + m.seed) * 2.7)) * 1.15;
-        else if (act === "wade") lift += Math.max(0, Math.sin((time + m.seed) * 2.1)) * 0.35;
+        else if (act === "wade")
+          // In water, a gentle bob; in the ball pit, a bounce.
+          lift += s.sink
+            ? Math.sin((time + m.seed) * 1.7) * 0.06
+            : Math.max(0, Math.sin((time + m.seed) * 2.1)) * 0.35;
         else if (act === "play") lift += Math.max(0, Math.sin((time + m.seed) * 7)) * 0.02;
         else if (act === "cheer" && Math.sin(time * 0.55 + m.seed * 3) > 0.55) {
           lift += Math.abs(Math.sin((time + m.seed) * 8)) * 0.16;
           up = true;
-        }
-        else if (act === "dance") c.groove = beat >= 0 ? beat + m.seed * 0.05 : time + m.seed;
-        if (beat >= 0 && act !== "serve" && act !== "bounce" && act !== "inside") c.groove = beat + m.seed * 0.05;
+        } else if (act === "dance") c.groove = beat >= 0 ? beat + m.seed * 0.05 : time + m.seed;
+        if (beat >= 0 && act !== "serve" && act !== "bounce" && act !== "inside")
+          c.groove = beat + m.seed * 0.05;
         if (act === "serve") {
           if (m.serving > 0) m.serving -= dt;
           else {
             m.rest -= dt;
             if (m.rest <= 0) {
               // Somebody waiting at the window gets served; with nobody there, keep an eye out.
-              const waiting = this.members.some((o) => !o.posted && !o.going && o.stop.act !== "inside" && Math.hypot(o.x - m.x, o.z - m.z) < 4.6);
+              const waiting = this.members.some(
+                (o) =>
+                  !o.posted &&
+                  !o.going &&
+                  o.stop.act !== "inside" &&
+                  Math.hypot(o.x - m.x, o.z - m.z) < 4.6,
+              );
               if (waiting) this.serve(m, 2.6);
               else m.rest = 1;
             }
@@ -392,6 +477,11 @@ export class Troupe {
         }
       }
       c.lift = lift;
+      c.sink = m.going ? 0 : (s.sink ?? 0);
+      if (!c.sink && this.wet?.(m.x, m.z)) {
+        c.lift -= 0.55;
+        c.sink = 1.05;
+      }
       c.place(m.x, m.z);
       c.update(dt, camera, tint, this.floorY);
     }

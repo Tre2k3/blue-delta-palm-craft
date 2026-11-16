@@ -8,10 +8,23 @@ import type { Activity, Game } from "../game";
 import { KART_LENGTH, KART_PADS, kartAt, kartNearest } from "../world/funhouse";
 import { CURB, KART_TRACK } from "../world/map";
 
-function payTickets(g: Game, title: string, sub: string, rows: [string, string][], tickets: number, record: boolean, again: () => void, close: () => void) {
+function payTickets(
+  g: Game,
+  title: string,
+  sub: string,
+  rows: [string, string][],
+  tickets: number,
+  record: boolean,
+  again: () => void,
+  close: () => void,
+) {
   const won = tickets > 0 ? g.winTickets(tickets) : 0;
   if (won) g.sound.cash();
-  g.showResults({ title, sub, rows, pay: 0, respect: 0, tickets: won, record, again: "Go again" }, again, close);
+  g.showResults(
+    { title, sub, rows, pay: 0, respect: 0, tickets: won, record, again: "Go again" },
+    again,
+    close,
+  );
 }
 
 // ------------------------------------------------------------------ go-karts
@@ -23,7 +36,11 @@ function makeKart(color: number) {
   const g = new THREE.Group();
   const paint = new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.2 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.8 });
-  const chrome = new THREE.MeshStandardMaterial({ color: 0xc9ccd2, roughness: 0.25, metalness: 0.9 });
+  const chrome = new THREE.MeshStandardMaterial({
+    color: 0xc9ccd2,
+    roughness: 0.25,
+    metalness: 0.9,
+  });
   const add = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number) => {
     const m = new THREE.Mesh(geo, mat);
     m.position.set(x, y, z);
@@ -54,7 +71,19 @@ function makeKart(color: number) {
   return { group: g, wheels };
 }
 
-type Bot = { kart: ReturnType<typeof makeKart>; driver: Card; name: string; s: number; off: number; drift: number; speed: number; top: number; done: number; x: number; z: number };
+type Bot = {
+  kart: ReturnType<typeof makeKart>;
+  driver: Card;
+  name: string;
+  s: number;
+  off: number;
+  drift: number;
+  speed: number;
+  top: number;
+  done: number;
+  x: number;
+  z: number;
+};
 
 /** Five laps of the oval behind the Fun House. Tickets for where you finish. */
 export class KartRace implements Activity {
@@ -103,7 +132,19 @@ export class KartRace implements Activity {
       const driver = new Card(PEDS[art % PEDS.length]!.art, 1.5);
       driver.visible = false;
       g.city.exterior.add(driver.group);
-      this.bots.push({ kart, driver, name, s: 0, off: 0, drift: 0, speed: 0, top: 13.5 - i * 0.42, done: -1, x: 0, z: 0 });
+      this.bots.push({
+        kart,
+        driver,
+        name,
+        s: 0,
+        off: 0,
+        drift: 0,
+        speed: 0,
+        top: 13.5 - i * 0.42,
+        done: -1,
+        x: 0,
+        z: 0,
+      });
     });
   }
 
@@ -168,6 +209,7 @@ export class KartRace implements Activity {
     b.driver.place(p.x - Math.sin(p.heading) * 0.3, p.z - Math.cos(p.heading) * 0.3);
     b.driver.heading = p.heading;
     b.driver.lift = -0.3;
+    b.driver.sink = 0.75;
     b.driver.speed = 0;
     b.driver.update(dt, g.camera.position, g.tint, CURB);
   }
@@ -183,6 +225,7 @@ export class KartRace implements Activity {
     g.pos.z = d.z - Math.cos(d.heading) * 0.3;
     g.heading = d.heading;
     g.benji.lift = -0.4;
+    g.benji.sink = 0.85;
     g.benji.speed = 0;
     g.live.speed = d.speed * 2.237;
   }
@@ -226,7 +269,18 @@ export class KartRace implements Activity {
         this.slide = 0;
       }
       this.boost = Math.max(0, this.boost - dt);
-      d.step(dt, { throttle: done ? 0 : g.input.throttle(), steer: m.x, handbrake: done || g.input.down("action"), boost: this.boost > 0 && !done }, KART, [], CURB);
+      d.step(
+        dt,
+        {
+          throttle: done ? 0 : g.input.throttle(),
+          steer: m.x,
+          handbrake: done || g.input.down("action"),
+          boost: this.boost > 0 && !done,
+        },
+        KART,
+        [],
+        CURB,
+      );
       g.stage.setPunch(this.boost > 0 ? 0.6 : 0);
       // The tyre wall and the kerb.
       const n = kartNearest(d.x, d.z);
@@ -268,7 +322,8 @@ export class KartRace implements Activity {
         const str = 2 * (KART_TRACK.halfX - KART_TRACK.halfZ);
         const bend = Math.PI * KART_TRACK.halfZ;
         const onBend = (here > str - 2.5 && here < str + bend - 3) || here > 2 * str + bend - 2.5;
-        let want = b.done >= 0 && b.s > KART_LENGTH * KART_LAPS + 12 ? 0 : onBend ? b.top * 0.74 : b.top;
+        let want =
+          b.done >= 0 && b.s > KART_LENGTH * KART_LAPS + 12 ? 0 : onBend ? b.top * 0.74 : b.top;
         // The pack stays a pack: leaders ease up a touch, back markers push.
         const gap = b.s - this.prog;
         want *= gap > 30 ? 0.86 : gap > 12 ? 0.95 : gap < -30 ? 1.12 : gap < -12 ? 1.05 : 1;
@@ -307,7 +362,12 @@ export class KartRace implements Activity {
         this.place = 1 + this.bots.filter((b) => b.s > this.prog).length;
         if (this.place < was && this.time > 2) {
           const passed = this.bots.filter((b) => b.s <= this.prog).sort((a, b) => b.s - a.s)[0];
-          this.say(this.place === 1 ? "YOU LEAD!" : `P${this.place}${passed ? `  ·  past ${passed.name}` : ""}`, 1.1);
+          this.say(
+            this.place === 1
+              ? "YOU LEAD!"
+              : `P${this.place}${passed ? `  ·  past ${passed.name}` : ""}`,
+            1.1,
+          );
         }
         if (this.prog >= KART_LENGTH * KART_LAPS) this.finish();
       }
@@ -328,7 +388,9 @@ export class KartRace implements Activity {
     g.emit("kart", place);
     payTickets(
       g,
-      place === 1 ? "CHECKERED FLAG" : `FINISHED ${["1ST", "2ND", "3RD", "4TH", "5TH", "6TH"][place - 1]}`,
+      place === 1
+        ? "CHECKERED FLAG"
+        : `FINISHED ${["1ST", "2ND", "3RD", "4TH", "5TH", "6TH"][place - 1]}`,
       place === 1 ? "Fastest kart in Orange Mound." : "Brake before the bend, gas out of it.",
       [
         ["Place", `${place} of ${this.bots.length + 1}`],
@@ -468,7 +530,9 @@ export class Bounce implements Activity {
         if (spins > 0) {
           this.combo++;
           pts += spins * 40 * Math.min(5, this.combo);
-          this.say(`${spins === 1 ? "360" : spins === 2 ? "720" : "1080"}  x${this.combo}  +${pts}`);
+          this.say(
+            `${spins === 1 ? "360" : spins === 2 ? "720" : "1080"}  x${this.combo}  +${pts}`,
+          );
         } else this.combo = 0;
         this.score += pts;
       }
@@ -508,7 +572,9 @@ export class Bounce implements Activity {
       payTickets(
         g,
         "TIME",
-        this.score > 600 ? "You were up there a while." : "Hit Space on the landing to climb, spin on the way up.",
+        this.score > 600
+          ? "You were up there a while."
+          : "Hit Space on the landing to climb, spin on the way up.",
         [
           ["Score", String(this.score)],
           ["Best air", `${this.best.toFixed(1)} m`],
@@ -550,7 +616,13 @@ export class Bounce implements Activity {
   }
 
   hud(h: HudState) {
-    h.bounce = { left: Math.max(0, Math.ceil(this.left)), best: this.best, combo: this.combo, score: this.score, call: this.call };
+    h.bounce = {
+      left: Math.max(0, Math.ceil(this.left)),
+      best: this.best,
+      combo: this.combo,
+      score: this.score,
+      call: this.call,
+    };
   }
 }
 
@@ -579,7 +651,11 @@ export class BallPit implements Activity {
   constructor(private g: Game) {
     const pit = g.rooms.fun.pit;
     const geo = new THREE.SphereGeometry(0.15, 10, 8);
-    this.mesh = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ roughness: 0.35 }), PIT_BALLS);
+    this.mesh = new THREE.InstancedMesh(
+      geo,
+      new THREE.MeshStandardMaterial({ roughness: 0.35 }),
+      PIT_BALLS,
+    );
     this.home = new Float32Array(PIT_BALLS * 3);
     this.off = new Float32Array(PIT_BALLS * 2);
     const cols = [0xff5ad1, 0x35e0d0, 0xffd23a, 0x39ff14, 0x5ac8ff, 0xff8a1e];
@@ -597,7 +673,13 @@ export class BallPit implements Activity {
     this.mesh.receiveShadow = true;
     this.mesh.frustumCulled = false;
     g.rooms.fun.group.add(this.mesh);
-    const gm = new THREE.MeshStandardMaterial({ color: 0xffc83a, emissive: 0xa86a00, emissiveIntensity: 1.2, roughness: 0.2, metalness: 0.8 });
+    const gm = new THREE.MeshStandardMaterial({
+      color: 0xffc83a,
+      emissive: 0xa86a00,
+      emissiveIntensity: 1.2,
+      roughness: 0.2,
+      metalness: 0.8,
+    });
     for (let i = 0; i < 8; i++) {
       const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.19, 14, 10), gm);
       mesh.visible = false;
@@ -641,6 +723,8 @@ export class BallPit implements Activity {
     if (speed > 0.3) g.heading = dampAngle(g.heading, Math.atan2(g.vel.x, g.vel.z), damp(10, dt));
     g.benji.speed = speed * 0.6;
     g.benji.lift = -0.42 + Math.sin(g.time * 7) * 0.03 * Math.min(1, speed);
+    // Buried in balls to the waist.
+    g.benji.sink = 0.97;
 
     // Balls part around him and settle back.
     const back = damp(2.2, dt);
@@ -664,7 +748,11 @@ export class BallPit implements Activity {
       this.off[i * 2] = ox;
       this.off[i * 2 + 1] = oz;
       const lift = Math.min(0.3, Math.hypot(ox, oz) * 0.5);
-      _m.makeTranslation(clamp(hx + ox, pit.minX - 0.2, pit.maxX + 0.2), hy + lift, clamp(hz + oz, pit.minZ - 0.2, pit.maxZ + 0.2));
+      _m.makeTranslation(
+        clamp(hx + ox, pit.minX - 0.2, pit.maxX + 0.2),
+        hy + lift,
+        clamp(hz + oz, pit.minZ - 0.2, pit.maxZ + 0.2),
+      );
       this.mesh.setMatrixAt(i, _m);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
@@ -698,11 +786,18 @@ export class BallPit implements Activity {
       this.ping = 0.12 + near * 0.3;
       g.sound.ui();
     }
-    const hint = near < 1.3 ? "Burning hot!" : near < 2.6 ? "Getting warmer..." : "Cold. Keep wading.";
-    if (!this.call.startsWith("Gold") && !this.call.startsWith("All") && hint !== this.call && this.left < 23) {
+    const hint =
+      near < 1.3 ? "Burning hot!" : near < 2.6 ? "Getting warmer..." : "Cold. Keep wading.";
+    if (
+      !this.call.startsWith("Gold") &&
+      !this.call.startsWith("All") &&
+      hint !== this.call &&
+      this.left < 23
+    ) {
       this.call = hint;
       g.push();
-    } else if (this.call.startsWith("Gold") && Math.floor(this.left * 2) % 3 === 0) this.call = hint;
+    } else if (this.call.startsWith("Gold") && Math.floor(this.left * 2) % 3 === 0)
+      this.call = hint;
 
     const before = Math.ceil(this.left);
     this.left -= dt;
@@ -761,7 +856,12 @@ export class BallPit implements Activity {
   }
 
   hud(h: HudState) {
-    h.pit = { left: Math.max(0, Math.ceil(this.left)), found: this.found, total: 8, call: this.call };
+    h.pit = {
+      left: Math.max(0, Math.ceil(this.left)),
+      found: this.found,
+      total: 8,
+      call: this.call,
+    };
   }
 }
 
