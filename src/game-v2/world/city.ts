@@ -7,7 +7,7 @@ import { BRIDGE, buildBridgeLights, type BridgeShow } from "./bridgelights";
 import { clearGround } from "./ground";
 import { Glow, makeCtx, resetKit, type Lamp } from "./kit";
 import { buildFarBank, buildHorizon, buildRiverboat, type Riverboat } from "./landmarks";
-import { FAR_BANK_Z, RIVER_Z, WORLD } from "./map";
+import { FAIR, FAR_BANK_Z, RIVER_Z, WORLD } from "./map";
 import { buildOpenSpots } from "./openspots";
 import { buildRiverfront, type Riverfront } from "./riverfront";
 import { buildHalle, type Halle } from "./moriah";
@@ -47,7 +47,8 @@ export type City = {
   fair: Fair;
   anchors: BlockAnchors & Omit<Riverfront, "hoops" | "nets" | "rims">;
   signals: SignalState;
-  update(dt: number, time: number): void;
+  /** `eye` is where the camera is: the fair's moving parts are only drawn from nearby. */
+  update(dt: number, time: number, eye?: { x: number; z: number }): void;
 };
 
 export function buildCity(): City {
@@ -126,13 +127,20 @@ export function buildCity(): City {
       uncStand: river.uncStand,
     },
     signals: signalState(0),
-    update(dt, time) {
+    update(dt, time, eye) {
       city.signals = signalState(time);
       applySignals(signalMats, city.signals);
       boat.update(dt);
       waterpark.update(dt, time);
       riverside.update(dt, time);
-      fair.update(dt, time);
+      // Five hundred moving pieces at the fair: drawn, and run, only when the camera is near it.
+      const near =
+        !eye ||
+        Math.hypot(eye.x - (FAIR.minX + FAIR.maxX) / 2, eye.z - (FAIR.minZ + FAIR.maxZ) / 2) <
+          420 ||
+        fair.held.size > 0;
+      fair.group.visible = near;
+      if (near) fair.update(dt, time);
     },
   };
   return city;

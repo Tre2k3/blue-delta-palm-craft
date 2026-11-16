@@ -5615,6 +5615,132 @@ try {
     "Adventure River: a tube on the lazy river goes round with the current",
     { ...added.lazy, off: added.lazyOff },
   );
+  // The Mid-South Fair: a ride to the end, the games and the shows, the food, and the fair hidden from across town.
+  const fair = await page.evaluate(() => {
+    const g = window.__GAME__;
+    const run = (s) => {
+      for (let i = 0; i < s * 30; i++) g.tick(1 / 30);
+    };
+    const until = (fn, s) => {
+      for (let i = 0; i < s * 30 && !fn(); i++) g.tick(1 / 30);
+    };
+    const out = {};
+    g.warp(-20, -160, 0);
+    run(0.5);
+    out.farHidden = !g.city.fair.group.visible;
+    const fs = g.city.fair.spots;
+    g.warp(fs.drop.x, fs.drop.z, 0);
+    run(1);
+    out.nearShown = g.city.fair.group.visible;
+    g.save.dollars = Math.max(g.save.dollars, 200);
+    // The drop tower, up and down to the results card.
+    let before = g.save.dollars;
+    g.rideFair("drop");
+    run(2);
+    out.dropOn = { mode: g.mode, phase: g.fairRide.state.phase, paid: before - g.save.dollars };
+    until(() => g.overlay === "results", 40);
+    out.drop = { overlay: g.overlay, title: g.results?.title ?? "" };
+    g.close();
+    g.activity?.quit();
+    run(1);
+    out.dropOff = g.mode;
+    // The Zippin Pippin: up the lift hill and round, top speed on the card.
+    g.warp(fs.pippin.x, fs.pippin.z, 0);
+    run(1);
+    g.rideFair("pippin");
+    run(2);
+    let top = 0;
+    for (let i = 0; i < 120 * 30 && g.overlay !== "results"; i++) {
+      g.tick(1 / 30);
+      top = Math.max(top, g.fairRide.state.v);
+    }
+    out.pippin = { overlay: g.overlay, top: +top.toFixed(1) };
+    g.close();
+    g.activity?.quit();
+    run(1);
+    // Pig races: a bet, a race, a winner.
+    g.warp(fs.pigs.x, fs.pigs.z, 0);
+    run(1);
+    g.playFair("pigs");
+    run(2);
+    g.pigRace.bet();
+    until(() => g.pigRace.state.phase === "done", 40);
+    out.pigs = { mode: g.mode, phase: g.pigRace.state.phase, winner: g.pigRace.state.winner };
+    g.close();
+    g.activity?.quit();
+    run(1);
+    // The Krystal eating contest: bites make burgers.
+    g.warp(fs.krystal.x, fs.krystal.z, 0);
+    run(1);
+    g.playFair("krystal");
+    run(2);
+    for (let i = 0; i < 40; i++) {
+      g.krystal.bite();
+      run(0.1);
+    }
+    out.krystal = { mode: g.mode, bites: g.krystal.state.bites, burgers: g.krystal.state.burgers };
+    g.close();
+    g.activity?.quit();
+    run(1);
+    // The high striker: a swing sends the puck up.
+    g.warp(fs.striker.x, fs.striker.z, 0);
+    run(1);
+    g.playFair("striker");
+    run(2);
+    out.swing = g.striker.swing();
+    run(3);
+    out.striker = { mode: g.mode, swings: g.striker.state.swings };
+    g.close();
+    g.activity?.quit();
+    run(1);
+    // Food: a Pronto Pup is paid for.
+    const pup = fs["food-pronto"];
+    g.warp(pup.x, pup.z, 0);
+    run(1);
+    before = g.save.dollars;
+    g.eatFair("pronto");
+    out.pup = before - g.save.dollars;
+    // The stunt dogs take the hoop.
+    g.city.fair.showtime();
+    run(2);
+    out.mode = g.mode;
+    g.warp(0, -150, 0);
+    run(1);
+    return out;
+  });
+  check(
+    fair.farHidden && fair.nearShown,
+    "Mid-South Fair: its moving parts are drawn only from near the grounds",
+    { far: fair.farHidden, near: fair.nearShown },
+  );
+  check(
+    fair.dropOn.mode === "whack" &&
+      fair.dropOn.paid === 4 &&
+      fair.drop.overlay === "results" &&
+      fair.dropOff === "walk" &&
+      fair.pippin.overlay === "results" &&
+      fair.pippin.top > 8,
+    "Mid-South Fair: the drop tower and the Zippin Pippin ride to the end, with a card",
+    { ...fair.dropOn, ...fair.drop, off: fair.dropOff, pippin: fair.pippin },
+  );
+  check(
+    fair.pigs.phase === "done" &&
+      fair.pigs.winner >= 0 &&
+      fair.krystal.burgers > 0 &&
+      fair.swing > 0 &&
+      fair.striker.swings === 1 &&
+      fair.pup === 4 &&
+      fair.mode === "walk",
+    "Mid-South Fair: pig races, the Krystal contest, the high striker and a Pronto Pup",
+    {
+      pigs: fair.pigs,
+      krystal: fair.krystal,
+      swing: fair.swing,
+      striker: fair.striker,
+      pup: fair.pup,
+      mode: fair.mode,
+    },
+  );
   check(errors.length === 0, "no page errors", errors);
   console.log("Memphis smoke passed.");
 } finally {

@@ -4048,7 +4048,7 @@ export class Game {
     );
     this.sound.setRain(this.mode === "title" ? 0 : wx.rain, !out);
     if (out) {
-      this.city.update(dt, this.time);
+      this.city.update(dt, this.time, this.camera.position);
       this.skyShow.update(paused ? 0 : dt, this.time, look.lights);
       if (!paused) {
         const blockers =
