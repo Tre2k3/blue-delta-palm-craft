@@ -10,7 +10,16 @@ import { buildFarBank, buildHorizon, buildRiverboat, type Riverboat } from "./la
 import { FAR_BANK_Z, RIVER_Z, WORLD } from "./map";
 import { buildOpenSpots } from "./openspots";
 import { buildRiverfront, type Riverfront } from "./riverfront";
-import { applySignals, buildStreets, signalState, type SignalMats, type SignalState } from "./streets";
+import { buildHalle, type Halle } from "./moriah";
+import { buildWaterpark, type Waterpark } from "./waterpark";
+import { buildRiverside, type Riverside } from "./riverside";
+import {
+  applySignals,
+  buildStreets,
+  signalState,
+  type SignalMats,
+  type SignalState,
+} from "./streets";
 
 export type City = {
   scene: THREE.Scene;
@@ -27,6 +36,12 @@ export type City = {
   hoops: Hoop[];
   nets: THREE.Mesh[];
   rims: THREE.Mesh[];
+  /** Halle Stadium and its courts, out on Mt. Moriah. */
+  halle: Halle;
+  /** Adventure River, out by I-40. */
+  waterpark: Waterpark;
+  /** The new Tom Lee Park, Beale Street Landing and the Big River Crossing. */
+  riverside: Riverside;
   anchors: BlockAnchors & Omit<Riverfront, "hoops" | "nets" | "rims">;
   signals: SignalState;
   update(dt: number, time: number): void;
@@ -47,16 +62,21 @@ export function buildCity(): City {
   const signalMats: SignalMats = buildStreets(ctx);
   const blocks = buildBlocks(ctx);
   const river = buildRiverfront(ctx);
+  const halle = buildHalle(ctx);
+  const waterpark = buildWaterpark(ctx);
+  const riverside = buildRiverside(ctx);
   buildOpenSpots(ctx);
   buildFarBank(ctx);
   buildHorizon(ctx);
 
   ctx.ground.build(exterior, { cast: false, receive: true, name: "ground" });
   ctx.solid.build(exterior, { cast: true, receive: true, name: "city" });
-  for (const mesh of ctx.flat.build(exterior, { cast: false, receive: false, name: "flat" })) mesh.renderOrder = 2;
-  for (const m of [...river.nets, ...river.rims]) exterior.add(m);
+  for (const mesh of ctx.flat.build(exterior, { cast: false, receive: false, name: "flat" }))
+    mesh.renderOrder = 2;
+  for (const m of [...river.nets, ...river.rims, ...halle.meshes]) exterior.add(m);
+  exterior.add(waterpark.group);
 
-  const water = makeWater(-700, 700, FAR_BANK_Z - 4, RIVER_Z + 0.2, FAR_BANK_Z, BRIDGE);
+  const water = makeWater(-1000, 1100, FAR_BANK_Z - 4, RIVER_Z + 0.2, FAR_BANK_Z, BRIDGE);
   exterior.add(water.mesh);
   const boat = buildRiverboat(ctx);
   exterior.add(boat.group);
@@ -65,12 +85,13 @@ export function buildCity(): City {
 
   // Walkers are also held to the map. The river edge has its own rail solids.
   const solids = ctx.solids;
-  solids.push({ minX: -400, maxX: WORLD.minX, minZ: -400, maxZ: 400 });
-  solids.push({ minX: WORLD.maxX, maxX: 400, minZ: -400, maxZ: 400 });
-  solids.push({ minX: -400, maxX: 400, minZ: WORLD.maxZ, maxZ: 400 });
-  solids.push({ minX: -400, maxX: 400, minZ: -400, maxZ: WORLD.minZ });
+  const FAR = 3000;
+  solids.push({ minX: -FAR, maxX: WORLD.minX, minZ: -FAR, maxZ: FAR });
+  solids.push({ minX: WORLD.maxX, maxX: FAR, minZ: -FAR, maxZ: FAR });
+  solids.push({ minX: -FAR, maxX: FAR, minZ: WORLD.maxZ, maxZ: FAR });
+  solids.push({ minX: -FAR, maxX: FAR, minZ: -FAR, maxZ: WORLD.minZ });
   const carSolids = solids.filter((s) => s.maxX - s.minX > 0.9 && s.maxZ - s.minZ > 0.9);
-  carSolids.push({ minX: -400, maxX: 400, minZ: -400, maxZ: RIVER_Z + 1.2 });
+  carSolids.push({ minX: -FAR, maxX: FAR, minZ: -FAR, maxZ: RIVER_Z + 1.2 });
 
   const city: City = {
     scene,
@@ -85,6 +106,9 @@ export function buildCity(): City {
     hoops: river.hoops,
     nets: river.nets,
     rims: river.rims,
+    halle,
+    waterpark,
+    riverside,
     anchors: {
       ...blocks,
       hqDoor: river.hqDoor,
@@ -100,6 +124,8 @@ export function buildCity(): City {
       city.signals = signalState(time);
       applySignals(signalMats, city.signals);
       boat.update(dt);
+      waterpark.update(dt, time);
+      riverside.update(dt, time);
     },
   };
   return city;

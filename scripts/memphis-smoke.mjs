@@ -11,8 +11,14 @@ const out = process.env.SMOKE_OUT || "artifacts";
 const local = "/opt/pw-browsers/chromium";
 const browser = await chromium.launch({
   headless: true,
-  executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || (existsSync(local) ? local : undefined),
-  args: ["--no-sandbox", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
+  executablePath:
+    process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || (existsSync(local) ? local : undefined),
+  args: [
+    "--no-sandbox",
+    "--use-angle=swiftshader",
+    "--enable-unsafe-swiftshader",
+    "--ignore-gpu-blocklist",
+  ],
 });
 await mkdir(out, { recursive: true });
 const errors = [];
@@ -26,7 +32,15 @@ try {
   page.on("pageerror", (e) => errors.push(e.message));
   // A stand-in controller the test can press.
   await page.addInitScript(() => {
-    const pad = { id: "smoke pad", index: 0, connected: true, mapping: "standard", timestamp: 0, axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 })) };
+    const pad = {
+      id: "smoke pad",
+      index: 0,
+      connected: true,
+      mapping: "standard",
+      timestamp: 0,
+      axes: [0, 0, 0, 0],
+      buttons: Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 })),
+    };
     window.__pad = pad;
     window.__padOn = false;
     navigator.getGamepads = () => (window.__padOn ? [pad] : []);
@@ -64,11 +78,14 @@ try {
 
   // Gamepad: A on the title, the stick on foot, Start and the d-pad in a menu, the trigger in a car.
   const button = (i, on) =>
-    page.evaluate(([n, down]) => {
-      window.__padOn = true;
-      window.__pad.buttons[n].pressed = down;
-      window.__pad.buttons[n].value = down ? 1 : 0;
-    }, [i, on]);
+    page.evaluate(
+      ([n, down]) => {
+        window.__padOn = true;
+        window.__pad.buttons[n].pressed = down;
+        window.__pad.buttons[n].value = down ? 1 : 0;
+      },
+      [i, on],
+    );
   const press = async (i) => {
     await button(i, true);
     await ff(0.1);
@@ -79,35 +96,64 @@ try {
   await press(0);
   await page.waitForTimeout(300);
   await ff(1);
-  check((await get(() => window.__GAME__.mode)) === "walk", "A on the pad starts the day from the title");
+  check(
+    (await get(() => window.__GAME__.mode)) === "walk",
+    "A on the pad starts the day from the title",
+  );
   // A new day opens on the flight in over the river. Nothing answers until it lands or a button skips it.
   const opening = await page.evaluate(() => {
     const g = window.__GAME__;
-    return { on: !!g.intro, card: !!g.cinema, locked: g.input.locked, x: g.camera.position.x, said: g.dialogue.length };
+    return {
+      on: !!g.intro,
+      card: !!g.cinema,
+      locked: g.input.locked,
+      x: g.camera.position.x,
+      said: g.dialogue.length,
+    };
   });
   await ff(1.5);
   const flown = await get(() => window.__GAME__.camera.position.x);
   await shot("00-opening");
-  check(opening.on && opening.card && opening.locked && opening.said === 0 && flown < opening.x - 20, "a new day opens on the flight in over the river", { ...opening, flown });
+  check(
+    opening.on && opening.card && opening.locked && opening.said === 0 && flown < opening.x - 20,
+    "a new day opens on the flight in over the river",
+    { ...opening, flown },
+  );
   await press(0);
   const landed = await page.evaluate(() => {
     const g = window.__GAME__;
-    return { on: !!g.intro, card: !!g.cinema, locked: g.input.locked, said: g.dialogue.length, behind: Math.hypot(g.camera.position.x - g.pos.x, g.camera.position.z - g.pos.z) };
+    return {
+      on: !!g.intro,
+      card: !!g.cinema,
+      locked: g.input.locked,
+      said: g.dialogue.length,
+      behind: Math.hypot(g.camera.position.x - g.pos.x, g.camera.position.z - g.pos.z),
+    };
   });
-  check(!landed.on && !landed.card && !landed.locked && landed.said === 1 && landed.behind < 8, "any button lands the lens behind Benji and K Blanco calls him in", landed);
+  check(
+    !landed.on && !landed.card && !landed.locked && landed.said === 1 && landed.behind < 8,
+    "any button lands the lens behind Benji and K Blanco calls him in",
+    landed,
+  );
   const z0 = await get(() => window.__GAME__.pos.z);
   await page.evaluate(() => (window.__pad.axes[1] = -1));
   await ff(1.2);
   await page.evaluate(() => (window.__pad.axes[1] = 0));
   await ff(0.1);
   const z1 = await get(() => window.__GAME__.pos.z);
-  check(z1 < z0 - 2 && (await get(() => window.__GAME__.input.pad)), "the left stick walks Benji", { from: z0, to: z1 });
+  check(z1 < z0 - 2 && (await get(() => window.__GAME__.input.pad)), "the left stick walks Benji", {
+    from: z0,
+    to: z1,
+  });
   await press(9);
   await page.waitForTimeout(400);
   check((await get(() => window.__GAME__.overlay)) === "pause", "Start opens the pause menu");
   await press(13);
   await page.waitForTimeout(200);
-  check((await page.locator('[data-padfocus="1"]').count()) === 1, "the d-pad moves a highlight through the menu");
+  check(
+    (await page.locator('[data-padfocus="1"]').count()) === 1,
+    "the d-pad moves a highlight through the menu",
+  );
   await press(1);
   check((await get(() => window.__GAME__.overlay)) === null, "B closes the menu");
   await page.evaluate(() => window.__GAME__.drive());
@@ -156,7 +202,12 @@ try {
   });
   await ff(0.3);
   await tap("interact");
-  check(await get(() => window.__GAME__.save.flags.carrying === true && window.__GAME__.save.step === 2), "K Blanco hands over the drop");
+  check(
+    await get(
+      () => window.__GAME__.save.flags.carrying === true && window.__GAME__.save.step === 2,
+    ),
+    "K Blanco hands over the drop",
+  );
   await shot("03-hq");
   await page.evaluate(() => {
     const g = window.__GAME__;
@@ -164,7 +215,14 @@ try {
     g.buy("sr-tour-black");
     g.wear("tour_black");
   });
-  check(await get(() => window.__GAME__.save.owned.includes("sr-tour-black") && window.__GAME__.save.wearing === "tour_black"), "a piece can be bought and worn");
+  check(
+    await get(
+      () =>
+        window.__GAME__.save.owned.includes("sr-tour-black") &&
+        window.__GAME__.save.wearing === "tour_black",
+    ),
+    "a piece can be bought and worn",
+  );
 
   // Deliver, then the court. Court OG himself takes the box, not only the sign-up table: walking
   // up to him with it offers the hand-off and nothing else, and he answers about the job after.
@@ -190,15 +248,29 @@ try {
     return { at, x: me.x, z: me.z };
   });
   await ff(0.3);
-  const handed = await page.evaluate(() => ({ prompt: window.__GAME__.prompt, step: window.__GAME__.save.step }));
+  const handed = await page.evaluate(() => ({
+    prompt: window.__GAME__.prompt,
+    step: window.__GAME__.save.step,
+  }));
   await tap("interact");
   await ff(0.2);
   const ogAfter = await page.evaluate(() => {
     const g = window.__GAME__;
-    return { step: g.save.step, carrying: g.save.flags.carrying, said: g.dialogue.map((d) => d.who + ": " + d.text), prompt: g.prompt };
+    return {
+      step: g.save.step,
+      carrying: g.save.flags.carrying,
+      said: g.dialogue.map((d) => d.who + ": " + d.text),
+      prompt: g.prompt,
+    };
   });
   check(
-    !!og.at && handed.step === 2 && handed.prompt === "Hand Court OG the drop" && ogAfter.step === 3 && !ogAfter.carrying && ogAfter.said.length === 1 && /^Court OG: That's the new drop/.test(ogAfter.said[0]),
+    !!og.at &&
+      handed.step === 2 &&
+      handed.prompt === "Hand Court OG the drop" &&
+      ogAfter.step === 3 &&
+      !ogAfter.carrying &&
+      ogAfter.said.length === 1 &&
+      /^Court OG: That's the new drop/.test(ogAfter.said[0]),
     "the drop is delivered to Court OG by walking up to him, as one hand-off with one line",
     { og, handed, ogAfter },
   );
@@ -208,9 +280,16 @@ try {
   const nudge0 = await page.evaluate(() => window.__GAME__.prompt);
   await tap("interact");
   await ff(0.2);
-  const nudge = await page.evaluate(() => ({ prompt: window.__GAME__.prompt, said: window.__GAME__.dialogue.map((d) => d.who + ": " + d.text), step: window.__GAME__.save.step }));
+  const nudge = await page.evaluate(() => ({
+    prompt: window.__GAME__.prompt,
+    said: window.__GAME__.dialogue.map((d) => d.who + ": " + d.text),
+    step: window.__GAME__.save.step,
+  }));
   check(
-    nudge0 === "Court OG: Earn the court" && nudge.step === 3 && nudge.said.length === 1 && /^Court OG: .*shootout/.test(nudge.said[0]),
+    nudge0 === "Court OG: Earn the court" &&
+      nudge.step === 3 &&
+      nudge.said.length === 1 &&
+      /^Court OG: .*shootout/.test(nudge.said[0]),
     "while the court is the job, talking to Court OG is about the job",
     { nudge0, nudge },
   );
@@ -222,7 +301,10 @@ try {
   await ff(0.3);
   await tap("interact");
   await ff(0.3);
-  check((await get(() => window.__GAME__.overlay)) === "court", "Court OG's table offers the three games");
+  check(
+    (await get(() => window.__GAME__.overlay)) === "court",
+    "Court OG's table offers the three games",
+  );
   // A game to eleven: the other player shoots first, then Benji answers from the same spot.
   await page.evaluate(() => window.__GAME__.playBall("versus"));
   await ff(1.5);
@@ -241,13 +323,16 @@ try {
       if (c.pose === "shoot" && /shot-(front|back)/.test(c.current)) seen.shoot = c.current;
       if (c.pose === "ready") seen.ready++;
       // Benji only holding the ball: the other player is on his feet, not down in a crouch.
-      if (h.turn === "you" && !h.charging && c.pose === null && c.speed === 0 && hold > 20) seen.tall++;
+      if (h.turn === "you" && !h.charging && c.pose === null && c.speed === 0 && hold > 20)
+        seen.tall++;
       if (c.pose === "drive") seen.ran += Math.hypot(h.rival.x - last[0], h.rival.z - last[1]);
-      if (c.pose === "shoot" && Math.hypot(h.rival.x - h.spot.x, h.rival.z - h.spot.z) < 0.1) seen.stood++;
+      if (c.pose === "shoot" && Math.hypot(h.rival.x - h.spot.x, h.rival.z - h.spot.z) < 0.1)
+        seen.stood++;
       last = [h.rival.x, h.rival.z];
       // Benji takes a second over each shot, then goes up for it the way a player does: held, and let go in the green.
       hold = h.turn === "you" ? hold + 1 : 0;
-      if (h.turn === "you" && !h.charging && h.cool <= 0 && hold > 30 && !g.input.down("action")) g.input.key("action", true);
+      if (h.turn === "you" && !h.charging && h.cool <= 0 && hold > 30 && !g.input.down("action"))
+        g.input.key("action", true);
       if (h.charging && h.charge >= 0.77) {
         g.input.key("action", false);
         mine++;
@@ -257,12 +342,37 @@ try {
     g.input.key("action", false);
     for (let i = 0; i < 30; i++) g.tick(1 / 30);
     g.stage.render = render;
-    const out = { kind: h.kind, over: h.over, you: h.score, them: h.rival.score, mine, title: g.results?.title, wins: g.save.best.versus, seen };
+    const out = {
+      kind: h.kind,
+      over: h.over,
+      you: h.score,
+      them: h.rival.score,
+      mine,
+      title: g.results?.title,
+      wins: g.save.best.versus,
+      seen,
+    };
     g.close();
     return out;
   });
-  check(duel.kind === "versus" && duel.over && duel.mine >= 3 && Math.max(duel.you, duel.them) >= 11 && duel.you !== duel.them, "a game to eleven is played out shot for shot", duel);
-  check(/pedestrians\/male-0\d-shot-/.test(duel.seen.shoot) && duel.seen.stood > 0 && duel.seen.ran > 10 && duel.seen.ready > 30 && duel.seen.tall > 30, "the other player runs to the spot, shoots with his arms up, stands while Benji holds the ball and drops into a stance when he goes up", duel.seen);
+  check(
+    duel.kind === "versus" &&
+      duel.over &&
+      duel.mine >= 3 &&
+      Math.max(duel.you, duel.them) >= 11 &&
+      duel.you !== duel.them,
+    "a game to eleven is played out shot for shot",
+    duel,
+  );
+  check(
+    /pedestrians\/male-0\d-shot-/.test(duel.seen.shoot) &&
+      duel.seen.stood > 0 &&
+      duel.seen.ran > 10 &&
+      duel.seen.ready > 30 &&
+      duel.seen.tall > 30,
+    "the other player runs to the spot, shoots with his arms up, stands while Benji holds the ball and drops into a stance when he goes up",
+    duel.seen,
+  );
   await ff(1);
   await page.evaluate(() => window.__GAME__.playBall("shootout"));
   await ff(1.5);
@@ -358,7 +468,11 @@ try {
     g.stage.render = draw;
     return { phase: g.race.phase, prog: g.race.prog, rivals: g.race.rivals.map((r) => r.s) };
   });
-  check(raced.phase === "go" && raced.prog > 60 && raced.rivals.every((s) => s > 60), "the race starts and everyone gets off the line", raced);
+  check(
+    raced.phase === "go" && raced.prog > 60 && raced.rivals.every((s) => s > 60),
+    "the race starts and everyone gets off the line",
+    raced,
+  );
   await shot("07-race");
   await tap("back");
   await page.evaluate(() => window.__GAME__.exitCar(true));
@@ -418,7 +532,11 @@ try {
   check(fun.pop === 1, "the hoop machine scores a clean throw", fun.pop);
   check(fun.laser === "go", "laser tag starts", fun.laser);
   check(fun.kart > 10, "the kart drives", fun.kart);
-  check(fun.place === "fun" && fun.mode === "walk", "every attraction hands the controls back", fun);
+  check(
+    fun.place === "fun" && fun.mode === "walk",
+    "every attraction hands the controls back",
+    fun,
+  );
   await page.evaluate(() => {
     const g = window.__GAME__;
     g.warp(g.rooms.fun.spawn.x, g.rooms.fun.spawn.z - 6, Math.PI);
@@ -435,9 +553,26 @@ try {
   // The itch.io cabinets play inside a browser on the cabinet's screen. itch.io is not part
   // of this test: the look-up and the game it finds are both stood in for here.
   await page.route("**/api/itch?*", (r) =>
-    r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, id: "martin", kind: "embed", src: "https://itch.io/embed-upload/1?color=0b0b0d", width: 1280, height: 740, page: "", probes: [] }) }),
+    r.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        id: "martin",
+        kind: "embed",
+        src: "https://itch.io/embed-upload/1?color=0b0b0d",
+        width: 1280,
+        height: 740,
+        page: "",
+        probes: [],
+      }),
+    }),
   );
-  await page.route("https://itch.io/**", (r) => r.fulfill({ contentType: "text/html", body: "<!doctype html><body style='margin:0;background:#123'><canvas id='c' width='1280' height='720'></canvas></body>" }));
+  await page.route("https://itch.io/**", (r) =>
+    r.fulfill({
+      contentType: "text/html",
+      body: "<!doctype html><body style='margin:0;background:#123'><canvas id='c' width='1280' height='720'></canvas></body>",
+    }),
+  );
   await page.evaluate(() => window.__GAME__.swapCabinet("martin"));
   await page.getByText("Press start").click({ timeout: 10000 });
   await page.waitForSelector("iframe", { timeout: 10000 });
@@ -445,13 +580,31 @@ try {
   const web = await page.evaluate(() => {
     const g = window.__GAME__;
     const f = document.querySelector("iframe");
-    return { src: f?.getAttribute("src"), padOff: g.input.padOff, allow: f?.getAttribute("allow") ?? "" };
+    return {
+      src: f?.getAttribute("src"),
+      padOff: g.input.padOff,
+      allow: f?.getAttribute("allow") ?? "",
+    };
   });
-  check(web.src?.startsWith("https://itch.io/embed-upload/") && web.padOff && web.allow.includes("gamepad"), "the itch.io cabinet runs the game in its own browser", web);
+  check(
+    web.src?.startsWith("https://itch.io/embed-upload/") &&
+      web.padOff &&
+      web.allow.includes("gamepad"),
+    "the itch.io cabinet runs the game in its own browser",
+    web,
+  );
   await page.getByRole("button", { name: "Back to the floor" }).click();
   await page.waitForTimeout(400);
-  const left = await page.evaluate(() => ({ overlay: window.__GAME__.overlay, padOff: window.__GAME__.input.padOff, frame: !!document.querySelector("iframe") }));
-  check(left.overlay === null && !left.padOff && !left.frame, "leaving the cabinet hands the pad back", left);
+  const left = await page.evaluate(() => ({
+    overlay: window.__GAME__.overlay,
+    padOff: window.__GAME__.input.padOff,
+    frame: !!document.querySelector("iframe"),
+  }));
+  check(
+    left.overlay === null && !left.padOff && !left.frame,
+    "leaving the cabinet hands the pad back",
+    left,
+  );
 
   // The riverfront lot: the three real trucks, each with its own menu, and Veli's screen.
   const lot = await page.evaluate(async () => {
@@ -474,7 +627,11 @@ try {
     const paid = before - g.save.dollars;
     const veli = g.street.members.find((m) => m.team === "velis");
     for (let i = 0; i < 6; i++) g.tick(1 / 30);
-    const handed = { serving: veli?.serving > 0, pose: veli?.card.pose, drawing: veli?.card.current };
+    const handed = {
+      serving: veli?.serving > 0,
+      pose: veli?.card.pose,
+      drawing: veli?.card.current,
+    };
     g.warp(a.windows.catch.x, a.windows.catch.z, 0);
     g.stage.render = () => {};
     for (let i = 0; i < 10; i++) g.tick(1 / 30);
@@ -483,13 +640,56 @@ try {
     const cook = g.street.members.find((m) => m.team === "catch");
     for (let i = 0; i < 6; i++) g.tick(1 / 30);
     g.stage.render = render;
-    const plated = { serving: cook?.serving > 0, pose: cook?.card.pose, drawing: cook?.card.current };
-    return { trucks: Object.keys(a.windows), prompt, paid, cooler: g.save.cooler.length, video: !!g.veli, fed: g.fedUntil > g.time, handed, plated, crews: g.street.members.filter((m) => m.team).map((m) => m.team).sort().join() };
+    const plated = {
+      serving: cook?.serving > 0,
+      pose: cook?.card.pose,
+      drawing: cook?.card.current,
+    };
+    return {
+      trucks: Object.keys(a.windows),
+      prompt,
+      paid,
+      cooler: g.save.cooler.length,
+      video: !!g.veli,
+      fed: g.fedUntil > g.time,
+      handed,
+      plated,
+      crews: g.street.members
+        .filter((m) => m.team)
+        .map((m) => m.team)
+        .sort()
+        .join(),
+    };
   });
-  check(lot.handed.serving && lot.handed.pose === "serve" && /vendors\/veli\/serve-/.test(lot.handed.drawing), "Veli holds the order out when Benji buys", lot.handed);
-  check(lot.crews === "brothers,brothers,catch,velis", "Veli and both brothers are in their windows", lot.crews);
-  check(lot.plated.serving && lot.plated.pose === "serve" && /vendors\/catch\/serve-/.test(lot.plated.drawing), "the Catch Kitchen cook holds the plate out when Benji buys", lot.plated);
-  check(lot.trucks.join() === "catch,velis,brothers" && /Veli's Wings/.test(lot.prompt) && lot.paid === 14 && lot.cooler === 0 && lot.video && lot.fed, "the three food trucks serve their own menus and Veli's screen is on", lot);
+  check(
+    lot.handed.serving &&
+      lot.handed.pose === "serve" &&
+      /vendors\/veli\/serve-/.test(lot.handed.drawing),
+    "Veli holds the order out when Benji buys",
+    lot.handed,
+  );
+  check(
+    lot.crews === "brothers,brothers,catch,velis",
+    "Veli and both brothers are in their windows",
+    lot.crews,
+  );
+  check(
+    lot.plated.serving &&
+      lot.plated.pose === "serve" &&
+      /vendors\/catch\/serve-/.test(lot.plated.drawing),
+    "the Catch Kitchen cook holds the plate out when Benji buys",
+    lot.plated,
+  );
+  check(
+    lot.trucks.join() === "catch,velis,brothers" &&
+      /Veli's Wings/.test(lot.prompt) &&
+      lot.paid === 14 &&
+      lot.cooler === 0 &&
+      lot.video &&
+      lot.fed,
+    "the three food trucks serve their own menus and Veli's screen is on",
+    lot,
+  );
   // Coins: every street has some, and walking through one banks it.
   const coins = await page.evaluate(() => {
     const g = window.__GAME__;
@@ -503,7 +703,11 @@ try {
     g.stage.render = render;
     return { total: c.total, left: c.left, gained: g.save.dollars - before };
   });
-  check(coins.total > 150 && coins.left < coins.total && coins.gained >= 5, "coins are out across the city and can be banked", coins);
+  check(
+    coins.total > 150 && coins.left < coins.total && coins.gained >= 5,
+    "coins are out across the city and can be banked",
+    coins,
+  );
 
   // The machines on the floor are real machines: played standing at them, never on a cabinet screen.
   const floor = await page.evaluate(() => {
@@ -523,7 +727,9 @@ try {
       run(() => false, 0.2);
       prompts.push(g.prompt);
     }
-    const onScreen = ["pinball", "skee", "wheel"].filter((id) => fun.cabinets.some((c) => c.id === id));
+    const onScreen = ["pinball", "skee", "wheel"].filter((id) =>
+      fun.cabinets.some((c) => c.id === id),
+    );
     // Pinball: pull the plunger, the ball goes up the lane and scores.
     g.begin(g.pinball, "whack");
     g.pinball.start();
@@ -555,11 +761,22 @@ try {
     g.stage.render = draw;
     return { prompts, onScreen, pinball, skee, wheel, mode: g.mode };
   });
-  check(/Pinball/.test(floor.prompts[0]) && /Skee-Ball/.test(floor.prompts[1]) && /Spin-N-Win/.test(floor.prompts[2]) && /Whack-A-Mole/.test(floor.prompts[3]), "pinball, Skee-Ball, the wheel and Whack-A-Mole can all be walked up to", floor.prompts);
+  check(
+    /Pinball/.test(floor.prompts[0]) &&
+      /Skee-Ball/.test(floor.prompts[1]) &&
+      /Spin-N-Win/.test(floor.prompts[2]) &&
+      /Whack-A-Mole/.test(floor.prompts[3]),
+    "pinball, Skee-Ball, the wheel and Whack-A-Mole can all be walked up to",
+    floor.prompts,
+  );
   check(floor.onScreen.length === 0, "none of them is a cabinet screen", floor.onScreen);
   check(floor.pinball.score > 0, "the pinball table launches a ball and scores", floor.pinball);
   check(floor.skee.balls === 8, "a Skee-Ball rolls up the lane and lands", floor.skee);
-  check(floor.wheel.spins === 2 && floor.wheel.total > 0, "the wheel spins down and pays the wedge under the flapper", floor.wheel);
+  check(
+    floor.wheel.spins === 2 && floor.wheel.total > 0,
+    "the wheel spins down and pays the wedge under the flapper",
+    floor.wheel,
+  );
   check(floor.mode === "walk", "the floor machines hand the controls back", floor.mode);
   await shot("21-fun-floor");
 
@@ -576,7 +793,10 @@ try {
     g.laser.start();
     run(() => g.laser.phase === "go", 5);
     const L = g.laser;
-    const sides = [L.bots.filter((b) => b.playing && b.team === 0).length, L.bots.filter((b) => b.playing && b.team === 1).length];
+    const sides = [
+      L.bots.filter((b) => b.playing && b.team === 0).length,
+      L.bots.filter((b) => b.playing && b.team === 1).length,
+    ];
     // Stand in front of the pink base with a clear line and put three into it.
     const base = L.bases[1];
     g.pos.x = base.x - 3;
@@ -608,8 +828,18 @@ try {
     g.stage.render = draw;
     return { sides, scored, power, radar, place: g.place };
   });
-  check(tag.sides.join() === "3,4" && tag.scored.hits === 3 && tag.scored.dark && tag.scored.score >= 400, "laser tag has teams and a base that pays when it goes down", tag);
-  check(!!tag.power && tag.radar >= 8, "power-ups drop and the radar tracks the arena", { power: tag.power, radar: tag.radar });
+  check(
+    tag.sides.join() === "3,4" &&
+      tag.scored.hits === 3 &&
+      tag.scored.dark &&
+      tag.scored.score >= 400,
+    "laser tag has teams and a base that pays when it goes down",
+    tag,
+  );
+  check(!!tag.power && tag.radar >= 8, "power-ups drop and the radar tracks the arena", {
+    power: tag.power,
+    radar: tag.radar,
+  });
 
   // The street race: arrows on the road, a launch on GO, and a boost for hitting a gate on time.
   const race = await page.evaluate(async () => {
@@ -645,8 +875,16 @@ try {
     g.stage.render = draw;
     return { launch, arrows, boost, turn, wrap, mode: g.mode };
   });
-  check(race.launch && race.arrows >= 6, "the race launches on GO and paints the line to follow", race);
-  check(race.boost.perfect && race.boost.kick, "hitting the button on a gate gives a boost", race.boost);
+  check(
+    race.launch && race.arrows >= 6,
+    "the race launches on GO and paints the line to follow",
+    race,
+  );
+  check(
+    race.boost.perfect && race.boost.kick,
+    "hitting the button on a gate gives a boost",
+    race.boost,
+  );
   check(race.turn >= 0, "the next bend is called out before it arrives", race.turn);
   check(race.wrap, "Benji's car wears the SackReligious livery", race.wrap);
 
@@ -659,10 +897,19 @@ try {
     for (const [, o] of fits) {
       urls.push(o.art.front, o.art.back, o.art.left, o.art.right);
       // A pose is one drawing for every side, or a drawing for each side it is seen from.
-      for (const p of Object.values(o.art.poses ?? {})) for (const u of typeof p === "string" ? [p] : Object.values(p)) urls.push(u);
+      for (const p of Object.values(o.art.poses ?? {}))
+        for (const u of typeof p === "string" ? [p] : Object.values(p)) urls.push(u);
     }
     for (const p of PEDS) urls.push(p.art.back, ...(p.art.walk?.back ?? []));
-    const every = (a) => [a.front, a.back, a.left, a.right, ...Object.values(a.poses ?? {}).flatMap((q) => (typeof q === "string" ? [q] : Object.values(q)))];
+    const every = (a) => [
+      a.front,
+      a.back,
+      a.left,
+      a.right,
+      ...Object.values(a.poses ?? {}).flatMap((q) =>
+        typeof q === "string" ? [q] : Object.values(q),
+      ),
+    ];
     for (const j of g.tables.JOOKERS) urls.push(...every(j.art));
     for (const a of BALLERS) urls.push(...every(a));
     for (const c of Object.values(CAST)) urls.push(...every(c.art));
@@ -693,23 +940,43 @@ try {
       noBack: fits.filter(([, o]) => !o.art.back || /^tint:/.test(o.art.back)).map(([id]) => id),
       noShot: fits.filter(([, o]) => !o.art.poses?.shoot).map(([id]) => id),
       pedsNoBack: PEDS.filter((p) => !p.art.back).length,
-      ballers: BALLERS.filter((a) => a.poses?.shoot?.back && a.poses?.ready?.front && a.poses?.drive?.right).length,
+      ballers: BALLERS.filter(
+        (a) => a.poses?.shoot?.back && a.poses?.ready?.front && a.poses?.drive?.right,
+      ).length,
       // Nobody is drawn to the shin and hung in the air behind a counter any more.
       cutOff: Object.entries(CAST)
         .filter(([, c]) => !c.art.back || !c.art.left || !c.art.right)
         .map(([id]) => id),
       hung: g.npcs.filter((n) => n.id !== "kBlanco" && n.card.lift > 0.01).map((n) => n.id),
-      whole: ["courtOg", "uncJ", "strike"].filter((id) => /\/full-front\.webp$/.test(CAST[id].art.front)).length,
+      whole: ["courtOg", "uncJ", "strike"].filter((id) =>
+        /\/full-front\.webp$/.test(CAST[id].art.front),
+      ).length,
       checked: plain.length,
       missing,
       pose,
       drawing,
     };
   });
-  check(art.fits === 12 && art.noBack.length === 0 && art.pedsNoBack === 0 && art.missing.length === 0, "every fit and every pedestrian has a drawn back, and all of the art loads", art);
-  check(art.pose === "shoot" && /shot-back/.test(art.drawing), "Benji uses his shooting sprite on the jumper", { pose: art.pose, drawing: art.drawing });
-  check(art.noShot.length === 0 && art.ballers === 4, "every fit and all four court players have their court moves", { noShot: art.noShot, ballers: art.ballers });
-  check(art.whole === 3 && art.cutOff.length === 0 && art.hung.length === 0, "Court OG, Unc J and Strike are drawn whole and stand on the ground", { whole: art.whole, cutOff: art.cutOff, hung: art.hung });
+  check(
+    art.fits === 12 && art.noBack.length === 0 && art.pedsNoBack === 0 && art.missing.length === 0,
+    "every fit and every pedestrian has a drawn back, and all of the art loads",
+    art,
+  );
+  check(
+    art.pose === "shoot" && /shot-back/.test(art.drawing),
+    "Benji uses his shooting sprite on the jumper",
+    { pose: art.pose, drawing: art.drawing },
+  );
+  check(
+    art.noShot.length === 0 && art.ballers === 4,
+    "every fit and all four court players have their court moves",
+    { noShot: art.noShot, ballers: art.ballers },
+  );
+  check(
+    art.whole === 3 && art.cutOff.length === 0 && art.hung.length === 0,
+    "Court OG, Unc J and Strike are drawn whole and stand on the ground",
+    { whole: art.whole, cutOff: art.cutOff, hung: art.hung },
+  );
 
   // People have somewhere to be: the same crowd is in different places a little later.
   const crowd = await page.evaluate(() => {
@@ -721,16 +988,28 @@ try {
     const t = g.troupes.fun;
     const before = t.members.map((m) => [m.x, m.z]);
     for (let i = 0; i < 30 * 40; i++) g.tick(1 / 30);
-    const moved = t.members.filter((m, i) => !m.posted && Math.hypot(m.x - before[i][0], m.z - before[i][1]) > 1).length;
+    const moved = t.members.filter(
+      (m, i) => !m.posted && Math.hypot(m.x - before[i][0], m.z - before[i][1]) > 1,
+    ).length;
     const roamers = t.members.filter((m) => !m.posted).length;
     const tramp = g.rooms.fun.tramp;
-    const onBig = t.members.filter((m) => Math.hypot(m.x - tramp.x, m.z - tramp.z) < tramp.r && m.stop.act !== "bounce").length;
+    const onBig = t.members.filter(
+      (m) => Math.hypot(m.x - tramp.x, m.z - tramp.z) < tramp.r && m.stop.act !== "bounce",
+    ).length;
     const vendors = g.street.members.filter((m) => m.stop.act === "serve").length;
     g.stage.render = draw;
     return { roamers, moved, onBig, vendors, bowlers: g.laneBalls.length };
   });
-  check(crowd.moved >= Math.ceil(crowd.roamers * 0.6) && crowd.onBig === 0, "people in the Fun House move between things to do, and nobody stands on the trampoline", crowd);
-  check(crowd.vendors === 4 && crowd.bowlers === 2, "there is a crew in every truck window and other lanes are in play at the bowl", crowd);
+  check(
+    crowd.moved >= Math.ceil(crowd.roamers * 0.6) && crowd.onBig === 0,
+    "people in the Fun House move between things to do, and nobody stands on the trampoline",
+    crowd,
+  );
+  check(
+    crowd.vendors === 4 && crowd.bowlers === 2,
+    "there is a crew in every truck window and other lanes are in play at the bowl",
+    crowd,
+  );
   // The midway stall and the air hockey table, each played through.
   const midway = await page.evaluate(() => {
     const g = window.__GAME__;
@@ -765,7 +1044,11 @@ try {
     g.begin(g.bottles, "whack");
     g.bottles.start();
     run(30);
-    const bottles = [toss(g.bottles, 0, 0.26), toss(g.bottles, -0.433, 0.26), toss(g.bottles, 0.433, 0.26)];
+    const bottles = [
+      toss(g.bottles, 0, 0.26),
+      toss(g.bottles, -0.433, 0.26),
+      toss(g.bottles, 0.433, 0.26),
+    ];
     const sweep = stop();
     g.begin(g.clowns, "whack");
     g.clowns.start();
@@ -773,18 +1056,32 @@ try {
     const gap = g.rooms.fun.midway.clowns.gap / 0.8;
     const wait = (k, open) => {
       let guard = 0;
-      while ((g.clowns.open(k, g.clowns.time + 0.62) && g.clowns.open(k, g.clowns.time + 0.75)) !== open && guard++ < 900) run(1);
+      while (
+        (g.clowns.open(k, g.clowns.time + 0.62) && g.clowns.open(k, g.clowns.time + 0.75)) !==
+          open &&
+        guard++ < 900
+      )
+        run(1);
     };
     wait(0, true);
     const fed = toss(g.clowns, -gap, 0.5);
     let guard = 0;
-    while ((g.clowns.open(0, g.clowns.time + 0.62) || g.clowns.open(0, g.clowns.time + 0.75)) && guard++ < 900) run(1);
+    while (
+      (g.clowns.open(0, g.clowns.time + 0.62) || g.clowns.open(0, g.clowns.time + 0.75)) &&
+      guard++ < 900
+    )
+      run(1);
     const shut = toss(g.clowns, -gap, 0.5);
     stop();
     g.begin(g.bags, "whack");
     g.bags.start();
     run(30);
-    const bags = [toss(g.bags, 0, 0.66), toss(g.bags, 0, 0.6), toss(g.bags, 0, 0.95), toss(g.bags, 0.9, 0.5)];
+    const bags = [
+      toss(g.bags, 0, 0.66),
+      toss(g.bags, 0, 0.6),
+      toss(g.bags, 0, 0.95),
+      toss(g.bags, 0.9, 0.5),
+    ];
     const bagCard = stop();
     const tickets = g.save.tickets - before;
     // Air hockey, with a simple player on the near end: get behind the puck and push it up the table.
@@ -802,18 +1099,51 @@ try {
       else if (h.me.z < 0.8) g.input.held.add("down");
       run(1);
       t++;
-      if (!Number.isFinite(h.p.x + h.p.z) || Math.abs(h.p.x) > table.hw + 0.01 || Math.abs(h.p.z) > table.hl + 0.2) off = true;
+      if (
+        !Number.isFinite(h.p.x + h.p.z) ||
+        Math.abs(h.p.x) > table.hw + 0.01 ||
+        Math.abs(h.p.z) > table.hl + 0.2
+      )
+        off = true;
     }
     for (const k of ["left", "right", "up", "down"]) g.input.held.delete(k);
-    const hockey = { seconds: Math.round(t / 60), you: h.you, them: h.them, off, card: g.results?.title ?? null };
+    const hockey = {
+      seconds: Math.round(t / 60),
+      you: h.you,
+      them: h.them,
+      off,
+      card: g.results?.title ?? null,
+    };
     stop();
     g.stage.render = draw;
     return { bottles, sweep, fed, shut, bags, bagCard, tickets, hockey, mode: g.mode };
   });
-  check(midway.bottles.join() === "4 DOWN,1 DOWN,CLEAN SWEEP!" && midway.sweep?.title === "CLEAN SWEEP" && midway.sweep.tickets === 30, "three balls in the right places clear the bottle pyramid", { bottles: midway.bottles, card: midway.sweep });
-  check(/^IN! \+1/.test(midway.fed) && midway.shut === "SHUT!", "a clown takes the ball with its mouth open and not with it shut", { open: midway.fed, shut: midway.shut });
-  check(midway.bags.join() === "IN THE HOLE! +3,SLID IN! +3,LONG,OFF THE SIDE" && midway.bagCard?.tickets === 18, "bean bags drop in, slide in, go long and miss the board", { bags: midway.bags, card: midway.bagCard });
-  check((midway.hockey.you === 5 || midway.hockey.them === 5) && !midway.hockey.off && !!midway.hockey.card && midway.mode === "walk", "air hockey is played to five and the puck stays on the table", midway.hockey);
+  check(
+    midway.bottles.join() === "4 DOWN,1 DOWN,CLEAN SWEEP!" &&
+      midway.sweep?.title === "CLEAN SWEEP" &&
+      midway.sweep.tickets === 30,
+    "three balls in the right places clear the bottle pyramid",
+    { bottles: midway.bottles, card: midway.sweep },
+  );
+  check(
+    /^IN! \+1/.test(midway.fed) && midway.shut === "SHUT!",
+    "a clown takes the ball with its mouth open and not with it shut",
+    { open: midway.fed, shut: midway.shut },
+  );
+  check(
+    midway.bags.join() === "IN THE HOLE! +3,SLID IN! +3,LONG,OFF THE SIDE" &&
+      midway.bagCard?.tickets === 18,
+    "bean bags drop in, slide in, go long and miss the board",
+    { bags: midway.bags, card: midway.bagCard },
+  );
+  check(
+    (midway.hockey.you === 5 || midway.hockey.them === 5) &&
+      !midway.hockey.off &&
+      !!midway.hockey.card &&
+      midway.mode === "walk",
+    "air hockey is played to five and the puck stays on the table",
+    midway.hockey,
+  );
   // The big moments, photo mode, and the phone's home screen.
   const wow = await page.evaluate(async () => {
     const g = window.__GAME__;
@@ -829,7 +1159,21 @@ try {
     const sky = g.fireworks.busy;
     const thrown = g.live.party - p0;
     for (let i = 0; i < 120; i++) g.tick(1 / 30);
-    g.showResults({ title: "T", sub: "", rows: [], pay: 0, respect: 0, tickets: 0, record: false, again: null, win: true }, null, () => {});
+    g.showResults(
+      {
+        title: "T",
+        sub: "",
+        rows: [],
+        pay: 0,
+        respect: 0,
+        tickets: 0,
+        record: false,
+        again: null,
+        win: true,
+      },
+      null,
+      () => {},
+    );
     const card = g.live.party - p0;
     g.close();
     g.stage.render = draw;
@@ -843,12 +1187,39 @@ try {
     g.close();
     const m = await fetch("/manifest.webmanifest");
     const man = m.ok ? await m.json() : null;
-    const icons = man ? await Promise.all(man.icons.map((i) => fetch(i.src, { method: "HEAD" }).then((r) => r.ok))) : [];
-    return { slow, sky, thrown, card, photo, after: g.overlay, app: man && { display: man.display, icons: icons.every(Boolean) && icons.length }, linked: !!document.querySelector('link[rel="manifest"]') };
+    const icons = man
+      ? await Promise.all(man.icons.map((i) => fetch(i.src, { method: "HEAD" }).then((r) => r.ok)))
+      : [];
+    return {
+      slow,
+      sky,
+      thrown,
+      card,
+      photo,
+      after: g.overlay,
+      app: man && { display: man.display, icons: icons.every(Boolean) && icons.length },
+      linked: !!document.querySelector('link[rel="manifest"]'),
+    };
   });
-  check(wow.slow && wow.sky && wow.thrown === 1 && wow.card === 2, "a big win slows the picture, throws confetti and lights the sky, and a winning card comes up under more", wow);
-  check(wow.photo.overlay === "photo" && wow.photo.moved > 1 && wow.photo.width > 0 && wow.photo.frozen && wow.after === null, "photo mode swings the lens round Benji and takes the picture", wow.photo);
-  check(wow.linked && wow.app?.display === "fullscreen" && wow.app.icons === 3, "the game can be added to a phone's home screen", wow.app);
+  check(
+    wow.slow && wow.sky && wow.thrown === 1 && wow.card === 2,
+    "a big win slows the picture, throws confetti and lights the sky, and a winning card comes up under more",
+    wow,
+  );
+  check(
+    wow.photo.overlay === "photo" &&
+      wow.photo.moved > 1 &&
+      wow.photo.width > 0 &&
+      wow.photo.frozen &&
+      wow.after === null,
+    "photo mode swings the lens round Benji and takes the picture",
+    wow.photo,
+  );
+  check(
+    wow.linked && wow.app?.display === "fullscreen" && wow.app.icons === 3,
+    "the game can be added to a phone's home screen",
+    wow.app,
+  );
   // The garage: a ride costs what it says, changes the car, and changes how it drives.
   const garage = await page.evaluate(() => {
     const g = window.__GAME__;
@@ -861,7 +1232,13 @@ try {
     const broke = s.ride === was.ride && s.dollars === 10;
     s.dollars = 2000;
     g.pickRide("van");
-    const bought = { ride: s.ride, left: s.dollars, kind: g.car.kind, top: g.tune.top > top0, shown: g.car.group.parent === g.city.exterior };
+    const bought = {
+      ride: s.ride,
+      left: s.dollars,
+      kind: g.car.kind,
+      top: g.tune.top > top0,
+      shown: g.car.group.parent === g.city.exterior,
+    };
     g.pickRide("coupe");
     const back = { ride: s.ride, left: s.dollars, kind: g.car.kind, top: g.tune.top === top0 };
     g.openGarage();
@@ -872,7 +1249,21 @@ try {
     s.dollars = was.dollars;
     return { rides: RIDES.length, broke, bought, back, menu };
   });
-  check(garage.rides === 6 && garage.broke && garage.bought.ride === "van" && garage.bought.left === 500 && garage.bought.kind === "van" && garage.bought.top && garage.bought.shown && garage.back.kind === "coupe" && garage.back.left === 500 && garage.back.top && garage.menu === "garage", "the garage sells six rides, and each one changes the car and how it drives", garage);
+  check(
+    garage.rides === 6 &&
+      garage.broke &&
+      garage.bought.ride === "van" &&
+      garage.bought.left === 500 &&
+      garage.bought.kind === "van" &&
+      garage.bought.top &&
+      garage.bought.shown &&
+      garage.back.kind === "coupe" &&
+      garage.back.left === 500 &&
+      garage.back.top &&
+      garage.menu === "garage",
+    "the garage sells six rides, and each one changes the car and how it drives",
+    garage,
+  );
   // The story runs on past the Drop Day, and Respect has rungs.
   const story = await page.evaluate(() => {
     const g = window.__GAME__;
@@ -913,13 +1304,47 @@ try {
     g.save.respect = 0;
     g.earn(0, 25);
     run(60);
-    const rank = { toast: g.revealNow?.title ?? "", badge: g.revealNow?.img ?? "", pays: g.earn(100, 0, { quiet: true }).dollars > 100 };
+    const rank = {
+      toast: g.revealNow?.title ?? "",
+      badge: g.revealNow?.img ?? "",
+      pays: g.earn(100, 0, { quiet: true }).dollars > 100,
+    };
     g.stage.render = draw;
-    return { chapters: CHAPTERS.map((c) => c.steps.length).join(), lost, sent, part, counted, refused, done, rank };
+    return {
+      chapters: CHAPTERS.map((c) => c.steps.length).join(),
+      lost,
+      sent,
+      part,
+      counted,
+      refused,
+      done,
+      rank,
+    };
   });
-  check(story.chapters === "11,8,7" && story.lost && story.sent.step === "catering" && /Mama Dee/.test(story.sent.by), "the story runs on past the Drop Day, and each errand is handed over by whoever needs it", story);
-  check(story.part.step === "change" && story.part.count === 29 && story.counted === "league" && story.refused && story.done, "errands that count are counted, and the last one ends with the eleven on his back", story);
-  check(/Known on the riverfront/.test(story.rank.toast) && /rank-2\.webp$/.test(story.rank.badge) && story.rank.pays, "Respect has rungs, each with its badge, and each one pays more", story.rank);
+  check(
+    story.chapters === "11,8,7" &&
+      story.lost &&
+      story.sent.step === "catering" &&
+      /Mama Dee/.test(story.sent.by),
+    "the story runs on past the Drop Day, and each errand is handed over by whoever needs it",
+    story,
+  );
+  check(
+    story.part.step === "change" &&
+      story.part.count === 29 &&
+      story.counted === "league" &&
+      story.refused &&
+      story.done,
+    "errands that count are counted, and the last one ends with the eleven on his back",
+    story,
+  );
+  check(
+    /Known on the riverfront/.test(story.rank.toast) &&
+      /rank-2\.webp$/.test(story.rank.badge) &&
+      story.rank.pays,
+    "Respect has rungs, each with its badge, and each one pays more",
+    story.rank,
+  );
   // After dark: the bridge runs its show, the river mirrors it, the neon moves, and it can rain.
   const night = await page.evaluate(() => {
     const g = window.__GAME__;
@@ -951,7 +1376,12 @@ try {
     const rough = g.city.glow.wet[0].roughness;
     g.setRain(true);
     run(360);
-    const rain = { amount: g.weather.rain, wet: g.weather.wet, drawn: g.rain.group.visible, rough: g.city.glow.wet[0].roughness };
+    const rain = {
+      amount: g.weather.rain,
+      wet: g.weather.wet,
+      drawn: g.rain.group.visible,
+      rough: g.city.glow.wet[0].roughness,
+    };
     g.setRain(false);
     run(330);
     const after = { amount: g.weather.rain, drawn: g.rain.group.visible, wet: g.weather.wet };
@@ -961,11 +1391,42 @@ try {
     g.setPhase("auto");
     run(10);
     g.stage.render = draw;
-    return { day, programmes: [...seen], glow, mirrored, signs: neon.length, moved, rough, rain, after };
+    return {
+      day,
+      programmes: [...seen],
+      glow,
+      mirrored,
+      signs: neon.length,
+      moved,
+      rough,
+      rain,
+      after,
+    };
   });
-  check(night.day.programme === "" && night.day.glow === 0 && night.programmes.length === 5 && night.glow > 0.5 && night.mirrored > 1, "the bridge runs five light shows after dark and the river mirrors them", { day: night.day, programmes: night.programmes, glow: night.glow, mirrored: night.mirrored });
-  check(night.moved > night.signs / 2, "neon signs are never quite still at night", { signs: night.signs, moved: night.moved });
-  check(night.rain.amount > 0.95 && night.rain.drawn && night.rain.wet > 0.9 && night.rain.rough < night.rough * 0.6 && night.after.amount < 0.05 && !night.after.drawn && night.after.wet > 0.5, "rain comes down, the streets shine, and they stay wet after it stops", { dry: night.rough, rain: night.rain, after: night.after });
+  check(
+    night.day.programme === "" &&
+      night.day.glow === 0 &&
+      night.programmes.length === 5 &&
+      night.glow > 0.5 &&
+      night.mirrored > 1,
+    "the bridge runs five light shows after dark and the river mirrors them",
+    { day: night.day, programmes: night.programmes, glow: night.glow, mirrored: night.mirrored },
+  );
+  check(night.moved > night.signs / 2, "neon signs are never quite still at night", {
+    signs: night.signs,
+    moved: night.moved,
+  });
+  check(
+    night.rain.amount > 0.95 &&
+      night.rain.drawn &&
+      night.rain.wet > 0.9 &&
+      night.rain.rough < night.rough * 0.6 &&
+      night.after.amount < 0.05 &&
+      !night.after.drawn &&
+      night.after.wet > 0.5,
+    "rain comes down, the streets shine, and they stay wet after it stops",
+    { dry: night.rough, rain: night.rain, after: night.after },
+  );
   // This round: easier fishing, defence and dunks at the court, laser tag's lock and dash, rides that
   // let him out facing the right way, and the things the city does on its own.
   const round = await page.evaluate(() => {
@@ -987,7 +1448,11 @@ try {
     g.taxi("trucks");
     run(() => false, 2);
     const veli = g.city.anchors.trucks.windows.velis;
-    out.ride = { front: g.pos.z < veli.z - 1, near: Math.hypot(g.pos.x - veli.x, g.pos.z - veli.z) < 6, heading: +g.heading.toFixed(2) };
+    out.ride = {
+      front: g.pos.z < veli.z - 1,
+      near: Math.hypot(g.pos.x - veli.x, g.pos.z - veli.z) < 6,
+      heading: +g.heading.toFixed(2),
+    };
 
     // Fishing: a slow hand on the hook still hooks, a missed bite comes round again, and a small fish comes straight in.
     const c = g.city.anchors.castSpots[0];
@@ -1025,7 +1490,10 @@ try {
     g.save.best.versus = 0;
     g.begin(h, "hoops");
     h.start("versus");
-    run(() => h.turn === "rival" && Math.hypot(h.rival.tx - h.rival.x, h.rival.tz - h.rival.z) < 0.05, 8);
+    run(
+      () => h.turn === "rival" && Math.hypot(h.rival.tx - h.rival.x, h.rival.tz - h.rival.z) < 0.05,
+      8,
+    );
     h.fake = false;
     run(() => h.rival.wait <= 0.25, 4);
     g.input.press("action");
@@ -1066,7 +1534,10 @@ try {
     const z0 = g.pos.z;
     g.input.press("interact");
     for (let i = 0; i < 14; i++) tick();
-    const dash = { moved: +Math.hypot(g.pos.x - x0, g.pos.z - z0).toFixed(1), shook: pink.at !== "benji" };
+    const dash = {
+      moved: +Math.hypot(g.pos.x - x0, g.pos.z - z0).toFixed(1),
+      shook: pink.at !== "benji",
+    };
     l.left = 20.4;
     run(() => l.frenzy, 2);
     out.laser = { lock, dash, frenzy: l.frenzy, worth: l.worth() };
@@ -1081,7 +1552,11 @@ try {
     const job = g.rollDaily();
     const cash = g.save.dollars;
     g.emit(job.goal.kind, job.goal.n ?? job.goal.max ?? 1, job.goal.extra ?? 0);
-    const daily = { done: g.save.daily.done, streak: g.save.daily.streak, paid: g.save.dollars - cash };
+    const daily = {
+      done: g.save.daily.done,
+      streak: g.save.daily.streak,
+      paid: g.save.dollars - cash,
+    };
     const cash2 = g.save.dollars;
     g.emit(job.goal.kind, job.goal.n ?? job.goal.max ?? 1, job.goal.extra ?? 0);
     daily.twice = g.save.dollars - cash2;
@@ -1144,13 +1619,61 @@ try {
     g.stage.render = draw;
     return out;
   });
-  check(round.ride.front && round.ride.near && round.ride.heading === 0, "a ride to the food trucks lets him out in front of the windows, facing them", round.ride);
-  check(round.fish.late === "bite" && round.fish.again.phase === "wait" && round.fish.again.bites === 1 && round.fish.hooked === "reel" && round.fish.end === "landed", "fishing forgives a slow hand: the bite waits, comes round again, and a small fish comes straight in", round.fish);
-  check(round.court.blocked.result === "block" && /BLOCKED/.test(round.court.blocked.call) && round.court.them === 0 && round.court.dunking && round.court.gained >= 2 && round.court.streak === 0, "at the court a well-timed jump blocks the shot and three in a row buys a dunk", round.court);
-  check(round.laser.lock && round.laser.dash.moved > 2 && round.laser.dash.shook && round.laser.frenzy && round.laser.worth === 2, "laser tag turns the crosshair on whoever is in it, a dash shakes off a pink lining him up, and the last twenty seconds count double", round.laser);
-  check(round.city.daily.done && round.city.daily.streak === 1 && round.city.daily.paid >= 120 && round.city.daily.twice === 0 && round.city.card.got && round.city.card.total === 6, "today's drop pays once and a photo at the pier collects a postcard", { daily: round.city.daily, card: round.city.card });
-  check(round.city.drift.plain.peak === 0 && round.city.drift.handbrake.peak > 30 && /^DRIFT \d+/.test(round.city.drift.handbrake.toast), "a handbrake slide is scored and paid; an ordinary turn is not a drift", round.city.drift);
-  check(round.city.show.left && round.city.show.sky && round.city.bow.left && round.city.bow.seen, "fireworks go up when night falls and a rainbow follows daytime rain", { show: round.city.show, bow: round.city.bow });
+  check(
+    round.ride.front && round.ride.near && round.ride.heading === 0,
+    "a ride to the food trucks lets him out in front of the windows, facing them",
+    round.ride,
+  );
+  check(
+    round.fish.late === "bite" &&
+      round.fish.again.phase === "wait" &&
+      round.fish.again.bites === 1 &&
+      round.fish.hooked === "reel" &&
+      round.fish.end === "landed",
+    "fishing forgives a slow hand: the bite waits, comes round again, and a small fish comes straight in",
+    round.fish,
+  );
+  check(
+    round.court.blocked.result === "block" &&
+      /BLOCKED/.test(round.court.blocked.call) &&
+      round.court.them === 0 &&
+      round.court.dunking &&
+      round.court.gained >= 2 &&
+      round.court.streak === 0,
+    "at the court a well-timed jump blocks the shot and three in a row buys a dunk",
+    round.court,
+  );
+  check(
+    round.laser.lock &&
+      round.laser.dash.moved > 2 &&
+      round.laser.dash.shook &&
+      round.laser.frenzy &&
+      round.laser.worth === 2,
+    "laser tag turns the crosshair on whoever is in it, a dash shakes off a pink lining him up, and the last twenty seconds count double",
+    round.laser,
+  );
+  check(
+    round.city.daily.done &&
+      round.city.daily.streak === 1 &&
+      round.city.daily.paid >= 120 &&
+      round.city.daily.twice === 0 &&
+      round.city.card.got &&
+      round.city.card.total === 6,
+    "today's drop pays once and a photo at the pier collects a postcard",
+    { daily: round.city.daily, card: round.city.card },
+  );
+  check(
+    round.city.drift.plain.peak === 0 &&
+      round.city.drift.handbrake.peak > 30 &&
+      /^DRIFT \d+/.test(round.city.drift.handbrake.toast),
+    "a handbrake slide is scored and paid; an ordinary turn is not a drift",
+    round.city.drift,
+  );
+  check(
+    round.city.show.left && round.city.show.sky && round.city.bow.left && round.city.bow.seen,
+    "fireworks go up when night falls and a rainbow follows daytime rain",
+    { show: round.city.show, bow: round.city.bow },
+  );
   // Benji walks: two strides for each side he is seen from, with the standing drawing between them.
   const walk = await page.evaluate(async () => {
     const g = window.__GAME__;
@@ -1189,9 +1712,15 @@ try {
     );
     return { seen, loaded: sizes.every((h) => h > 600) };
   });
-  const strides = (list, view) => list.includes(`walk-${view}-a.webp`) && list.includes(`walk-${view}-b.webp`);
+  const strides = (list, view) =>
+    list.includes(`walk-${view}-a.webp`) && list.includes(`walk-${view}-b.webp`);
   check(
-    walk.loaded && strides(walk.seen.up, "back") && walk.seen.up.includes("back.png") && strides(walk.seen.left, "left") && strides(walk.seen.down, "front") && strides(walk.seen.right, "left"),
+    walk.loaded &&
+      strides(walk.seen.up, "back") &&
+      walk.seen.up.includes("back.png") &&
+      strides(walk.seen.left, "left") &&
+      strides(walk.seen.down, "front") &&
+      strides(walk.seen.right, "left"),
     "Benji walks with two strides from behind, from the side and from in front",
     walk,
   );
@@ -1258,8 +1787,19 @@ try {
     const middle = [perft(c, 1), perft(c, 2)];
     const f = fresh("chess");
     const sq = (name) => (8 - +name[1]) * 8 + (name.charCodeAt(0) - 97);
-    for (const [from, to] of [["f2", "f3"], ["e7", "e5"], ["g2", "g4"], ["d8", "h4"]]) f.play({ from: sq(from), to: sq(to) });
-    out.chess = { opening, middle, mate: f.outcome(), illegal: fresh("chess").play({ from: sq("e2"), to: sq("e5") }) };
+    for (const [from, to] of [
+      ["f2", "f3"],
+      ["e7", "e5"],
+      ["g2", "g4"],
+      ["d8", "h4"],
+    ])
+      f.play({ from: sq(from), to: sq(to) });
+    out.chess = {
+      opening,
+      middle,
+      mate: f.outcome(),
+      illegal: fresh("chess").play({ from: sq("e2"), to: sq("e5") }),
+    };
 
     // Checkers: a jump on offer is the only move there is.
     const k = fresh("checkers");
@@ -1270,7 +1810,11 @@ try {
     k.cells[0 * 8 + 1] = 3;
     k.side = 0;
     const hops = k.hops();
-    out.checkers = { hops: hops.length, jump: hops[0]?.over === 4 * 8 + 3, took: k.play(hops[0]) && k.cells[4 * 8 + 3] === 0 };
+    out.checkers = {
+      hops: hops.length,
+      jump: hops[0]?.over === 4 * 8 + 3,
+      took: k.play(hops[0]) && k.cells[4 * 8 + 3] === 0,
+    };
 
     // Every game, the regulars playing each other to the end.
     const through = (id, cap) => {
@@ -1295,7 +1839,14 @@ try {
       return { over: !!o, winner: o?.winner ?? null, steps, chainOk, tricks };
     };
     out.through = {};
-    for (const [id, cap] of [["tictactoe", 20], ["connect4", 60], ["checkers", 500], ["dominoes", 4000], ["spades", 8000]]) out.through[id] = through(id, cap);
+    for (const [id, cap] of [
+      ["tictactoe", 20],
+      ["connect4", 60],
+      ["checkers", 500],
+      ["dominoes", 4000],
+      ["spades", 8000],
+    ])
+      out.through[id] = through(id, cap);
     // A sharp tic-tac-toe player, left to it, is never beaten.
     let beaten = 0;
     for (let n = 0; n < 12; n++) {
@@ -1326,7 +1877,8 @@ try {
         else run(90);
       }
       const h = g.board.hud();
-      if (h.stage === "done" && h.result.won) won = { pay: h.result.pay, gained: g.save.dollars - cash, wins: h.wins };
+      if (h.stage === "done" && h.result.won)
+        won = { pay: h.result.pay, gained: g.save.dollars - cash, wins: h.wins };
       cash = g.save.dollars;
     }
     out.table = { waiting, answered, won };
@@ -1340,7 +1892,12 @@ try {
       g.board.move(col);
     }
     const two = g.board.hud();
-    out.two = { seats: seats.every(Boolean), stage: two.stage, text: two.result?.text ?? "", paid: g.save.dollars - cash2 };
+    out.two = {
+      seats: seats.every(Boolean),
+      stage: two.stage,
+      text: two.result?.text ?? "",
+      paid: g.save.dollars - cash2,
+    };
 
     // The screen itself: a chess move made by tapping two squares.
     g.board.sit("chess");
@@ -1359,14 +1916,64 @@ try {
     g.warp(0, -160, Math.PI);
     return out;
   });
-  check(Math.hypot(park.ride.x + 84, park.ride.z - 490.6) < 1.5 && Math.abs(park.ride.heading - Math.PI) < 0.01, "a ride to the park lets him out on the terrace, facing the tables", park.ride);
-  check(/Sit down: Spades/.test(park.prompt) && park.sat.overlay === "table" && park.sat.id === "spades" && park.pickButtons === 3, "the open seat at a park table offers the game, at three levels", { prompt: park.prompt, sat: park.sat, buttons: park.pickButtons });
-  check(park.chess.opening.join() === "20,400,8902" && park.chess.middle.join() === "48,2039" && park.chess.mate?.winner === 1 && park.chess.illegal === false, "chess plays by the book: the move counts match the published ones, mate is mate and an illegal move is refused", park.chess);
-  check(park.checkers.hops === 1 && park.checkers.jump && park.checkers.took, "in checkers a jump on offer has to be taken", park.checkers);
-  check(Object.values(park.through).every((t) => t.over && t.chainOk && t.tricks) && park.tic === 0, "every table game plays through to a result, with the domino line matching end to end and thirteen tricks to a hand", park.through);
-  check(park.table.waiting === false && park.table.answered === 1 && park.table.won && park.table.won.pay > 0 && park.table.won.gained === park.table.won.pay && park.table.won.wins >= 1, "the regular answers in his own time, and beating him pays", park.table);
-  check(park.two.seats && park.two.stage === "done" && /Player one/.test(park.two.text) && park.two.paid === 0, "two people can share the device at a table, for bragging rights only", park.two);
-  check(park.screen.squares === 64 && park.screen.moved && park.left.overlay === null && park.left.id === null, "a chess move is made by tapping two squares, and getting up clears the table", { ...park.screen, left: park.left });
+  check(
+    Math.hypot(park.ride.x + 84, park.ride.z - 490.6) < 1.5 &&
+      Math.abs(park.ride.heading - Math.PI) < 0.01,
+    "a ride to the park lets him out on the terrace, facing the tables",
+    park.ride,
+  );
+  check(
+    /Sit down: Spades/.test(park.prompt) &&
+      park.sat.overlay === "table" &&
+      park.sat.id === "spades" &&
+      park.pickButtons === 3,
+    "the open seat at a park table offers the game, at three levels",
+    { prompt: park.prompt, sat: park.sat, buttons: park.pickButtons },
+  );
+  check(
+    park.chess.opening.join() === "20,400,8902" &&
+      park.chess.middle.join() === "48,2039" &&
+      park.chess.mate?.winner === 1 &&
+      park.chess.illegal === false,
+    "chess plays by the book: the move counts match the published ones, mate is mate and an illegal move is refused",
+    park.chess,
+  );
+  check(
+    park.checkers.hops === 1 && park.checkers.jump && park.checkers.took,
+    "in checkers a jump on offer has to be taken",
+    park.checkers,
+  );
+  check(
+    Object.values(park.through).every((t) => t.over && t.chainOk && t.tricks) && park.tic === 0,
+    "every table game plays through to a result, with the domino line matching end to end and thirteen tricks to a hand",
+    park.through,
+  );
+  check(
+    park.table.waiting === false &&
+      park.table.answered === 1 &&
+      park.table.won &&
+      park.table.won.pay > 0 &&
+      park.table.won.gained === park.table.won.pay &&
+      park.table.won.wins >= 1,
+    "the regular answers in his own time, and beating him pays",
+    park.table,
+  );
+  check(
+    park.two.seats &&
+      park.two.stage === "done" &&
+      /Player one/.test(park.two.text) &&
+      park.two.paid === 0,
+    "two people can share the device at a table, for bragging rights only",
+    park.two,
+  );
+  check(
+    park.screen.squares === 64 &&
+      park.screen.moved &&
+      park.left.overlay === null &&
+      park.left.id === null,
+    "a chess move is made by tapping two squares, and getting up clears the table",
+    { ...park.screen, left: park.left },
+  );
   // Recordings are optional: with none on the shelf every sound is still made up on the spot.
   const sound = await page.evaluate(async () => {
     const g = window.__GAME__;
@@ -1393,7 +2000,15 @@ try {
       tracks: g.tracks().length,
     };
   });
-  check(sound.loaded === sound.listed && sound.missing.length === 0 && sound.line === "k-drop-day" && sound.unknown === false && sound.tracks > 0, "recorded sound is used where it exists and made up where it doesn't", sound);
+  check(
+    sound.loaded === sound.listed &&
+      sound.missing.length === 0 &&
+      sound.line === "k-drop-day" &&
+      sound.unknown === false &&
+      sound.tracks > 0,
+    "recorded sound is used where it exists and made up where it doesn't",
+    sound,
+  );
   // The drawn pictures: fish, postcards, rank badges and clown faces; and everybody's new moves.
   const pics = await page.evaluate(async () => {
     const g = window.__GAME__;
@@ -1414,8 +2029,27 @@ try {
         img.src = src;
       });
     // Every drawing a character can be shown as is a real picture.
-    const every = (a) => [a.front, a.back, a.left, a.right, ...Object.values(a.walk ?? {}).flat(), ...Object.values(a.poses ?? {}).flatMap((q) => (typeof q === "string" ? [q] : Object.values(q)))].filter(Boolean).map((u) => u.replace(/^flip:/, ""));
-    const people = [...Object.values(OUTFITS).map((o) => o.art), ...PEDS.map((q) => q.art), ...BALLERS, ...Object.values(CAST).map((c) => c.art), ...TAGGERS.map((q) => q.art), COACH.art];
+    const every = (a) =>
+      [
+        a.front,
+        a.back,
+        a.left,
+        a.right,
+        ...Object.values(a.walk ?? {}).flat(),
+        ...Object.values(a.poses ?? {}).flatMap((q) =>
+          typeof q === "string" ? [q] : Object.values(q),
+        ),
+      ]
+        .filter(Boolean)
+        .map((u) => u.replace(/^flip:/, ""));
+    const people = [
+      ...Object.values(OUTFITS).map((o) => o.art),
+      ...PEDS.map((q) => q.art),
+      ...BALLERS,
+      ...Object.values(CAST).map((c) => c.art),
+      ...TAGGERS.map((q) => q.art),
+      COACH.art,
+    ];
     const files = [...new Set([...people.flatMap(every), ...BAND.flatMap((q) => q.frames)])];
     const broken = [];
     for (const f of files) if (!(await size(f))) broken.push(f);
@@ -1425,8 +2059,21 @@ try {
     g.openAlbum();
     await new Promise((r) => setTimeout(r, 150));
     const album = g.albumHud();
-    const shown = { cards: document.querySelectorAll("[data-card]").length, got: document.querySelectorAll('[data-card][data-got="1"]').length, fish: document.querySelectorAll("[data-fish]").length, ranks: document.querySelectorAll("[data-rank]").length, earned: document.querySelectorAll('[data-rank][data-got="1"]').length };
-    const pictures = [...album.postcards.map((c) => c.img), ...album.fish.map((f) => f.img), ...album.ranks.map((r) => r.badge), 1, 2, 3].map((u) => (typeof u === "number" ? `/game-v2/places/clowns/clown-${u}.webp` : u));
+    const shown = {
+      cards: document.querySelectorAll("[data-card]").length,
+      got: document.querySelectorAll('[data-card][data-got="1"]').length,
+      fish: document.querySelectorAll("[data-fish]").length,
+      ranks: document.querySelectorAll("[data-rank]").length,
+      earned: document.querySelectorAll('[data-rank][data-got="1"]').length,
+    };
+    const pictures = [
+      ...album.postcards.map((c) => c.img),
+      ...album.fish.map((f) => f.img),
+      ...album.ranks.map((r) => r.badge),
+      1,
+      2,
+      3,
+    ].map((u) => (typeof u === "number" ? `/game-v2/places/clowns/clown-${u}.webp` : u));
     const blank = [];
     for (const f of pictures) if (!(await size(f))) blank.push(f);
     g.open("pause");
@@ -1500,7 +2147,14 @@ try {
     run(3);
     const quiet = og.pose;
     // The crowd throws its hands up when it jumps.
-    const still = [...g.street.members, ...(g.people.members ?? [])].filter((m) => !m.going && m.stop.act !== "inside" && m.stop.act !== "serve" && m.stop.act !== "sit" && m.card.has("cheer"));
+    const still = [...g.street.members, ...(g.people.members ?? [])].filter(
+      (m) =>
+        !m.going &&
+        m.stop.act !== "inside" &&
+        m.stop.act !== "serve" &&
+        m.stop.act !== "sit" &&
+        m.card.has("cheer"),
+    );
     // Somebody who is staying put for the next few seconds: one about to walk off drops their hands as they go.
     const near = still.find((m) => m.posted || m.t > 6) ?? still[0];
     g.warp(near.x + 3, near.z + 3, 0);
@@ -1550,17 +2204,97 @@ try {
     run(10);
     g.save.best.versus = tier;
     g.stage.render = draw;
-    return { files: files.length, broken, album: { cards: album.postcards.length, fish: album.fish.length, ranks: album.ranks.length }, shown, blank, held, caught, reeling, landed, book, heaviest, drawn, fist, down, posed, dropped, talking, quiet, hands, still: still.length, after, drive };
+    return {
+      files: files.length,
+      broken,
+      album: { cards: album.postcards.length, fish: album.fish.length, ranks: album.ranks.length },
+      shown,
+      blank,
+      held,
+      caught,
+      reeling,
+      landed,
+      book,
+      heaviest,
+      drawn,
+      fist,
+      down,
+      posed,
+      dropped,
+      talking,
+      quiet,
+      hands,
+      still: still.length,
+      after,
+      drive,
+    };
   });
-  check(pics.files > 150 && pics.broken.length === 0, "every drawing a character can be shown as is a real picture", { files: pics.files, broken: pics.broken });
-  check(pics.shown.cards === 6 && pics.shown.got >= 1 && pics.shown.fish === 8 && pics.shown.ranks === 7 && pics.shown.earned >= 3 && pics.blank.length === 0, "the album shows the postcards, the fish book and the names, each with its picture", { shown: pics.shown, blank: pics.blank });
-  check(/postcards\/pyramid\.webp$/.test(pics.held.img) && pics.held.title === "The Pyramid", "a postcard is held up when it is collected", pics.held);
-  check(/fish\/largemouth-bass\.webp$/.test(pics.caught.img ?? "") && pics.book === Math.max(pics.heaviest, pics.caught.lb) && pics.reeling === "reel" && pics.landed === "cheer", "a catch has its picture, goes in the fish book, and Benji leans on the rod and then celebrates", { caught: pics.caught, heaviest: pics.heaviest, book: pics.book, reeling: pics.reeling, landed: pics.landed });
-  check(pics.drawn.dunk === "dunk-back.webp" && pics.drawn.reel === "reel-back.webp" && pics.drawn.bowl === "bowl-back.webp" && pics.drawn.cheer === "cheer-back.webp", "the green tee has its own drawings for the dunk, the reel, the bowling release and the cheer", pics.drawn);
-  check(pics.fist === "cheer" && pics.down === null && pics.posed === "cheer" && pics.dropped === null, "his fist goes up after a win and for a photo, and comes down again", { fist: pics.fist, down: pics.down, posed: pics.posed, dropped: pics.dropped });
-  check(pics.talking.pose === "talk" && pics.talking.file === "talk.webp" && pics.quiet === null, "whoever is talking is drawn talking", { talking: pics.talking, quiet: pics.quiet });
-  check(pics.still > 0 && pics.hands > 5 && pics.after, "people in the crowd throw their hands up when they jump, and put them down again", { standing: pics.still, frames: pics.hands, after: pics.after });
-  check(pics.drive.started.on && pics.drive.started.turn === "air" && /dunk-back/.test(pics.drive.up) && pics.drive.scored === 2 && pics.drive.turn === "you", "a better player can take an open look to the rim and throw it down for two", pics.drive);
+  check(
+    pics.files > 150 && pics.broken.length === 0,
+    "every drawing a character can be shown as is a real picture",
+    { files: pics.files, broken: pics.broken },
+  );
+  check(
+    pics.shown.cards === 6 &&
+      pics.shown.got >= 1 &&
+      pics.shown.fish === 8 &&
+      pics.shown.ranks === 7 &&
+      pics.shown.earned >= 3 &&
+      pics.blank.length === 0,
+    "the album shows the postcards, the fish book and the names, each with its picture",
+    { shown: pics.shown, blank: pics.blank },
+  );
+  check(
+    /postcards\/pyramid\.webp$/.test(pics.held.img) && pics.held.title === "The Pyramid",
+    "a postcard is held up when it is collected",
+    pics.held,
+  );
+  check(
+    /fish\/largemouth-bass\.webp$/.test(pics.caught.img ?? "") &&
+      pics.book === Math.max(pics.heaviest, pics.caught.lb) &&
+      pics.reeling === "reel" &&
+      pics.landed === "cheer",
+    "a catch has its picture, goes in the fish book, and Benji leans on the rod and then celebrates",
+    {
+      caught: pics.caught,
+      heaviest: pics.heaviest,
+      book: pics.book,
+      reeling: pics.reeling,
+      landed: pics.landed,
+    },
+  );
+  check(
+    pics.drawn.dunk === "dunk-back.webp" &&
+      pics.drawn.reel === "reel-back.webp" &&
+      pics.drawn.bowl === "bowl-back.webp" &&
+      pics.drawn.cheer === "cheer-back.webp",
+    "the green tee has its own drawings for the dunk, the reel, the bowling release and the cheer",
+    pics.drawn,
+  );
+  check(
+    pics.fist === "cheer" && pics.down === null && pics.posed === "cheer" && pics.dropped === null,
+    "his fist goes up after a win and for a photo, and comes down again",
+    { fist: pics.fist, down: pics.down, posed: pics.posed, dropped: pics.dropped },
+  );
+  check(
+    pics.talking.pose === "talk" && pics.talking.file === "talk.webp" && pics.quiet === null,
+    "whoever is talking is drawn talking",
+    { talking: pics.talking, quiet: pics.quiet },
+  );
+  check(
+    pics.still > 0 && pics.hands > 5 && pics.after,
+    "people in the crowd throw their hands up when they jump, and put them down again",
+    { standing: pics.still, frames: pics.hands, after: pics.after },
+  );
+  check(
+    pics.drive.started.on &&
+      pics.drive.started.turn === "air" &&
+      /dunk-back/.test(pics.drive.up) &&
+      pics.drive.scored === 2 &&
+      pics.drive.turn === "you",
+    "a better player can take an open look to the rim and throw it down for two",
+    pics.drive,
+  );
   // The rec grounds on Park Avenue: putt-putt, cornhole and tennis; and what flies over the city.
   const rec = await page.evaluate(() => {
     const g = window.__GAME__;
@@ -1580,8 +2314,13 @@ try {
     const quiet = new Proxy({}, { get: () => () => {} });
     const sound = g.sound;
     // The spots are there to walk up to, and the map knows both places.
-    const stops = { putt: POIS.find((q) => q.id === "putt"), courts: POIS.find((q) => q.id === "courts") };
-    const spots = ["Putt-putt", "Tennis", "Cornhole"].map((w) => g.spots.some((q) => q.label().startsWith(w)));
+    const stops = {
+      putt: POIS.find((q) => q.id === "putt"),
+      courts: POIS.find((q) => q.id === "courts"),
+    };
+    const spots = ["Putt-putt", "Tennis", "Cornhole"].map((w) =>
+      g.spots.some((q) => q.label().startsWith(w)),
+    );
 
     // ---- putt-putt
     g.begin(g.putt, "whack");
@@ -1602,11 +2341,22 @@ try {
     const top = HOLES[hill].ramp.h;
     p.putt(p.aim, 0.2);
     rollOut();
-    const soft = { z: +p.z.toFixed(2), up: Math.abs(p.z - HOLES[hill].tee[1]) > 5.5, strokes: p.strokes };
+    const soft = {
+      z: +p.z.toFixed(2),
+      up: Math.abs(p.z - HOLES[hill].tee[1]) > 5.5,
+      strokes: p.strokes,
+    };
     p.tee(hill);
     p.putt(p.aim, (p.sweet[0] + p.sweet[1]) / 2);
     rollOut();
-    const firm = { over: p.state.phase === "sunk" || Math.abs(p.z - HOLES[hill].ramp.z1) < 3 === (Math.sign(p.z - HOLES[hill].ramp.z1) === Math.sign(HOLES[hill].ramp.z1 - HOLES[hill].ramp.z0) || p.state.phase === "sunk"), phase: p.state.phase };
+    const firm = {
+      over:
+        p.state.phase === "sunk" ||
+        Math.abs(p.z - HOLES[hill].ramp.z1) < 3 ===
+          (Math.sign(p.z - HOLES[hill].ramp.z1) ===
+            Math.sign(HOLES[hill].ramp.z1 - HOLES[hill].ramp.z0) || p.state.phase === "sunk"),
+      phase: p.state.phase,
+    };
     // The paddle wheel: shut, the ball stays this side of it; open, it goes through.
     const wh = HOLES.findIndex((h) => h.wheel);
     const gateZ = HOLES[wh].wheel.gap[1];
@@ -1634,7 +2384,12 @@ try {
     p.putt(p.aim, (p.sweet[0] + p.sweet[1]) / 2);
     rollOut();
     run(120);
-    const round = { title: g.results?.title ?? "", card: p.card.slice(), pay: g.results?.pay ?? 0, best: g.save.best.putt ?? 0 };
+    const round = {
+      title: g.results?.title ?? "",
+      card: p.card.slice(),
+      pay: g.results?.pay ?? 0,
+      best: g.save.best.putt ?? 0,
+    };
     settle();
 
     // ---- cornhole
@@ -1645,14 +2400,18 @@ try {
     run(12);
     c.toss(0, 0, 0.655, 0, 0);
     for (let i = 0; i < 200 && (c.phase === "fly" || c.phase === "settle"); i++) g.tick(1 / 30);
-    const first = { state: c.bags.find((b) => b.who === 0 && b.state !== "hand").state, next: c.phase };
+    const first = {
+      state: c.bags.find((b) => b.who === 0 && b.state !== "hand").state,
+      next: c.phase,
+    };
     for (let i = 0; i < 300 && c.phase !== "aim"; i++) g.tick(1 / 30);
     run(12);
     c.toss(0, 0, 0.3, 0, 0);
     for (let i = 0; i < 200 && (c.phase === "fly" || c.phase === "settle"); i++) g.tick(1 / 30);
     const short = c.bags.filter((b) => b.who === 0 && b.state !== "hand").map((b) => b.state);
     // One bag shoves another: put a bag below the hole and slide a second into the back of it.
-    const a = c.bags.find((b) => b.who === 1 && b.state === "hand") ?? c.bags.find((b) => b.who === 1);
+    const a =
+      c.bags.find((b) => b.who === 1 && b.state === "hand") ?? c.bags.find((b) => b.who === 1);
     a.state = "board";
     a.u = 0;
     a.v = 0.8;
@@ -1677,7 +2436,12 @@ try {
       if (c.phase === "aim" && c.t > 0.3) c.toss(0, 0, 0.655, 0, 0);
     }
     g.sound = sound;
-    const bags = { title: g.results?.title ?? "", score: c.score.slice(), wins: (g.save.best.cornhole ?? 0) - wins, rounds: c.round };
+    const bags = {
+      title: g.results?.title ?? "",
+      score: c.score.slice(),
+      wins: (g.save.best.cornhole ?? 0) - wins,
+      rounds: c.round,
+    };
     settle();
 
     // ---- tennis
@@ -1701,7 +2465,8 @@ try {
     let longest = 0;
     guard = 0;
     while (guard++ < 60 * 60 * 14 && !g.overlay) {
-      if (t.phase === "serve" && t.server === 0 && t.t > 0.6) t.serve(0, 0.7 + Math.random() * 0.1, Math.random() - 0.5);
+      if (t.phase === "serve" && t.server === 0 && t.t > 0.6)
+        t.serve(0, 0.7 + Math.random() * 0.1, Math.random() - 0.5);
       if (t.phase === "rally" && t.live && t.last === 1) {
         const dx = Math.max(38.1 - 12.9, Math.min(38.1 - 1.5, t.meet.x)) - g.pos.x;
         const dz = t.meet.z - g.pos.z;
@@ -1719,7 +2484,13 @@ try {
     }
     g.input.setStick(0, 0);
     g.sound = sound;
-    const match = { title: g.results?.title ?? "", games: t.games.slice(), hits, longest, wins: g.save.best.tennis ?? 0 };
+    const match = {
+      title: g.results?.title ?? "",
+      games: t.games.slice(),
+      hits,
+      longest,
+      wins: g.save.best.tennis ?? 0,
+    };
     settle();
 
     // ---- over the city
@@ -1732,18 +2503,101 @@ try {
     sky.update(0.1, g.time, 1);
     const night = beam.opacity;
     g.stage.render = draw;
-    return { stops, spots, holes: HOLES.length, par: PUTT_PAR, ace, second, soft, top, firm, blocked, through, round, first, short, shoved, bags, opening, fault, box, match, sky: { flew, y: Math.round(sky.blimp.position.y), day, night } };
+    return {
+      stops,
+      spots,
+      holes: HOLES.length,
+      par: PUTT_PAR,
+      ace,
+      second,
+      soft,
+      top,
+      firm,
+      blocked,
+      through,
+      round,
+      first,
+      short,
+      shoved,
+      bags,
+      opening,
+      fault,
+      box,
+      match,
+      sky: { flew, y: Math.round(sky.blimp.position.y), day, night },
+    };
   });
-  check(rec.stops.putt && rec.stops.courts && rec.spots.every(Boolean), "the rec grounds are on the map, with a spot to walk up to for each game", { stops: rec.stops, spots: rec.spots });
-  check(rec.holes === 9 && rec.par === 23 && rec.ace.strokes === 1 && rec.ace.phase === "sunk" && rec.second === 1, "putt-putt: a straight putt at the right weight drops, and the next hole comes up", { ace: rec.ace, second: rec.second });
-  check(!rec.soft.up && rec.soft.strokes === 1 && rec.firm.phase !== "roll", "putt-putt: a putt too soft for the hill rolls back down it", { soft: rec.soft, firm: rec.firm });
-  check(rec.blocked && rec.through, "putt-putt: the paddle wheel stops a ball when a paddle is down and lets it through when it is not", { blocked: rec.blocked, through: rec.through });
-  check(/PAR/.test(rec.round.title) && rec.round.card.length === 9 && rec.round.pay > 0 && rec.round.best > 0, "putt-putt: the ninth hole ends the round with a card and a best score", rec.round);
-  check(rec.first.state === "in" && rec.short.includes("grass") && rec.shoved.pushed !== "hand" && (rec.shoved.pushed === "in" || rec.shoved.v > 0.81), "cornhole: a bag slides up into the hole, a short one lands on the grass, and one bag shoves another", { first: rec.first, short: rec.short, shoved: rec.shoved });
-  check(/TOOK IT/.test(rec.bags.title) && Math.max(...rec.bags.score) >= 21 && rec.bags.wins === (rec.bags.score[0] > rec.bags.score[1] ? 1 : 0), "cornhole: a match is played out to 21, and a win is counted when it is his", rec.bags);
-  check(rec.opening.phase === "serve" && rec.opening.server === 0 && /FAULT/.test(rec.fault.call) && rec.fault.pts === "0,0" && rec.box.live && rec.box.x > 0 && rec.box.x < 6.5, "tennis: a serve hit too hard is a fault, and a good one comes down in the box", { opening: rec.opening, fault: rec.fault, box: rec.box });
-  check(rec.match.title.length > 0 && Math.max(...rec.match.games) === 3 && rec.match.hits > 3 && rec.match.longest >= 2, "tennis: a match is rallied out to three games", rec.match);
-  check(rec.sky.flew > 20 && rec.sky.y > 60 && rec.sky.day === 0 && rec.sky.night > 0.03, "a blimp circles over the city, and searchlights come on over the boutique after dark", rec.sky);
+  check(
+    rec.stops.putt && rec.stops.courts && rec.spots.every(Boolean),
+    "the rec grounds are on the map, with a spot to walk up to for each game",
+    { stops: rec.stops, spots: rec.spots },
+  );
+  check(
+    rec.holes === 9 &&
+      rec.par === 23 &&
+      rec.ace.strokes === 1 &&
+      rec.ace.phase === "sunk" &&
+      rec.second === 1,
+    "putt-putt: a straight putt at the right weight drops, and the next hole comes up",
+    { ace: rec.ace, second: rec.second },
+  );
+  check(
+    !rec.soft.up && rec.soft.strokes === 1 && rec.firm.phase !== "roll",
+    "putt-putt: a putt too soft for the hill rolls back down it",
+    { soft: rec.soft, firm: rec.firm },
+  );
+  check(
+    rec.blocked && rec.through,
+    "putt-putt: the paddle wheel stops a ball when a paddle is down and lets it through when it is not",
+    { blocked: rec.blocked, through: rec.through },
+  );
+  check(
+    /PAR/.test(rec.round.title) &&
+      rec.round.card.length === 9 &&
+      rec.round.pay > 0 &&
+      rec.round.best > 0,
+    "putt-putt: the ninth hole ends the round with a card and a best score",
+    rec.round,
+  );
+  check(
+    rec.first.state === "in" &&
+      rec.short.includes("grass") &&
+      rec.shoved.pushed !== "hand" &&
+      (rec.shoved.pushed === "in" || rec.shoved.v > 0.81),
+    "cornhole: a bag slides up into the hole, a short one lands on the grass, and one bag shoves another",
+    { first: rec.first, short: rec.short, shoved: rec.shoved },
+  );
+  check(
+    /TOOK IT/.test(rec.bags.title) &&
+      Math.max(...rec.bags.score) >= 21 &&
+      rec.bags.wins === (rec.bags.score[0] > rec.bags.score[1] ? 1 : 0),
+    "cornhole: a match is played out to 21, and a win is counted when it is his",
+    rec.bags,
+  );
+  check(
+    rec.opening.phase === "serve" &&
+      rec.opening.server === 0 &&
+      /FAULT/.test(rec.fault.call) &&
+      rec.fault.pts === "0,0" &&
+      rec.box.live &&
+      rec.box.x > 0 &&
+      rec.box.x < 6.5,
+    "tennis: a serve hit too hard is a fault, and a good one comes down in the box",
+    { opening: rec.opening, fault: rec.fault, box: rec.box },
+  );
+  check(
+    rec.match.title.length > 0 &&
+      Math.max(...rec.match.games) === 3 &&
+      rec.match.hits > 3 &&
+      rec.match.longest >= 2,
+    "tennis: a match is rallied out to three games",
+    rec.match,
+  );
+  check(
+    rec.sky.flew > 20 && rec.sky.y > 60 && rec.sky.day === 0 && rec.sky.night > 0.03,
+    "a blimp circles over the city, and searchlights come on over the boutique after dark",
+    rec.sky,
+  );
   // ---- the playground, the boat, the putter and the rackets
   const play = await page.evaluate(async () => {
     const g = window.__GAME__;
@@ -1761,7 +2615,9 @@ try {
     const worn = g.save.wearing;
     g.wear("starter");
     run(2);
-    const spots = ["Get on the swing", "Go down the slide", "Take the boat out"].map((w) => g.spots.some((q) => q.label().startsWith(w)));
+    const spots = ["Get on the swing", "Go down the slide", "Take the boat out"].map((w) =>
+      g.spots.some((q) => q.label().startsWith(w)),
+    );
     const lawn = g.spots.filter((q) => q.label().startsWith("Cornhole")).length;
     const stops = ["cornhole", "playground"].map((id) => !!POIS.find((q) => q.id === id)?.arrive);
 
@@ -1785,7 +2641,12 @@ try {
       lift = Math.max(lift, g.benji.lift);
     }
     g.input.hold("action", false);
-    const swung = { top: +top.toFixed(2), lift: +lift.toFixed(2), pose: g.benji.pose, seat: Math.abs(sw.state.seat) > 0.001 };
+    const swung = {
+      top: +top.toFixed(2),
+      lift: +lift.toFixed(2),
+      pose: g.benji.pose,
+      seat: Math.abs(sw.state.seat) > 0.001,
+    };
     let waited = 0;
     while (!(sw.state.w > 1.2 && sw.state.a > 0.5 && sw.state.a < 0.9) && waited++ < 900) run(1);
     sw.jump();
@@ -1794,11 +2655,19 @@ try {
     const jump = { cm: sw.state.last, best: g.save.best.swing ?? 0, air };
     let rest = 0;
     while (g.activity === sw && rest++ < 240) run(1);
-    const offSwing = { mode: g.mode, z: +g.pos.z.toFixed(1), lift: g.benji.lift, tilt: g.benji.tilt };
+    const offSwing = {
+      mode: g.mode,
+      z: +g.pos.z.toFixed(1),
+      lift: g.benji.lift,
+      tilt: g.benji.tilt,
+    };
     // The empty seat goes on swinging and comes to rest by itself.
     const still = Math.abs(sw.state.a) + Math.abs(sw.state.w);
     run(30 * 20);
-    const settled = { before: +still.toFixed(3), after: +(Math.abs(sw.state.a) + Math.abs(sw.state.w)).toFixed(3) };
+    const settled = {
+      before: +still.toFixed(3),
+      after: +(Math.abs(sw.state.a) + Math.abs(sw.state.w)).toFixed(3),
+    };
 
     // ---- the slide: up the ladder, a push, down the chute and off the end on his feet.
     g.warp(-105.5, 506.8, 0);
@@ -1819,7 +2688,13 @@ try {
       run(1);
       fast = Math.max(fast, sl.state.v);
     }
-    const slid = { fast: +fast.toFixed(1), mode: g.mode, z: +g.pos.z.toFixed(1), lift: g.benji.lift, best: g.save.best.slide ?? 0 };
+    const slid = {
+      fast: +fast.toFixed(1),
+      mode: g.mode,
+      z: +g.pos.z.toFixed(1),
+      lift: g.benji.lift,
+      best: g.save.best.slide ?? 0,
+    };
 
     // ---- the boat: aboard from the pier, out under her own power, a sack, a ramp, the pier's piles, and home.
     g.save.best.river = 0;
@@ -1834,12 +2709,19 @@ try {
     const from = { x: b.state.x, z: b.state.z };
     g.input.hold("up", true);
     run(100);
-    const out = { moved: +Math.hypot(b.state.x - from.x, b.state.z - from.z).toFixed(1), speed: +b.state.speed.toFixed(1), z: +b.state.z.toFixed(1) };
+    const out = {
+      moved: +Math.hypot(b.state.x - from.x, b.state.z - from.z).toFixed(1),
+      speed: +b.state.speed.toFixed(1),
+      z: +b.state.z.toFixed(1),
+    };
     const h0 = b.state.heading;
     g.input.hold("right", true);
     run(45);
     g.input.hold("right", false);
-    const turned = +Math.atan2(Math.sin(b.state.heading - h0), Math.cos(b.state.heading - h0)).toFixed(2);
+    const turned = +Math.atan2(
+      Math.sin(b.state.heading - h0),
+      Math.cos(b.state.heading - h0),
+    ).toFixed(2);
     g.input.hold("up", false);
     const [sx, sz] = b.state.sacks[0];
     const money = g.save.dollars;
@@ -1868,14 +2750,24 @@ try {
     g.input.press("interact");
     for (let i = 0; i < 200 && g.activity === b; i++) g.tick(1 / 30);
     for (let i = 0; i < 90 && g.live.fade > 0.05; i++) g.tick(1 / 30);
-    const ashore = { mode: g.mode, x: +g.pos.x.toFixed(1), z: +g.pos.z.toFixed(1), riding: b.state.riding, lift: g.benji.lift };
+    const ashore = {
+      mode: g.mode,
+      x: +g.pos.x.toFixed(1),
+      z: +g.pos.z.toFixed(1),
+      riding: b.state.riding,
+      lift: g.benji.lift,
+    };
 
     // ---- the putter: the swing goes back with the meter, the ball leaves when the club reaches it, and he stays put while it rolls.
     g.begin(g.putt, "whack");
     g.putt.start();
     run(15);
     const p = g.putt;
-    const address = { pose: g.benji.pose, club: p.club.visible, off: +Math.hypot(g.pos.x - p.ball.position.x, g.pos.z - p.ball.position.z).toFixed(2) };
+    const address = {
+      pose: g.benji.pose,
+      club: p.club.visible,
+      off: +Math.hypot(g.pos.x - p.ball.position.x, g.pos.z - p.ball.position.z).toFixed(2),
+    };
     g.input.hold("action", true);
     run(22);
     const back = +p.arm.rotation.x.toFixed(2);
@@ -1888,7 +2780,14 @@ try {
     const through = +p.arm.rotation.x.toFixed(2);
     const stood = { x: g.pos.x, z: g.pos.z };
     run(12);
-    const struck = { phase: p.state.phase, ticks, strokes: p.state.strokes, through, drift: +Math.hypot(g.pos.x - stood.x, g.pos.z - stood.z).toFixed(3), rolled: +Math.hypot(p.ball.position.x - stood.x, p.ball.position.z - stood.z).toFixed(1) };
+    const struck = {
+      phase: p.state.phase,
+      ticks,
+      strokes: p.state.strokes,
+      through,
+      drift: +Math.hypot(g.pos.x - stood.x, g.pos.z - stood.z).toFixed(3),
+      rolled: +Math.hypot(p.ball.position.x - stood.x, p.ball.position.z - stood.z).toFixed(1),
+    };
     p.quit();
     run(4);
 
@@ -1909,25 +2808,160 @@ try {
     g.warp(-84, 491.5, Math.PI);
     run(12);
     const seats = g.street.members.filter((m) => m.posted && m.stop.act === "sit");
-    const sat = { n: seats.length, posed: seats.filter((m) => m.card.pose === "sit").length, sunk: seats.filter((m) => m.card.lift !== 0).length };
+    const sat = {
+      n: seats.length,
+      posed: seats.filter((m) => m.card.pose === "sit").length,
+      sunk: seats.filter((m) => m.card.lift !== 0).length,
+    };
     const fresh = (c) => /\/(male-0[5-9]|female-0[5-7])/.test(c.face);
-    const faces = { kinds: PEDS.length, walking: g.people.walkers.filter((w) => fresh(w.card)).length, about: [...g.street.members, ...Object.values(g.troupes).flatMap((t) => t.members)].filter((m) => fresh(m.card)).length };
+    const faces = {
+      kinds: PEDS.length,
+      walking: g.people.walkers.filter((w) => fresh(w.card)).length,
+      about: [...g.street.members, ...Object.values(g.troupes).flatMap((t) => t.members)].filter(
+        (m) => fresh(m.card),
+      ).length,
+    };
     g.wear(worn);
     g.stage.render = draw;
-    return { spots, lawn, stops, swingAsk, onSwing, swung, jump, offSwing, settled, slideAsk, onSlide, deck, slid, boatAsk, aboard, out, turned, sack, jumped, piles, ashore, address, back, coming, struck, ready, serving, sat, faces };
+    return {
+      spots,
+      lawn,
+      stops,
+      swingAsk,
+      onSwing,
+      swung,
+      jump,
+      offSwing,
+      settled,
+      slideAsk,
+      onSlide,
+      deck,
+      slid,
+      boatAsk,
+      aboard,
+      out,
+      turned,
+      sack,
+      jumped,
+      piles,
+      ashore,
+      address,
+      back,
+      coming,
+      struck,
+      ready,
+      serving,
+      sat,
+      faces,
+    };
   });
-  check(play.spots.every(Boolean) && play.lawn === 3 && play.stops.every(Boolean), "the swing, the slide and the boat can be walked up to, cornhole starts from anywhere on its lawn, and the map has both new stops", { spots: play.spots, lawn: play.lawn, stops: play.stops });
-  check(play.swingAsk === "Get on the swing" && play.onSwing && play.swung.top > 0.75 && play.swung.lift > 1 && play.swung.seat, "the swing: holding on the way forward pumps it high, and the seat moves with him", { ask: play.swingAsk, ...play.swung });
-  check(play.jump.cm > 250 && play.jump.cm < 700 && play.jump.best === play.jump.cm && play.offSwing.mode === "walk" && play.offSwing.lift === 0 && play.offSwing.tilt === 0 && play.offSwing.z > 95, "the swing: letting go on the way up throws him out over the chips, and the distance is kept", { ...play.jump, off: play.offSwing });
-  check(play.settled.before > 0.05 && play.settled.after < 0.02, "the swing: the empty seat goes on swinging and comes to rest", play.settled);
-  check(play.slideAsk === "Go down the slide" && play.onSlide && play.deck.phase === "top" && Math.abs(play.deck.lift - 1.6) < 0.05 && play.slid.fast > 3.5 && play.slid.mode === "walk" && play.slid.z > 100.5 && play.slid.lift === 0 && play.slid.best > 5, "the slide: up the ladder, down the chute and off the end on his feet", { deck: play.deck, ...play.slid });
-  check(play.boatAsk === "Take the boat out" && play.aboard && play.out.moved > 12 && play.out.speed > 8 && play.out.z < -222 && play.turned < -0.4, "the boat: aboard at the pier, out into the river under throttle, and she answers the wheel", { ask: play.boatAsk, ...play.out, turned: play.turned });
-  check(play.sack.got === 1 && play.sack.paid >= 10 && play.jumped.flew > 8 && play.jumped.high > 1.2 && play.jumped.down && play.piles < -228, "the boat: a sack alongside is brought in, a ramp at speed puts her in the air, and the pier stops her", { sack: play.sack, jumped: play.jumped, piles: play.piles });
-  check(play.ashore.mode === "walk" && !play.ashore.riding && Math.abs(play.ashore.x - -82.9) < 0.3 && play.ashore.lift === 0, "the boat: tying up puts Benji back on the pier", play.ashore);
-  check(play.address.pose === "putt" && play.address.club && play.address.off < 0.5 && play.back > 0.25 && play.coming.strike && play.coming.phase === "aim" && play.coming.strokes === 0, "putting: he stands over the ball with the putter in his hands, and it swings back as the meter fills", { ...play.address, back: play.back, coming: play.coming });
-  check(play.struck.phase === "roll" && play.struck.ticks >= 2 && play.struck.ticks <= 9 && play.struck.strokes === 1 && play.struck.through < 0 && play.struck.drift < 0.01 && play.struck.rolled > 0.6, "putting: the ball leaves when the club reaches it, the club follows through, and Benji stays where he stood", play.struck);
-  check(play.ready.benji === "tennis" && play.ready.coach === "tennis" && play.serving === "serve", "tennis: both players hold a racket, and Benji lifts his to serve", { ...play.ready, serving: play.serving });
-  check(play.sat.n === 8 && play.sat.posed === 8 && play.sat.sunk === 0 && play.faces.kinds === 16 && play.faces.walking + play.faces.about > 3, "the regulars are sat at their tables, and eight new people are out in the city", { ...play.sat, ...play.faces });
+  check(
+    play.spots.every(Boolean) && play.lawn === 3 && play.stops.every(Boolean),
+    "the swing, the slide and the boat can be walked up to, cornhole starts from anywhere on its lawn, and the map has both new stops",
+    { spots: play.spots, lawn: play.lawn, stops: play.stops },
+  );
+  check(
+    play.swingAsk === "Get on the swing" &&
+      play.onSwing &&
+      play.swung.top > 0.75 &&
+      play.swung.lift > 1 &&
+      play.swung.seat,
+    "the swing: holding on the way forward pumps it high, and the seat moves with him",
+    { ask: play.swingAsk, ...play.swung },
+  );
+  check(
+    play.jump.cm > 250 &&
+      play.jump.cm < 700 &&
+      play.jump.best === play.jump.cm &&
+      play.offSwing.mode === "walk" &&
+      play.offSwing.lift === 0 &&
+      play.offSwing.tilt === 0 &&
+      play.offSwing.z > 95,
+    "the swing: letting go on the way up throws him out over the chips, and the distance is kept",
+    { ...play.jump, off: play.offSwing },
+  );
+  check(
+    play.settled.before > 0.05 && play.settled.after < 0.02,
+    "the swing: the empty seat goes on swinging and comes to rest",
+    play.settled,
+  );
+  check(
+    play.slideAsk === "Go down the slide" &&
+      play.onSlide &&
+      play.deck.phase === "top" &&
+      Math.abs(play.deck.lift - 1.6) < 0.05 &&
+      play.slid.fast > 3.5 &&
+      play.slid.mode === "walk" &&
+      play.slid.z > 100.5 &&
+      play.slid.lift === 0 &&
+      play.slid.best > 5,
+    "the slide: up the ladder, down the chute and off the end on his feet",
+    { deck: play.deck, ...play.slid },
+  );
+  check(
+    play.boatAsk === "Take the boat out" &&
+      play.aboard &&
+      play.out.moved > 12 &&
+      play.out.speed > 8 &&
+      play.out.z < -222 &&
+      play.turned < -0.4,
+    "the boat: aboard at the pier, out into the river under throttle, and she answers the wheel",
+    { ask: play.boatAsk, ...play.out, turned: play.turned },
+  );
+  check(
+    play.sack.got === 1 &&
+      play.sack.paid >= 10 &&
+      play.jumped.flew > 8 &&
+      play.jumped.high > 1.2 &&
+      play.jumped.down &&
+      play.piles < -228,
+    "the boat: a sack alongside is brought in, a ramp at speed puts her in the air, and the pier stops her",
+    { sack: play.sack, jumped: play.jumped, piles: play.piles },
+  );
+  check(
+    play.ashore.mode === "walk" &&
+      !play.ashore.riding &&
+      Math.abs(play.ashore.x - -82.9) < 0.3 &&
+      play.ashore.lift === 0,
+    "the boat: tying up puts Benji back on the pier",
+    play.ashore,
+  );
+  check(
+    play.address.pose === "putt" &&
+      play.address.club &&
+      play.address.off < 0.5 &&
+      play.back > 0.25 &&
+      play.coming.strike &&
+      play.coming.phase === "aim" &&
+      play.coming.strokes === 0,
+    "putting: he stands over the ball with the putter in his hands, and it swings back as the meter fills",
+    { ...play.address, back: play.back, coming: play.coming },
+  );
+  check(
+    play.struck.phase === "roll" &&
+      play.struck.ticks >= 2 &&
+      play.struck.ticks <= 9 &&
+      play.struck.strokes === 1 &&
+      play.struck.through < 0 &&
+      play.struck.drift < 0.01 &&
+      play.struck.rolled > 0.6,
+    "putting: the ball leaves when the club reaches it, the club follows through, and Benji stays where he stood",
+    play.struck,
+  );
+  check(
+    play.ready.benji === "tennis" && play.ready.coach === "tennis" && play.serving === "serve",
+    "tennis: both players hold a racket, and Benji lifts his to serve",
+    { ...play.ready, serving: play.serving },
+  );
+  check(
+    play.sat.n === 8 &&
+      play.sat.posed === 8 &&
+      play.sat.sunk === 0 &&
+      play.faces.kinds === 16 &&
+      play.faces.walking + play.faces.about > 3,
+    "the regulars are sat at their tables, and eight new people are out in the city",
+    { ...play.sat, ...play.faces },
+  );
 
   // ---- laser tag through his own eyes
   const fps = await page.evaluate(async () => {
@@ -1956,14 +2990,24 @@ try {
     g.input.press("interact");
     run(2);
     await settle();
-    const fresh = { overlay: g.overlay, rank: document.querySelector("[data-rank]")?.textContent ?? "", racks: document.querySelectorAll("[data-blaster]").length, locked: [...document.querySelectorAll("[data-blaster]")].filter((b) => b.disabled).length, deploy: !!document.querySelector("[data-deploy]") };
+    const fresh = {
+      overlay: g.overlay,
+      rank: document.querySelector("[data-rank]")?.textContent ?? "",
+      racks: document.querySelectorAll("[data-blaster]").length,
+      locked: [...document.querySelectorAll("[data-blaster]")].filter((b) => b.disabled).length,
+      deploy: !!document.querySelector("[data-deploy]"),
+    };
     g.pickBlaster("marksman");
     const refused = L.loadout().guns.find((q) => q.picked).id;
     g.save.best.lt_xp = TAG_RANKS[4][0] + 10;
     g.pickBlaster("marksman");
     g.push();
     await settle();
-    const ranked = { rank: document.querySelector("[data-rank]")?.textContent ?? "", locked: [...document.querySelectorAll("[data-blaster]")].filter((b) => b.disabled).length, picked: L.loadout().guns.find((q) => q.picked).id };
+    const ranked = {
+      rank: document.querySelector("[data-rank]")?.textContent ?? "",
+      locked: [...document.querySelectorAll("[data-blaster]")].filter((b) => b.disabled).length,
+      picked: L.loadout().guns.find((q) => q.picked).id,
+    };
     document.querySelector("[data-deploy]").click();
     for (let i = 0; i < 240 && !(g.mode === "laser" && L.phase === "go"); i++) g.tick(1 / 30);
     for (let i = 0; i < 60 && g.live.fade > 0.05; i++) g.tick(1 / 30);
@@ -2005,7 +3049,10 @@ try {
     const yaw0 = g.camYaw;
     g.input.look(0.2, 0.1);
     run(1);
-    const looked = { yaw: +Math.atan2(Math.sin(g.camYaw - yaw0), Math.cos(g.camYaw - yaw0)).toFixed(2), pitch: +L.pitch.toFixed(2) };
+    const looked = {
+      yaw: +Math.atan2(Math.sin(g.camYaw - yaw0), Math.cos(g.camYaw - yaw0)).toFixed(2),
+      pitch: +L.pitch.toFixed(2),
+    };
     g.camYaw = Math.PI;
     L.pitch = 0;
     const x0 = g.pos.x;
@@ -2013,7 +3060,12 @@ try {
     run(20);
     g.input.hold("right", false);
     run(10);
-    const strafe = { dx: +(g.pos.x - x0).toFixed(1), yaw: +Math.abs(Math.atan2(Math.sin(g.camYaw - Math.PI), Math.cos(g.camYaw - Math.PI))).toFixed(3) };
+    const strafe = {
+      dx: +(g.pos.x - x0).toFixed(1),
+      yaw: +Math.abs(
+        Math.atan2(Math.sin(g.camYaw - Math.PI), Math.cos(g.camYaw - Math.PI)),
+      ).toFixed(3),
+    };
     g.input.touch = false;
     // Down the sights: the view closes in. One beam from the Marksman, from the scope, tags from across the room.
     g.pos.x = 804;
@@ -2028,12 +3080,27 @@ try {
     const fov0 = g.camera.fov;
     g.input.key("aim", true);
     run(20);
-    const aimed = { ads: +g.live.fp.ads.toFixed(2), fov: Math.round(g.camera.fov), wide: Math.round(fov0), target: g.live.fp.target, plate: far.plate.visible };
+    const aimed = {
+      ads: +g.live.fp.ads.toFixed(2),
+      fov: Math.round(g.camera.fov),
+      wide: Math.round(fov0),
+      target: g.live.fp.target,
+      plate: far.plate.visible,
+    };
     const score0 = L.score;
     L.cool = 0;
     const shot = L.fire();
     run(1);
-    const tagged = { shot, tags: L.tags, out: far.out > 0, pose: far.card.pose, ammo: L.ammo, mark: g.live.fp.hitKind, points: L.score - score0, feed: L.feed[0] ? `${L.feed[0].a}>${L.feed[0].b}` : "" };
+    const tagged = {
+      shot,
+      tags: L.tags,
+      out: far.out > 0,
+      pose: far.card.pose,
+      ammo: L.ammo,
+      mark: g.live.fp.hitKind,
+      points: L.score - score0,
+      feed: L.feed[0] ? `${L.feed[0].a}>${L.feed[0].b}` : "",
+    };
     g.input.key("aim", false);
     run(10);
     // A wall is a wall: somebody behind cover cannot be hit, and the crosshair does not light on them.
@@ -2087,7 +3154,7 @@ try {
     L.fire();
     L.cool = 0;
     L.fire();
-    const dry = { ammo: L.ammo, reloading: L.reloading > 0, fires: (L.cool = 0, L.fire()) };
+    const dry = { ammo: L.ammo, reloading: L.reloading > 0, fires: ((L.cool = 0), L.fire()) };
     run(Math.ceil(L.gun.reload * 30) + 3);
     const full = { ammo: L.ammo, reloading: L.reloading > 0 };
     // The vest: a hit takes a third, keeping out of the light brings it back, and the third hit puts him out and back at his base.
@@ -2109,9 +3176,20 @@ try {
       L.tagged(pinks[3]);
     }
     await settle();
-    const out = { down: L.down > 0, outs: L.outs, streak: L.streak, card: !!document.querySelector("[data-fp]")?.textContent.includes("Tagged out") };
+    const out = {
+      down: L.down > 0,
+      outs: L.outs,
+      streak: L.streak,
+      card: !!document.querySelector("[data-fp]")?.textContent.includes("Tagged out"),
+    };
     run(30 * 4);
-    const back = { down: L.down > 0, vest: Math.round(L.vest), x: +g.pos.x.toFixed(1), z: +g.pos.z.toFixed(1), start: [g.rooms.laser.start.x, g.rooms.laser.start.z] };
+    const back = {
+      down: L.down > 0,
+      vest: Math.round(L.vest),
+      x: +g.pos.x.toFixed(1),
+      z: +g.pos.z.toFixed(1),
+      start: [g.rooms.laser.start.x, g.rooms.laser.start.z],
+    };
     // Runs: three tags sweep the radar, five overcharge the blaster, seven black out every pink vest.
     hush();
     const runOf = (n) => {
@@ -2175,7 +3253,11 @@ try {
     const shots0 = L.shots;
     run(20);
     await settle();
-    const thumbs = { fired: L.shots - shots0, pad: !!document.querySelector("[data-fp-pad]"), aim: !!document.querySelector("[data-aim]") };
+    const thumbs = {
+      fired: L.shots - shots0,
+      pad: !!document.querySelector("[data-fp-pad]"),
+      aim: !!document.querySelector("[data-aim]"),
+    };
     g.input.touch = false;
     g.push();
     // The whistle: the match goes on his record.
@@ -2183,32 +3265,175 @@ try {
     L.left = 0.05;
     run(4);
     await settle();
-    const done = { phase: L.phase, overlay: g.overlay, xp: (g.save.best.lt_xp ?? 0) - before.xp, games: (g.save.best.lt_games ?? 0) - before.games, rank: (g.results?.rows ?? []).some((r) => r[0] === "Rank"), on: g.live.fp.on };
+    const done = {
+      phase: L.phase,
+      overlay: g.overlay,
+      xp: (g.save.best.lt_xp ?? 0) - before.xp,
+      games: (g.save.best.lt_games ?? 0) - before.games,
+      rank: (g.results?.rows ?? []).some((r) => r[0] === "Rank"),
+      on: g.live.fp.on,
+    };
     g.closeResults?.();
     if (g.overlay) g.close();
     L.quit();
     for (let i = 0; i < 240 && !(g.place === "fun" && g.mode === "walk"); i++) g.tick(1 / 30);
     for (let i = 0; i < 60 && g.live.fade > 0.05; i++) g.tick(1 / 30);
-    const after = { place: g.place, mode: g.mode, benji: g.benji.visible, roll: +Math.abs(g.camera.rotation.z).toFixed(3) };
+    const after = {
+      place: g.place,
+      mode: g.mode,
+      benji: g.benji.visible,
+      roll: +Math.abs(g.camera.rotation.z).toFixed(3),
+    };
     // Back out on the street for whatever comes next.
     g.leave(0, -150, 0);
     for (let i = 0; i < 200 && (g.place !== "street" || g.live.fade > 0.05); i++) g.tick(1 / 30);
     g.stage.render = draw;
-    return { ask, fresh, refused, ranked, view, looked, strafe, aimed, tagged, cover, body, head, heads, dry, full, hurt, healed, out, back, swept, overcharged, blackout, thumbs, done, after };
+    return {
+      ask,
+      fresh,
+      refused,
+      ranked,
+      view,
+      looked,
+      strafe,
+      aimed,
+      tagged,
+      cover,
+      body,
+      head,
+      heads,
+      dry,
+      full,
+      hurt,
+      healed,
+      out,
+      back,
+      swept,
+      overcharged,
+      blackout,
+      thumbs,
+      done,
+      after,
+    };
   });
-  check(/^Laser tag/.test(fps.ask) && fps.fresh.overlay === "loadout" && fps.fresh.rank === "Recruit" && fps.fresh.racks === 3 && fps.fresh.locked === 2 && fps.refused === "pulse", "laser tag: the door shows his rank and three blasters, and a Recruit carries only the first", { ask: fps.ask, ...fps.fresh, refused: fps.refused });
-  check(fps.ranked.rank === "Lieutenant" && fps.ranked.locked === 0 && fps.ranked.picked === "marksman", "laser tag: rank issues the other blasters", fps.ranked);
-  check(fps.view.mode === "laser" && fps.view.phase === "go" && fps.view.gun === "marksman" && Math.abs(fps.view.eye - 1.32) < 0.06 && fps.view.at < 0.01 && !fps.view.benji && fps.view.hands && fps.view.cross && fps.view.on, "laser tag: Deploy puts the lens in his eyes with the chosen blaster drawn in his hands and a crosshair", fps.view);
-  check(fps.looked.yaw < -0.15 && fps.looked.pitch < -0.07 && Math.abs(fps.strafe.dx) > 1.2 && fps.strafe.yaw < 0.01, "laser tag: a drag looks about, and after it A and D step sideways without turning him", { ...fps.looked, strafe: fps.strafe });
-  check(fps.aimed.ads > 0.95 && fps.aimed.fov < 30 && fps.aimed.wide > 65 && fps.aimed.target === 1 && fps.aimed.plate, "laser tag: aiming brings the scope up, closes the view in, and names whoever is in it", fps.aimed);
-  check(fps.tagged.shot && fps.tagged.tags === 1 && fps.tagged.out && fps.tagged.pose === "out" && fps.tagged.ammo === 4 && fps.tagged.mark === 2 && fps.tagged.points >= 100 && /^Benji>/.test(fps.tagged.feed), "laser tag: one beam from the Marksman tags from across the room, and it is marked, scored and reported", fps.tagged);
-  check(fps.cover.lit === 0 && fps.cover.hp === 100, "laser tag: nobody is hit through cover", fps.cover);
-  check(fps.body.join() === "66,32,0" && fps.head[0] === 32 && fps.head[1] === 0 && fps.heads >= 1, "laser tag: the Pulse Rifle takes three to the body or two to the head", { body: fps.body, head: fps.head, heads: fps.heads });
-  check(fps.dry.ammo === 0 && fps.dry.reloading && fps.dry.fires === false && fps.full.ammo === 24 && !fps.full.reloading, "laser tag: an empty blaster reloads itself and cannot fire until it has", { dry: fps.dry, full: fps.full });
-  check(fps.hurt.vest === 66 && fps.hurt.from > 0.5 && fps.healed === 100 && fps.out.down && fps.out.outs === 1 && fps.out.streak === 0 && fps.out.card && !fps.back.down && fps.back.vest === 100 && Math.hypot(fps.back.x - fps.back.start[0], fps.back.z - fps.back.start[1]) < 0.5, "laser tag: the vest takes three hits, recharges out of the light, and a dark vest sends him back to his base", { hurt: fps.hurt, healed: fps.healed, out: fps.out, back: fps.back });
-  check(fps.swept.dark === 0 && fps.swept.sweep && fps.swept.blips >= 3 && fps.overcharged && fps.blackout === 4, "laser tag: three in a row sweeps the radar, five overcharges the blaster, seven blacks out the pinks", { swept: fps.swept, overcharged: fps.overcharged, blackout: fps.blackout });
-  check(fps.thumbs.fired >= 2 && fps.thumbs.pad && fps.thumbs.aim, "laser tag: on a touch screen it fires by itself on a target, with buttons to aim, reload, dash and sprint", fps.thumbs);
-  check(fps.done.phase === "over" && fps.done.overlay === "results" && fps.done.xp > 0 && fps.done.games === 1 && fps.done.rank && !fps.done.on && fps.after.place === "fun" && fps.after.mode === "walk" && fps.after.benji && fps.after.roll < 0.01, "laser tag: the match goes on his record, and leaving puts him back in the Fun House as himself", { done: fps.done, after: fps.after });
+  check(
+    /^Laser tag/.test(fps.ask) &&
+      fps.fresh.overlay === "loadout" &&
+      fps.fresh.rank === "Recruit" &&
+      fps.fresh.racks === 3 &&
+      fps.fresh.locked === 2 &&
+      fps.refused === "pulse",
+    "laser tag: the door shows his rank and three blasters, and a Recruit carries only the first",
+    { ask: fps.ask, ...fps.fresh, refused: fps.refused },
+  );
+  check(
+    fps.ranked.rank === "Lieutenant" && fps.ranked.locked === 0 && fps.ranked.picked === "marksman",
+    "laser tag: rank issues the other blasters",
+    fps.ranked,
+  );
+  check(
+    fps.view.mode === "laser" &&
+      fps.view.phase === "go" &&
+      fps.view.gun === "marksman" &&
+      Math.abs(fps.view.eye - 1.32) < 0.06 &&
+      fps.view.at < 0.01 &&
+      !fps.view.benji &&
+      fps.view.hands &&
+      fps.view.cross &&
+      fps.view.on,
+    "laser tag: Deploy puts the lens in his eyes with the chosen blaster drawn in his hands and a crosshair",
+    fps.view,
+  );
+  check(
+    fps.looked.yaw < -0.15 &&
+      fps.looked.pitch < -0.07 &&
+      Math.abs(fps.strafe.dx) > 1.2 &&
+      fps.strafe.yaw < 0.01,
+    "laser tag: a drag looks about, and after it A and D step sideways without turning him",
+    { ...fps.looked, strafe: fps.strafe },
+  );
+  check(
+    fps.aimed.ads > 0.95 &&
+      fps.aimed.fov < 30 &&
+      fps.aimed.wide > 65 &&
+      fps.aimed.target === 1 &&
+      fps.aimed.plate,
+    "laser tag: aiming brings the scope up, closes the view in, and names whoever is in it",
+    fps.aimed,
+  );
+  check(
+    fps.tagged.shot &&
+      fps.tagged.tags === 1 &&
+      fps.tagged.out &&
+      fps.tagged.pose === "out" &&
+      fps.tagged.ammo === 4 &&
+      fps.tagged.mark === 2 &&
+      fps.tagged.points >= 100 &&
+      /^Benji>/.test(fps.tagged.feed),
+    "laser tag: one beam from the Marksman tags from across the room, and it is marked, scored and reported",
+    fps.tagged,
+  );
+  check(
+    fps.cover.lit === 0 && fps.cover.hp === 100,
+    "laser tag: nobody is hit through cover",
+    fps.cover,
+  );
+  check(
+    fps.body.join() === "66,32,0" && fps.head[0] === 32 && fps.head[1] === 0 && fps.heads >= 1,
+    "laser tag: the Pulse Rifle takes three to the body or two to the head",
+    { body: fps.body, head: fps.head, heads: fps.heads },
+  );
+  check(
+    fps.dry.ammo === 0 &&
+      fps.dry.reloading &&
+      fps.dry.fires === false &&
+      fps.full.ammo === 24 &&
+      !fps.full.reloading,
+    "laser tag: an empty blaster reloads itself and cannot fire until it has",
+    { dry: fps.dry, full: fps.full },
+  );
+  check(
+    fps.hurt.vest === 66 &&
+      fps.hurt.from > 0.5 &&
+      fps.healed === 100 &&
+      fps.out.down &&
+      fps.out.outs === 1 &&
+      fps.out.streak === 0 &&
+      fps.out.card &&
+      !fps.back.down &&
+      fps.back.vest === 100 &&
+      Math.hypot(fps.back.x - fps.back.start[0], fps.back.z - fps.back.start[1]) < 0.5,
+    "laser tag: the vest takes three hits, recharges out of the light, and a dark vest sends him back to his base",
+    { hurt: fps.hurt, healed: fps.healed, out: fps.out, back: fps.back },
+  );
+  check(
+    fps.swept.dark === 0 &&
+      fps.swept.sweep &&
+      fps.swept.blips >= 3 &&
+      fps.overcharged &&
+      fps.blackout === 4,
+    "laser tag: three in a row sweeps the radar, five overcharges the blaster, seven blacks out the pinks",
+    { swept: fps.swept, overcharged: fps.overcharged, blackout: fps.blackout },
+  );
+  check(
+    fps.thumbs.fired >= 2 && fps.thumbs.pad && fps.thumbs.aim,
+    "laser tag: on a touch screen it fires by itself on a target, with buttons to aim, reload, dash and sprint",
+    fps.thumbs,
+  );
+  check(
+    fps.done.phase === "over" &&
+      fps.done.overlay === "results" &&
+      fps.done.xp > 0 &&
+      fps.done.games === 1 &&
+      fps.done.rank &&
+      !fps.done.on &&
+      fps.after.place === "fun" &&
+      fps.after.mode === "walk" &&
+      fps.after.benji &&
+      fps.after.roll < 0.01,
+    "laser tag: the match goes on his record, and leaving puts him back in the Fun House as himself",
+    { done: fps.done, after: fps.after },
+  );
 
   // ---- live music: a tune for every place, the band in Handy Park, and the Memphian
   const gigs = await page.evaluate(async () => {
@@ -2222,7 +3447,12 @@ try {
     if (g.overlay) g.close();
     if (g.activity) g.activity.quit();
     run(6);
-    for (let i = 0; i < 200 && (g.mode !== "walk" || g.place !== "street" || g.live.fade > 0.05); i++) g.tick(1 / 30);
+    for (
+      let i = 0;
+      i < 200 && (g.mode !== "walk" || g.place !== "street" || g.live.fade > 0.05);
+      i++
+    )
+      g.tick(1 / 30);
     const { POIS, TUNES, SONGS, BEALE_STAGE: S, MEMPHIAN: M, BAND } = g.tables;
     g.setRain(false);
     g.setPhase("day");
@@ -2230,7 +3460,21 @@ try {
     const cash0 = g.save.dollars;
     g.save.dollars = 300;
     // The band knows a tune for everywhere the game can ask for one.
-    const asked = ["title", "race", "radio", "court", "jook", "bowl", "funhouse", "hq", "river", "beale", "city-day", "city-night", ...SONGS.map((q) => q.id)];
+    const asked = [
+      "title",
+      "race",
+      "radio",
+      "court",
+      "jook",
+      "bowl",
+      "funhouse",
+      "hq",
+      "river",
+      "beale",
+      "city-day",
+      "city-night",
+      ...SONGS.map((q) => q.id),
+    ];
     const known = asked.filter((id) => TUNES[id]).length;
     g.warp(160, 52, 0);
     run(4);
@@ -2272,7 +3516,9 @@ try {
     }
     const stage = {
       players: band.length,
-      up: band.every((p) => p.card.visible && Math.abs(p.card.group.position.y - (S.top + 0.03)) < 0.02),
+      up: band.every(
+        (p) => p.card.visible && Math.abs(p.card.group.position.y - (S.top + 0.03)) < 0.02,
+      ),
       on: band.every((p) => Math.abs(p.x - S.x) < S.w / 2 && Math.abs(p.z - S.z) < S.d / 2),
       both: seen.filter((q) => q.size === 2).length,
       stepped: +stepped.toFixed(2),
@@ -2289,7 +3535,11 @@ try {
     const tip = { paid: d0 - g.save.dollars, respect: g.save.respect - r0, said: g.toastText };
     g.warp(160, 52, 0);
     run(40);
-    const far = { live: +g.sound.liveLevel.toFixed(2), bop: g.benji.groove >= 0, tune: g.tracks()[0] };
+    const far = {
+      live: +g.sound.liveLevel.toFixed(2),
+      bop: g.benji.groove >= 0,
+      tune: g.tracks()[0],
+    };
 
     // ---- The Memphian: in at the doors on Union, the house band, the tables, the bar, a request.
     const stop = POIS.find((q) => q.id === "memphian");
@@ -2307,7 +3557,9 @@ try {
       tune: g.tracks()[0],
       live: +g.sound.liveLevel.toFixed(2),
       players: house.length,
-      up: house.every((p) => p.card.visible && Math.abs(p.card.group.position.y - club.stage.top) < 0.02),
+      up: house.every(
+        (p) => p.card.visible && Math.abs(p.card.group.position.y - club.stage.top) < 0.02,
+      ),
       sat: folk.filter((m) => m.posted && m.card.pose === "sit").length,
       tables: club.tables.length,
       keep: folk.filter((m) => m.stop.act === "serve").length,
@@ -2327,7 +3579,13 @@ try {
     const before = { song: g.clubSong.name, tune: g.tracks()[0], cash: g.save.dollars };
     g.input.press("interact");
     run(3);
-    const asked2 = { song: g.clubSong.name, tune: g.tracks()[0], paid: before.cash - g.save.dollars, said: g.toastText, cheer: folk.filter((m) => m.hop > 0).length };
+    const asked2 = {
+      song: g.clubSong.name,
+      tune: g.tracks()[0],
+      paid: before.cash - g.save.dollars,
+      said: g.toastText,
+      cheer: folk.filter((m) => m.hop > 0).length,
+    };
     g.warp(club.bar.x, club.bar.z, -Math.PI / 2);
     run(5);
     const bar = g.prompt;
@@ -2344,16 +3602,110 @@ try {
     g.sound.beat = real;
     g.save.dollars = cash0;
     g.stage.render = draw;
-    return { known, asked: asked.length, day, night, sounding, tune, stage, close, tip, far, door, inside, lights: glow.size, ask, before, asked2, bar, tea, out, back, stops: POIS.filter((q) => q.id === "memphian" || q.id === "bealestage").length, drawn: BAND.length };
+    return {
+      known,
+      asked: asked.length,
+      day,
+      night,
+      sounding,
+      tune,
+      stage,
+      close,
+      tip,
+      far,
+      door,
+      inside,
+      lights: glow.size,
+      ask,
+      before,
+      asked2,
+      bar,
+      tea,
+      out,
+      back,
+      stops: POIS.filter((q) => q.id === "memphian" || q.id === "bealestage").length,
+      drawn: BAND.length,
+    };
   });
-  check(gigs.known === gigs.asked && gigs.day === "city-day" && gigs.night === "city-night" && (!gigs.sounding.on || (gigs.sounding.heard === gigs.sounding.want && gigs.sounding.beat >= 0)), "music: the band knows a tune for every place, the city has one for day and one for night, and what plays is what was asked for", { known: gigs.known, day: gigs.day, night: gigs.night, ...gigs.sounding });
-  check(gigs.tune === "beale" && gigs.stage.players === 6 && gigs.drawn === 6 && gigs.stage.up && gigs.stage.on && gigs.stage.both === 6 && gigs.stage.stepped > 0.5, "music: six players are on the boards in Handy Park, every one of them moving with the tune, and whoever has the lead steps up", { tune: gigs.tune, ...gigs.stage });
-  check(gigs.stage.crowd >= 5 && gigs.stage.dancing >= 3 && gigs.close.live === 1 && gigs.close.bop && gigs.far.live === 0 && !gigs.far.bop && gigs.far.tune === "city-day", "music: a crowd dances in front of the stage, up close it is louder and Benji moves to it, and across town it is the city's tune again", { crowd: gigs.stage.crowd, dancing: gigs.stage.dancing, close: gigs.close, far: gigs.far });
-  check(/^Tip the band/.test(gigs.close.ask) && gigs.tip.paid === 5 && gigs.tip.respect >= 2 && /SackReligious/.test(gigs.tip.said), "music: a tip in Handy Park gets Benji pointed out from the stage", gigs.tip);
-  check(gigs.stops === 2 && gigs.door === "Enter The Memphian" && gigs.inside.place === "club" && gigs.inside.tune === "club" && gigs.inside.live === 1 && gigs.inside.players === 6 && gigs.inside.up, "the Memphian: it is on the map, its doors on Union let him in, and the house band is on the stage", { door: gigs.door, ...gigs.inside });
-  check(gigs.inside.sat >= gigs.inside.tables && gigs.inside.keep === 1 && gigs.inside.floor >= 4 && gigs.inside.moving >= 8 && gigs.lights >= 3, "the Memphian: every table has somebody sat at it, there is a barkeep, a floor of dancers, and the stage lights go with the beat", { ...gigs.inside, lights: gigs.lights });
-  check(/^Request a song/.test(gigs.ask) && gigs.asked2.paid === 5 && gigs.asked2.song !== gigs.before.song && gigs.asked2.tune !== gigs.before.tune && gigs.asked2.said.includes(gigs.asked2.song) && gigs.asked2.cheer >= 3, "the Memphian: five in the jar and the band plays the next song on its list, to a cheer", { before: gigs.before, after: gigs.asked2 });
-  check(/^Sweet tea/.test(gigs.bar) && gigs.tea.paid === 4 && gigs.tea.fed && gigs.out === "Step outside" && gigs.back.place === "street" && gigs.back.at, "the Memphian: the bar serves, and the doors let him back out on Union", { bar: gigs.bar, tea: gigs.tea, out: gigs.out, back: gigs.back });
+  check(
+    gigs.known === gigs.asked &&
+      gigs.day === "city-day" &&
+      gigs.night === "city-night" &&
+      (!gigs.sounding.on ||
+        (gigs.sounding.heard === gigs.sounding.want && gigs.sounding.beat >= 0)),
+    "music: the band knows a tune for every place, the city has one for day and one for night, and what plays is what was asked for",
+    { known: gigs.known, day: gigs.day, night: gigs.night, ...gigs.sounding },
+  );
+  check(
+    gigs.tune === "beale" &&
+      gigs.stage.players === 6 &&
+      gigs.drawn === 6 &&
+      gigs.stage.up &&
+      gigs.stage.on &&
+      gigs.stage.both === 6 &&
+      gigs.stage.stepped > 0.5,
+    "music: six players are on the boards in Handy Park, every one of them moving with the tune, and whoever has the lead steps up",
+    { tune: gigs.tune, ...gigs.stage },
+  );
+  check(
+    gigs.stage.crowd >= 5 &&
+      gigs.stage.dancing >= 3 &&
+      gigs.close.live === 1 &&
+      gigs.close.bop &&
+      gigs.far.live === 0 &&
+      !gigs.far.bop &&
+      gigs.far.tune === "city-day",
+    "music: a crowd dances in front of the stage, up close it is louder and Benji moves to it, and across town it is the city's tune again",
+    { crowd: gigs.stage.crowd, dancing: gigs.stage.dancing, close: gigs.close, far: gigs.far },
+  );
+  check(
+    /^Tip the band/.test(gigs.close.ask) &&
+      gigs.tip.paid === 5 &&
+      gigs.tip.respect >= 2 &&
+      /SackReligious/.test(gigs.tip.said),
+    "music: a tip in Handy Park gets Benji pointed out from the stage",
+    gigs.tip,
+  );
+  check(
+    gigs.stops === 2 &&
+      gigs.door === "Enter The Memphian" &&
+      gigs.inside.place === "club" &&
+      gigs.inside.tune === "club" &&
+      gigs.inside.live === 1 &&
+      gigs.inside.players === 6 &&
+      gigs.inside.up,
+    "the Memphian: it is on the map, its doors on Union let him in, and the house band is on the stage",
+    { door: gigs.door, ...gigs.inside },
+  );
+  check(
+    gigs.inside.sat >= gigs.inside.tables &&
+      gigs.inside.keep === 1 &&
+      gigs.inside.floor >= 4 &&
+      gigs.inside.moving >= 8 &&
+      gigs.lights >= 3,
+    "the Memphian: every table has somebody sat at it, there is a barkeep, a floor of dancers, and the stage lights go with the beat",
+    { ...gigs.inside, lights: gigs.lights },
+  );
+  check(
+    /^Request a song/.test(gigs.ask) &&
+      gigs.asked2.paid === 5 &&
+      gigs.asked2.song !== gigs.before.song &&
+      gigs.asked2.tune !== gigs.before.tune &&
+      gigs.asked2.said.includes(gigs.asked2.song) &&
+      gigs.asked2.cheer >= 3,
+    "the Memphian: five in the jar and the band plays the next song on its list, to a cheer",
+    { before: gigs.before, after: gigs.asked2 },
+  );
+  check(
+    /^Sweet tea/.test(gigs.bar) &&
+      gigs.tea.paid === 4 &&
+      gigs.tea.fed &&
+      gigs.out === "Step outside" &&
+      gigs.back.place === "street" &&
+      gigs.back.at,
+    "the Memphian: the bar serves, and the doors let him back out on Union",
+    { bar: gigs.bar, tea: gigs.tea, out: gigs.out, back: gigs.back },
+  );
 
   // ---- jookin: the cypher inside the Beale Street arch, Memphis rap out of its speaker, and Benji's turn on the lino
   const jook = await page.evaluate(() => {
@@ -2366,7 +3718,12 @@ try {
     if (g.overlay) g.close();
     if (g.activity) g.activity.quit();
     run(6);
-    for (let i = 0; i < 200 && (g.mode !== "walk" || g.place !== "street" || g.live.fade > 0.05); i++) g.tick(1 / 30);
+    for (
+      let i = 0;
+      i < 200 && (g.mode !== "walk" || g.place !== "street" || g.live.fade > 0.05);
+      i++
+    )
+      g.tick(1 / 30);
     const { POIS, TUNES, CYPHER: C, JOOKERS, BEALE_STAGE: S } = g.tables;
     g.setRain(false);
     // The clock keeps the beat, so every run of this comes out the same.
@@ -2376,7 +3733,12 @@ try {
     j.metronome = true;
     const fit0 = g.save.wearing;
     g.wear("starter");
-    const rap = ["jook", "radio", "court"].filter((id) => TUNES[id]?.bass === "808" && ["trap", "buck"].includes(TUNES[id].drums) && TUNES[id].leads.includes("cowbell")).length;
+    const rap = ["jook", "radio", "court"].filter(
+      (id) =>
+        TUNES[id]?.bass === "808" &&
+        ["trap", "buck"].includes(TUNES[id].drums) &&
+        TUNES[id].leads.includes("cowbell"),
+    ).length;
     const stop = POIS.find((q) => q.id === "cypher");
     g.warp(stop.arrive.x, stop.arrive.z, stop.arrive.heading);
     run(12);
@@ -2396,7 +3758,17 @@ try {
         if (Math.hypot(d.x - C.x, d.z - C.z) < 1.7) led.add(k);
       });
     }
-    const cypher = { drawn: JOOKERS.length, names: j.names, moves: moves.map((q) => q.size), led: led.size, up: two.every((d) => d.card.visible), ring: j.ring.members.length, facing: j.ring.members.every((m) => Math.hypot(m.x - C.x, m.z - C.z) < 5.2 && Math.hypot(m.x - C.x, m.z - C.z) > 3.2) };
+    const cypher = {
+      drawn: JOOKERS.length,
+      names: j.names,
+      moves: moves.map((q) => q.size),
+      led: led.size,
+      up: two.every((d) => d.card.visible),
+      ring: j.ring.members.length,
+      facing: j.ring.members.every(
+        (m) => Math.hypot(m.x - C.x, m.z - C.z) < 5.2 && Math.hypot(m.x - C.x, m.z - C.z) > 3.2,
+      ),
+    };
     // Stood by it, he cannot keep still either; walking off, he is himself again.
     const free = new Set();
     for (let i = 0; i < 150; i++) {
@@ -2417,12 +3789,20 @@ try {
     const r0 = g.save.respect;
     g.input.press("interact");
     run(2);
-    const began = { mode: g.mode, mine: g.activity === j, phase: j.phase, beat: +j.beat.toFixed(2), notes: j.notes.length };
+    const began = {
+      mode: g.mode,
+      mine: g.activity === j,
+      phase: j.phase,
+      beat: +j.beat.toFixed(2),
+      notes: j.notes.length,
+    };
     const L = ["left", "down", "up", "right", "action"];
     const play = (every, watch) => {
       let k = 0;
       for (let i = 0; i < 30 * 100 && j.phase !== "over"; i++) {
-        for (const n of j.notes) if (n.state === 0 && Math.abs(n.beat - j.beat) < 0.05 && k++ % every === 0) g.input.press(L[n.lane]);
+        for (const n of j.notes)
+          if (n.state === 0 && Math.abs(n.beat - j.beat) < 0.05 && k++ % every === 0)
+            g.input.press(L[n.lane]);
         g.tick(1 / 30);
         watch();
       }
@@ -2440,9 +3820,28 @@ try {
       shown = Math.max(shown, g.live.jookN);
       heat = Math.max(heat, j.heat);
       if (j.phase === "dance") glide = Math.max(glide, Math.abs(g.pos.x - C.x));
-      if (j.phase === "watch") two.forEach((d, k) => Math.hypot(d.x - C.x, d.z - C.z) < 1.7 && answered.add(k));
+      if (j.phase === "watch")
+        two.forEach((d, k) => Math.hypot(d.x - C.x, d.z - C.z) < 1.7 && answered.add(k));
     });
-    const clean = { score: j.score, max: j.max, tally: { ...j.tally }, title: g.results?.title, win: g.results?.win, record: g.results?.record, overlay: g.overlay, pay: g.save.dollars - d0, respect: g.save.respect - r0, best: g.save.best.jook, wins: g.save.best.jookWins, poses: [...poses].filter(Boolean), phases: [...phases], answered: answered.size, glide: +glide.toFixed(2), shown, heat: +heat.toFixed(2) };
+    const clean = {
+      score: j.score,
+      max: j.max,
+      tally: { ...j.tally },
+      title: g.results?.title,
+      win: g.results?.win,
+      record: g.results?.record,
+      overlay: g.overlay,
+      pay: g.save.dollars - d0,
+      respect: g.save.respect - r0,
+      best: g.save.best.jook,
+      wins: g.save.best.jookWins,
+      poses: [...poses].filter(Boolean),
+      phases: [...phases],
+      answered: answered.size,
+      glide: +glide.toFixed(2),
+      shown,
+      heat: +heat.toFixed(2),
+    };
     // Run it back in another fit, landing one move in three: no win, a busier routine, and he still moves.
     const other = g.save.outfits.find((id) => id !== "starter");
     if (other) g.wear(other);
@@ -2459,35 +3858,141 @@ try {
       moved.lean = Math.max(moved.lean, Math.abs(g.benji.tilt));
       moved.rise = Math.max(moved.rise, g.benji.lift);
     });
-    const loose = { fit: g.save.wearing, level: j.level, notes: j.notes.length, score: j.score, max: j.max, tally: { ...j.tally }, title: g.results?.title, win: g.results?.win, wins: g.save.best.jookWins, best: g.save.best.jook, lean: +moved.lean.toFixed(2), rise: +moved.rise.toFixed(2), turned: moved.turned };
+    const loose = {
+      fit: g.save.wearing,
+      level: j.level,
+      notes: j.notes.length,
+      score: j.score,
+      max: j.max,
+      tally: { ...j.tally },
+      title: g.results?.title,
+      win: g.results?.win,
+      wins: g.save.best.jookWins,
+      best: g.save.best.jook,
+      lean: +moved.lean.toFixed(2),
+      rise: +moved.rise.toFixed(2),
+      turned: moved.turned,
+    };
     g.close();
     run(10);
-    const after = { mode: g.mode, busy: !!g.activity, near: Math.hypot(g.pos.x - C.x, g.pos.z - C.z) < 6, lanes: g.live.jookN, pose: g.benji.pose };
+    const after = {
+      mode: g.mode,
+      busy: !!g.activity,
+      near: Math.hypot(g.pos.x - C.x, g.pos.z - C.z) < 6,
+      lanes: g.live.jookN,
+      pose: g.benji.pose,
+    };
     g.wear(fit0);
     g.sound.beat = real;
     g.stage.render = draw;
-    return { rap, here, stage, cypher, free: [...free], walking, ask, began, clean, loose, after, stops: POIS.filter((q) => q.id === "cypher").length };
+    return {
+      rap,
+      here,
+      stage,
+      cypher,
+      free: [...free],
+      walking,
+      ask,
+      began,
+      clean,
+      loose,
+      after,
+      stops: POIS.filter((q) => q.id === "cypher").length,
+    };
   });
-  check(jook.rap === 3 && jook.here.tune === "jook" && jook.here.live > 0.5 && jook.stage === "beale", "Memphis rap: the cypher, the car radio and the court each have a beat built on an 808 and a cowbell, and by the cypher its speaker is what is heard", { rap: jook.rap, here: jook.here, stage: jook.stage });
-  check(jook.stops === 1 && jook.cypher.drawn === 2 && jook.cypher.up && jook.cypher.moves.every((n) => n >= 5) && jook.cypher.led === 2 && jook.cypher.ring >= 5 && jook.cypher.facing, "jookin: the cypher is on the map, two jookers trade the floor with every move they have, and a ring of people stands round them", jook.cypher);
-  check(jook.free.length >= 3 && jook.free.every((p) => p.startsWith("jook-")) && !String(jook.walking).startsWith("jook-"), "jookin: stood by the ring Benji starts to jook on his own, and walks off as himself", { free: jook.free, walking: jook.walking });
-  check(jook.ask === "Jump in the cypher" && jook.began.mode === "whack" && jook.began.mine && jook.began.phase === "count" && jook.began.beat < -3 && jook.began.notes > 60, "jookin: the prompt on the lino starts his routine with a count-in", { ask: jook.ask, ...jook.began });
   check(
-    jook.clean.score === jook.clean.max && jook.clean.tally.miss === 0 && jook.clean.tally.good === 0 && jook.clean.win && jook.clean.record && jook.clean.title === "THE CYPHER IS YOURS" && jook.clean.overlay === "results" && jook.clean.pay >= 90 && jook.clean.respect >= 5 && jook.clean.best === jook.clean.max && jook.clean.wins === 1,
+    jook.rap === 3 && jook.here.tune === "jook" && jook.here.live > 0.5 && jook.stage === "beale",
+    "Memphis rap: the cypher, the car radio and the court each have a beat built on an 808 and a cowbell, and by the cypher its speaker is what is heard",
+    { rap: jook.rap, here: jook.here, stage: jook.stage },
+  );
+  check(
+    jook.stops === 1 &&
+      jook.cypher.drawn === 2 &&
+      jook.cypher.up &&
+      jook.cypher.moves.every((n) => n >= 5) &&
+      jook.cypher.led === 2 &&
+      jook.cypher.ring >= 5 &&
+      jook.cypher.facing,
+    "jookin: the cypher is on the map, two jookers trade the floor with every move they have, and a ring of people stands round them",
+    jook.cypher,
+  );
+  check(
+    jook.free.length >= 3 &&
+      jook.free.every((p) => p.startsWith("jook-")) &&
+      !String(jook.walking).startsWith("jook-"),
+    "jookin: stood by the ring Benji starts to jook on his own, and walks off as himself",
+    { free: jook.free, walking: jook.walking },
+  );
+  check(
+    jook.ask === "Jump in the cypher" &&
+      jook.began.mode === "whack" &&
+      jook.began.mine &&
+      jook.began.phase === "count" &&
+      jook.began.beat < -3 &&
+      jook.began.notes > 60,
+    "jookin: the prompt on the lino starts his routine with a count-in",
+    { ask: jook.ask, ...jook.began },
+  );
+  check(
+    jook.clean.score === jook.clean.max &&
+      jook.clean.tally.miss === 0 &&
+      jook.clean.tally.good === 0 &&
+      jook.clean.win &&
+      jook.clean.record &&
+      jook.clean.title === "THE CYPHER IS YOURS" &&
+      jook.clean.overlay === "results" &&
+      jook.clean.pay >= 90 &&
+      jook.clean.respect >= 5 &&
+      jook.clean.best === jook.clean.max &&
+      jook.clean.wins === 1,
     "jookin: every move landed on the beat takes the cypher, pays, and goes on his record",
     { ...jook.clean, poses: jook.clean.poses.length },
   );
   check(
-    ["jook-glide", "jook-glide-r", "jook-toes", "jook-buck", "jook-spin", "jook-spin-r", "jook-heel", "jook-finish"].every((p) => jook.clean.poses.includes(p)) && jook.clean.glide > 0.8 && jook.clean.glide < 1.9 && jook.clean.shown >= 3 && jook.clean.heat > 0.78 && ["count", "dance", "watch", "bow"].every((p) => jook.clean.phases.includes(p)) && jook.clean.answered === 2,
+    [
+      "jook-glide",
+      "jook-glide-r",
+      "jook-toes",
+      "jook-buck",
+      "jook-spin",
+      "jook-spin-r",
+      "jook-heel",
+      "jook-finish",
+    ].every((p) => jook.clean.poses.includes(p)) &&
+      jook.clean.glide > 0.8 &&
+      jook.clean.glide < 1.9 &&
+      jook.clean.shown >= 3 &&
+      jook.clean.heat > 0.78 &&
+      ["count", "dance", "watch", "bow"].every((p) => jook.clean.phases.includes(p)) &&
+      jook.clean.answered === 2,
     "jookin: he glides across the lino, goes up on his toes, bucks, spins and finishes, the moves are shown coming, the crowd warms to him, and each of the two answers a round",
-    { poses: jook.clean.poses, glide: jook.clean.glide, shown: jook.clean.shown, heat: jook.clean.heat, phases: jook.clean.phases, answered: jook.clean.answered },
+    {
+      poses: jook.clean.poses,
+      glide: jook.clean.glide,
+      shown: jook.clean.shown,
+      heat: jook.clean.heat,
+      phases: jook.clean.phases,
+      answered: jook.clean.answered,
+    },
   );
   check(
-    jook.loose.level === 1 && jook.loose.notes > jook.began.notes && jook.loose.win === false && jook.loose.wins === 1 && jook.loose.tally.miss > 30 && jook.loose.score < jook.loose.max * 0.5 && jook.loose.best === jook.clean.best && (jook.loose.fit === "starter" || (jook.loose.lean > 0.1 && jook.loose.rise > 0.05 && jook.loose.turned > 0)),
+    jook.loose.level === 1 &&
+      jook.loose.notes > jook.began.notes &&
+      jook.loose.win === false &&
+      jook.loose.wins === 1 &&
+      jook.loose.tally.miss > 30 &&
+      jook.loose.score < jook.loose.max * 0.5 &&
+      jook.loose.best === jook.clean.best &&
+      (jook.loose.fit === "starter" ||
+        (jook.loose.lean > 0.1 && jook.loose.rise > 0.05 && jook.loose.turned > 0)),
     "jookin: after a win the routine is busier, missing most of it wins nothing, and in a fit without the drawings he still leans, rises and turns",
     jook.loose,
   );
-  check(jook.after.mode === "walk" && !jook.after.busy && jook.after.near && jook.after.lanes === 0, "jookin: closing the card puts him back by the ring on his own feet", jook.after);
+  check(
+    jook.after.mode === "walk" && !jook.after.busy && jook.after.near && jook.after.lanes === 0,
+    "jookin: closing the card puts him back by the ring on his own feet",
+    jook.after,
+  );
   // The lanes on the screen, and its buttons under a thumb.
   const lanes = await page.evaluate(async () => {
     const g = window.__GAME__;
@@ -2511,11 +4016,26 @@ try {
     for (let i = 0; i < 200 && !falling; i++) {
       await wait(150);
       root = document.querySelector("[data-jook]");
-      falling = root ? [...root.querySelectorAll("div")].filter((d) => d.style.display === "flex" && d.style.transform.includes("translate3d")).length : 0;
+      falling = root
+        ? [...root.querySelectorAll("div")].filter(
+            (d) => d.style.display === "flex" && d.style.transform.includes("translate3d"),
+          ).length
+        : 0;
     }
-    const pads = [...document.querySelectorAll("[data-jook-pad]")].map((b) => b.getAttribute("data-jook-pad"));
-    const state = { coming: g.live.jookN, beat: +j.beat.toFixed(1), phase: j.phase, mode: g.mode, overlay: g.overlay, drawn: root ? root.querySelectorAll("div").length : 0 };
-    document.querySelector('[data-jook-pad="right"]')?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    const pads = [...document.querySelectorAll("[data-jook-pad]")].map((b) =>
+      b.getAttribute("data-jook-pad"),
+    );
+    const state = {
+      coming: g.live.jookN,
+      beat: +j.beat.toFixed(1),
+      phase: j.phase,
+      mode: g.mode,
+      overlay: g.overlay,
+      drawn: root ? root.querySelectorAll("div").length : 0,
+    };
+    document
+      .querySelector('[data-jook-pad="right"]')
+      ?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
     g.tick(1 / 30);
     const tapped = { move: j.move, lit: g.live.jookTap[3] > 0.5, slid: j.slideTo > 0 };
     j.quit();
@@ -2523,9 +4043,28 @@ try {
     g.tick(1 / 30);
     await wait(300);
     g.stage.render = draw;
-    return { root: !!root, pads, falling, tapped, state, gone: !document.querySelector("[data-jook]"), mode: g.mode };
+    return {
+      root: !!root,
+      pads,
+      falling,
+      tapped,
+      state,
+      gone: !document.querySelector("[data-jook]"),
+      mode: g.mode,
+    };
   });
-  check(lanes.root && lanes.pads.join() === "left,down,up,right" && lanes.falling >= 1 && lanes.tapped.move === 3 && lanes.tapped.lit && lanes.tapped.slid && lanes.gone && lanes.mode === "walk", "jookin: four lanes with a button under each are on the screen, moves come down them, a button pressed is a move made, and walking away clears them", lanes);
+  check(
+    lanes.root &&
+      lanes.pads.join() === "left,down,up,right" &&
+      lanes.falling >= 1 &&
+      lanes.tapped.move === 3 &&
+      lanes.tapped.lit &&
+      lanes.tapped.slid &&
+      lanes.gone &&
+      lanes.mode === "walk",
+    "jookin: four lanes with a button under each are on the screen, moves come down them, a button pressed is a move made, and walking away clears them",
+    lanes,
+  );
 
   // ---- the view has a button of its own: a key, the View button on a pad, a button under a thumb
   const views = await page.evaluate(() => {
@@ -2539,7 +4078,10 @@ try {
     g.warp(160, 52, 0);
     g.view = 0;
     run(40);
-    const lens = () => ({ back: +Math.hypot(g.camera.position.x - g.pos.x, g.camera.position.z - g.pos.z).toFixed(1), up: +g.camera.position.y.toFixed(1) });
+    const lens = () => ({
+      back: +Math.hypot(g.camera.position.x - g.pos.x, g.camera.position.z - g.pos.z).toFixed(1),
+      up: +g.camera.position.y.toFixed(1),
+    });
     const seen = [{ view: g.view, ...lens() }];
     for (let i = 0; i < 3; i++) {
       g.input.press("camera");
@@ -2577,7 +4119,16 @@ try {
     g.sky.setPhase("day", true);
   });
   check(
-    views.seen.map((q) => q.view).join() === "0,1,2,0" && views.seen[1].back < views.seen[0].back - 1.5 && views.seen[2].back > views.seen[0].back + 2.5 && views.seen[2].up > views.seen[0].up + 1 && /Close/.test(views.seen[1].said) && /Wide/.test(views.seen[2].said) && views.held === 0 && views.kept === "0" && padView === 1 && phase1 !== phase0,
+    views.seen.map((q) => q.view).join() === "0,1,2,0" &&
+      views.seen[1].back < views.seen[0].back - 1.5 &&
+      views.seen[2].back > views.seen[0].back + 2.5 &&
+      views.seen[2].up > views.seen[0].up + 1 &&
+      /Close/.test(views.seen[1].said) &&
+      /Wide/.test(views.seen[2].said) &&
+      views.held === 0 &&
+      views.kept === "0" &&
+      padView === 1 &&
+      phase1 !== phase0,
     "the view has its own button: C goes through standard, close and wide and the choice is kept, the View button on a pad does the same, and the right stick's click turns the day over",
     { ...views, padView, phase0, phase1 },
   );
@@ -2597,23 +4148,39 @@ try {
     run(6);
     for (let i = 0; i < 200 && (g.mode !== "walk" || g.live.fade > 0.05); i++) g.tick(1 / 30);
     const R = g.rooms.laser;
-    const plans = R.arenas.map((a) => ({ id: a.id, floors: a.storeys, joined: a.joined, nodes: a.nodes.length, upstairs: a.upper.length }));
+    const plans = R.arenas.map((a) => ({
+      id: a.id,
+      floors: a.storeys,
+      joined: a.joined,
+      nodes: a.nodes.length,
+      upstairs: a.upper.length,
+    }));
     // At the door: a card for each, and the one picked is the one the hall is set out as.
     g.save.best.lt_map = 0;
     g.open("loadout");
     g.push();
     await wait(400);
-    const cards = [...document.querySelectorAll("[data-arena]")].map((b) => b.getAttribute("data-arena"));
+    const cards = [...document.querySelectorAll("[data-arena]")].map((b) =>
+      b.getAttribute("data-arena"),
+    );
     const drawn = document.querySelectorAll("[data-arena] svg rect").length;
     document.querySelector('[data-arena="catwalk"]')?.click();
     await wait(300);
-    const picked = { map: L.map, kept: g.save.best.lt_map, shown: L.loadout().maps.find((m) => m.picked)?.id };
+    const picked = {
+      map: L.map,
+      kept: g.save.best.lt_map,
+      shown: L.loadout().maps.find((m) => m.picked)?.id,
+    };
     document.querySelector("[data-deploy]").click();
     for (let i = 0; i < 240 && !(g.mode === "laser" && L.phase === "go"); i++) g.tick(1 / 30);
     for (let i = 0; i < 60 && g.live.fade > 0.05; i++) g.tick(1 / 30);
     const A = R.arena;
     const C = { x: (R.bounds.minX + R.bounds.maxX) / 2, z: (R.bounds.minZ + R.bounds.maxZ) / 2 };
-    const hall = { id: A.id, shown: R.arenas.filter((a) => a.group.visible).map((a) => a.id), at: [+(g.pos.x - C.x).toFixed(1), +(g.pos.z - C.z).toFixed(1)] };
+    const hall = {
+      id: A.id,
+      shown: R.arenas.filter((a) => a.group.visible).map((a) => a.id),
+      at: [+(g.pos.x - C.x).toFixed(1), +(g.pos.z - C.z).toFixed(1)],
+    };
     // Everybody else stands still while he tries the place out.
     const pinks = L.bots.filter((b) => b.playing && b.team === 1);
     const hush = () => {
@@ -2624,7 +4191,8 @@ try {
         b.at = null;
       }
     };
-    const park = () => pinks.forEach((b, i) => ((b.x = b.tx = C.x - 14 + i), (b.z = b.tz = C.z - 9.4), (b.y = 0)));
+    const park = () =>
+      pinks.forEach((b, i) => ((b.x = b.tx = C.x - 14 + i), (b.z = b.tz = C.z - 9.4), (b.y = 0)));
     hush();
     park();
     L.steady = true;
@@ -2648,7 +4216,12 @@ try {
     walk(0.9);
     const half = +L.y.toFixed(2);
     walk(2.6);
-    const up = { half, y: +L.y.toFixed(2), x: +(g.pos.x - C.x).toFixed(1), eye: +(g.camera.position.y - R.floorY).toFixed(2) };
+    const up = {
+      half,
+      y: +L.y.toFixed(2),
+      x: +(g.pos.x - C.x).toFixed(1),
+      eye: +(g.camera.position.y - R.floorY).toFixed(2),
+    };
     // A rail stops him; the gap in it lets him drop.
     stand(1, -0.5, 2.7, Math.PI);
     walk(1.2);
@@ -2675,7 +4248,10 @@ try {
     put(-2, -5, 0);
     run(1);
     const under = L.trace(g.camYaw, 0, 60);
-    const floor = { down: A.clear(C.x - 2, 2.7 + 1.32, C.z, C.x - 2, 1.1, C.z + 0.1), up: A.clear(C.x - 2, 1.2, C.z + 0.1, C.x - 2, 2.7 + 1, C.z) };
+    const floor = {
+      down: A.clear(C.x - 2, 2.7 + 1.32, C.z, C.x - 2, 1.1, C.z + 0.1),
+      up: A.clear(C.x - 2, 1.2, C.z + 0.1, C.x - 2, 2.7 + 1, C.z),
+    };
     const beams = { down: down.kind, upward: upward.kind, under: under.kind, floor };
     // Let them go: in a minute of play somebody takes the high ground, and nobody is stuck in or against anything.
     const roam = (seconds) => {
@@ -2696,7 +4272,14 @@ try {
           if (b.y > 2.5) upstairs.add(k);
           if (b.stuck > 1.15 && was[k] <= 1.15) stuck++;
           was[k] = b.stuck;
-          for (const q of arena.solidsAt(b.y)) if (b.x > q.minX + 0.05 && b.x < q.maxX - 0.05 && b.z > q.minZ + 0.05 && b.z < q.maxZ - 0.05) inside++;
+          for (const q of arena.solidsAt(b.y))
+            if (
+              b.x > q.minX + 0.05 &&
+              b.x < q.maxX - 0.05 &&
+              b.z > q.minZ + 0.05 &&
+              b.z < q.maxZ - 0.05
+            )
+              inside++;
         });
       }
       return { high: +high.toFixed(1), upstairs: upstairs.size, stuck, inside };
@@ -2724,21 +4307,71 @@ try {
     g.setPlace("street");
     run(8);
     g.stage.render = draw;
-    return { plans, cards, drawn, picked, hall, up, rail, drop, beams, catwalk, towersId, tower, towers, after };
+    return {
+      plans,
+      cards,
+      drawn,
+      picked,
+      hall,
+      up,
+      rail,
+      drop,
+      beams,
+      catwalk,
+      towersId,
+      tower,
+      towers,
+      after,
+    };
   });
   check(
-    halls.plans.map((q) => q.floors).join() === "1,2,2" && halls.plans.every((q) => q.joined && q.nodes >= 14) && halls.plans[1].upstairs >= 4 && halls.plans[2].upstairs >= 12 && halls.cards.join() === "yard,catwalk,towers" && halls.drawn > 30 && halls.picked.map === 1 && halls.picked.kept === 1 && halls.picked.shown === "catwalk" && halls.hall.id === "catwalk" && halls.hall.shown.join() === "catwalk",
+    halls.plans.map((q) => q.floors).join() === "1,2,2" &&
+      halls.plans.every((q) => q.joined && q.nodes >= 14) &&
+      halls.plans[1].upstairs >= 4 &&
+      halls.plans[2].upstairs >= 12 &&
+      halls.cards.join() === "yard,catwalk,towers" &&
+      halls.drawn > 30 &&
+      halls.picked.map === 1 &&
+      halls.picked.kept === 1 &&
+      halls.picked.shown === "catwalk" &&
+      halls.hall.id === "catwalk" &&
+      halls.hall.shown.join() === "catwalk",
     "laser tag: the door offers three halls with their floor plans, two of them with an upstairs, every corner of each can be walked to, and the one picked is the one he is sent into",
     { plans: halls.plans, cards: halls.cards, picked: halls.picked, hall: halls.hall },
   );
   check(
-    halls.up.half > 0.4 && halls.up.half < 2.6 && halls.up.y === 2.7 && halls.up.x > -4 && Math.abs(halls.up.eye - 4.02) < 0.08 && halls.rail.y === 2.7 && halls.rail.z > -1.3 && halls.drop.y === 0 && halls.drop.z < -2 && halls.tower.y === 2.7 && halls.towersId === "towers",
+    halls.up.half > 0.4 &&
+      halls.up.half < 2.6 &&
+      halls.up.y === 2.7 &&
+      halls.up.x > -4 &&
+      Math.abs(halls.up.eye - 4.02) < 0.08 &&
+      halls.rail.y === 2.7 &&
+      halls.rail.z > -1.3 &&
+      halls.drop.y === 0 &&
+      halls.drop.z < -2 &&
+      halls.tower.y === 2.7 &&
+      halls.towersId === "towers",
     "laser tag: a ramp carries him upstairs on foot and his eyes go up with him, a rail stops him at the edge, a gap in it drops him to the floor, and the towers have a ramp of their own",
     { up: halls.up, rail: halls.rail, drop: halls.drop, tower: halls.tower },
   );
-  check(halls.beams.down === "bot" && halls.beams.upward === "bot" && halls.beams.under === "bot" && !halls.beams.floor.down && !halls.beams.floor.up, "laser tag: he can tag down over a rail and up through one, and under the bridge, but nothing goes through the floor of it", halls.beams);
   check(
-    halls.catwalk.upstairs >= 1 && halls.catwalk.stuck <= 2 && halls.catwalk.inside === 0 && halls.towers.upstairs >= 1 && halls.towers.stuck <= 2 && halls.towers.inside === 0 && halls.after.mode === "walk" && halls.after.place === "fun",
+    halls.beams.down === "bot" &&
+      halls.beams.upward === "bot" &&
+      halls.beams.under === "bot" &&
+      !halls.beams.floor.down &&
+      !halls.beams.floor.up,
+    "laser tag: he can tag down over a rail and up through one, and under the bridge, but nothing goes through the floor of it",
+    halls.beams,
+  );
+  check(
+    halls.catwalk.upstairs >= 1 &&
+      halls.catwalk.stuck <= 2 &&
+      halls.catwalk.inside === 0 &&
+      halls.towers.upstairs >= 1 &&
+      halls.towers.stuck <= 2 &&
+      halls.towers.inside === 0 &&
+      halls.after.mode === "walk" &&
+      halls.after.place === "fun",
     "laser tag: in both two-storey halls the others take the high ground by the ramps without getting stuck or walking into anything",
     { catwalk: halls.catwalk, towers: halls.towers, after: halls.after },
   );
@@ -2762,7 +4395,9 @@ try {
     const asked = g.prompt;
     g.input.press("interact");
     run(3);
-    const first = g.dialogue[0] ? { who: g.dialogue[0].who, text: g.dialogue[0].text, face: g.dialogue[0].portrait } : null;
+    const first = g.dialogue[0]
+      ? { who: g.dialogue[0].who, text: g.dialogue[0].text, face: g.dialogue[0].portrait }
+      : null;
     g.input.press("interact");
     run(3);
     const second = g.dialogue[0]?.text ?? "";
@@ -2771,10 +4406,19 @@ try {
     // Whichever walker can be stood beside, from whichever side there is room on.
     let w = null;
     for (const q of g.people.walkers.slice(0, 10)) {
-      for (const [ox, oz] of [[1.1, 0.3], [-1.1, 0.3], [0.3, 1.1], [0.3, -1.1]]) {
+      for (const [ox, oz] of [
+        [1.1, 0.3],
+        [-1.1, 0.3],
+        [0.3, 1.1],
+        [0.3, -1.1],
+      ]) {
         g.warp(q.x + ox, q.z + oz, 0);
         run(5);
-        if (/^Talk to /.test(g.prompt) && Math.hypot(q.x - g.pos.x, q.z - g.pos.z) < 1.6 && g.people.nearest(g.pos.x, g.pos.z, 1.9)?.card === q.card) {
+        if (
+          /^Talk to /.test(g.prompt) &&
+          Math.hypot(q.x - g.pos.x, q.z - g.pos.z) < 1.6 &&
+          g.people.nearest(g.pos.x, g.pos.z, 1.9)?.card === q.card
+        ) {
           w = q;
           break;
         }
@@ -2793,14 +4437,26 @@ try {
       const at = w.s;
       run(45);
       const want = Math.atan2(g.pos.x - w.x, g.pos.z - w.z);
-      const turned = Math.abs(Math.atan2(Math.sin(w.card.heading - want), Math.cos(w.card.heading - want)));
-      walker = { prompt, said: g.dialogue[0]?.text ?? "", stayed: Math.abs(w.s - at) < 0.05, turned: +turned.toFixed(2) };
+      const turned = Math.abs(
+        Math.atan2(Math.sin(w.card.heading - want), Math.cos(w.card.heading - want)),
+      );
+      walker = {
+        prompt,
+        said: g.dialogue[0]?.text ?? "",
+        stayed: Math.abs(w.s - at) < 0.05,
+        turned: +turned.toFixed(2),
+      };
     }
     // The ones with names have something to say when there is no errand for him: Mama Dee, beside her truck.
     g.dialogue.length = 0;
     const dee = g.npcs.find((q) => q.id === "mamaDee");
     let named = null;
-    for (const [ox, oz] of [[-1.5, 0.8], [0.6, 1.7], [-1.6, -0.6], [1.5, 0.8]]) {
+    for (const [ox, oz] of [
+      [-1.5, 0.8],
+      [0.6, 1.7],
+      [-1.6, -0.6],
+      [1.5, 0.8],
+    ]) {
       g.warp(dee.x + ox, dee.z + oz, 0);
       run(4);
       if (g.prompt !== "Talk to Mama Dee") continue;
@@ -2819,7 +4475,9 @@ try {
     let inside = null;
     for (let i = 0; i < 900 && !inside; i++) {
       run(1);
-      const m = g.troupes.fun.members.find((q) => q.card.visible && !q.posted && !q.going && q.stop.act !== "inside");
+      const m = g.troupes.fun.members.find(
+        (q) => q.card.visible && !q.posted && !q.going && q.stop.act !== "inside",
+      );
       if (m) {
         g.pos.x = m.x + 0.9;
         g.pos.z = m.z + 0.9;
@@ -2827,7 +4485,11 @@ try {
         if (/^Talk to /.test(g.prompt)) {
           g.input.press("interact");
           run(2);
-          inside = { prompt: g.prompt, who: g.dialogue[0]?.who ?? "", text: g.dialogue[0]?.text ?? "" };
+          inside = {
+            prompt: g.prompt,
+            who: g.dialogue[0]?.who ?? "",
+            text: g.dialogue[0]?.text ?? "",
+          };
         }
       }
     }
@@ -2840,7 +4502,12 @@ try {
     run(4);
     g.taxi("court");
     for (let i = 0; i < 240; i++) g.tick(1 / 30);
-    const court = { x: +g.pos.x.toFixed(1), z: +g.pos.z.toFixed(1), prompt: g.prompt, onFloor: Math.abs(g.pos.z - (-177)) < 14 };
+    const court = {
+      x: +g.pos.x.toFixed(1),
+      z: +g.pos.z.toFixed(1),
+      prompt: g.prompt,
+      onFloor: Math.abs(g.pos.z - -177) < 14,
+    };
     // Every line is short enough to read and has its blanks filled.
     const lines = g.tables.CHATTER;
     const bad = lines.filter((t) => t.length > 96 || t.length < 4);
@@ -2857,7 +4524,12 @@ try {
       return k.getImageData(x, y, 1, 1).data[3];
     };
     const base = "/game-v2/characters";
-    const gaps = [await alpha(`${base}/nitro/front.png`, 145, 600), await alpha(`${base}/nitro/back.png`, 140, 600), await alpha(`${base}/nitro/left.png`, 147, 600), await alpha(`${base}/nitro/right.png`, 110, 600)];
+    const gaps = [
+      await alpha(`${base}/nitro/front.png`, 145, 600),
+      await alpha(`${base}/nitro/back.png`, 140, 600),
+      await alpha(`${base}/nitro/left.png`, 147, 600),
+      await alpha(`${base}/nitro/right.png`, 110, 600),
+    ];
     const holes = await (async () => {
       const img = new Image();
       img.src = `${base}/mama-dee/front.png`;
@@ -2875,7 +4547,12 @@ try {
         for (let x = 20; x < c.width - 20; x++) {
           if (!clear(x, y)) continue;
           let boxed = true;
-          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          for (const [dx, dy] of [
+            [1, 0],
+            [-1, 0],
+            [0, 1],
+            [0, -1],
+          ]) {
             let hit = false;
             for (let r = 1; r <= 6 && !hit; r++) hit = !clear(x + dx * r, y + dy * r);
             boxed &&= hit;
@@ -2885,35 +4562,135 @@ try {
       return n;
     })();
     g.stage.render = draw;
-    return { asked, first, second, walker, named, inside, court, lines: lines.length, bad, gaps, holes };
+    return {
+      asked,
+      first,
+      second,
+      walker,
+      named,
+      inside,
+      court,
+      lines: lines.length,
+      bad,
+      gaps,
+      holes,
+    };
   });
-  check(/^Talk to \S/.test(folk.asked) && folk.first && folk.asked === `Talk to ${folk.first.who}` && folk.first.text.length > 8 && /pedestrians\//.test(folk.first.face) && folk.second.length > 8 && folk.second !== folk.first.text, "anyone standing about has a name and something to say, and something else the second time", { asked: folk.asked, first: folk.first, second: folk.second });
-  check(folk.walker && /^Talk to /.test(folk.walker.prompt) && folk.walker.said.length > 8 && folk.walker.stayed && folk.walker.turned < 0.3, "someone walking by stops and turns to Benji when he speaks to them", folk.walker);
-  check(folk.named && folk.named.who === "Mama Dee" && folk.named.one.length > 8 && folk.named.two.length > 8 && folk.named.one !== folk.named.two, "the named cast talk when there is no errand for him", folk.named);
-  check(folk.inside && folk.inside.who.length > 1 && folk.inside.text.length > 8, "people indoors talk too", folk.inside);
-  check(/^(Play ball|Hand Court OG)/.test(folk.court.prompt) && !folk.court.onFloor, "a ride to the 901 Court lets Benji out at the sign-up table with the game on offer", folk.court);
-  check(folk.lines > 120 && folk.bad.length === 0, "every line the city has is short enough to read", { lines: folk.lines, bad: folk.bad });
-  check(folk.gaps.every((a) => a === 0) && folk.holes < 40, "Nitro's cut-out is clear between the legs and Mama Dee's has no pinholes", { gaps: folk.gaps, holes: folk.holes });
+  check(
+    /^Talk to \S/.test(folk.asked) &&
+      folk.first &&
+      folk.asked === `Talk to ${folk.first.who}` &&
+      folk.first.text.length > 8 &&
+      /pedestrians\//.test(folk.first.face) &&
+      folk.second.length > 8 &&
+      folk.second !== folk.first.text,
+    "anyone standing about has a name and something to say, and something else the second time",
+    { asked: folk.asked, first: folk.first, second: folk.second },
+  );
+  check(
+    folk.walker &&
+      /^Talk to /.test(folk.walker.prompt) &&
+      folk.walker.said.length > 8 &&
+      folk.walker.stayed &&
+      folk.walker.turned < 0.3,
+    "someone walking by stops and turns to Benji when he speaks to them",
+    folk.walker,
+  );
+  check(
+    folk.named &&
+      folk.named.who === "Mama Dee" &&
+      folk.named.one.length > 8 &&
+      folk.named.two.length > 8 &&
+      folk.named.one !== folk.named.two,
+    "the named cast talk when there is no errand for him",
+    folk.named,
+  );
+  check(
+    folk.inside && folk.inside.who.length > 1 && folk.inside.text.length > 8,
+    "people indoors talk too",
+    folk.inside,
+  );
+  check(
+    /^(Play ball|Hand Court OG)/.test(folk.court.prompt) && !folk.court.onFloor,
+    "a ride to the 901 Court lets Benji out at the sign-up table with the game on offer",
+    folk.court,
+  );
+  check(
+    folk.lines > 120 && folk.bad.length === 0,
+    "every line the city has is short enough to read",
+    { lines: folk.lines, bad: folk.bad },
+  );
+  check(
+    folk.gaps.every((a) => a === 0) && folk.holes < 40,
+    "Nitro's cut-out is clear between the legs and Mama Dee's has no pinholes",
+    { gaps: folk.gaps, holes: folk.holes },
+  );
 
   // ---- playing with friends
   // The line two devices find each other over: who is in a crew, and the handshake passed between them.
   const relay = await page.evaluate(async () => {
     const room = `sack-T${Date.now().toString(36)}`;
-    const poll = async (peer, name, since = 0) => (await fetch(`/api/rtc?room=${room}&peer=${peer}&name=${name}&since=${since}`)).json();
-    const post = async (body) => (await fetch("/api/rtc", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })).status;
+    const poll = async (peer, name, since = 0) =>
+      (await fetch(`/api/rtc?room=${room}&peer=${peer}&name=${name}&since=${since}`)).json();
+    const post = async (body) =>
+      (
+        await fetch("/api/rtc", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        })
+      ).status;
     const one = await poll("tre", "Tre");
     const two = await poll("kay", "Kay");
-    const sent = await post({ op: "signal", room, from: "tre", to: "kay", kind: "offer", payload: { sdp: "hello" } });
+    const sent = await post({
+      op: "signal",
+      room,
+      from: "tre",
+      to: "kay",
+      kind: "offer",
+      payload: { sdp: "hello" },
+    });
     const hers = await poll("kay", "Kay");
     const his = await poll("tre", "Tre");
     const again = await poll("kay", "Kay", hers.signals[0]?.id ?? 0);
     const left = await post({ op: "leave", room, peer: "tre" });
     const after = await poll("kay", "Kay", hers.signals[0]?.id ?? 0);
     const bad = (await fetch("/api/rtc?room=not%20a%20room&peer=kay")).status;
-    const junk = await post({ op: "signal", room, from: "tre", to: "kay", kind: "nonsense", payload: 1 });
-    return { one: one.peers.length, two: two.peers.map((q) => q.name).join(), sent, hers: hers.signals.map((q) => `${q.from}:${q.kind}:${q.payload.sdp}`), his: his.signals.length, again: again.signals.length, left, after: after.peers.map((q) => q.id).join(), bad, junk };
+    const junk = await post({
+      op: "signal",
+      room,
+      from: "tre",
+      to: "kay",
+      kind: "nonsense",
+      payload: 1,
+    });
+    return {
+      one: one.peers.length,
+      two: two.peers.map((q) => q.name).join(),
+      sent,
+      hers: hers.signals.map((q) => `${q.from}:${q.kind}:${q.payload.sdp}`),
+      his: his.signals.length,
+      again: again.signals.length,
+      left,
+      after: after.peers.map((q) => q.id).join(),
+      bad,
+      junk,
+    };
   });
-  check(relay.one === 1 && relay.two === "Kay,Tre" && relay.sent === 200 && relay.hers.join() === "tre:offer:hello" && relay.his === 0 && relay.again === 0 && relay.left === 200 && relay.after === "kay" && relay.bad === 400 && relay.junk === 400, "online: the crew line lists who is in a crew, passes a handshake only to the one it is for, and forgets whoever leaves", relay);
+  check(
+    relay.one === 1 &&
+      relay.two === "Kay,Tre" &&
+      relay.sent === 200 &&
+      relay.hers.join() === "tre:offer:hello" &&
+      relay.his === 0 &&
+      relay.again === 0 &&
+      relay.left === 200 &&
+      relay.after === "kay" &&
+      relay.bad === 400 &&
+      relay.junk === 400,
+    "online: the crew line lists who is in a crew, passes a handshake only to the one it is for, and forgets whoever leaves",
+    relay,
+  );
 
   // A second device, with its own save. The two are wired through this script, so the test needs no network.
   const friend = await browser.newPage({ viewport: { width: 1280, height: 720 } });
@@ -2923,13 +4700,23 @@ try {
   const devices = [page, friend];
   for (const d of devices) {
     await d.exposeFunction("__crewOut", (m) => {
-      for (const other of devices) if (other !== d) other.evaluate((msg) => window.__crewIn?.(msg), m).catch(() => {});
+      for (const other of devices)
+        if (other !== d) other.evaluate((msg) => window.__crewIn?.(msg), m).catch(() => {});
     });
     await d.evaluate(() => {
       const g = window.__GAME__;
       g.crew.make = (room, selfId, name, hooks) => {
         const known = new Map();
-        const tell = () => hooks.peers([...known].map(([id, n]) => ({ id, name: n, connectionState: "connected", candidateType: "host", rttMs: 12 })));
+        const tell = () =>
+          hooks.peers(
+            [...known].map(([id, n]) => ({
+              id,
+              name: n,
+              connectionState: "connected",
+              candidateType: "host",
+              rttMs: 12,
+            })),
+          );
         window.__crewIn = (m) => {
           if (m.room !== room || m.from === selfId) return;
           if (m.t === "hi" || m.t === "hey") {
@@ -2983,8 +4770,24 @@ try {
   await on(page, () => window.__GAME__.crew.linked().length === 1);
   await on(friend, () => window.__GAME__.crew.linked().length === 1);
   await page.waitForTimeout(300);
-  const crewed = { code, link: await page.evaluate(() => window.__GAME__.crew.invite), mine: await page.evaluate(() => window.__GAME__.crew.hud()), theirs: await friend.evaluate(() => window.__GAME__.crew.hud()), listed: await page.textContent("[data-crew-friend]") };
-  check(/^[A-Z]{4}$/.test(code) && crewed.link.endsWith(`/?crew=${code}`) && crewed.mine.status === "linked" && crewed.mine.friends[0].name === "Kay" && crewed.theirs.code === code && crewed.theirs.friends[0].name === "Tre" && /Kay/.test(crewed.listed), "online: one starts a crew, the other types the four letters, and each has the other on the line", { code, link: crewed.link, mine: crewed.mine.friends, theirs: crewed.theirs.friends });
+  const crewed = {
+    code,
+    link: await page.evaluate(() => window.__GAME__.crew.invite),
+    mine: await page.evaluate(() => window.__GAME__.crew.hud()),
+    theirs: await friend.evaluate(() => window.__GAME__.crew.hud()),
+    listed: await page.textContent("[data-crew-friend]"),
+  };
+  check(
+    /^[A-Z]{4}$/.test(code) &&
+      crewed.link.endsWith(`/?crew=${code}`) &&
+      crewed.mine.status === "linked" &&
+      crewed.mine.friends[0].name === "Kay" &&
+      crewed.theirs.code === code &&
+      crewed.theirs.friends[0].name === "Tre" &&
+      /Kay/.test(crewed.listed),
+    "online: one starts a crew, the other types the four letters, and each has the other on the line",
+    { code, link: crewed.link, mine: crewed.mine.friends, theirs: crewed.theirs.friends },
+  );
 
   // Each sees the other where they really are, in what they are really wearing.
   const fit = await page.evaluate(() => {
@@ -2997,10 +4800,14 @@ try {
     return g.save.wearing;
   });
   await friend.evaluate(() => window.__GAME__.close());
-  await on(friend, (o) => {
-    const f = window.__GAME__.crew.shown[0];
-    return f && f.visible && f.tag && f.outfit === o && Math.hypot(f.x - 2, f.z + 70) < 0.6;
-  }, fit);
+  await on(
+    friend,
+    (o) => {
+      const f = window.__GAME__.crew.shown[0];
+      return f && f.visible && f.tag && f.outfit === o && Math.hypot(f.x - 2, f.z + 70) < 0.6;
+    },
+    fit,
+  );
   await page.evaluate(() => window.__GAME__.crew.react("🔥"));
   // The reaction hangs for three seconds: what is on screen is read in the same breath it is seen in.
   const seen = await (
@@ -3010,7 +4817,16 @@ try {
     })
   ).jsonValue();
   await friend.screenshot({ path: `${out}/20-crew-friend.png` });
-  check(seen.shown.visible && seen.shown.outfit === fit && seen.shown.say && seen.dot.street && seen.dot.where.length > 0 && seen.dot.doing === "Walking", "online: a friend stands in your city where they stood in theirs, in their own fit, with a name over their head, a reaction over that, and a dot on the map", seen);
+  check(
+    seen.shown.visible &&
+      seen.shown.outfit === fit &&
+      seen.shown.say &&
+      seen.dot.street &&
+      seen.dot.where.length > 0 &&
+      seen.dot.doing === "Walking",
+    "online: a friend stands in your city where they stood in theirs, in their own fit, with a name over their head, a reaction over that, and a dot on the map",
+    seen,
+  );
 
   // A big win in one city is called out in the other.
   await page.evaluate(() => window.__GAME__.moment(3));
@@ -3025,14 +4841,21 @@ try {
       return w.call && w.trophy && w.shells ? w : false;
     })
   ).jsonValue();
-  check(roar.call && roar.trophy && roar.shells, "online: a friend's big win is called out in your city, with fireworks over your river", roar);
+  check(
+    roar.call && roar.trophy && roar.shells,
+    "online: a friend's big win is called out in your city, with fireworks over your river",
+    roar,
+  );
   await ff(1.5);
 
   // A game at a table, each on their own device: asked from the table, answered from the street.
   await page.evaluate(() => window.__GAME__.board.sit("connect4"));
   await page.click('[data-friend="Kay"]');
   await on(friend, () => !!window.__GAME__.board.inviteHud());
-  const asking = { stage: (await table(page)).stage, ask: await friend.textContent("[data-invite]") };
+  const asking = {
+    stage: (await table(page)).stage,
+    ask: await friend.textContent("[data-invite]"),
+  };
   await friend.click("[data-invite-yes]");
   await on(page, () => window.__GAME__.board.hud()?.stage === "play");
   const seats = [(await table(page)).online.seat, (await table(friend)).online.seat];
@@ -3041,12 +4864,27 @@ try {
   for (let i = 0; i < 7; i++) {
     const [d, other, col] = i % 2 === 0 ? [page, friend, 3] : [friend, page, 4];
     await d.click(`[data-col="${col}"]:not([disabled])`);
-    await on(other, ([c, n]) => window.__GAME__.board.hud().view.cols[c].length === n, [col, Math.floor(i / 2) + 1]);
+    await on(other, ([c, n]) => window.__GAME__.board.hud().view.cols[c].length === n, [
+      col,
+      Math.floor(i / 2) + 1,
+    ]);
   }
   await on(friend, () => window.__GAME__.board.hud().stage === "done");
   const ended = { his: await table(page), hers: await table(friend) };
   await friend.screenshot({ path: `${out}/21-crew-table.png` });
-  check(asking.stage === "wait" && /Tre wants a game of Four in a Row/.test(asking.ask) && seats.join() === "0,1" && early === false && ended.his.result.won === true && ended.hers.result.won === false && JSON.stringify(ended.his.view.cols) === JSON.stringify(ended.hers.view.cols) && ended.his.result.pay > 0 && ended.hers.result.pay === 0, "online: a friend is asked for a game, sits down, and the two play it out move for move on their own screens", { asking, seats, early, his: ended.his.result, hers: ended.hers.result });
+  check(
+    asking.stage === "wait" &&
+      /Tre wants a game of Four in a Row/.test(asking.ask) &&
+      seats.join() === "0,1" &&
+      early === false &&
+      ended.his.result.won === true &&
+      ended.hers.result.won === false &&
+      JSON.stringify(ended.his.view.cols) === JSON.stringify(ended.hers.view.cols) &&
+      ended.his.result.pay > 0 &&
+      ended.hers.result.pay === 0,
+    "online: a friend is asked for a game, sits down, and the two play it out move for move on their own screens",
+    { asking, seats, early, his: ended.his.result, hers: ended.hers.result },
+  );
 
   // Both want another: same two, the other one goes first. Then she gets up in the middle of it.
   await friend.click("[data-rematch]");
@@ -3054,11 +4892,20 @@ try {
   await page.click("[data-rematch]");
   await on(friend, () => window.__GAME__.board.hud().stage === "play");
   await on(page, () => window.__GAME__.board.hud().stage === "play");
-  const swapped = [(await table(page)).online.seat, (await table(friend)).online.seat, (await table(page)).mine, (await table(friend)).mine];
+  const swapped = [
+    (await table(page)).online.seat,
+    (await table(friend)).online.seat,
+    (await table(page)).mine,
+    (await table(friend)).mine,
+  ];
   await friend.evaluate(() => window.__GAME__.close());
   await on(page, () => window.__GAME__.board.hud()?.online?.gone === true);
   const walked = (await table(page)).result;
-  check(swapped.join() === "1,0,false,true" && /Kay got up/.test(walked.text) && walked.won === null, "online: a rematch swaps who goes first, and a friend getting up ends the game without a winner", { swapped, walked });
+  check(
+    swapped.join() === "1,0,false,true" && /Kay got up/.test(walked.text) && walked.won === null,
+    "online: a rematch swaps who goes first, and a friend getting up ends the game without a winner",
+    { swapped, walked },
+  );
 
   // She says not now; then she asks him for chess, and he sees the board from the far side.
   await page.evaluate(() => window.__GAME__.board.sit("chess"));
@@ -3076,11 +4923,25 @@ try {
   await friend.click('[data-sq="52"]');
   await friend.click('[data-sq="36"]');
   await on(page, () => window.__GAME__.board.hud().view.cells[36] === "P");
-  const far = { first: await page.getAttribute("[data-sq]", "data-sq"), hers: await friend.getAttribute("[data-sq]", "data-sq"), mine: (await table(page)).mine, seat: (await table(page)).online.seat };
+  const far = {
+    first: await page.getAttribute("[data-sq]", "data-sq"),
+    hers: await friend.getAttribute("[data-sq]", "data-sq"),
+    mine: (await table(page)).mine,
+    seat: (await table(page)).online.seat,
+  };
   await page.click('[data-sq="12"]');
   await page.click('[data-sq="28"]');
   await on(friend, () => window.__GAME__.board.hud().view.cells[28] === "p");
-  check(passed === null && far.first === "63" && far.hers === "0" && far.mine && far.seat === 1 && (await table(friend)).mine, "online: a friend can say not now; and whoever has black sees the chess board from black's side", { passed, far });
+  check(
+    passed === null &&
+      far.first === "63" &&
+      far.hers === "0" &&
+      far.mine &&
+      far.seat === 1 &&
+      (await table(friend)).mine,
+    "online: a friend can say not now; and whoever has black sees the chess board from black's side",
+    { passed, far },
+  );
 
   // He gets in his car: she sees the car he owns, not a man running at forty miles an hour.
   await page.evaluate(() => {
@@ -3094,14 +4955,30 @@ try {
   await ff(1.5);
   await page.evaluate(() => window.__GAME__.input.hold("up", false));
   await on(friend, () => window.__GAME__.crew.shown[0].car);
-  const wheels = { mode: await get(() => window.__GAME__.mode), shown: await friend.evaluate(() => window.__GAME__.crew.shown[0]), doing: await friend.evaluate(() => window.__GAME__.crew.hud().friends[0].doing), off: await friend.evaluate(() => window.__GAME__.board.hud()) };
-  check(wheels.mode === "drive" && wheels.shown.car && !wheels.shown.visible && wheels.shown.tag && wheels.doing === "Driving", "online: a friend at the wheel is seen as their car, with their name over it", wheels);
+  const wheels = {
+    mode: await get(() => window.__GAME__.mode),
+    shown: await friend.evaluate(() => window.__GAME__.crew.shown[0]),
+    doing: await friend.evaluate(() => window.__GAME__.crew.hud().friends[0].doing),
+    off: await friend.evaluate(() => window.__GAME__.board.hud()),
+  };
+  check(
+    wheels.mode === "drive" &&
+      wheels.shown.car &&
+      !wheels.shown.visible &&
+      wheels.shown.tag &&
+      wheels.doing === "Driving",
+    "online: a friend at the wheel is seen as their car, with their name over it",
+    wheels,
+  );
 
   // Leaving the crew takes her off his screen; a link with the code in it puts her straight back in one.
   await friend.evaluate(() => window.__GAME__.open("online"));
   await friend.click("[data-crew-leave]");
   await on(page, () => window.__GAME__.crew.hud().friends.length === 0);
-  const alone = { his: await page.evaluate(() => window.__GAME__.crew.hud().status), hers: await friend.evaluate(() => window.__GAME__.crew.hud().status) };
+  const alone = {
+    his: await page.evaluate(() => window.__GAME__.crew.hud().status),
+    hers: await friend.evaluate(() => window.__GAME__.crew.hud().status),
+  };
   // A page loading the whole city draws its first frames slowly, and slower still while another page is
   // drawing beside it on the same machine. So the first device stops drawing while the second loads,
   // and the second is given as long to show its title as it is given to load.
@@ -3111,7 +4988,10 @@ try {
     g.stage.render = () => {};
   });
   await friend.goto(`${base}?q=low&calm=1&intro=0&crew=${code}`, { waitUntil: "domcontentloaded" });
-  await friend.waitForFunction(() => !!window.__GAME__, undefined, { timeout: 120000, polling: 100 });
+  await friend.waitForFunction(() => !!window.__GAME__, undefined, {
+    timeout: 120000,
+    polling: 100,
+  });
   // The title screen says the crew is waiting; pressing play is what joins it.
   const titled = await friend
     .waitForFunction(
@@ -3125,22 +5005,50 @@ try {
     .then((h) => h.jsonValue())
     .catch(async (e) => {
       // Say what the page did show, so a failure here explains itself.
-      const state = await friend.evaluate(() => ({ mode: window.__GAME__?.mode, waiting: window.__GAME__?.crew.waiting, code: window.__GAME__?.crew.code, text: document.body.innerText.slice(0, 300) })).catch((x) => String(x));
-      throw new Error(`the title never showed the waiting crew: ${JSON.stringify(state)} (${e.message.split("\n")[0]})`);
+      const state = await friend
+        .evaluate(() => ({
+          mode: window.__GAME__?.mode,
+          waiting: window.__GAME__?.crew.waiting,
+          code: window.__GAME__?.crew.code,
+          text: document.body.innerText.slice(0, 300),
+        }))
+        .catch((x) => String(x));
+      throw new Error(
+        `the title never showed the waiting crew: ${JSON.stringify(state)} (${e.message.split("\n")[0]})`,
+      );
     });
   await friend.evaluate(() => {
     const g = window.__GAME__;
     g.play(true);
     g.skipIntro?.();
   });
-  await friend.waitForFunction(() => window.__GAME__.crew.hud().ready, undefined, { timeout: 120000, polling: 100 });
+  await friend.waitForFunction(() => window.__GAME__.crew.hud().ready, undefined, {
+    timeout: 120000,
+    polling: 100,
+  });
   await page.evaluate(() => (window.__GAME__.stage.render = window.__draw));
   const linkIn = await friend.evaluate(async () => {
     const g = window.__GAME__;
-    const roster = await (await fetch(`/api/rtc?room=sack-${g.crew.code}&peer=smoke&since=1`)).json();
-    return { code: g.crew.code, listed: roster.peers.some((q) => q.id === g.crew.selfId), status: g.crew.hud().status };
+    const roster = await (
+      await fetch(`/api/rtc?room=sack-${g.crew.code}&peer=smoke&since=1`)
+    ).json();
+    return {
+      code: g.crew.code,
+      listed: roster.peers.some((q) => q.id === g.crew.selfId),
+      status: g.crew.hud().status,
+    };
   });
-  check(alone.his === "waiting" && alone.hers === "off" && titled.note.includes(code) && titled.code === null && linkIn.code === code && linkIn.listed && linkIn.status === "waiting", "online: leaving takes you off your friends' screens, and a link with the code in it joins the crew when the day starts", { alone, titled, linkIn });
+  check(
+    alone.his === "waiting" &&
+      alone.hers === "off" &&
+      titled.note.includes(code) &&
+      titled.code === null &&
+      linkIn.code === code &&
+      linkIn.listed &&
+      linkIn.status === "waiting",
+    "online: leaving takes you off your friends' screens, and a link with the code in it joins the crew when the day starts",
+    { alone, titled, linkIn },
+  );
   await friend.close();
   await page.evaluate(() => {
     const g = window.__GAME__;
@@ -3181,12 +5089,34 @@ try {
     const inPause = !!document.querySelector("[data-partners-open]");
     document.querySelector("[data-partners-open]")?.click();
     await wait(500);
-    const kinds = [...document.querySelectorAll("[data-partners-kind]")].map((b) => b.getAttribute("data-partners-kind") + (b.getAttribute("aria-pressed") === "true" ? "*" : ""));
+    const kinds = [...document.querySelectorAll("[data-partners-kind]")].map(
+      (b) =>
+        b.getAttribute("data-partners-kind") +
+        (b.getAttribute("aria-pressed") === "true" ? "*" : ""),
+    );
     g.stage.render = draw;
-    return { signs, inPause, kinds, form: !!document.querySelector("[data-partners-form]"), mail: document.querySelector("[data-partners-mail]")?.getAttribute("href") ?? "", x: g.pos.x, z: g.pos.z };
+    return {
+      signs,
+      inPause,
+      kinds,
+      form: !!document.querySelector("[data-partners-form]"),
+      mail: document.querySelector("[data-partners-mail]")?.getAttribute("href") ?? "",
+      x: g.pos.x,
+      z: g.pos.z,
+    };
   });
   check(
-    ["truck", "billboard", "music"].every((k) => spots.signs[k]?.stood && spots.signs[k].overlay === "partners" && spots.signs[k].kind === k) && /truck/.test(spots.signs.truck.prompt) && /Advertise/.test(spots.signs.billboard.prompt) && /music/.test(spots.signs.music.prompt) && spots.inPause && spots.form && /^mailto:\S+@\S+\?subject=/.test(spots.mail) && spots.kinds.join() === "billboard*,truck,store,music,other",
+    ["truck", "billboard", "music"].every(
+      (k) =>
+        spots.signs[k]?.stood && spots.signs[k].overlay === "partners" && spots.signs[k].kind === k,
+    ) &&
+      /truck/.test(spots.signs.truck.prompt) &&
+      /Advertise/.test(spots.signs.billboard.prompt) &&
+      /music/.test(spots.signs.music.prompt) &&
+      spots.inPause &&
+      spots.form &&
+      /^mailto:\S+@\S+\?subject=/.test(spots.mail) &&
+      spots.kinds.join() === "billboard*,truck,store,music,other",
     "open spots: a pitch on the truck row, a billboard on the plaza and a board by the Beale stage each open the asking screen set to what they are for, the pause menu opens it too, and it gives an address to write to",
     spots,
   );
@@ -3205,20 +5135,36 @@ try {
   await page.waitForSelector("[data-partners-sent]", { timeout: 60000 });
   const asked2 = await page.evaluate(() => {
     const g = window.__GAME__;
-    return { said: document.querySelector("[data-partners-sent]")?.textContent ?? "", tabs: document.querySelectorAll("[data-partners-tab]").length, x: g.pos.x, z: g.pos.z };
+    return {
+      said: document.querySelector("[data-partners-sent]")?.textContent ?? "",
+      tabs: document.querySelectorAll("[data-partners-tab]").length,
+      x: g.pos.x,
+      z: g.pos.z,
+    };
   });
   // The request went on to the inbox: the relay was handed everything in it, under a subject that says what it is.
   const relayed = await page.evaluate(async () => {
-    const sent = document.querySelector("[data-partners-sent]")?.getAttribute("data-partners-sent") ?? "";
+    const sent =
+      document.querySelector("[data-partners-sent]")?.getAttribute("data-partners-sent") ?? "";
     const all = await (await fetch("/__relay", { cache: "no-store" })).json();
     const setup = await (await fetch("/api/partners", { cache: "no-store" })).json();
     return { sent, got: all.find((q) => q["Business or artist"] === "Smoke Wings") ?? null, setup };
   });
   await page.locator("[data-partners-sent] [data-primary]").click();
   await page.waitForTimeout(300);
-  const afterAsk = await page.evaluate(() => ({ overlay: window.__GAME__.overlay, mode: window.__GAME__.mode }));
+  const afterAsk = await page.evaluate(() => ({
+    overlay: window.__GAME__.overlay,
+    mode: window.__GAME__.mode,
+  }));
   check(
-    /name/i.test(noName) && /reach/i.test(noReach) && /Request sent/.test(asked2.said) && /@smokewings\s+901-555-0100/.test(asked2.said) && asked2.tabs === 0 && Math.hypot(asked2.x - spots.x, asked2.z - spots.z) < 0.01 && afterAsk.overlay === null && afterAsk.mode === "walk",
+    /name/i.test(noName) &&
+      /reach/i.test(noReach) &&
+      /Request sent/.test(asked2.said) &&
+      /@smokewings\s+901-555-0100/.test(asked2.said) &&
+      asked2.tabs === 0 &&
+      Math.hypot(asked2.x - spots.x, asked2.z - spots.z) < 0.01 &&
+      afterAsk.overlay === null &&
+      afterAsk.mode === "walk",
     "open spots: an empty request is turned away, typing in the form does not walk Benji about, a request is taken without an account, and nobody is shown the requests",
     { noName, noReach, asked2, afterAsk },
   );
@@ -3254,7 +5200,14 @@ try {
     const href = el?.querySelector("[data-partners-mail]")?.getAttribute("href") ?? "";
     const q = href.indexOf("?");
     const args = new URLSearchParams(q >= 0 ? href.slice(q + 1) : "");
-    return { sent: el?.getAttribute("data-partners-sent") ?? "", said: el?.textContent ?? "", to: href.slice(0, q), subject: args.get("subject") ?? "", body: args.get("body") ?? "", asked: all.find((r) => r.Name === "Unconfirmed Artist") ?? null };
+    return {
+      sent: el?.getAttribute("data-partners-sent") ?? "",
+      said: el?.textContent ?? "",
+      to: href.slice(0, q),
+      subject: args.get("subject") ?? "",
+      body: args.get("body") ?? "",
+      asked: all.find((r) => r.Name === "Unconfirmed Artist") ?? null,
+    };
   });
   await page.locator("[data-partners-back]").click();
   await page.waitForTimeout(300);
@@ -3278,13 +5231,19 @@ try {
   // ---- an account: made on one device, signed in to on another, and the progress is there
   const mail = `smoke${Date.now().toString(36)}@example.com`;
   const pass = "river-bridge-901";
-  const settled = (p) => p.waitForFunction(() => !!window.__GAME__ && window.__GAME__.account.ready, undefined, { timeout: 120000, polling: 100 });
+  const settled = (p) =>
+    p.waitForFunction(() => !!window.__GAME__ && window.__GAME__.account.ready, undefined, {
+      timeout: 120000,
+      polling: 100,
+    });
   // A page that takes the account's progress starts itself again: wait for the page that comes after.
   const restarted = async (p, act) => {
     await p.evaluate(() => (window.__old = true));
     await act();
     for (let i = 0; i < 600; i++) {
-      const fresh = await p.evaluate(() => !window.__old && !!window.__GAME__ && window.__GAME__.account.ready).catch(() => false);
+      const fresh = await p
+        .evaluate(() => !window.__old && !!window.__GAME__ && window.__GAME__.account.ready)
+        .catch(() => false);
       if (fresh) return;
       await p.waitForTimeout(200);
     }
@@ -3299,7 +5258,13 @@ try {
     const a = g.account.hud();
     g.open("account");
     await new Promise((r) => setTimeout(r, 400));
-    return { status: a.status, email: a.email, form: !!document.querySelector("[data-account-form]"), mode: g.mode, x: g.pos.x };
+    return {
+      status: a.status,
+      email: a.email,
+      form: !!document.querySelector("[data-account-form]"),
+      mode: g.mode,
+      x: g.pos.x,
+    };
   });
   await page.locator('[data-account-mode="new"]').click();
   await page.locator('[data-account-field="name"]').fill("Smoke");
@@ -3309,41 +5274,107 @@ try {
   const short = await page.locator("[data-account-error]").innerText();
   // What goes to the server when progress is saved, to be tried again later by somebody with no session.
   const sent = [];
-  const tap2 = (r) => r.method() === "POST" && r.url().includes("/_serverFn/") && sent.push({ url: r.url(), headers: r.headers(), body: r.postData() });
+  const tap2 = (r) =>
+    r.method() === "POST" &&
+    r.url().includes("/_serverFn/") &&
+    sent.push({ url: r.url(), headers: r.headers(), body: r.postData() });
   page.on("request", tap2);
   await page.locator('[data-account-field="password"]').fill(pass);
   await page.locator("[data-account-submit]").click();
-  await page.waitForFunction(() => window.__GAME__.account.hud().status === "in" && window.__GAME__.account.hud().saved >= 0, undefined, { timeout: 60000, polling: 100 });
+  await page.waitForFunction(
+    () => window.__GAME__.account.hud().status === "in" && window.__GAME__.account.hud().saved >= 0,
+    undefined,
+    { timeout: 60000, polling: 100 },
+  );
   page.off("request", tap2);
   const signedUp = await page.evaluate(() => {
     const g = window.__GAME__;
     const a = g.account.hud();
-    return { status: a.status, name: a.name, saved: a.saved, shown: document.querySelector("[data-account-name]")?.textContent ?? "", error: a.error, x: g.pos.x };
+    return {
+      status: a.status,
+      name: a.name,
+      saved: a.saved,
+      shown: document.querySelector("[data-account-name]")?.textContent ?? "",
+      error: a.error,
+      x: g.pos.x,
+    };
   });
-  check(asked.status === "out" && asked.email && asked.form && /8 characters/.test(short) && signedUp.status === "in" && signedUp.name === "Smoke" && signedUp.shown === "Smoke" && signedUp.saved >= 0 && !signedUp.error && Math.abs(signedUp.x - asked.x) < 0.01 && sent.length >= 1, "account: one is made from the form, a short password is turned away, typing does not walk Benji about, and his progress goes to it", { asked, short, signedUp, sends: sent.length });
+  check(
+    asked.status === "out" &&
+      asked.email &&
+      asked.form &&
+      /8 characters/.test(short) &&
+      signedUp.status === "in" &&
+      signedUp.name === "Smoke" &&
+      signedUp.shown === "Smoke" &&
+      signedUp.saved >= 0 &&
+      !signedUp.error &&
+      Math.abs(signedUp.x - asked.x) < 0.01 &&
+      sent.length >= 1,
+    "account: one is made from the form, a short password is turned away, typing does not walk Benji about, and his progress goes to it",
+    { asked, short, signedUp, sends: sent.length },
+  );
 
   const phone = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   phone.on("pageerror", (e) => errors.push(`other device: ${e.message}`));
   await phone.goto(`${base}?q=low&calm=1&intro=0`, { waitUntil: "domcontentloaded" });
   await settled(phone);
   // Nobody without a session can write to (or read) an account: the same request, sent from a device that is not signed in.
-  const stranger = await phone.evaluate(async (req) => {
-    const headers = {};
-    for (const [k, v] of Object.entries(req.headers)) if (!/^(cookie|content-length|host|origin|referer|user-agent|sec-|accept-encoding|connection)/i.test(k)) headers[k] = v;
-    const r = await fetch(req.url, { method: "POST", headers, body: req.body });
-    return { status: r.status, text: (await r.text()).slice(0, 200) };
-  }, sent[sent.length - 1]);
-  const cold = await phone.evaluate(() => ({ status: window.__GAME__.account.hud().status, dollars: window.__GAME__.save.dollars, button: document.querySelector("[data-account-open]")?.textContent ?? "" }));
+  const stranger = await phone.evaluate(
+    async (req) => {
+      const headers = {};
+      for (const [k, v] of Object.entries(req.headers))
+        if (
+          !/^(cookie|content-length|host|origin|referer|user-agent|sec-|accept-encoding|connection)/i.test(
+            k,
+          )
+        )
+          headers[k] = v;
+      const r = await fetch(req.url, { method: "POST", headers, body: req.body });
+      return { status: r.status, text: (await r.text()).slice(0, 200) };
+    },
+    sent[sent.length - 1],
+  );
+  const cold = await phone.evaluate(() => ({
+    status: window.__GAME__.account.hud().status,
+    dollars: window.__GAME__.save.dollars,
+    button: document.querySelector("[data-account-open]")?.textContent ?? "",
+  }));
   await phone.locator("[data-account-open]").first().click();
   await phone.locator('[data-account-field="email"]').fill(mail);
   await phone.locator('[data-account-field="password"]').fill("not-the-password");
   await phone.locator("[data-account-submit]").click();
-  await phone.waitForFunction(() => !!window.__GAME__.account.hud().error, undefined, { timeout: 60000, polling: 100 });
-  const wrong = await phone.evaluate(() => ({ error: window.__GAME__.account.hud().error, status: window.__GAME__.account.hud().status }));
+  await phone.waitForFunction(() => !!window.__GAME__.account.hud().error, undefined, {
+    timeout: 60000,
+    polling: 100,
+  });
+  const wrong = await phone.evaluate(() => ({
+    error: window.__GAME__.account.hud().error,
+    status: window.__GAME__.account.hud().status,
+  }));
   await phone.locator('[data-account-field="password"]').fill(pass);
   await restarted(phone, () => phone.locator("[data-account-submit]").click());
-  const moved = await phone.evaluate(() => ({ status: window.__GAME__.account.hud().status, name: window.__GAME__.account.hud().name, dollars: window.__GAME__.save.dollars, button: document.querySelector("[data-account-open]")?.textContent ?? "" }));
-  check(/"Unauthorized"/.test(stranger.text) && !/"rev"/.test(stranger.text) && cold.status === "out" && cold.dollars !== 4321 && /sign in/i.test(cold.button) && wrong.status === "out" && /do not match/.test(wrong.error) && moved.status === "in" && moved.name === "Smoke" && moved.dollars === 4321 && /Smoke/.test(moved.button), "account: a device with no session is refused, the wrong password is refused, and signing in on another device brings his progress to it", { stranger, cold, wrong, moved });
+  const moved = await phone.evaluate(() => ({
+    status: window.__GAME__.account.hud().status,
+    name: window.__GAME__.account.hud().name,
+    dollars: window.__GAME__.save.dollars,
+    button: document.querySelector("[data-account-open]")?.textContent ?? "",
+  }));
+  check(
+    /"Unauthorized"/.test(stranger.text) &&
+      !/"rev"/.test(stranger.text) &&
+      cold.status === "out" &&
+      cold.dollars !== 4321 &&
+      /sign in/i.test(cold.button) &&
+      wrong.status === "out" &&
+      /do not match/.test(wrong.error) &&
+      moved.status === "in" &&
+      moved.name === "Smoke" &&
+      moved.dollars === 4321 &&
+      /Smoke/.test(moved.button),
+    "account: a device with no session is refused, the wrong password is refused, and signing in on another device brings his progress to it",
+    { stranger, cold, wrong, moved },
+  );
 
   // The other device earns something and saves; the first, opened again, has it without being asked. Then it signs out and keeps its copy.
   await phone.evaluate(async () => {
@@ -3351,19 +5382,47 @@ try {
     g.save.dollars = 5555;
     await g.account.saveNow();
   });
-  const sentOn = await phone.evaluate(() => ({ saved: window.__GAME__.account.hud().saved, error: window.__GAME__.account.hud().error }));
+  const sentOn = await phone.evaluate(() => ({
+    saved: window.__GAME__.account.hud().saved,
+    error: window.__GAME__.account.hud().error,
+  }));
   await restarted(page, () => page.reload({ waitUntil: "domcontentloaded" }));
-  const home = await page.evaluate(() => ({ status: window.__GAME__.account.hud().status, dollars: window.__GAME__.save.dollars, choice: !!window.__GAME__.account.hud().choice }));
+  const home = await page.evaluate(() => ({
+    status: window.__GAME__.account.hud().status,
+    dollars: window.__GAME__.save.dollars,
+    choice: !!window.__GAME__.account.hud().choice,
+  }));
   await restarted(phone, () => phone.evaluate(() => void window.__GAME__.account.signOut()));
-  const gone = await phone.evaluate(() => ({ status: window.__GAME__.account.hud().status, dollars: window.__GAME__.save.dollars }));
-  check(sentOn.saved >= 0 && sentOn.saved < 30 && !sentOn.error && home.status === "in" && home.dollars === 5555 && !home.choice && gone.status === "out" && gone.dollars === 5555, "account: what one device saves is on the other the next time it opens, and signing out leaves the device its copy", { sentOn, home, gone });
+  const gone = await phone.evaluate(() => ({
+    status: window.__GAME__.account.hud().status,
+    dollars: window.__GAME__.save.dollars,
+  }));
+  check(
+    sentOn.saved >= 0 &&
+      sentOn.saved < 30 &&
+      !sentOn.error &&
+      home.status === "in" &&
+      home.dollars === 5555 &&
+      !home.choice &&
+      gone.status === "out" &&
+      gone.dollars === 5555,
+    "account: what one device saves is on the other the next time it opens, and signing out leaves the device its copy",
+    { sentOn, home, gone },
+  );
   // Who reads the requests: not a signed-in player, only the account the site names as its owner.
   const player = await page.evaluate(async () => {
     const g = window.__GAME__;
     if (g.overlay) g.close();
     g.openPartners("store");
     await new Promise((r) => setTimeout(r, 2500));
-    const out = { status: g.account.hud().status, form: !!document.querySelector("[data-partners-form]"), tabs: document.querySelectorAll("[data-partners-tab]").length, picked: document.querySelector('[data-partners-kind][aria-pressed="true"]')?.getAttribute("data-partners-kind") };
+    const out = {
+      status: g.account.hud().status,
+      form: !!document.querySelector("[data-partners-form]"),
+      tabs: document.querySelectorAll("[data-partners-tab]").length,
+      picked: document
+        .querySelector('[data-partners-kind][aria-pressed="true"]')
+        ?.getAttribute("data-partners-kind"),
+    };
     g.close();
     return out;
   });
@@ -3375,7 +5434,12 @@ try {
   await phone.locator("[data-account-submit]").click();
   // The checks may be run twice against one server: the second time the account is already there.
   for (let i = 0; i < 300; i++) {
-    const st = await phone.evaluate(() => ({ status: window.__GAME__?.account.hud().status, error: window.__GAME__?.account.hud().error ?? "" })).catch(() => ({ status: "", error: "" }));
+    const st = await phone
+      .evaluate(() => ({
+        status: window.__GAME__?.account.hud().status,
+        error: window.__GAME__?.account.hud().error ?? "",
+      }))
+      .catch(() => ({ status: "", error: "" }));
     if (st.status === "in") break;
     if (/already an account/.test(st.error)) {
       await phone.locator('[data-account-mode="in"]').click();
@@ -3385,7 +5449,14 @@ try {
     }
     await phone.waitForTimeout(200);
   }
-  await phone.waitForFunction(() => !!window.__GAME__ && window.__GAME__.account.ready && window.__GAME__.account.hud().status === "in", undefined, { timeout: 120000, polling: 200 });
+  await phone.waitForFunction(
+    () =>
+      !!window.__GAME__ &&
+      window.__GAME__.account.ready &&
+      window.__GAME__.account.hud().status === "in",
+    undefined,
+    { timeout: 120000, polling: 200 },
+  );
   await phone.evaluate(() => {
     const g = window.__GAME__;
     if (g.overlay) g.close();
@@ -3397,16 +5468,153 @@ try {
   const inbox = await phone.evaluate(() => {
     const rows = [...document.querySelectorAll("[data-partners-ask]")];
     const mine = rows.find((r) => /Smoke Wings/.test(r.textContent ?? ""));
-    return { rows: rows.length, text: mine?.textContent ?? "", tab: document.querySelector('[data-partners-tab="inbox"]')?.textContent ?? "" };
+    return {
+      rows: rows.length,
+      text: mine?.textContent ?? "",
+      tab: document.querySelector('[data-partners-tab="inbox"]')?.textContent ?? "",
+    };
   });
-  await phone.locator("[data-partners-ask]", { hasText: "Smoke Wings" }).first().getByRole("button").click();
-  await phone.waitForFunction(() => [...document.querySelectorAll("[data-partners-ask]")].some((r) => /Smoke Wings/.test(r.textContent ?? "") && /Put back/.test(r.textContent ?? "")), undefined, { timeout: 30000, polling: 200 });
+  await phone
+    .locator("[data-partners-ask]", { hasText: "Smoke Wings" })
+    .first()
+    .getByRole("button")
+    .click();
+  await phone.waitForFunction(
+    () =>
+      [...document.querySelectorAll("[data-partners-ask]")].some(
+        (r) => /Smoke Wings/.test(r.textContent ?? "") && /Put back/.test(r.textContent ?? ""),
+      ),
+    undefined,
+    { timeout: 30000, polling: 200 },
+  );
   check(
-    player.status === "in" && player.form && player.tabs === 0 && player.picked === "store" && inbox.rows >= 1 && /A food truck/.test(inbox.text) && /Smoke Tester/.test(inbox.text) && /@smokewings 901-555-0100/.test(inbox.text) && /A truck by the river/.test(inbox.text) && /new/.test(inbox.tab),
+    player.status === "in" &&
+      player.form &&
+      player.tabs === 0 &&
+      player.picked === "store" &&
+      inbox.rows >= 1 &&
+      /A food truck/.test(inbox.text) &&
+      /Smoke Tester/.test(inbox.text) &&
+      /@smokewings 901-555-0100/.test(inbox.text) &&
+      /A truck by the river/.test(inbox.text) &&
+      /new/.test(inbox.tab),
     "open spots: a signed-in player is shown no requests, and the owner's account reads what was sent, with who sent it and how to reach them, and ticks it off",
     { player, inbox },
   );
   await phone.close();
+
+  // ---- The places added with the real map: Halle's courts, the Crystal Palace, Adventure River, the new riverfront.
+  const added = await page.evaluate(() => {
+    const g = window.__GAME__;
+    const run = (s) => {
+      for (let i = 0; i < s * 30; i++) g.tick(1 / 30);
+    };
+    if (g.overlay) g.close();
+    if (g.activity) g.activity.quit();
+    run(1);
+    const out = {};
+    // Basketball on Mt. Moriah: the same games, on the court by the track.
+    g.courtAt = "moriah";
+    g.playBall("practice");
+    run(2);
+    const c = g.city.halle;
+    out.halle = {
+      mode: g.mode,
+      x: +g.pos.x.toFixed(1),
+      z: +g.pos.z.toFixed(1),
+      hoopZ: c.hoops.map((h) => +h.z.toFixed(1)),
+    };
+    g.activity?.quit();
+    run(1);
+    // The Crystal Palace: in through the door, skates on, pushes add speed, off the floor again.
+    g.leave(-345, 124, 0);
+    run(2);
+    g.enter("rink");
+    run(2);
+    out.rinkIn = { place: g.place };
+    g.save.dollars = Math.max(g.save.dollars, 50);
+    const before = g.save.dollars;
+    g.rentSkates();
+    run(2);
+    const s0 = g.skate.state.speed;
+    for (let i = 0; i < 4; i++) {
+      g.skate.stride();
+      run(0.4);
+    }
+    out.skate = {
+      mode: g.mode,
+      on: g.skate.state.on,
+      paid: before - g.save.dollars,
+      faster: g.skate.state.speed > s0 + 1,
+      strides: g.skate.state.perfect + g.skate.state.good,
+    };
+    g.skate.quit();
+    run(1);
+    out.skateOff = { mode: g.mode, place: g.place };
+    g.leave(-345, 124, Math.PI);
+    run(2);
+    // Geronimo: off the top, tucked all the way, and the pool says how fast.
+    g.rideGeronimo();
+    run(2);
+    out.top = { mode: g.mode, phase: g.geronimo.state.phase };
+    g.geronimo.go();
+    g.input.hold("action", true);
+    for (let i = 0; i < 12 * 30 && !g.overlay; i++) g.tick(1 / 30);
+    g.input.hold("action", false);
+    out.geronimo = {
+      overlay: g.overlay,
+      top: +g.geronimo.state.top.toFixed(1),
+      best: g.save.best.geronimo ?? 0,
+      title: g.results?.title ?? "",
+    };
+    if (g.overlay) g.close();
+    run(1);
+    // The lazy river: the current carries him round.
+    g.warp(g.city.waterpark.tubes.x, g.city.waterpark.tubes.z, 0);
+    run(1);
+    g.begin(g.lazy, "whack");
+    g.lazy.start();
+    run(4);
+    out.lazy = { mode: g.mode, went: +g.lazy.state.went.toFixed(3) };
+    g.lazy.quit();
+    run(1);
+    out.lazyOff = g.mode;
+    g.warp(0, -150, 0);
+    run(1);
+    return out;
+  });
+  check(
+    added.halle.mode === "hoops" &&
+      Math.abs(added.halle.x - -164) < 1 &&
+      added.halle.z > 540 &&
+      added.halle.z < 580,
+    "Mt. Moriah: a game of ball is played on the court beside Halle's track",
+    added.halle,
+  );
+  check(
+    added.rinkIn.place === "rink" &&
+      added.skate.mode === "whack" &&
+      added.skate.on &&
+      added.skate.paid === 5 &&
+      added.skate.faster &&
+      added.skate.strides >= 2 &&
+      added.skateOff.mode === "walk",
+    "Crystal Palace: in off Third Street, skates for $5, pushes carry him faster, and off the floor again",
+    { ...added.rinkIn, ...added.skate, off: added.skateOff },
+  );
+  check(
+    added.top.phase === "top" &&
+      added.geronimo.overlay === "results" &&
+      added.geronimo.top > 10 &&
+      added.geronimo.best > 0,
+    "Adventure River: Geronimo from the top to the splash pool, with the top speed on the card",
+    { ...added.top, ...added.geronimo },
+  );
+  check(
+    added.lazy.mode === "whack" && added.lazy.went > 0.01 && added.lazyOff === "walk",
+    "Adventure River: a tube on the lazy river goes round with the current",
+    { ...added.lazy, off: added.lazyOff },
+  );
   check(errors.length === 0, "no page errors", errors);
   console.log("Memphis smoke passed.");
 } finally {

@@ -7,12 +7,39 @@ import { Traffic } from "./actors/traffic";
 import { CarModel, Driver, STREET, type DriveTune } from "./actors/vehicle";
 import { Fireworks } from "./gfx/fx";
 import { Rain } from "./gfx/rain";
-import { BALLERS, BAND, CAST, COACH, JOOKERS, PEDS, OUTFITS, BENJI_HEIGHT, SITTERS, TAGGERS, type CastId, type OutfitId, VENDORS } from "./assets/cast";
+import {
+  BALLERS,
+  BAND,
+  CAST,
+  COACH,
+  JOOKERS,
+  PEDS,
+  OUTFITS,
+  BENJI_HEIGHT,
+  SITTERS,
+  TAGGERS,
+  type CastId,
+  type OutfitId,
+  VENDORS,
+} from "./assets/cast";
 import { Sound } from "./core/audio";
 import { SAVE_KEY } from "./core/keys";
 import { SONGS, TUNES } from "./core/band";
 import { Input, type Nav } from "./core/input";
-import type { AlbumHud, HoopsKind, Dialogue, HudState, Live, Mode, Overlay, Place, Results, Reveal, Save, Solid } from "./core/types";
+import type {
+  AlbumHud,
+  HoopsKind,
+  Dialogue,
+  HudState,
+  Live,
+  Mode,
+  Overlay,
+  Place,
+  Results,
+  Reveal,
+  Save,
+  Solid,
+} from "./core/types";
 import { clamp, damp, dampAngle, wrapAngle } from "./core/util";
 import { makeStage, pickQuality, qualityIsChosen, type Quality, type Stage } from "./gfx/render";
 import { Lite } from "./gfx/lite";
@@ -31,8 +58,18 @@ import { BallPit, Bounce, KartRace } from "./play/fun";
 import { BLASTERS, LaserTag, RANKS as TAG_RANKS } from "./play/lasertag";
 import { CABINETS, FOOD, FOOD_TRUCKS, PRIZES, type TruckId } from "./play/goods";
 import { Hoops } from "./play/hoops";
+import { RinkCrowd, Skate } from "./play/skate";
+import { Geronimo, LazyRiver } from "./play/waterslide";
 import { PinballTable, PrizeWheel, SkeeLane } from "./play/floor";
-import { POSTCARDS, dailyFor, dailyPay, dayBefore, dayKey, meets, postcardImg } from "./play/extras";
+import {
+  POSTCARDS,
+  dailyFor,
+  dailyPay,
+  dayBefore,
+  dayKey,
+  meets,
+  postcardImg,
+} from "./play/extras";
 import { TableGames } from "./play/tables";
 import { Account } from "./net/account";
 import { Crew } from "./net/crew";
@@ -41,18 +78,63 @@ import { RIDES, rideById } from "./play/garage";
 import { AirHockey, BagToss, BottleBash, ClownToss } from "./play/midway";
 import { PopShot, Whack } from "./play/machines";
 import { StreetRace } from "./play/race";
-import { BOUNTIES, CHAPTERS, RANKS, RANK_PAY, STORE_REWARD, STORY, chapterOf, rankBadge, rankOf } from "./play/story";
+import {
+  BOUNTIES,
+  CHAPTERS,
+  RANKS,
+  RANK_PAY,
+  STORE_REWARD,
+  STORY,
+  chapterOf,
+  rankBadge,
+  rankOf,
+} from "./play/story";
 import { buildCity, type City } from "./world/city";
 import { buildSkyShow, type SkyShow } from "./world/skyshow";
 import { pushCircle, pushOut, sight } from "./world/collide";
 import { OPEN_SPOTS } from "./world/openspots";
 import { buildClubRoom, type ClubRoom } from "./world/club";
+import { buildRinkRoom, type RinkRoom } from "./world/rink";
 import { buildFunRoom, buildLaserRoom, type FunRoom, type LaserRoom } from "./world/funhouse";
 import { CORNHOLE, HOLES, PUTT_PAR, PUTT_STAND, TENNIS_GATE } from "./world/rec-map";
-import { BEALE_STAGE, BOWL, CYPHER, FUN, HQ, MEMPHIAN, OM, PARK, PARK_TABLES, POIS, RACE_MEET, RIVER_Z, ROAD_HALF, ROOM, SLIDE, STREETS_X, STREETS_Z, SWING, TRUCKS, WALK, districtAt, nearestStreet } from "./world/map";
-import { LANE, buildBowlRoom, buildHomeRoom, buildHqRoom, type BowlRoom, type HomeRoom, type HqRoom, type Room } from "./world/rooms";
-
-
+import {
+  BEALE_STAGE,
+  BOWL,
+  COURT,
+  CYPHER,
+  HALLE,
+  MORIAH_COURT,
+  RINK,
+  FUN,
+  HQ,
+  MEMPHIAN,
+  OM,
+  PARK,
+  PARK_TABLES,
+  POIS,
+  RACE_MEET,
+  RIVER_Z,
+  ROAD_HALF,
+  ROOM,
+  SLIDE,
+  STREETS_X,
+  STREETS_Z,
+  SWING,
+  TRUCKS,
+  WALK,
+  districtAt,
+  nearestStreet,
+} from "./world/map";
+import {
+  LANE,
+  buildBowlRoom,
+  buildHomeRoom,
+  buildHqRoom,
+  type BowlRoom,
+  type HomeRoom,
+  type HqRoom,
+  type Room,
+} from "./world/rooms";
 
 export type Spot = {
   place: Place;
@@ -81,7 +163,17 @@ type Npc = { id: CastId; card: Card; place: Place; x: number; z: number; home: n
 const STEP = 1 / 30;
 
 /** Who each Drop Day job belongs to. The later jobs name their own giver. */
-const DROP_DAY_WHO: Record<string, CastId> = { meet: "kBlanco", deliver: "courtOg", hoops: "courtOg", fish: "uncJ", eat: "mamaDee", bowl: "strike", race: "nitro", buy: "kBlanco", fit: "kBlanco" };
+const DROP_DAY_WHO: Record<string, CastId> = {
+  meet: "kBlanco",
+  deliver: "courtOg",
+  hoops: "courtOg",
+  fish: "uncJ",
+  eat: "mamaDee",
+  bowl: "strike",
+  race: "nitro",
+  buy: "kBlanco",
+  fit: "kBlanco",
+};
 /** What they say about it when Benji comes up to them while it is open. */
 const DROP_DAY_LINES: Record<string, string> = {
   hoops: "Package is in. Now earn the court: ten in a shootout. Sign-up table is right here.",
@@ -105,8 +197,12 @@ const RUNG_KEY = "sack-v2-auto-2";
 
 function loadRung() {
   try {
-    const v = JSON.parse(localStorage.getItem(RUNG_KEY) ?? "null") as { rung?: number; tooSlow?: number } | null;
-    if (v && Number.isInteger(v.rung) && v.rung! >= 0 && v.rung! < RUNGS.length) return { rung: v.rung!, tooSlow: Number.isInteger(v.tooSlow) ? v.tooSlow! : -1 };
+    const v = JSON.parse(localStorage.getItem(RUNG_KEY) ?? "null") as {
+      rung?: number;
+      tooSlow?: number;
+    } | null;
+    if (v && Number.isInteger(v.rung) && v.rung! >= 0 && v.rung! < RUNGS.length)
+      return { rung: v.rung!, tooSlow: Number.isInteger(v.tooSlow) ? v.tooSlow! : -1 };
   } catch {
     /* private mode */
   }
@@ -169,7 +265,8 @@ function loadSave(): Save | null {
     if (s.v !== 4 || typeof s.dollars !== "number") return null;
     const out = { ...freshSave(), ...s };
     // The FRESH jersey in the store is the black 38127: anyone who already bought it has it.
-    if (out.owned.includes("sr-fresh-jersey") && !out.outfits.includes("fresh_black")) out.outfits.push("fresh_black");
+    if (out.owned.includes("sr-fresh-jersey") && !out.outfits.includes("fresh_black"))
+      out.outfits.push("fresh_black");
     out.outfits = out.outfits.filter((o) => o in OUTFITS);
     if (!(out.wearing in OUTFITS)) out.wearing = "starter";
     out.rides = out.rides.filter((id) => RIDES.some((r) => r.id === id));
@@ -215,8 +312,67 @@ export class Game {
   readonly stage: Stage;
   readonly camera: THREE.PerspectiveCamera;
   readonly sky: Sky;
-  readonly rooms: { hq: HqRoom; home: HomeRoom; bowl: BowlRoom; fun: FunRoom; laser: LaserRoom; club: ClubRoom };
-  readonly live: Live = { fp: { on: false, gun: 0, ads: 0, bob: 0, move: 0, kick: 0, flash: 0, reload: -1, sprint: 0, gap: 0, target: 0, hit: 0, hitKind: 0, hurt: 0, hurtAngle: 0, swayX: 0, swayY: 0, down: 0, fov: 72 }, meter: 0, sweetLo: 0, sweetHi: 0, aim: 0, tension: 0, speed: 0, drift: 0, nitro: 0, fade: 1, radar: new Array<number>(48).fill(0), radarN: 0, cue: 999, turn: -1, jook: new Array<number>(72).fill(0), jookN: 0, jookTap: [0, 0, 0, 0, 0], jookWord: 0, jookWordAge: 9, jookBeat: 0, markX: 0.5, markY: 0.5, markOn: false, markDist: 0, x: 0, z: 0, heading: 0, camYaw: 0, party: 0, partyLevel: 0 };
+  readonly rooms: {
+    hq: HqRoom;
+    home: HomeRoom;
+    bowl: BowlRoom;
+    fun: FunRoom;
+    laser: LaserRoom;
+    club: ClubRoom;
+    rink: RinkRoom;
+  };
+  readonly live: Live = {
+    fp: {
+      on: false,
+      gun: 0,
+      ads: 0,
+      bob: 0,
+      move: 0,
+      kick: 0,
+      flash: 0,
+      reload: -1,
+      sprint: 0,
+      gap: 0,
+      target: 0,
+      hit: 0,
+      hitKind: 0,
+      hurt: 0,
+      hurtAngle: 0,
+      swayX: 0,
+      swayY: 0,
+      down: 0,
+      fov: 72,
+    },
+    meter: 0,
+    sweetLo: 0,
+    sweetHi: 0,
+    aim: 0,
+    tension: 0,
+    speed: 0,
+    drift: 0,
+    nitro: 0,
+    fade: 1,
+    radar: new Array<number>(48).fill(0),
+    radarN: 0,
+    cue: 999,
+    turn: -1,
+    jook: new Array<number>(72).fill(0),
+    jookN: 0,
+    jookTap: [0, 0, 0, 0, 0],
+    jookWord: 0,
+    jookWordAge: 9,
+    jookBeat: 0,
+    markX: 0.5,
+    markY: 0.5,
+    markOn: false,
+    markDist: 0,
+    x: 0,
+    z: 0,
+    heading: 0,
+    camYaw: 0,
+    party: 0,
+    partyLevel: 0,
+  };
   readonly benji: Card;
   car: CarModel;
   readonly driver = new Driver();
@@ -232,7 +388,33 @@ export class Game {
   room: Room | null = null;
   activity: Activity | null = null;
   /** The art tables, where tools and tests can read them. */
-  readonly tables = { OUTFITS, PEDS, BALLERS, CAST, VENDORS, STORY, CHAPTERS, RIDES, POSTCARDS, POIS, HOLES, PUTT_PAR, CHATTER: ALL_LINES, TAGGERS, COACH, BAND, BLASTERS, TAG_RANKS, TUNES, SONGS, BEALE_STAGE, MEMPHIAN, CYPHER, JOOKERS, OPEN_SPOTS };
+  readonly tables = {
+    OUTFITS,
+    PEDS,
+    BALLERS,
+    CAST,
+    VENDORS,
+    STORY,
+    CHAPTERS,
+    RIDES,
+    POSTCARDS,
+    POIS,
+    HOLES,
+    PUTT_PAR,
+    CHATTER: ALL_LINES,
+    TAGGERS,
+    COACH,
+    BAND,
+    BLASTERS,
+    TAG_RANKS,
+    TUNES,
+    SONGS,
+    BEALE_STAGE,
+    MEMPHIAN,
+    CYPHER,
+    JOOKERS,
+    OPEN_SPOTS,
+  };
   pos = { x: START.x, z: START.z };
   vel = { x: 0, z: 0 };
   heading = 0;
@@ -300,7 +482,12 @@ export class Game {
   private camPos = new THREE.Vector3();
   private titleSpin = 0;
   /** The opening shot: seconds in, the path of the lens and the path of what it looks at. */
-  private intro: { t: number; path: THREE.CatmullRomCurve3; aim: THREE.CatmullRomCurve3; card: number } | null = null;
+  private intro: {
+    t: number;
+    path: THREE.CatmullRomCurve3;
+    aim: THREE.CatmullRomCurve3;
+    card: number;
+  } | null = null;
   private cinema: { title: string; sub: string } | null = null;
   /** Real seconds of slow motion left, and how slow. */
   private slowLeft = 0;
@@ -314,7 +501,16 @@ export class Game {
   private fireworks = new Fireworks();
   private rain = new Rain(RIVER_Z);
   /** How hard it is raining now and is going to, how wet the ground is, and when the sky next turns. */
-  private weather = { rain: 0, want: 0, wet: 0, next: 210 + Math.random() * 150, left: 0, pinned: false, flash: 0, thunder: 9 };
+  private weather = {
+    rain: 0,
+    want: 0,
+    wet: 0,
+    next: 210 + Math.random() * 150,
+    left: 0,
+    pinned: false,
+    flash: 0,
+    thunder: 9,
+  };
   /** Phones buzz on hits and wins unless this is off. */
   buzzOn = true;
   /** Which of `VIEWS` the lens is on. */
@@ -346,6 +542,16 @@ export class Game {
   private gProbeLeft = 0;
   private gRate = 60;
   private hoops: Hoops;
+  /** The Crystal Palace: a session on the floor, and the regulars going round it. */
+  readonly skate: Skate;
+  private rinkCrowd: RinkCrowd;
+  /** Adventure River: the big slide and the lazy river. */
+  readonly geronimo: Geronimo;
+  readonly lazy: LazyRiver;
+  /** Out past downtown: Halle, Adventure River, the new riverfront. Swimmers, fans and loungers. */
+  private outskirts!: Troupe;
+  /** Which court the basketball menu was opened at. */
+  courtAt: "river" | "moriah" = "river";
   private bowling: Bowling;
   private fishing: Fishing;
   /** The blimp and the searchlights. */
@@ -381,7 +587,8 @@ export class Game {
   private clowns: ClownToss;
   private bags: BagToss;
   /** Nothing happens on its own: no daily drop, no fireworks at nightfall, no rainbow. For tests, with `?calm=1`. */
-  calm = typeof location !== "undefined" && new URLSearchParams(location.search).get("calm") === "1";
+  calm =
+    typeof location !== "undefined" && new URLSearchParams(location.search).get("calm") === "1";
   /** The slide he is in: points so far, and how long since the tyres last let go. */
   private drift = { pts: 0, hold: 0 };
   /** Fireworks over the river on the first night of a session and every night after: seconds left, and the next shell. */
@@ -414,7 +621,15 @@ export class Game {
       this.stage.setScale(RUNGS[this.rung]!.scale);
     }
     this.fitQuality();
-    this.rooms = { hq: buildHqRoom(), home: buildHomeRoom(), bowl: buildBowlRoom(), fun: buildFunRoom(), laser: buildLaserRoom(), club: buildClubRoom() };
+    this.rooms = {
+      hq: buildHqRoom(),
+      home: buildHomeRoom(),
+      bowl: buildBowlRoom(),
+      fun: buildFunRoom(),
+      laser: buildLaserRoom(),
+      club: buildClubRoom(),
+      rink: buildRinkRoom(),
+    };
     for (const r of Object.values(this.rooms)) this.scene.add(r.group);
 
     this.benji = new Card(OUTFITS[this.save.wearing]?.art ?? OUTFITS.starter.art, BENJI_HEIGHT);
@@ -422,8 +637,11 @@ export class Game {
     this.car = this.buildCar(this.save.ride);
     // Enough on the grid that there is something coming on every street: about a car to every block of lane.
     // Only the ones near him are drawn, and on the lighter settings "near" is nearer.
-    this.traffic = new Traffic(this.stage.quality === "high" ? 110 : this.stage.quality === "medium" ? 84 : 48);
-    this.traffic.reach = this.stage.quality === "high" ? 190 : this.stage.quality === "medium" ? 165 : 135;
+    this.traffic = new Traffic(
+      this.stage.quality === "high" ? 110 : this.stage.quality === "medium" ? 84 : 48,
+    );
+    this.traffic.reach =
+      this.stage.quality === "high" ? 190 : this.stage.quality === "medium" ? 165 : 135;
     this.city.exterior.add(this.traffic.group);
     this.coins = new Sacks(this.save.flags);
     this.city.exterior.add(this.coins.mesh);
@@ -432,7 +650,16 @@ export class Game {
 
     this.beam = new THREE.Mesh(
       new THREE.CylinderGeometry(0.45, 0.45, 70, 16, 1, true),
-      new THREE.MeshBasicMaterial({ color: 0x39ff14, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false, fog: false }),
+      new THREE.MeshBasicMaterial({
+        color: 0x39ff14,
+        transparent: true,
+        opacity: 0.16,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        toneMapped: false,
+        fog: false,
+      }),
     );
     this.beam.position.y = 35;
     this.beam.renderOrder = 4;
@@ -442,12 +669,24 @@ export class Game {
     this.fireworks.onBurst = () => this.sound.boom();
     try {
       this.buzzOn = localStorage.getItem("sack-v2-buzz") !== "0";
-      this.view = clamp(Math.floor(Number(localStorage.getItem("sack-v2-view")) || 0), 0, VIEWS.length - 1);
+      this.view = clamp(
+        Math.floor(Number(localStorage.getItem("sack-v2-view")) || 0),
+        0,
+        VIEWS.length - 1,
+      );
     } catch {
       // Private windows have no storage: the default stands.
     }
 
     this.hoops = new Hoops(this);
+    this.skate = new Skate(this, this.rooms.rink.floor);
+    this.geronimo = new Geronimo(this, this.city.waterpark);
+    this.lazy = new LazyRiver(this, this.city.waterpark);
+    this.rinkCrowd = new RinkCrowd(
+      this.rooms.rink.group,
+      this.rooms.rink.floor,
+      this.stage.quality === "low" ? 7 : 12,
+    );
     this.bowling = new Bowling(this);
     this.fishing = new Fishing(this);
     this.cornhole = new Cornhole(this);
@@ -504,12 +743,31 @@ export class Game {
       (place === "street" ? this.city.exterior : this.rooms[place].group).add(card.group);
       this.npcs.push({ id, card, place, x, z, home: heading });
     };
-    put("kBlanco", "hq", this.rooms.hq.kSpot.x, this.rooms.hq.kSpot.z, this.rooms.hq.kSpot.heading, this.rooms.hq.kSpot.lift);
+    put(
+      "kBlanco",
+      "hq",
+      this.rooms.hq.kSpot.x,
+      this.rooms.hq.kSpot.z,
+      this.rooms.hq.kSpot.heading,
+      this.rooms.hq.kSpot.lift,
+    );
     put("courtOg", "street", a.ogStand.x, a.ogStand.z, 0);
     put("uncJ", "street", a.uncStand.x, a.uncStand.z, a.uncStand.heading);
-    put("mamaDee", "street", a.trucks.windows.catch.x - 2.6, a.trucks.windows.catch.z + 0.6, Math.PI);
+    put(
+      "mamaDee",
+      "street",
+      a.trucks.windows.catch.x - 2.6,
+      a.trucks.windows.catch.z + 0.6,
+      Math.PI,
+    );
     put("nitro", "street", RACE_MEET.x, RACE_MEET.z, 0);
-    put("strike", "bowl", this.rooms.bowl.strikeSpot.x, this.rooms.bowl.strikeSpot.z, this.rooms.bowl.strikeSpot.heading);
+    put(
+      "strike",
+      "bowl",
+      this.rooms.bowl.strikeSpot.x,
+      this.rooms.bowl.strikeSpot.z,
+      this.rooms.bowl.strikeSpot.heading,
+    );
     this.populate();
   }
 
@@ -520,8 +778,18 @@ export class Game {
   private populate() {
     let k = 0;
     const who = () => PEDS[(k++ * 5 + 2) % PEDS.length]!;
-    const at = (x: number, z: number, fx: number, fz: number, act: Act, more: Partial<Stop> = {}): Stop => ({ x, z, fx, fz, act, ...more });
-    const hand = (name: string): { art: { front: string }; height: number } => ({ art: { front: `/game/people/${name}.webp` }, height: 1.76 });
+    const at = (
+      x: number,
+      z: number,
+      fx: number,
+      fz: number,
+      act: Act,
+      more: Partial<Stop> = {},
+    ): Stop => ({ x, z, fx, fz, act, ...more });
+    const hand = (name: string): { art: { front: string }; height: number } => ({
+      art: { front: `/game/people/${name}.webp` },
+      height: 1.76,
+    });
     const few = this.stage.quality === "low";
 
     // ---- Fun House: play, eat, watch, queue for laser tag and the karts.
@@ -534,28 +802,68 @@ export class Game {
       if (cab && !cab.machine) funStops.push(at(c.x + 0.62, c.z + 0.3, c.x + 0.3, c.z - 2, "play"));
     }
     funStops.push(
-      at(fun.pinball.x + 1.5, fun.pinball.stand.z + 0.1, fun.pinball.x + 1.5, fun.pinball.z + 2, "play"),
+      at(
+        fun.pinball.x + 1.5,
+        fun.pinball.stand.z + 0.1,
+        fun.pinball.x + 1.5,
+        fun.pinball.z + 2,
+        "play",
+      ),
       at(fun.skee.x + 1.25, fun.skee.stand.z, fun.skee.x + 1.25, fun.skee.zRamp, "play"),
       at(fun.wheel.x - 2.3, fun.wheel.z + 3.3, fun.wheel.x, fun.wheel.z, "cheer"),
       at(fun.wheel.x + 2.7, fun.wheel.z + 3.6, fun.wheel.x, fun.wheel.z, "cheer"),
       at(fun.hockey.x + 1.5, fun.hockey.z + 0.3, fun.hockey.x, fun.hockey.z, "cheer"),
-      at(fun.midway.bottles.stand.x - 0.95, fun.midway.bottles.stand.z + 0.5, fun.midway.bottles.x, fun.midway.bottles.z, "cheer"),
-      at(fun.midway.bags.stand.x + 0.9, fun.midway.bags.stand.z + 0.7, fun.midway.clowns.x, fun.midway.clowns.z, "watch"),
-      at(fun.pizza.x - 0.3, fun.pizza.z + 1.2, fun.pizza.x + 3, fun.pizza.z + 1.2, "watch", { stay: [3, 6] }),
+      at(
+        fun.midway.bottles.stand.x - 0.95,
+        fun.midway.bottles.stand.z + 0.5,
+        fun.midway.bottles.x,
+        fun.midway.bottles.z,
+        "cheer",
+      ),
+      at(
+        fun.midway.bags.stand.x + 0.9,
+        fun.midway.bags.stand.z + 0.7,
+        fun.midway.clowns.x,
+        fun.midway.clowns.z,
+        "watch",
+      ),
+      at(fun.pizza.x - 0.3, fun.pizza.z + 1.2, fun.pizza.x + 3, fun.pizza.z + 1.2, "watch", {
+        stay: [3, 6],
+      }),
       at(fun.prizes.x - 0.3, fun.prizes.z - 1.5, fun.prizes.x + 3, fun.prizes.z - 1.5, "watch"),
-      at(fun.pitEdge.x + 1.7, fun.pitEdge.z + 1.3, (fun.pit.minX + fun.pit.maxX) / 2, (fun.pit.minZ + fun.pit.maxZ) / 2, "cheer"),
+      at(
+        fun.pitEdge.x + 1.7,
+        fun.pitEdge.z + 1.3,
+        (fun.pit.minX + fun.pit.maxX) / 2,
+        (fun.pit.minZ + fun.pit.maxZ) / 2,
+        "cheer",
+      ),
       at(fun.trampEdge.x + 0.7, fun.trampEdge.z - 2.1, fun.tramp.x, fun.tramp.z, "cheer"),
       at(fun.trampEdge.x + 0.9, fun.trampEdge.z + 2.2, fun.tramp.x, fun.tramp.z, "watch"),
-      at(fun.laserDoor.x + 1, fun.laserDoor.z - 0.5, fun.laserDoor.x, fun.laserDoor.z - 3, "inside", { stay: [14, 24] }),
-      at(fun.kartDoor.x + 1.2, fun.kartDoor.z + 0.4, fun.kartDoor.x, fun.kartDoor.z + 3, "inside", { stay: [14, 24] }),
-      at(fun.exit.x - 1.3, fun.exit.z + 0.1, fun.exit.x, fun.exit.z + 3, "inside", { stay: [6, 12] }),
+      at(
+        fun.laserDoor.x + 1,
+        fun.laserDoor.z - 0.5,
+        fun.laserDoor.x,
+        fun.laserDoor.z - 3,
+        "inside",
+        { stay: [14, 24] },
+      ),
+      at(fun.kartDoor.x + 1.2, fun.kartDoor.z + 0.4, fun.kartDoor.x, fun.kartDoor.z + 3, "inside", {
+        stay: [14, 24],
+      }),
+      at(fun.exit.x - 1.3, fun.exit.z + 0.1, fun.exit.x, fun.exit.z + 3, "inside", {
+        stay: [6, 12],
+      }),
     );
     for (const [tx, tz] of [
       [7.5, -3.6],
       [11, 0.4],
       [7.5, 3.6],
     ] as const) {
-      funStops.push(at(F.x + tx + 0.25, F.z + tz + 1.3, F.x + tx, F.z + tz, "eat"), at(F.x + tx - 0.25, F.z + tz - 1.3, F.x + tx, F.z + tz, "eat"));
+      funStops.push(
+        at(F.x + tx + 0.25, F.z + tz + 1.3, F.x + tx, F.z + tz, "eat"),
+        at(F.x + tx - 0.25, F.z + tz - 1.3, F.x + tx, F.z + tz, "eat"),
+      );
     }
     ft.stops(funStops);
     for (let i = 0; i < (few ? 7 : 11); i++) {
@@ -571,14 +879,34 @@ export class Game {
       ft.post(PEDS[kid]!.art, h, at(F.x + bx, F.z + bz, F.x, F.z + 2, "bounce", { lift: 0.42 }));
     }
     const wader = PEDS[5]!;
-    ft.post(wader.art, 1.5, at(fun.pit.minX + 2.6, fun.pit.minZ + 2.4, fun.pit.maxX, fun.pit.maxZ, "wade", { lift: -0.42 }));
+    ft.post(
+      wader.art,
+      1.5,
+      at(fun.pit.minX + 2.6, fun.pit.minZ + 2.4, fun.pit.maxX, fun.pit.maxZ, "wade", {
+        lift: -0.42,
+      }),
+    );
     const cook = PEDS[6]!;
     ft.post(cook.art, cook.height, at(F.x + 18.5, F.z - 5.1, F.x + 14, F.z - 5.1, "serve"));
     // Whoever has the far end of the air hockey table, and the man who runs the midway.
     const puck = PEDS[4]!;
-    ft.post(puck.art, puck.height, at(fun.hockey.far.x, fun.hockey.far.z, fun.hockey.x, fun.hockey.z, "play"));
+    ft.post(
+      puck.art,
+      puck.height,
+      at(fun.hockey.far.x, fun.hockey.far.z, fun.hockey.x, fun.hockey.z, "play"),
+    );
     const barker = PEDS[0]!;
-    ft.post(barker.art, barker.height, at(fun.midway.keeper.x, fun.midway.keeper.z, fun.midway.keeper.x - 2, fun.midway.keeper.z + 3, "serve"));
+    ft.post(
+      barker.art,
+      barker.height,
+      at(
+        fun.midway.keeper.x,
+        fun.midway.keeper.z,
+        fun.midway.keeper.x - 2,
+        fun.midway.keeper.z + 3,
+        "serve",
+      ),
+    );
     const clerk = PEDS[1]!;
     ft.post(clerk.art, clerk.height, at(F.x + 18.85, F.z + 8, F.x + 14, F.z + 8, "serve"));
 
@@ -586,10 +914,21 @@ export class Game {
     const hq = this.rooms.hq;
     const H = ROOM.hq;
     const ht = (this.troupes.hq = new Troupe(hq.group, hq.solids, hq.floorY + 0.03, 5));
-    const hqStops: Stop[] = hq.stands.map((st, i) => at(st.x + (i % 2 ? 0.75 : -0.75), st.z, st.x + (st.x - H.x) * 2, st.z + (st.z - H.z) * 2, "watch", { stay: [5, 11] }));
+    const hqStops: Stop[] = hq.stands.map((st, i) =>
+      at(
+        st.x + (i % 2 ? 0.75 : -0.75),
+        st.z,
+        st.x + (st.x - H.x) * 2,
+        st.z + (st.z - H.z) * 2,
+        "watch",
+        { stay: [5, 11] },
+      ),
+    );
     hqStops.push(
       at(hq.counter.x - 1.9, hq.counter.z + 0.3, hq.kSpot.x, hq.kSpot.z, "watch"),
-      at(hq.fitting.x + 1.3, hq.fitting.z - 0.5, hq.fitting.x, hq.fitting.z + 2, "inside", { stay: [8, 14] }),
+      at(hq.fitting.x + 1.3, hq.fitting.z - 0.5, hq.fitting.x, hq.fitting.z + 2, "inside", {
+        stay: [8, 14],
+      }),
       at(hq.exit.x + 1.4, hq.exit.z - 0.2, hq.exit.x, hq.exit.z + 3, "inside", { stay: [6, 12] }),
     );
     ht.stops(hqStops);
@@ -611,7 +950,10 @@ export class Game {
       [2, 0x1f4a8a],
     ] as const) {
       const lx = B.x + lane * pitch;
-      const mesh = new THREE.Mesh(ballGeo, new THREE.MeshStandardMaterial({ color, roughness: 0.2, metalness: 0.3 }));
+      const mesh = new THREE.Mesh(
+        ballGeo,
+        new THREE.MeshStandardMaterial({ color, roughness: 0.2, metalness: 0.3 }),
+      );
       mesh.visible = false;
       mesh.position.set(lx, 0.19, B.z);
       bowl.group.add(mesh);
@@ -634,8 +976,15 @@ export class Game {
         true,
       );
     }
-    const bowlStops: Stop[] = [-5.4, -2.6, 2.6].map((sx) => at(B.x + sx, B.z + 7.4, B.x + sx, B.z - 8, "cheer"));
-    bowlStops.push(at(bowl.desk.x - 1.5, bowl.desk.z + 0.2, bowl.strikeSpot.x, bowl.strikeSpot.z, "watch"), at(bowl.exit.x - 1.4, bowl.exit.z - 0.1, bowl.exit.x, bowl.exit.z + 3, "inside", { stay: [6, 12] }));
+    const bowlStops: Stop[] = [-5.4, -2.6, 2.6].map((sx) =>
+      at(B.x + sx, B.z + 7.4, B.x + sx, B.z - 8, "cheer"),
+    );
+    bowlStops.push(
+      at(bowl.desk.x - 1.5, bowl.desk.z + 0.2, bowl.strikeSpot.x, bowl.strikeSpot.z, "watch"),
+      at(bowl.exit.x - 1.4, bowl.exit.z - 0.1, bowl.exit.x, bowl.exit.z + 3, "inside", {
+        stay: [6, 12],
+      }),
+    );
     bt.stops(bowlStops);
     for (let i = 0; i < 3; i++) {
       const w = who();
@@ -648,7 +997,10 @@ export class Game {
     const offs = { catch: -13, velis: -1, brothers: 13 } as const;
     for (const id of ["catch", "velis", "brothers"] as const) {
       const wx = TRUCKS.x + offs[id] + 1.2;
-      lot.push(at(wx - 1.2, TRUCKS.z - 3.5, wx, TRUCKS.z, "watch", { stay: [4, 8] }), at(wx + 1.1, TRUCKS.z - 3.8, wx, TRUCKS.z, "watch", { stay: [4, 8] }));
+      lot.push(
+        at(wx - 1.2, TRUCKS.z - 3.5, wx, TRUCKS.z, "watch", { stay: [4, 8] }),
+        at(wx + 1.1, TRUCKS.z - 3.8, wx, TRUCKS.z, "watch", { stay: [4, 8] }),
+      );
       // Whoever runs the truck is in the window: Veli's, the two brothers, the Catch.
       // The crew stand on the truck floor, high enough that the order they hold out clears the counter.
       const crew: [{ art: { front: string }; height: number }, number, number][] =
@@ -660,9 +1012,19 @@ export class Game {
                 [VENDORS.brotherBlue, 0.78, 1.1],
               ]
             : [[VENDORS.catch, 0, 1.02]];
-      for (const [v, dx, floor] of crew) st.post(v.art, v.height, at(wx + dx, TRUCKS.z - 1.5, wx + dx, TRUCKS.z - 8, "serve", { lift: floor }), id);
+      for (const [v, dx, floor] of crew)
+        st.post(
+          v.art,
+          v.height,
+          at(wx + dx, TRUCKS.z - 1.5, wx + dx, TRUCKS.z - 8, "serve", { lift: floor }),
+          id,
+        );
     }
-    for (const tx of [-14, -4, 6, 16]) lot.push(at(TRUCKS.x + tx - 1.75, TRUCKS.z - 9.5, TRUCKS.x + tx, TRUCKS.z - 9.5, "eat"), at(TRUCKS.x + tx + 1.75, TRUCKS.z - 9.5, TRUCKS.x + tx, TRUCKS.z - 9.5, "eat"));
+    for (const tx of [-14, -4, 6, 16])
+      lot.push(
+        at(TRUCKS.x + tx - 1.75, TRUCKS.z - 9.5, TRUCKS.x + tx, TRUCKS.z - 9.5, "eat"),
+        at(TRUCKS.x + tx + 1.75, TRUCKS.z - 9.5, TRUCKS.x + tx, TRUCKS.z - 9.5, "eat"),
+      );
     for (const [vx, vz] of [
       [4, -5.6],
       [5.8, -6.8],
@@ -682,14 +1044,18 @@ export class Game {
       [-3, -166],
       [8, -168],
     ].map(([px, pz]) => at(px!, pz!, HQ.doorX, HQ.frontZ, "watch"));
-    plaza.push(at(HQ.doorX + 1.1, HQ.frontZ + 1.1, HQ.doorX, HQ.frontZ - 3, "inside", { stay: [10, 20] }), at(HQ.doorX - 1.2, HQ.frontZ + 1.2, HQ.doorX, HQ.frontZ - 3, "inside", { stay: [10, 20] }));
+    plaza.push(
+      at(HQ.doorX + 1.1, HQ.frontZ + 1.1, HQ.doorX, HQ.frontZ - 3, "inside", { stay: [10, 20] }),
+      at(HQ.doorX - 1.2, HQ.frontZ + 1.2, HQ.doorX, HQ.frontZ - 3, "inside", { stay: [10, 20] }),
+    );
     st.stops(plaza);
     for (let i = 0; i < (few ? 3 : 5); i++) {
       const w = who();
       st.roam(w.art, w.height, plaza);
     }
     const rail: Stop[] = [];
-    for (let x = -66; x <= 46; x += 14) rail.push(at(x, RIVER_Z + 2.4, x, RIVER_Z - 30, "watch", { stay: [5, 11] }));
+    for (let x = -66; x <= 46; x += 14)
+      rail.push(at(x, RIVER_Z + 2.4, x, RIVER_Z - 30, "watch", { stay: [5, 11] }));
     st.stops(rail);
     for (let i = 0; i < (few ? 2 : 4); i++) {
       const w = who();
@@ -705,7 +1071,14 @@ export class Game {
         const block: Stop[] = [0.1, 0.36, 0.64, 0.9].map((t, i) => {
           const z = z0 + (z1 - z0) * t;
           // Odd stops look across the street, even ones at the windows behind them.
-          return at(x, z, i % 2 ? beale : x + side * 8, z + (i % 2 ? 1.5 : -1.5), (i + row) % 3 === 1 ? "dance" : "watch", { stay: [4, 10] });
+          return at(
+            x,
+            z,
+            i % 2 ? beale : x + side * 8,
+            z + (i % 2 ? 1.5 : -1.5),
+            (i + row) % 3 === 1 ? "dance" : "watch",
+            { stay: [4, 10] },
+          );
         });
         st.stops(block);
         for (let i = 0; i < (few ? 1 : 2); i++) {
@@ -719,7 +1092,10 @@ export class Game {
       { x: BOWL.doorX, z: BOWL.frontZ, out: 1, spots: [-4.5, -2.8, 3.4, 5] },
     ]) {
       const door: Stop[] = d.spots.map((dx) => at(d.x + dx, d.z + d.out * 2.3, d.x, d.z, "watch"));
-      door.push(at(d.x + 0.9, d.z + d.out * 0.9, d.x, d.z - d.out * 3, "inside", { stay: [12, 22] }), at(d.x - 0.9, d.z + d.out * 0.9, d.x, d.z - d.out * 3, "inside", { stay: [12, 22] }));
+      door.push(
+        at(d.x + 0.9, d.z + d.out * 0.9, d.x, d.z - d.out * 3, "inside", { stay: [12, 22] }),
+        at(d.x - 0.9, d.z + d.out * 0.9, d.x, d.z - d.out * 3, "inside", { stay: [12, 22] }),
+      );
       st.stops(door);
       for (let i = 0; i < 3; i++) {
         const w = who();
@@ -729,12 +1105,27 @@ export class Game {
 
     // ---- Live music. The band on the stage in Handy Park, and the people who came out for it.
     const S = BEALE_STAGE;
-    this.bealeBand = new StageBand(this.city.exterior, S.x, S.z - 0.5, Math.PI, S.top + 0.03, S.w - 4.2, S.d - 2.2, 1.16);
+    this.bealeBand = new StageBand(
+      this.city.exterior,
+      S.x,
+      S.z - 0.5,
+      Math.PI,
+      S.top + 0.03,
+      S.w - 4.2,
+      S.d - 2.2,
+      1.16,
+    );
     const gig = (this.gig = new Troupe(this.city.exterior, this.city.solids, null, 37));
     const lip = S.z - S.d / 2;
     const pit: Stop[] = [
-      ...[-5, -2.6, -0.4, 2, 4.4].map((dx, i) => at(S.x + dx, lip - 2.4 - (i % 2) * 1.3, S.x + dx * 0.4, S.z, "dance", { stay: [20, 44] })),
-      ...[-6.5, -3.4, 0.8, 3.6, 6.8].map((dx, i) => at(S.x + dx, lip - 5.6 - (i % 2) * 1.1, S.x, S.z, i % 2 ? "cheer" : "watch", { stay: [16, 34] })),
+      ...[-5, -2.6, -0.4, 2, 4.4].map((dx, i) =>
+        at(S.x + dx, lip - 2.4 - (i % 2) * 1.3, S.x + dx * 0.4, S.z, "dance", { stay: [20, 44] }),
+      ),
+      ...[-6.5, -3.4, 0.8, 3.6, 6.8].map((dx, i) =>
+        at(S.x + dx, lip - 5.6 - (i % 2) * 1.1, S.x, S.z, i % 2 ? "cheer" : "watch", {
+          stay: [16, 34],
+        }),
+      ),
       ...[-8, -1.5, 5.5].map((dx) => at(S.x + dx, lip - 9, S.x, S.z, "watch", { stay: [10, 22] })),
     ];
     gig.stops(pit);
@@ -745,7 +1136,16 @@ export class Game {
 
     // ---- The Memphian: the house band, somebody at every table, a bar and a floor that never empties.
     const club = this.rooms.club;
-    this.clubBand = new StageBand(club.group, club.stage.x, club.stage.z, club.stage.heading, club.stage.top, club.stage.w, club.stage.d, 1.06);
+    this.clubBand = new StageBand(
+      club.group,
+      club.stage.x,
+      club.stage.z,
+      club.stage.heading,
+      club.stage.top,
+      club.stage.w,
+      club.stage.d,
+      1.06,
+    );
     const ct = (this.troupes.club = new Troupe(club.group, club.solids, club.floorY + 0.03, 41));
     let chair = 0;
     for (const t of club.tables) {
@@ -756,15 +1156,108 @@ export class Game {
       }
     }
     const keep = PEDS[9 % PEDS.length]!;
-    ct.post(keep.art, keep.height, at(club.barkeep.x, club.barkeep.z, club.bar.x, club.bar.z, "serve"));
+    ct.post(
+      keep.art,
+      keep.height,
+      at(club.barkeep.x, club.barkeep.z, club.bar.x, club.bar.z, "serve"),
+    );
     const dance = club.floor;
     const house: Stop[] = [
-      ...[-2.9, -1.1, 0.8, 2.8].map((dx, i) => at(dance.x + dx, dance.z - 0.9 + (i % 2) * 1.5, club.stage.x, club.stage.z, "dance", { stay: [12, 26] })),
-      ...[-2, 1.9].map((dx) => at(dance.x + dx, dance.z + 1.7, club.stage.x, club.stage.z, "dance", { stay: [10, 20] })),
-      ...club.rail.map((r, i) => at(r.x, r.z, i < club.rail.length - 2 ? club.barkeep.x : club.stage.x, i < club.rail.length - 2 ? r.z : club.stage.z, i < club.rail.length - 2 ? "watch" : "cheer", { stay: [8, 18] })),
-      at(club.exit.x + 1.5, club.exit.z - 0.4, club.exit.x, club.exit.z + 3, "inside", { stay: [8, 16] }),
+      ...[-2.9, -1.1, 0.8, 2.8].map((dx, i) =>
+        at(dance.x + dx, dance.z - 0.9 + (i % 2) * 1.5, club.stage.x, club.stage.z, "dance", {
+          stay: [12, 26],
+        }),
+      ),
+      ...[-2, 1.9].map((dx) =>
+        at(dance.x + dx, dance.z + 1.7, club.stage.x, club.stage.z, "dance", { stay: [10, 20] }),
+      ),
+      ...club.rail.map((r, i) =>
+        at(
+          r.x,
+          r.z,
+          i < club.rail.length - 2 ? club.barkeep.x : club.stage.x,
+          i < club.rail.length - 2 ? r.z : club.stage.z,
+          i < club.rail.length - 2 ? "watch" : "cheer",
+          { stay: [8, 18] },
+        ),
+      ),
+      at(club.exit.x + 1.5, club.exit.z - 0.4, club.exit.x, club.exit.z + 3, "inside", {
+        stay: [8, 16],
+      }),
     ];
     ct.stops(house);
+
+    // ---- The Crystal Palace: whoever hands out the skates, the snack bar, the DJ, and the benches.
+    const rink = this.rooms.rink;
+    const rt = (this.troupes.rink = new Troupe(rink.group, rink.solids, rink.floorY + 0.03, 81));
+    rink.staff.forEach((p, i) => {
+      const w = PEDS[(i * 4 + 3) % PEDS.length]!;
+      rt.post(
+        w.art,
+        w.height,
+        at(
+          p.x,
+          p.z,
+          p.x + Math.sin(p.heading),
+          p.z + Math.cos(p.heading),
+          i === 2 ? "dance" : "serve",
+        ),
+      );
+    });
+    rt.stops(
+      rink.benches.map((b, i) =>
+        at(b.x, b.z, b.fx, b.fz, i % 3 === 0 ? "cheer" : "watch", { stay: [8, 20] }),
+      ),
+    );
+
+    // ---- Out past downtown: the stand at Halle, the courts, Adventure River's pools and loungers.
+    const ot = (this.outskirts = new Troupe(this.city.exterior, this.city.solids, null, 59));
+    const halle = this.city.halle;
+    let nOut = 0;
+    const pick = () => PEDS[(nOut++ * 7 + 5) % PEDS.length]!;
+    for (const seat of halle.seats.filter((_, i) => i % (few ? 3 : 2) === 0)) {
+      const w = pick();
+      ot.post(
+        w.art,
+        w.height,
+        at(seat.x, seat.z, HALLE.track.cx, seat.z, nOut % 4 === 0 ? "cheer" : "watch", {
+          lift: seat.y,
+        }),
+      );
+    }
+    const side: Stop[] = halle.trackside.map((p, i) =>
+      at(p.x, p.z, p.lookX, p.lookZ, i % 2 ? "cheer" : "watch", { stay: [10, 24] }),
+    );
+    const south = HALLE.courts[1];
+    side.push(
+      at(south.cx - 3, south.cz + 4, south.cx, south.cz - south.halfL, "play", { stay: [12, 30] }),
+      at(south.cx + 2.5, south.cz - 2, south.cx, south.cz - south.halfL, "play", {
+        stay: [12, 30],
+      }),
+    );
+    ot.stops(side);
+    for (let i = 0; i < (few ? 3 : 6); i++) {
+      const w = pick();
+      ot.roam(w.art, w.height, side);
+    }
+    const river: Stop[] = this.city.riverside.stops.map((p) =>
+      at(p.x, p.z, p.fx, p.fz, p.act, { stay: [10, 26] }),
+    );
+    ot.stops(river);
+    for (let i = 0; i < (few ? 6 : 12); i++) {
+      const w = pick();
+      ot.roam(w.art, w.height, river);
+    }
+    const wpk = this.city.waterpark;
+    const pool: Stop[] = [
+      ...wpk.swim.map((p) => at(p.x, p.z, p.x, p.z - 3, "wade", { stay: [14, 30] })),
+      ...wpk.lounge.map((p) => at(p.x, p.z, p.fx, p.fz, "watch", { stay: [10, 26] })),
+    ];
+    ot.stops(pool);
+    for (let i = 0; i < (few ? 6 : 12); i++) {
+      const w = pick();
+      ot.roam(w.art, w.height, pool);
+    }
     for (let i = 0; i < (few ? 4 : 7); i++) {
       const w = who();
       ct.roam(w.art, w.height, house);
@@ -785,7 +1278,9 @@ export class Game {
       }
     }
     const park: Stop[] = [
-      ...PARK_TABLES.map((t, i) => at(t.x + (i % 2 ? 1.5 : -1.5), t.z + 0.4, t.x, t.z, "watch", { stay: [6, 14] })),
+      ...PARK_TABLES.map((t, i) =>
+        at(t.x + (i % 2 ? 1.5 : -1.5), t.z + 0.4, t.x, t.z, "watch", { stay: [6, 14] }),
+      ),
       at(PARK.cx - 4.6, PARK.cz + 4.6, PARK.cx, PARK.cz, "watch", { stay: [5, 12] }),
       at(PARK.cx + 4.8, PARK.cz - 4.4, PARK.cx, PARK.cz, "watch", { stay: [5, 12] }),
       at(PARK.cx, PARK.minZ + 4, PARK.cx, PARK.cz, "watch", { stay: [3, 6] }),
@@ -811,8 +1306,24 @@ export class Game {
     } else this.troupes[this.place]?.cheer(x, z, r, seconds);
   }
 
-  private spot(place: Place, x: number, z: number, r: number, label: string | (() => string), act: () => void, when?: () => boolean) {
-    const s: Spot = { place, x, z, r, label: typeof label === "string" ? () => label : label, act, when };
+  private spot(
+    place: Place,
+    x: number,
+    z: number,
+    r: number,
+    label: string | (() => string),
+    act: () => void,
+    when?: () => boolean,
+  ) {
+    const s: Spot = {
+      place,
+      x,
+      z,
+      r,
+      label: typeof label === "string" ? () => label : label,
+      act,
+      when,
+    };
     this.spots.push(s);
     return s;
   }
@@ -822,25 +1333,79 @@ export class Game {
     const { hq, home, bowl, fun } = this.rooms;
 
     // Doors.
-    this.spot("street", a.hqDoor.x, a.hqDoor.z, 2.2, "Enter SackReligious HQ", () => this.enter("hq"));
-    this.spot("hq", hq.exit.x, hq.exit.z, 1.5, "Step outside", () => this.leave(a.hqDoor.x, a.hqDoor.z + 1.2, 0));
+    this.spot("street", a.hqDoor.x, a.hqDoor.z, 2.2, "Enter SackReligious HQ", () =>
+      this.enter("hq"),
+    );
+    this.spot("hq", hq.exit.x, hq.exit.z, 1.5, "Step outside", () =>
+      this.leave(a.hqDoor.x, a.hqDoor.z + 1.2, 0),
+    );
     this.spot("street", a.homeDoor.x, a.homeDoor.z, 1.9, "Go inside", () => this.enter("home"));
-    this.spot("home", home.exit.x, home.exit.z, 1.3, "Head out", () => this.leave(a.homeWalk.x, a.homeWalk.z, Math.PI));
-    this.spot("street", a.bowlDoor.x, a.bowlDoor.z, 2.2, "Enter 901 Bowl", () => this.enter("bowl"));
-    this.spot("bowl", bowl.exit.x, bowl.exit.z, 1.5, "Step outside", () => this.leave(a.bowlDoor.x, a.bowlDoor.z + 1.4, 0));
+    this.spot("home", home.exit.x, home.exit.z, 1.3, "Head out", () =>
+      this.leave(a.homeWalk.x, a.homeWalk.z, Math.PI),
+    );
+    this.spot("street", a.bowlDoor.x, a.bowlDoor.z, 2.2, "Enter 901 Bowl", () =>
+      this.enter("bowl"),
+    );
+    this.spot("bowl", bowl.exit.x, bowl.exit.z, 1.5, "Step outside", () =>
+      this.leave(a.bowlDoor.x, a.bowlDoor.z + 1.4, 0),
+    );
     this.spot("street", FUN.doorX, FUN.frontZ - 1.3, 2.4, "Enter the Fun House", () => {
       this.visitTickets = 0;
       this.enter("fun");
     });
-    this.spot("fun", fun.exit.x, fun.exit.z, 1.6, "Step outside", () => this.leave(FUN.doorX, FUN.frontZ - 2.6, Math.PI));
+    this.spot("fun", fun.exit.x, fun.exit.z, 1.6, "Step outside", () =>
+      this.leave(FUN.doorX, FUN.frontZ - 2.6, Math.PI),
+    );
 
     // Live music: the old picture house on Main, and the stage in Handy Park on Beale.
     const club = this.rooms.club;
-    this.spot("street", MEMPHIAN.x, MEMPHIAN.z + 1.3, 2.4, "Enter The Memphian", () => this.enter("club"));
-    this.spot("club", club.exit.x, club.exit.z, 1.5, "Step outside", () => this.leave(MEMPHIAN.x, MEMPHIAN.z + 2.4, 0));
-    this.spot("club", club.request.x, club.request.z, 1.8, "Request a song · $5", () => this.requestSong());
-    this.spot("club", club.bar.x, club.bar.z, 1.5, "Sweet tea at the bar · $4", () => this.barTea());
-    this.spot("street", BEALE_STAGE.x, BEALE_STAGE.z - BEALE_STAGE.d / 2 - 1.3, 2, "Tip the band · $5", () => this.tipBand());
+    this.spot("street", MEMPHIAN.x, MEMPHIAN.z + 1.3, 2.4, "Enter The Memphian", () =>
+      this.enter("club"),
+    );
+    this.spot("club", club.exit.x, club.exit.z, 1.5, "Step outside", () =>
+      this.leave(MEMPHIAN.x, MEMPHIAN.z + 2.4, 0),
+    );
+    this.spot("club", club.request.x, club.request.z, 1.8, "Request a song · $5", () =>
+      this.requestSong(),
+    );
+    this.spot("club", club.bar.x, club.bar.z, 1.5, "Sweet tea at the bar · $4", () =>
+      this.barTea(),
+    );
+
+    // The Crystal Palace on South Third.
+    const rink = this.rooms.rink;
+    this.spot("street", RINK.doorX, RINK.frontZ - 1.4, 2.4, "Enter the Crystal Palace", () =>
+      this.enter("rink"),
+    );
+    this.spot("rink", rink.exit.x, rink.exit.z, 1.5, "Back out to Third Street", () =>
+      this.leave(RINK.doorX, RINK.frontZ - 2.6, Math.PI),
+    );
+    this.spot("rink", rink.rental.x, rink.rental.z, 2, "Rent skates and hit the floor · $5", () =>
+      this.rentSkates(),
+    );
+    this.spot("rink", rink.snack.x, rink.snack.z, 2, "Nachos and a slushie · $4", () =>
+      this.snackBar(),
+    );
+
+    // Adventure River.
+    const wp = this.city.waterpark;
+    this.spot("street", wp.stairs.x, wp.stairs.z, 2.2, "Climb the tower and ride Geronimo", () =>
+      this.rideGeronimo(),
+    );
+    this.spot("street", wp.tubes.x, wp.tubes.z, 2.2, "Grab a tube: float the lazy river", () =>
+      this.transition(() => {
+        this.begin(this.lazy, "whack");
+        this.lazy.start();
+      }),
+    );
+    this.spot(
+      "street",
+      BEALE_STAGE.x,
+      BEALE_STAGE.z - BEALE_STAGE.d / 2 - 1.3,
+      2,
+      "Tip the band · $5",
+      () => this.tipBand(),
+    );
     // The cypher: anywhere on the lino or at the open side of the ring.
     this.spot("street", CYPHER.x, CYPHER.z + 1.2, CYPHER.r + 1.1, "Jump in the cypher", () => {
       this.begin(this.jook, "whack");
@@ -848,9 +1413,30 @@ export class Game {
     });
 
     // The spots that are open to a real business: each sign takes whoever walks up to the asking screen.
-    this.spot("street", OPEN_SPOTS.truck.stand.x, OPEN_SPOTS.truck.stand.z, OPEN_SPOTS.truck.r, "Put your truck in the game", () => this.openPartners("truck"));
-    this.spot("street", OPEN_SPOTS.billboard.stand.x, OPEN_SPOTS.billboard.stand.z, OPEN_SPOTS.billboard.r, "Advertise here", () => this.openPartners("billboard"));
-    this.spot("street", OPEN_SPOTS.music.stand.x, OPEN_SPOTS.music.stand.z, OPEN_SPOTS.music.r, "Get your music in the game", () => this.openPartners("music"));
+    this.spot(
+      "street",
+      OPEN_SPOTS.truck.stand.x,
+      OPEN_SPOTS.truck.stand.z,
+      OPEN_SPOTS.truck.r,
+      "Put your truck in the game",
+      () => this.openPartners("truck"),
+    );
+    this.spot(
+      "street",
+      OPEN_SPOTS.billboard.stand.x,
+      OPEN_SPOTS.billboard.stand.z,
+      OPEN_SPOTS.billboard.r,
+      "Advertise here",
+      () => this.openPartners("billboard"),
+    );
+    this.spot(
+      "street",
+      OPEN_SPOTS.music.stand.x,
+      OPEN_SPOTS.music.stand.z,
+      OPEN_SPOTS.music.r,
+      "Get your music in the game",
+      () => this.openPartners("music"),
+    );
 
     // The coupe.
     this.carSpot = this.spot(
@@ -880,12 +1466,20 @@ export class Game {
     this.spot("hq", hq.fitting.x, hq.fitting.z, 1.6, "Fitting room", () => this.open("wardrobe"));
 
     // Home.
-    this.spot("home", home.wardrobe.x, home.wardrobe.z, 1.5, "Open the closet", () => this.open("wardrobe"));
+    this.spot("home", home.wardrobe.x, home.wardrobe.z, 1.5, "Open the closet", () =>
+      this.open("wardrobe"),
+    );
     this.spot("home", home.bed.x, home.bed.z, 1.6, "Rest a while", () => {
       this.transition(() => {
         this.sky.next();
         this.sky.setPhase(this.sky.phase, true);
-        this.toast(this.sky.phase === "night" ? "You slept till dark." : this.sky.phase === "day" ? "Good morning, Memphis." : "Sun's going down.");
+        this.toast(
+          this.sky.phase === "night"
+            ? "You slept till dark."
+            : this.sky.phase === "day"
+              ? "Good morning, Memphis."
+              : "Sun's going down.",
+        );
       });
     });
 
@@ -895,9 +1489,27 @@ export class Game {
       a.ogSpot.x,
       a.ogSpot.z + 1.5,
       2.4,
-      () => (this.save.flags.carrying ? "Hand Court OG the drop" : "Play ball: shootout, a game to 11, or practice"),
+      () =>
+        this.save.flags.carrying
+          ? "Hand Court OG the drop"
+          : "Play ball: shootout, a game to 11, or practice",
       () => {
         if (this.save.flags.carrying) return this.handOff();
+        this.courtAt = "river";
+        this.open("court");
+      },
+    );
+
+    // The courts at Halle Stadium on Mt. Moriah: the same games, a different crowd.
+    const halle = this.city.halle;
+    this.spot(
+      "street",
+      halle.gate.x,
+      halle.gate.z,
+      2.4,
+      "Hoop at Halle: shootout, a game to 11, or practice",
+      () => {
+        this.courtAt = "moriah";
         this.open("court");
       },
     );
@@ -918,7 +1530,12 @@ export class Game {
     a.castSpots.forEach((c) =>
       this.spot("street", c.x, c.z, 1.5, "Cast a line", () => {
         if (this.save.bait <= 0) {
-          this.say("Unc J", "No bait, no fish. The shack's right there, nephew.", null, "unc-no-bait");
+          this.say(
+            "Unc J",
+            "No bait, no fish. The shack's right there, nephew.",
+            null,
+            "unc-no-bait",
+          );
           this.sound.bad();
           return;
         }
@@ -935,7 +1552,14 @@ export class Game {
         this.open("food");
       });
     }
-    this.spot("street", a.trucks.screen.x, a.trucks.screen.z, 2.6, "Watch the video: Yung Veli, Go Girl", () => this.open("video"));
+    this.spot(
+      "street",
+      a.trucks.screen.x,
+      a.trucks.screen.z,
+      2.6,
+      "Watch the video: Yung Veli, Go Girl",
+      () => this.open("video"),
+    );
     // Pay at the desk or just step up to the lane: either starts a game.
     for (const [bx, bz, r] of [
       [bowl.desk.x, bowl.desk.z, 2.2],
@@ -947,27 +1571,41 @@ export class Game {
         this.bowling.start();
       });
     }
-    this.spot("street", RACE_MEET.x, RACE_MEET.z + 1.6, 2.6, "Race Nitro: 3 laps of downtown", () => {
-      this.begin(this.race, "race");
-      this.race.start();
-    });
+    this.spot(
+      "street",
+      RACE_MEET.x,
+      RACE_MEET.z + 1.6,
+      2.6,
+      "Race Nitro: 3 laps of downtown",
+      () => {
+        this.begin(this.race, "race");
+        this.race.start();
+      },
+    );
 
     // Fun House.
     for (const c of fun.cabinets) {
       const cab = CABINETS.find((k) => k.id === c.id);
       if (!cab) continue;
-      this.spot("fun", c.x, c.z, 1.25, cab.link ? `${cab.name}: play it for real` : `Play ${cab.name}`, () => {
-        if (cab.id === "whack") {
-          this.begin(this.whack, "whack");
-          this.whack.start();
-        } else if (cab.id === "hoopfever") {
-          this.begin(this.popshot, "hoops");
-          this.popshot.start();
-        } else {
-          this.cabinet = cab.id;
-          this.open("arcade");
-        }
-      });
+      this.spot(
+        "fun",
+        c.x,
+        c.z,
+        1.25,
+        cab.link ? `${cab.name}: play it for real` : `Play ${cab.name}`,
+        () => {
+          if (cab.id === "whack") {
+            this.begin(this.whack, "whack");
+            this.whack.start();
+          } else if (cab.id === "hoopfever") {
+            this.begin(this.popshot, "hoops");
+            this.popshot.start();
+          } else {
+            this.cabinet = cab.id;
+            this.open("arcade");
+          }
+        },
+      );
     }
     this.spot("fun", fun.pinball.stand.x, fun.pinball.stand.z, 1.3, "Play Sack Pinball", () => {
       this.begin(this.pinball, "whack");
@@ -990,7 +1628,12 @@ export class Game {
       [this.clowns, "Feed the clowns"],
       [this.bags, "Toss the bean bags"],
     ] as const) {
-      const st = stall === this.bottles ? fun.midway.bottles.stand : stall === this.clowns ? fun.midway.clowns.stand : fun.midway.bags.stand;
+      const st =
+        stall === this.bottles
+          ? fun.midway.bottles.stand
+          : stall === this.clowns
+            ? fun.midway.clowns.stand
+            : fun.midway.bags.stand;
       this.spot("fun", st.x, st.z, 0.95, label, () => {
         this.begin(stall, "whack");
         stall.start();
@@ -1010,9 +1653,12 @@ export class Game {
       this.bounce.start();
     });
     // The arena door: his rank, his record and the choice of blaster, then in.
-    this.spot("fun", fun.laserDoor.x, fun.laserDoor.z, 1.8, "Laser tag: green against pink", () => this.open("loadout"));
+    this.spot("fun", fun.laserDoor.x, fun.laserDoor.z, 1.8, "Laser tag: green against pink", () =>
+      this.open("loadout"),
+    );
     // The park: walk up to the open seat at any table.
-    for (const t of PARK_TABLES) this.spot("street", t.x, t.z + 1.2, 1.25, `Sit down: ${t.name}`, () => this.board.sit(t.id));
+    for (const t of PARK_TABLES)
+      this.spot("street", t.x, t.z + 1.2, 1.25, `Sit down: ${t.name}`, () => this.board.sit(t.id));
     // The rec grounds on Park Avenue.
     this.spot("street", PUTT_STAND.x, PUTT_STAND.z, 2, "Putt-putt: nine holes", () => {
       this.transition(() => {
@@ -1100,16 +1746,48 @@ export class Game {
    * Pyramid and round the boutique, and lands behind Benji where the day is played from.
    */
   private startIntro() {
-    if (typeof location !== "undefined" && new URLSearchParams(location.search).get("intro") === "0") return this.endIntro();
+    if (
+      typeof location !== "undefined" &&
+      new URLSearchParams(location.search).get("intro") === "0"
+    )
+      return this.endIntro();
     const end = this.camera.position.clone();
     const fx = Math.sin(this.camYaw);
     const fz = Math.cos(this.camYaw);
-    const eye = new THREE.Vector3(this.pos.x + fx * 1.5, this.benji.group.position.y + 1.5, this.pos.z + fz * 1.5);
+    const eye = new THREE.Vector3(
+      this.pos.x + fx * 1.5,
+      this.benji.group.position.y + 1.5,
+      this.pos.z + fz * 1.5,
+    );
     const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
     this.intro = {
       t: 0,
-      path: new THREE.CatmullRomCurve3([V(590, 32, -212), V(450, 30, -222), V(260, 26, -220), V(100, 18, -198), V(20, 10, -170), V(-6, 4.6, -152), end], false, "centripetal"),
-      aim: new THREE.CatmullRomCurve3([V(740, 30, -176), V(710, 26, -178), V(320, 16, -150), V(40, 10, -168), V(-12, 6, -162), V(this.pos.x, 2, this.pos.z - 0.5), eye], false, "centripetal"),
+      path: new THREE.CatmullRomCurve3(
+        [
+          V(590, 32, -212),
+          V(450, 30, -222),
+          V(260, 26, -220),
+          V(100, 18, -198),
+          V(20, 10, -170),
+          V(-6, 4.6, -152),
+          end,
+        ],
+        false,
+        "centripetal",
+      ),
+      aim: new THREE.CatmullRomCurve3(
+        [
+          V(740, 30, -176),
+          V(710, 26, -178),
+          V(320, 16, -150),
+          V(40, 10, -168),
+          V(-12, 6, -162),
+          V(this.pos.x, 2, this.pos.z - 0.5),
+          eye,
+        ],
+        false,
+        "centripetal",
+      ),
       card: -1,
     };
     this.cinema = { title: "", sub: "" };
@@ -1123,7 +1801,15 @@ export class Game {
     const T = 11.5;
     it.t += dt;
     const input = this.input;
-    if (it.t >= T || (it.t > 0.6 && (input.hitRaw("interact") || input.hitRaw("action") || input.hitRaw("pause") || input.hitRaw("back")))) return this.endIntro();
+    if (
+      it.t >= T ||
+      (it.t > 0.6 &&
+        (input.hitRaw("interact") ||
+          input.hitRaw("action") ||
+          input.hitRaw("pause") ||
+          input.hitRaw("back")))
+    )
+      return this.endIntro();
     const u = clamp(it.t / T, 0, 1);
     // Away gently, and slower still into the landing.
     const e = u * u * (3 - 2 * u);
@@ -1139,7 +1825,12 @@ export class Game {
     if (card !== it.card) {
       it.card = card;
       if (card === 0) this.sound.voice("call-welcome");
-      this.cinema = card === 0 ? { title: "MEMPHIS", sub: "TENNESSEE · THE 901" } : card === 1 ? { title: "SACKRELIGIOUS", sub: "DROP DAY" } : { title: "", sub: "" };
+      this.cinema =
+        card === 0
+          ? { title: "MEMPHIS", sub: "TENNESSEE · THE 901" }
+          : card === 1
+            ? { title: "SACKRELIGIOUS", sub: "DROP DAY" }
+            : { title: "", sub: "" };
       this.push();
     }
   }
@@ -1157,7 +1848,12 @@ export class Game {
     this.camera.fov = 46;
     this.camera.updateProjectionMatrix();
     this.snapCamera();
-    this.say("K Blanco", "Benji! It's Drop Day. Come inside, I got something for you.", CAST.kBlanco.portrait, "k-drop-day");
+    this.say(
+      "K Blanco",
+      "Benji! It's Drop Day. Come inside, I got something for you.",
+      CAST.kBlanco.portrait,
+      "k-drop-day",
+    );
     this.push();
   }
 
@@ -1226,7 +1922,9 @@ export class Game {
     const fx = Math.sin(ph.yaw) * flat;
     const fz = Math.cos(ph.yaw) * flat;
     // This side of any wall, and inside the room when there is one.
-    const d = ph.dist * clamp(sight(tx, tz, tx + fx * ph.dist, tz + fz * ph.dist, this.solids, 0.35), 0.25, 1);
+    const d =
+      ph.dist *
+      clamp(sight(tx, tz, tx + fx * ph.dist, tz + fz * ph.dist, this.solids, 0.35), 0.25, 1);
     let x = tx + fx * d;
     let z = tz + fz * d;
     if (room) {
@@ -1253,18 +1951,38 @@ export class Game {
     this.emit("photo");
     if (this.room) return;
     const flags = this.save.flags;
-    const card = POSTCARDS.find((c) => !flags[`card_${c.id}`] && Math.hypot(this.pos.x - c.x, this.pos.z - c.z) < c.r);
+    const card = POSTCARDS.find(
+      (c) => !flags[`card_${c.id}`] && Math.hypot(this.pos.x - c.x, this.pos.z - c.z) < c.r,
+    );
     if (!card) return;
     flags[`card_${card.id}`] = true;
     const got = POSTCARDS.filter((c) => flags[`card_${c.id}`]).length;
     if (got === POSTCARDS.length) {
       const paid = this.earn(300, 20, { quiet: true });
       this.moment(3);
-      this.reveal({ img: postcardImg(card.id), kicker: `All ${got} postcards`, title: card.name, sub: `Memphis is yours.  +$${paid.dollars}`, round: false }, 7);
+      this.reveal(
+        {
+          img: postcardImg(card.id),
+          kicker: `All ${got} postcards`,
+          title: card.name,
+          sub: `Memphis is yours.  +$${paid.dollars}`,
+          round: false,
+        },
+        7,
+      );
     } else {
       const paid = this.earn(40, 4, { quiet: true });
       this.sound.cash();
-      this.reveal({ img: postcardImg(card.id), kicker: `Postcard ${got} of ${POSTCARDS.length}`, title: card.name, sub: `+$${paid.dollars}  ·  it is in your album`, round: false }, 5.5);
+      this.reveal(
+        {
+          img: postcardImg(card.id),
+          kicker: `Postcard ${got} of ${POSTCARDS.length}`,
+          title: card.name,
+          sub: `+$${paid.dollars}  ·  it is in your album`,
+          round: false,
+        },
+        5.5,
+      );
     }
     this.persist();
     this.push();
@@ -1279,7 +1997,8 @@ export class Game {
 
   /** A buzz in the hand, on phones that have one. */
   buzz(pattern: number | number[]) {
-    if (!this.buzzOn || typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
+    if (!this.buzzOn || typeof navigator === "undefined" || typeof navigator.vibrate !== "function")
+      return;
     try {
       navigator.vibrate(pattern);
     } catch {
@@ -1293,7 +2012,8 @@ export class Game {
    */
   nextView() {
     // Games that put the lens where the game needs it (a shot, a lane, a first-person arena) keep it there.
-    const follows = !this.activity || this.mode === "race" || this.mode === "kart" || this.activity === this.boat;
+    const follows =
+      !this.activity || this.mode === "race" || this.mode === "kart" || this.activity === this.boat;
     if (!follows || this.mode === "title" || this.intro || this.overlay) return;
     this.view = (this.view + 1) % VIEWS.length;
     try {
@@ -1444,8 +2164,11 @@ export class Game {
     const { x, z } = this.pos;
     const r = 1.9;
     // One of the named cast, standing where no errand of theirs is in reach.
-    for (const n of this.npcs) if (n.place === this.place && Math.hypot(n.x - x, n.z - z) < 2.2) return { key: n.id, card: n.card, x: n.x, z: n.z, doing: "cast" };
-    if (this.place !== "street") return this.troupes[this.place]?.nearest(x, z, r, `${this.place}-`) ?? null;
+    for (const n of this.npcs)
+      if (n.place === this.place && Math.hypot(n.x - x, n.z - z) < 2.2)
+        return { key: n.id, card: n.card, x: n.x, z: n.z, doing: "cast" };
+    if (this.place !== "street")
+      return this.troupes[this.place]?.nearest(x, z, r, `${this.place}-`) ?? null;
     const a = this.people.nearest(x, z, r);
     const b = this.street.nearest(x, z, r, "t");
     if (a && b) return Math.hypot(a.x - x, a.z - z) <= Math.hypot(b.x - x, b.z - z) ? a : b;
@@ -1496,6 +2219,9 @@ export class Game {
   playBall(kind: HoopsKind) {
     this.close();
     this.transition(() => {
+      if (this.courtAt === "moriah")
+        this.hoops.useCourt(MORIAH_COURT, this.city.halle.hoops, this.city.halle.nets);
+      else this.hoops.useCourt(COURT, this.city.hoops, this.city.nets);
       this.begin(this.hoops, "hoops");
       this.hoops.start(kind);
     });
@@ -1629,7 +2355,8 @@ export class Game {
   /** Pay out with every bonus applied. Returns what was actually paid. */
   earn(dollars: number, respect: number, opts: { quiet?: boolean; race?: boolean } = {}) {
     const was = rankOf(this.save.respect);
-    let d = dollars * (1 + (this.save.owned.length - 1) * COLLECTION_BONUS) * (1 + was.index * RANK_PAY);
+    let d =
+      dollars * (1 + (this.save.owned.length - 1) * COLLECTION_BONUS) * (1 + was.index * RANK_PAY);
     if (this.time < this.fedUntil) d *= 1.1;
     if (opts.race && this.wearing("tour_black")) d *= 1.1;
     let r = respect;
@@ -1688,7 +2415,10 @@ export class Game {
     d.last = d.day;
     const got = this.earn(dailyPay(d.streak), 6, { quiet: true });
     this.moment(2);
-    this.toast(`Today's drop done: ${job.title}  +$${got.dollars}${d.streak > 1 ? `  ·  ${d.streak} days running` : ""}`, 5);
+    this.toast(
+      `Today's drop done: ${job.title}  +$${got.dollars}${d.streak > 1 ? `  ·  ${d.streak} days running` : ""}`,
+      5,
+    );
     this.persist();
   }
 
@@ -1712,7 +2442,13 @@ export class Game {
     // After the Drop Day a step names what has to happen, how big, and how many times.
     const goal = step?.goal;
     let met = false;
-    if (goal && kind === goal.kind && n >= (goal.n ?? -Infinity) && n <= (goal.max ?? Infinity) && extra >= (goal.extra ?? -Infinity)) {
+    if (
+      goal &&
+      kind === goal.kind &&
+      n >= (goal.n ?? -Infinity) &&
+      n <= (goal.max ?? Infinity) &&
+      extra >= (goal.extra ?? -Infinity)
+    ) {
       this.save.count += 1;
       met = this.save.count >= (goal.times ?? 1);
     }
@@ -1726,18 +2462,46 @@ export class Game {
       this.sound.cheer();
       const next = STORY[this.save.step];
       const to = chapterOf(this.save.step);
-      this.toast(`${step.title}: done${got.dollars ? `  +$${got.dollars}` : ""}  +${got.respect} Respect`, 4);
+      this.toast(
+        `${step.title}: done${got.dollars ? `  +$${got.dollars}` : ""}  +${got.respect} Respect`,
+        4,
+      );
       if (!next) {
         this.moment(3);
-        this.say("K Blanco", "Look at you. Drop Day was the audition. This city has your name on it now.", CAST.kBlanco.portrait, "k-finale");
-        this.say("K Blanco", STORE_REWARD.code ? `One more thing. ${STORE_REWARD.note || "Take this to the real store."}  Code: ${STORE_REWARD.code}` : "The board is yours from here. There is always work in Memphis.", CAST.kBlanco.portrait, STORE_REWARD.code ? "" : "k-board-is-yours");
+        this.say(
+          "K Blanco",
+          "Look at you. Drop Day was the audition. This city has your name on it now.",
+          CAST.kBlanco.portrait,
+          "k-finale",
+        );
+        this.say(
+          "K Blanco",
+          STORE_REWARD.code
+            ? `One more thing. ${STORE_REWARD.note || "Take this to the real store."}  Code: ${STORE_REWARD.code}`
+            : "The board is yours from here. There is always work in Memphis.",
+          CAST.kBlanco.portrait,
+          STORE_REWARD.code ? "" : "k-board-is-yours",
+        );
       } else {
         if (to && from && to.name !== from.name) {
           // A chapter closed.
           this.moment(3);
-          this.say("K Blanco", from.name === "THE DROP DAY" ? "You ran the whole Drop Day. Now the city knows your face. Keep your phone on." : "Half of Memphis is wearing the brand because of you. The other half is about to.", CAST.kBlanco.portrait, from.name === "THE DROP DAY" ? "k-chapter-one" : "k-chapter-two");
+          this.say(
+            "K Blanco",
+            from.name === "THE DROP DAY"
+              ? "You ran the whole Drop Day. Now the city knows your face. Keep your phone on."
+              : "Half of Memphis is wearing the brand because of you. The other half is about to.",
+            CAST.kBlanco.portrait,
+            from.name === "THE DROP DAY" ? "k-chapter-one" : "k-chapter-two",
+          );
         }
-        if (next.who && next.line) this.say(next.who, next.line, next.who === "K Blanco" ? CAST.kBlanco.portrait : null, `step-${next.id}`);
+        if (next.who && next.line)
+          this.say(
+            next.who,
+            next.line,
+            next.who === "K Blanco" ? CAST.kBlanco.portrait : null,
+            `step-${next.id}`,
+          );
         if (next.done === "bought" && this.save.owned.length > 1) this.emit("bought");
         else if (next.done === "wore" && this.save.wearing !== "starter") this.emit("wore");
       }
@@ -1769,7 +2533,12 @@ export class Game {
     if (!this.save.flags.carrying) return;
     this.save.flags.carrying = false;
     this.dialogue.length = 0;
-    this.say("Court OG", "That's the new drop? Lil' man came through. Now let me see that jumper.", null, "og-new-drop");
+    this.say(
+      "Court OG",
+      "That's the new drop? Lil' man came through. Now let me see that jumper.",
+      null,
+      "og-new-drop",
+    );
     this.emit("delivered");
   }
 
@@ -1781,11 +2550,20 @@ export class Game {
   private errand(id: CastId): { label: string; act: () => void } | null {
     const step = STORY[this.save.step];
     if (!step) return null;
-    const owner = step.who ? (Object.keys(CAST) as CastId[]).find((k) => CAST[k].name === step.who) : DROP_DAY_WHO[step.id];
+    const owner = step.who
+      ? (Object.keys(CAST) as CastId[]).find((k) => CAST[k].name === step.who)
+      : DROP_DAY_WHO[step.id];
     if (owner !== id) return null;
     const c = CAST[id];
-    if (step.id === "deliver") return this.save.flags.carrying ? { label: "Hand Court OG the drop", act: () => this.handOff() } : null;
-    if (id === "kBlanco") return { label: this.stepId() === "meet" ? "Talk to K Blanco" : `K Blanco: ${step.title}`, act: () => this.talkK() };
+    if (step.id === "deliver")
+      return this.save.flags.carrying
+        ? { label: "Hand Court OG the drop", act: () => this.handOff() }
+        : null;
+    if (id === "kBlanco")
+      return {
+        label: this.stepId() === "meet" ? "Talk to K Blanco" : `K Blanco: ${step.title}`,
+        act: () => this.talkK(),
+      };
     const line = step.line ?? DROP_DAY_LINES[step.id] ?? step.detail;
     return {
       label: `${c.name}: ${step.title}`,
@@ -1801,13 +2579,28 @@ export class Game {
   private talkK() {
     if (this.stepId() === "crown") {
       if (this.wearing("sackrow_11")) return this.emit("crown");
-      this.say("K Blanco", "Where is the eleven? The fitting room is right there. I'll wait.", CAST.kBlanco.portrait, "k-where-is-the-eleven");
+      this.say(
+        "K Blanco",
+        "Where is the eleven? The fitting room is right there. I'll wait.",
+        CAST.kBlanco.portrait,
+        "k-where-is-the-eleven",
+      );
       return;
     }
     if (this.stepId() === "meet") {
       this.save.flags.carrying = true;
-      this.say("K Blanco", "Fresh off the press. Run this box to Court OG at the 901 Court, up the riverfront.", CAST.kBlanco.portrait, "k-fresh-off-the-press");
-      this.say("K Blanco", "And Benji, everything on these walls is real. Pick a piece, wear it out.", CAST.kBlanco.portrait, "k-on-these-walls");
+      this.say(
+        "K Blanco",
+        "Fresh off the press. Run this box to Court OG at the 901 Court, up the riverfront.",
+        CAST.kBlanco.portrait,
+        "k-fresh-off-the-press",
+      );
+      this.say(
+        "K Blanco",
+        "And Benji, everything on these walls is real. Pick a piece, wear it out.",
+        CAST.kBlanco.portrait,
+        "k-on-these-walls",
+      );
       this.emit("met_k");
       return;
     }
@@ -1839,7 +2632,12 @@ export class Game {
     if (!this.spend(p.cost)) return;
     this.save.owned.push(id);
     if (p.wear && !this.save.outfits.includes(p.wear)) this.save.outfits.push(p.wear);
-    this.toast(p.wear ? `${p.name} is yours. Put it on in the fitting room.` : `${p.name} is yours. Every piece raises your payouts.`, 4);
+    this.toast(
+      p.wear
+        ? `${p.name} is yours. Put it on in the fitting room.`
+        : `${p.name} is yours. Every piece raises your payouts.`,
+      4,
+    );
     this.emit("bought");
     this.persist();
     this.push();
@@ -1898,13 +2696,21 @@ export class Game {
     if (this.room || this.mode === "title") return;
     const riding = this.mode === "drive" || this.mode === "race";
     const free = !paused && (this.mode === "walk" || riding);
-    const got = this.coins.update(this.time, riding ? this.driver.x : this.pos.x, riding ? this.driver.z : this.pos.z, free ? (riding ? 2.6 : 1.35) : 0, this.save.flags);
+    const got = this.coins.update(
+      this.time,
+      riding ? this.driver.x : this.pos.x,
+      riding ? this.driver.z : this.pos.z,
+      free ? (riding ? 2.6 : 1.35) : 0,
+      this.save.flags,
+    );
     this.coinRunLeft -= dt;
     if (this.coinRunLeft <= 0) this.coinRun = 0;
     if (!got) return;
     for (let i = 0; i < got; i++) {
       this.coinRun++;
-      this.earn((5 + Math.min(10, this.coinRun - 1)) * (this.wearing("fresh_blue") ? 2 : 1), 0, { quiet: true });
+      this.earn((5 + Math.min(10, this.coinRun - 1)) * (this.wearing("fresh_blue") ? 2 : 1), 0, {
+        quiet: true,
+      });
       if (STORY[this.save.step]?.goal?.kind === "coin") this.emit("coin", 1);
     }
     this.coinRunLeft = 4;
@@ -1918,8 +2724,17 @@ export class Game {
       this.toast(`Every coin in Memphis. +$${bonus.dollars} and they're back out.`, 5);
     } else if (have % 25 === 0) {
       const bonus = this.earn(60, 3, { quiet: true });
-      this.toast(`${have} coins banked  +$${bonus.dollars} bonus  ·  ${this.coins.left} still out there`, 3.5);
-    } else this.toast(this.coinRun > 1 ? `Coin x${this.coinRun}  +$${5 + Math.min(10, this.coinRun - 1)}   ${have}/${this.coins.total}` : `Coin  +$5   ${have}/${this.coins.total}`, 1.6);
+      this.toast(
+        `${have} coins banked  +$${bonus.dollars} bonus  ·  ${this.coins.left} still out there`,
+        3.5,
+      );
+    } else
+      this.toast(
+        this.coinRun > 1
+          ? `Coin x${this.coinRun}  +$${5 + Math.min(10, this.coinRun - 1)}   ${have}/${this.coins.total}`
+          : `Coin  +$5   ${have}/${this.coins.total}`,
+        1.6,
+      );
   }
 
   /**
@@ -1965,7 +2780,8 @@ export class Game {
     this.sound.bed(1 - this.veliVol);
     // Benji and whoever is standing around catch the beat.
     this.benji.groove = this.veliVol > 0.25 ? v.video.currentTime : -1;
-    for (const n of this.npcs) if (n.id === "mamaDee") n.card.groove = this.veliVol > 0.25 ? v.video.currentTime + 0.3 : -1;
+    for (const n of this.npcs)
+      if (n.id === "mamaDee") n.card.groove = this.veliVol > 0.25 ? v.video.currentTime + 0.3 : -1;
   }
 
   redeem(id: string) {
@@ -2163,7 +2979,8 @@ export class Game {
   private runSkyShows(dt: number, paused: boolean) {
     const ns = this.nightShow;
     const phase = this.sky.phase;
-    const about = !this.calm && !this.room && !this.intro && (this.mode === "walk" || this.mode === "drive");
+    const about =
+      !this.calm && !this.room && !this.intro && (this.mode === "walk" || this.mode === "drive");
     if (phase !== ns.was) {
       if (phase === "night" && ns.was !== "" && about && this.weather.rain < 0.2) {
         ns.left = 15;
@@ -2178,7 +2995,11 @@ export class Game {
       if (ns.next <= 0 && !this.room) {
         ns.next = 0.9 + Math.random() * 0.7;
         // Out over the water, wherever on the bank he is standing.
-        _v.set(-70 + Math.random() * 190 - this.camera.position.x, 0, -300 - this.camera.position.z).normalize();
+        _v.set(
+          -70 + Math.random() * 190 - this.camera.position.x,
+          0,
+          -300 - this.camera.position.z,
+        ).normalize();
         this.fireworks.show(this.camera.position, _v, this.stage.quality === "low" ? 1 : 2);
       }
     }
@@ -2202,19 +3023,41 @@ export class Game {
         const geo = new THREE.RingGeometry(inner, outer, 72, 1, 0, Math.PI);
         const pos = geo.attributes.position!;
         const uv = geo.attributes.uv!;
-        for (let i = 0; i < pos.count; i++) uv.setXY(i, 0.5, (Math.hypot(pos.getX(i), pos.getY(i)) - inner) / (outer - inner));
+        for (let i = 0; i < pos.count; i++)
+          uv.setXY(i, 0.5, (Math.hypot(pos.getX(i), pos.getY(i)) - inner) / (outer - inner));
         const bands = document.createElement("canvas");
         bands.width = 4;
         bands.height = 64;
         const c = bands.getContext("2d")!;
         const grad = c.createLinearGradient(0, 64, 0, 0);
-        const cols = ["rgba(150,60,220,0)", "rgba(150,60,220,1)", "rgba(60,90,255,1)", "rgba(40,200,120,1)", "rgba(250,230,60,1)", "rgba(255,140,40,1)", "rgba(255,50,50,1)", "rgba(255,50,50,0)"];
+        const cols = [
+          "rgba(150,60,220,0)",
+          "rgba(150,60,220,1)",
+          "rgba(60,90,255,1)",
+          "rgba(40,200,120,1)",
+          "rgba(250,230,60,1)",
+          "rgba(255,140,40,1)",
+          "rgba(255,50,50,1)",
+          "rgba(255,50,50,0)",
+        ];
         cols.forEach((col, i) => grad.addColorStop(i / (cols.length - 1), col));
         c.fillStyle = grad;
         c.fillRect(0, 0, 4, 64);
         const map = new THREE.CanvasTexture(bands);
         map.colorSpace = THREE.SRGBColorSpace;
-        rb.mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map, transparent: true, opacity: 0, depthWrite: false, fog: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, toneMapped: false }));
+        rb.mesh = new THREE.Mesh(
+          geo,
+          new THREE.MeshBasicMaterial({
+            map,
+            transparent: true,
+            opacity: 0,
+            depthWrite: false,
+            fog: false,
+            side: THREE.DoubleSide,
+            blending: THREE.AdditiveBlending,
+            toneMapped: false,
+          }),
+        );
         rb.mesh.position.set(30, -12, -430);
         rb.mesh.renderOrder = -5;
         this.city.exterior.add(rb.mesh);
@@ -2326,6 +3169,32 @@ export class Game {
     this.push();
   }
 
+  /** Up the tower and off the top of Geronimo. */
+  rideGeronimo() {
+    this.transition(() => {
+      this.begin(this.geronimo, "whack");
+      this.geronimo.start();
+    });
+  }
+
+  /** Five dollars at the rental counter, laced up, and out on the floor. */
+  rentSkates() {
+    if (!this.spend(5)) return;
+    this.troupes.rink?.serveAt(this.pos.x, this.pos.z);
+    this.transition(() => {
+      this.begin(this.skate, "whack");
+      this.skate.start();
+    });
+  }
+
+  snackBar() {
+    if (!this.spend(4)) return;
+    this.fedUntil = Math.max(this.fedUntil, this.time + 150);
+    this.troupes.rink?.serveAt(this.pos.x, this.pos.z);
+    this.toast("Nachos with the cheese pump and a blue slushie. Rink food.", 4);
+    this.push();
+  }
+
   barTea() {
     if (!this.spend(4)) return;
     this.fedUntil = Math.max(this.fedUntil, this.time + 150);
@@ -2342,7 +3211,12 @@ export class Game {
     const first = this.time - this.tipped > 240;
     this.tipped = this.time;
     if (first) this.earn(0, 2, { quiet: true });
-    this.toast(first ? "The singer points Benji out to the whole square: \"That's SackReligious right there!\"" : "The guitar man tips his hat.", 4.5);
+    this.toast(
+      first
+        ? 'The singer points Benji out to the whole square: "That\'s SackReligious right there!"'
+        : "The guitar man tips his hat.",
+      4.5,
+    );
     this.push();
   }
 
@@ -2358,7 +3232,8 @@ export class Game {
 
   /** The music for where he is, most wanted first: whichever of these has been recorded plays. */
   private tracks(): string[] {
-    const city = this.sky.phase === "night" ? ["city-night", "city-day"] : ["city-day", "city-night"];
+    const city =
+      this.sky.phase === "night" ? ["city-night", "city-day"] : ["city-day", "city-night"];
     if (this.mode === "title" || this.intro) return ["title", ...city];
     if (this.mode === "race") return ["race", "radio", ...city];
     if (this.mode === "hoops") return ["court", ...city];
@@ -2366,12 +3241,17 @@ export class Game {
     if (this.place === "fun" || this.place === "laser") return ["funhouse", ...city];
     if (this.place === "hq") return ["hq", ...city];
     if (this.place === "club") return [this.clubSong.id, "club", ...city];
+    if (this.place === "rink") return ["jook", ...city];
     if (this.mode === "fish") return ["river", ...city];
     if (this.mode === "drive") return ["radio", ...city];
     // By the cypher its speaker is all anybody hears.
     if (!this.room && this.toCypher() < 14) return ["jook", "beale", ...city];
     // On Beale, and anywhere the band in Handy Park can be heard.
-    if (!this.room && (districtAt(this.pos.x, this.pos.z) === "Beale Street" || this.toStage() < 52)) return ["beale", ...city];
+    if (
+      !this.room &&
+      (districtAt(this.pos.x, this.pos.z) === "Beale Street" || this.toStage() < 52)
+    )
+      return ["beale", ...city];
     return city;
   }
 
@@ -2411,7 +3291,13 @@ export class Game {
     const s = this.save;
     const rung = rankOf(s.respect).index;
     return {
-      postcards: POSTCARDS.map((c) => ({ id: c.id, name: c.name, hint: c.hint, img: postcardImg(c.id), got: !!s.flags[`card_${c.id}`] })),
+      postcards: POSTCARDS.map((c) => ({
+        id: c.id,
+        name: c.name,
+        hint: c.hint,
+        img: postcardImg(c.id),
+        got: !!s.flags[`card_${c.id}`],
+      })),
       fish: FISH.map((f) => ({ ...f, best: s.best[`fish_${f.id}`] ?? 0 })),
       ranks: RANKS.map((r, i) => ({ name: r.name, at: r.at, badge: rankBadge(i), got: i <= rung })),
     };
@@ -2425,7 +3311,8 @@ export class Game {
       s.z = this.pos.z;
       s.heading = this.heading;
     }
-    if (this.mode === "walk" || this.mode === "drive") s.car = { x: this.driver.x, z: this.driver.z, heading: this.driver.heading };
+    if (this.mode === "walk" || this.mode === "drive")
+      s.car = { x: this.driver.x, z: this.driver.z, heading: this.driver.heading };
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(s));
       this.hasSave = true;
@@ -2449,7 +3336,12 @@ export class Game {
       this.city.exterior.remove(old.group);
     }
     if (this.lite.on) this.lite.apply(car.group, true);
-    this.tune = { top: STREET.top * ride.top, accel: STREET.accel * ride.accel, boostTop: STREET.boostTop * ride.top, grip: STREET.grip * ride.grip };
+    this.tune = {
+      top: STREET.top * ride.top,
+      accel: STREET.accel * ride.accel,
+      boostTop: STREET.boostTop * ride.top,
+      grip: STREET.grip * ride.grip,
+    };
     return car;
   }
 
@@ -2529,7 +3421,18 @@ export class Game {
     const m = this.input.move();
     const gas = this.input.throttle();
     const d = this.driver;
-    d.step(dt, { throttle: gas, steer: m.x, handbrake: this.input.down("action"), boost: false, slide: true }, this.tune, this.city.carSolids);
+    d.step(
+      dt,
+      {
+        throttle: gas,
+        steer: m.x,
+        handbrake: this.input.down("action"),
+        boost: false,
+        slide: true,
+      },
+      this.tune,
+      this.city.carSolids,
+    );
     for (const c of this.traffic.list()) {
       const hit = d.bump(c.x, c.z, c.radius);
       if (hit > 2.5) {
@@ -2557,10 +3460,15 @@ export class Game {
           const pts = Math.round(dr.pts);
           const best = this.save.best.drift ?? 0;
           if (pts > best) this.save.best.drift = pts;
-          const paid = this.earn(Math.min(40, Math.round(pts / 25)), pts >= 400 ? 1 : 0, { quiet: true });
+          const paid = this.earn(Math.min(40, Math.round(pts / 25)), pts >= 400 ? 1 : 0, {
+            quiet: true,
+          });
           this.sound.cash();
           this.buzz(25);
-          this.toast(`DRIFT ${pts}${pts > best && best > 0 ? "  ·  your longest" : ""}  +$${paid.dollars}`, 2.4);
+          this.toast(
+            `DRIFT ${pts}${pts > best && best > 0 ? "  ·  your longest" : ""}  +$${paid.dollars}`,
+            2.4,
+          );
         }
         dr.pts = 0;
       }
@@ -2600,7 +3508,14 @@ export class Game {
   }
 
   /** Chase camera behind a car. Shared with the races. */
-  chaseCar(dt: number, d: Driver, back: number, up: number, snap = false, solids: Solid[] = this.city.carSolids) {
+  chaseCar(
+    dt: number,
+    d: Driver,
+    back: number,
+    up: number,
+    snap = false,
+    solids: Solid[] = this.city.carSolids,
+  ) {
     this.camYaw = snap ? d.heading : dampAngle(this.camYaw, d.heading, damp(4.2, dt));
     this.camYaw = wrapAngle(this.camYaw - this.input.takeLook() * 0.6);
     const fx = Math.sin(this.camYaw);
@@ -2636,7 +3551,8 @@ export class Game {
       this.lookIdle = 0;
     } else this.lookIdle += dt;
     // A and D swing the camera as well as strafing, so holding one walks an arc that way.
-    if (!talking && m.y > -0.3 && Math.abs(m.x) > 0.1) this.camYaw = wrapAngle(this.camYaw - m.x * 1.55 * dt);
+    if (!talking && m.y > -0.3 && Math.abs(m.x) > 0.1)
+      this.camYaw = wrapAngle(this.camYaw - m.x * 1.55 * dt);
     const fx = Math.sin(this.camYaw);
     const fz = Math.cos(this.camYaw);
     const wx = talking ? 0 : (fx * m.y - fz * m.x) * top;
@@ -2655,9 +3571,11 @@ export class Game {
       pushCircle(this.pos, 0.36, d.x - hx * 1.1, d.z - hz * 1.1, 1.05);
       for (const c of this.traffic.list()) pushCircle(this.pos, 0.36, c.x, c.z, 1.5);
     }
-    for (const n of this.npcs) if (n.place === this.place) pushCircle(this.pos, 0.36, n.x, n.z, 0.4);
+    for (const n of this.npcs)
+      if (n.place === this.place) pushCircle(this.pos, 0.36, n.x, n.z, 0.4);
     const speed = Math.hypot(this.vel.x, this.vel.z);
-    if (speed > 0.4) this.heading = dampAngle(this.heading, Math.atan2(this.vel.x, this.vel.z), damp(14, dt));
+    if (speed > 0.4)
+      this.heading = dampAngle(this.heading, Math.atan2(this.vel.x, this.vel.z), damp(14, dt));
     this.benji.speed = speed;
     if (speed > 1) {
       this.stepClock += (speed * dt) / 0.82;
@@ -2683,7 +3601,11 @@ export class Game {
     this.nearSpot = best;
     // No door or counter in reach: is there somebody to speak to?
     const who = best ? null : this.someone();
-    const name = !who ? "" : who.doing === "cast" ? CAST[who.key as CastId].name : nameOf(who.key, who.card.face.includes("female"));
+    const name = !who
+      ? ""
+      : who.doing === "cast"
+        ? CAST[who.key as CastId].name
+        : nameOf(who.key, who.card.face.includes("female"));
     const job = who && who.doing === "cast" ? this.errand(who.key as CastId) : null;
     const label = best ? best.label() : job ? job.label : who ? `Talk to ${name}` : "";
     if (label !== this.prompt) {
@@ -2696,7 +3618,8 @@ export class Game {
         this.dialogue.length = 0;
         best.act();
       } else if (job && !this.afterFade) job.act();
-      else if (who && !this.afterFade && (!this.dialogue.length || this.dialogue[0]!.who === name)) this.talkTo(who, name);
+      else if (who && !this.afterFade && (!this.dialogue.length || this.dialogue[0]!.who === name))
+        this.talkTo(who, name);
       else if (this.dialogue.length) this.nextLine();
     }
     this.chase(dt);
@@ -2718,15 +3641,35 @@ export class Game {
       const b = room.bounds;
       const cx = tx - fx * want;
       const cz = tz - fz * want;
-      if (fx !== 0) t = Math.min(t, cx < b.minX + 0.4 ? (tx - b.minX - 0.4) / (fx * want) : cx > b.maxX - 0.4 ? (tx - b.maxX + 0.4) / (fx * want) : 1);
-      if (fz !== 0) t = Math.min(t, cz < b.minZ + 0.4 ? (tz - b.minZ - 0.4) / (fz * want) : cz > b.maxZ - 0.4 ? (tz - b.maxZ + 0.4) / (fz * want) : 1);
+      if (fx !== 0)
+        t = Math.min(
+          t,
+          cx < b.minX + 0.4
+            ? (tx - b.minX - 0.4) / (fx * want)
+            : cx > b.maxX - 0.4
+              ? (tx - b.maxX + 0.4) / (fx * want)
+              : 1,
+        );
+      if (fz !== 0)
+        t = Math.min(
+          t,
+          cz < b.minZ + 0.4
+            ? (tz - b.minZ - 0.4) / (fz * want)
+            : cz > b.maxZ - 0.4
+              ? (tz - b.maxZ + 0.4) / (fz * want)
+              : 1,
+        );
     }
     const goal = want * clamp(t, 0.3, 1);
     this.boom = snap || goal < this.boom ? goal : this.boom + (goal - this.boom) * damp(3, dt);
     // Squeezed against a wall: go up and look down instead of sitting in his hair.
     const near = 1 - this.boom / want;
     const y0 = (room ? room.floorY : this.benji.group.position.y) + 1.25;
-    _v.set(tx - fx * this.boom, y0 + (room ? Math.min(0.95, v.up) : v.up) + near * (room ? 1.3 : 1.7), tz - fz * this.boom);
+    _v.set(
+      tx - fx * this.boom,
+      y0 + (room ? Math.min(0.95, v.up) : v.up) + near * (room ? 1.3 : 1.7),
+      tz - fz * this.boom,
+    );
     if (snap) this.camera.position.copy(_v);
     else this.camera.position.lerp(_v, damp(14, dt));
     // Indoors the lens looks more level, so the walls are in the picture and not just the floor.
@@ -2828,7 +3771,16 @@ export class Game {
         this.rankUp = null;
         this.moment(2);
         this.sound.voice("call-rank-up");
-        this.reveal({ img: rankBadge(RANKS.findIndex((r) => r.name === name)), kicker: "New name in Memphis", title: name, sub: "Every job pays more.", round: true }, 5.5);
+        this.reveal(
+          {
+            img: rankBadge(RANKS.findIndex((r) => r.name === name)),
+            kicker: "New name in Memphis",
+            title: name,
+            sub: "Every job pays more.",
+            round: true,
+          },
+          5.5,
+        );
       }
     }
     if (this.overlay === "photo") this.photoCamera();
@@ -2851,7 +3803,10 @@ export class Game {
     // His fist: held for the camera, or up for a moment after a win while he is standing about.
     if (this.fistLeft > 0) this.fistLeft -= dt;
     if (!this.activity) {
-      const fist = this.overlay === "photo" ? this.posing : this.fistLeft > 0 && this.mode === "walk" && this.benji.speed < 0.6;
+      const fist =
+        this.overlay === "photo"
+          ? this.posing
+          : this.fistLeft > 0 && this.mode === "walk" && this.benji.speed < 0.6;
       if (fist) this.benji.pose = "cheer";
       else if (this.benji.pose === "cheer") this.benji.pose = null;
     }
@@ -2875,7 +3830,12 @@ export class Game {
       // Whoever has the floor is drawn mid-sentence.
       n.card.pose = speaker === CAST[n.id].name ? "talk" : null;
       n.card.heading = dampAngle(n.card.heading, want, damp(5, dt));
-      n.card.update(dt, cam, this.tint, n.place === "street" ? null : this.rooms[n.place].floorY + 0.03);
+      n.card.update(
+        dt,
+        cam,
+        this.tint,
+        n.place === "street" ? null : this.rooms[n.place].floorY + 0.03,
+      );
     }
     // Friends keep moving whatever is open on this screen.
     this.crew.update(dt);
@@ -2891,6 +3851,10 @@ export class Game {
       if (live) {
         this.clubBand.update(dt, cam, this.tint, cb, this.leadOf(this.clubSong.id, cb));
         this.rooms.club.pulse(cb);
+      }
+      if (this.place === "rink") {
+        this.rinkCrowd.update(dt, cam, this.tint);
+        this.rooms.rink.pulse(this.sound.beat(), this.time);
       }
       if (this.place === "bowl") {
         for (const b of this.laneBalls) {
@@ -2915,14 +3879,28 @@ export class Game {
     this.sky.flash = out ? wx.flash : 0;
     _v.set(this.pos.x, 0, this.pos.z);
     this.sky.update(paused ? dt * 0.2 : dt, _v, this.camera);
-    this.rain.update(dt, this.camera, out ? wx.rain : 0, this.stage.quality === "high" ? 1 : this.stage.quality === "medium" ? 0.65 : 0.36, look.lights, this.stage.renderer.domElement.width, this.stage.renderer.domElement.height);
+    this.rain.update(
+      dt,
+      this.camera,
+      out ? wx.rain : 0,
+      this.stage.quality === "high" ? 1 : this.stage.quality === "medium" ? 0.65 : 0.36,
+      look.lights,
+      this.stage.renderer.domElement.width,
+      this.stage.renderer.domElement.height,
+    );
     this.sound.setRain(this.mode === "title" ? 0 : wx.rain, !out);
     if (out) {
       this.city.update(dt, this.time);
       this.skyShow.update(paused ? 0 : dt, this.time, look.lights);
       if (!paused) {
-        const blockers = this.mode === "walk" ? [{ x: this.pos.x, z: this.pos.z, radius: 0.5, speed: 0 }] : [];
-        blockers.push({ x: this.driver.x, z: this.driver.z, radius: 1.4, speed: this.driver.speed });
+        const blockers =
+          this.mode === "walk" ? [{ x: this.pos.x, z: this.pos.z, radius: 0.5, speed: 0 }] : [];
+        blockers.push({
+          x: this.driver.x,
+          z: this.driver.z,
+          radius: 1.4,
+          speed: this.driver.speed,
+        });
         this.traffic.update(dt, this.city.signals, blockers, cam);
         this.traffic.setLights(look.lights > 0.4 ? 3 : 0.2);
         const beat = this.veliVol > 0.25 && this.veli ? this.veli.video.currentTime : -1;
@@ -2935,13 +3913,39 @@ export class Game {
           wheels.vz = this.driver.vz;
           wheels.speed = this.driver.speed;
         }
-        this.people.update(dt, cam, this.tint, this.pos, beat, this.city.anchors.trucks.screen.x, this.city.anchors.trucks.screen.z, wheels);
+        this.people.update(
+          dt,
+          cam,
+          this.tint,
+          this.pos,
+          beat,
+          this.city.anchors.trucks.screen.x,
+          this.city.anchors.trucks.screen.z,
+          wheels,
+        );
         // The song only reaches the lot, so only the lot moves to it.
         const reach = this.stage.quality === "low" ? 115 : 150;
-        this.street.update(dt, cam, this.tint, afoot, this.time, Math.hypot(this.pos.x - TRUCKS.x, this.pos.z - TRUCKS.z) < 40 ? beat : -1, reach, wheels);
+        this.street.update(
+          dt,
+          cam,
+          this.tint,
+          afoot,
+          this.time,
+          Math.hypot(this.pos.x - TRUCKS.x, this.pos.z - TRUCKS.z) < 40 ? beat : -1,
+          reach,
+          wheels,
+        );
+        this.outskirts.update(dt, cam, this.tint, afoot, this.time, -1, reach, wheels);
         // The band in Handy Park, and everyone who came out for it.
         const gb = this.beatOf("beale");
-        this.bealeBand.update(dt, cam, this.tint, gb, this.leadOf("beale", gb), Math.abs(cam.x - BEALE_STAGE.x) + Math.abs(cam.z - BEALE_STAGE.z) < reach);
+        this.bealeBand.update(
+          dt,
+          cam,
+          this.tint,
+          gb,
+          this.leadOf("beale", gb),
+          Math.abs(cam.x - BEALE_STAGE.x) + Math.abs(cam.z - BEALE_STAGE.z) < reach,
+        );
         this.gig.update(dt, cam, this.tint, afoot, this.time, gb / 1.58, reach, wheels);
       }
       this.city.glow.apply(look.lights, look.roadRough * (1 - 0.66 * wx.wet), wx.wet);
@@ -2975,7 +3979,14 @@ export class Game {
     this.updateVeli(dt);
     // Stood in front of a band it is louder, and Benji cannot keep still.
     const heard = this.tracks()[0]!;
-    const near = this.place === "club" ? 1 : heard === "jook" ? clamp(1 - (this.toCypher() - 5) / 9, 0.25, 1) : heard === "beale" ? clamp(1 - (this.toStage() - 12) / 40, 0, 1) : 0;
+    const near =
+      this.place === "club"
+        ? 1
+        : heard === "jook"
+          ? clamp(1 - (this.toCypher() - 5) / 9, 0.25, 1)
+          : heard === "beale"
+            ? clamp(1 - (this.toStage() - 12) / 40, 0, 1)
+            : 0;
     this.sound.live(near);
     if (near > 0.55 && this.mode === "walk") this.benji.groove = this.beatOf(heard) / 1.58;
     else if (this.veliVol <= 0.25) this.benji.groove = -1;
@@ -3010,7 +4021,10 @@ export class Game {
     // A cabinet game covers the screen: draw the room behind it only now and then.
     if (draw) this.skip = this.overlay === "arcade" ? (this.skip + 1) % 12 : 0;
     if (this.skip === 0 && draw && !this.webOn) {
-      this.lite.sync(this.sky.look.hemiSky, this.room ? 0.06 : 0.3 * this.sky.look.hemiPower + 0.05);
+      this.lite.sync(
+        this.sky.look.hemiSky,
+        this.room ? 0.06 : 0.3 * this.sky.look.hemiPower + 0.05,
+      );
       this.stage.render();
     }
 
@@ -3026,7 +4040,11 @@ export class Game {
   private titleCamera(dt: number) {
     this.titleSpin += dt;
     const sway = Math.sin(this.titleSpin * 0.22);
-    this.camera.position.set(-11.9 + sway * 0.5, 1.12 + Math.sin(this.titleSpin * 0.31) * 0.06, -156.6);
+    this.camera.position.set(
+      -11.9 + sway * 0.5,
+      1.12 + Math.sin(this.titleSpin * 0.31) * 0.06,
+      -156.6,
+    );
     _look.set(-19.2 + sway * 0.3, 3.5, HQ.frontZ);
     this.camera.lookAt(_look);
     if (this.camera.fov !== 50) {
@@ -3052,7 +4070,9 @@ export class Game {
     const dist = Math.hypot(t.x - this.pos.x, t.z - this.pos.z);
     this.beam.position.x = t.x;
     this.beam.position.z = t.z;
-    (this.beam.material as THREE.MeshBasicMaterial).opacity = (0.05 + 0.13 * clamp(dist / 80, 0, 1) + Math.sin(this.time * 3) * 0.02) * clamp((dist - 10) / 14, 0, 1);
+    (this.beam.material as THREE.MeshBasicMaterial).opacity =
+      (0.05 + 0.13 * clamp(dist / 80, 0, 1) + Math.sin(this.time * 3) * 0.02) *
+      clamp((dist - 10) / 14, 0, 1);
     _v.set(t.x, 3.4, t.z).project(this.camera);
     let x = _v.x;
     let y = _v.y;
@@ -3109,30 +4129,73 @@ export class Game {
       dollars: s.dollars,
       respect: s.respect,
       tickets: s.tickets,
-      district: this.room ? { hq: "SackReligious HQ", home: "Home", bowl: "901 Bowl", fun: "The Fun House", laser: "Laser Arena", club: "The Memphian" }[this.room.id as Exclude<Place, "street">] : districtAt(this.pos.x, this.pos.z),
+      district: this.room
+        ? {
+            hq: "SackReligious HQ",
+            home: "Home",
+            bowl: "901 Bowl",
+            fun: "The Fun House",
+            laser: "Laser Arena",
+            club: "The Memphian",
+            rink: "Crystal Palace",
+          }[this.room.id as Exclude<Place, "street">]
+        : districtAt(this.pos.x, this.pos.z),
       street: this.room ? "" : nearestStreet(this.pos.x, this.pos.z),
       phase: this.sky.phase,
       rain: this.weather.want > 0,
       ride: s.ride,
       rides: s.rides,
-      daily: { title: today.title, detail: today.detail, done: s.daily.done, streak: s.daily.streak, pay: dailyPay(s.daily.streak + (s.daily.done ? 0 : 1)) },
+      daily: {
+        title: today.title,
+        detail: today.detail,
+        done: s.daily.done,
+        streak: s.daily.streak,
+        pay: dailyPay(s.daily.streak + (s.daily.done ? 0 : 1)),
+      },
       table: this.overlay === "table" ? this.board.hud() : null,
       crew: this.crew.hud(),
       account: this.account.hud(),
       invite: this.board.inviteHud(),
-      postcards: { got: POSTCARDS.filter((c) => s.flags[`card_${c.id}`]).length, total: POSTCARDS.length, next: nextCard ? `${nextCard.name}, ${nextCard.hint}` : "" },
+      postcards: {
+        got: POSTCARDS.filter((c) => s.flags[`card_${c.id}`]).length,
+        total: POSTCARDS.length,
+        next: nextCard ? `${nextCard.name}, ${nextCard.hint}` : "",
+      },
       rank: rankOf(s.respect),
       mission: step
-        ? { chapter: chapter?.name ?? "", index: chapter?.index ?? 1, total: chapter?.total ?? 1, title: step.title, detail: step.goal?.times ? `${step.detail}  ${Math.min(s.count, step.goal.times)}/${step.goal.times}` : step.detail }
-        : { chapter: "BOUNTY BOARD", index: (s.bounty % BOUNTIES.length) + 1, total: BOUNTIES.length, title: bounty.title, detail: `${bounty.detail}  $${bounty.pay}` },
-      prompt: this.overlay ? "" : this.mode === "walk" ? this.prompt : this.mode === "drive" ? this.drivePrompt : "",
+        ? {
+            chapter: chapter?.name ?? "",
+            index: chapter?.index ?? 1,
+            total: chapter?.total ?? 1,
+            title: step.title,
+            detail: step.goal?.times
+              ? `${step.detail}  ${Math.min(s.count, step.goal.times)}/${step.goal.times}`
+              : step.detail,
+          }
+        : {
+            chapter: "BOUNTY BOARD",
+            index: (s.bounty % BOUNTIES.length) + 1,
+            total: BOUNTIES.length,
+            title: bounty.title,
+            detail: `${bounty.detail}  $${bounty.pay}`,
+          },
+      prompt: this.overlay
+        ? ""
+        : this.mode === "walk"
+          ? this.prompt
+          : this.mode === "drive"
+            ? this.drivePrompt
+            : "",
       hints,
       dialogue: d ? { who: d.who, text: d.text, portrait: d.portrait } : null,
       toast: this.toastText,
       reveal: this.revealNow,
       pose: { can: this.benji.has("cheer"), on: this.posing },
       album: this.overlay === "album" ? this.albumHud() : null,
-      buff: this.time < this.fedUntil ? `Well fed  +10% pay  ${Math.ceil((this.fedUntil - this.time) / 60)}m` : "",
+      buff:
+        this.time < this.fedUntil
+          ? `Well fed  +10% pay  ${Math.ceil((this.fedUntil - this.time) / 60)}m`
+          : "",
       wearing: s.wearing,
       outfits: [...s.outfits],
       owned: [...s.owned],
@@ -3157,7 +4220,15 @@ export class Game {
       shopFocus: this.shopFocus,
       cabinet: this.cabinet,
       foodAt: this.foodAt,
-      settings: { quality: this.stage.quality, auto: this.auto, music: this.sound.musicOn, sfx: this.sound.sfxOn, clock: this.sky.auto, buzz: this.buzzOn, view: VIEWS[this.view]!.name },
+      settings: {
+        quality: this.stage.quality,
+        auto: this.auto,
+        music: this.sound.musicOn,
+        sfx: this.sound.sfxOn,
+        clock: this.sky.auto,
+        buzz: this.buzzOn,
+        view: VIEWS[this.view]!.name,
+      },
       cinema: this.cinema,
       hasSave: this.hasSave && s.step > 0,
       storyDone: !step,
@@ -3166,7 +4237,14 @@ export class Game {
     };
     this.activity?.hud(h);
     // The announcer reads the big calls out as they come up.
-    const call = h.hoops?.call || h.bowl?.call || h.fish?.call || h.race?.call || h.laser?.call || h.machine?.call || "";
+    const call =
+      h.hoops?.call ||
+      h.bowl?.call ||
+      h.fish?.call ||
+      h.race?.call ||
+      h.laser?.call ||
+      h.machine?.call ||
+      "";
     if (call !== this.lastCall) {
       this.lastCall = call;
       const hit = call ? CALLS.find(([re]) => re.test(call)) : undefined;

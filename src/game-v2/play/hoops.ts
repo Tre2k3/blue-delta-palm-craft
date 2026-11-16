@@ -7,6 +7,9 @@ import type { Activity, Game } from "../game";
 import { basketballTex } from "../gfx/tex";
 import { COURT, CURB } from "../world/map";
 
+/** The court a game is on: its middle and half sizes. */
+export type CourtShape = { cx: number; cz: number; halfW: number; halfL: number };
+
 const G = 9.81;
 const BALL_R = 0.12;
 const TUBE = 0.02;
@@ -66,7 +69,19 @@ export class Hoops implements Activity {
   ];
   kind: HoopsKind = "shootout";
   /** The other player: where he is, where he is headed, and how far into his jumper he is. */
-  private rival = { card: null as Card | null, tier: 0, name: "", skill: 0.5, score: 0, wait: 0, x: 0, z: 0, tx: 0, tz: 0, jump: 0 };
+  private rival = {
+    card: null as Card | null,
+    tier: 0,
+    name: "",
+    skill: 0.5,
+    score: 0,
+    wait: 0,
+    x: 0,
+    z: 0,
+    tx: 0,
+    tz: 0,
+    jump: 0,
+  };
   /** Versus: whose shot it is. "air" is a ball on its way, "next" the pause between rounds. */
   private turn: "you" | "rival" | "air" | "next" = "you";
   private shotClock = 0;
@@ -119,39 +134,90 @@ export class Hoops implements Activity {
   /** The other player taking it to the rim: on from the moment he sets off, `t` from when he leaves the floor. */
   private drive = { on: false, t: 0, done: false };
 
+  /** Where the game is: the 901 Court on the river, or the courts on Mt. Moriah. */
+  private court: CourtShape = COURT;
+
   constructor(private g: Game) {
     const hoops = g.city.hoops;
     const i = hoops[0]!.z < hoops[1]!.z ? 0 : 1;
     this.hoop = hoops[i]!;
     this.net = g.city.nets[i]!;
     const geo = new THREE.SphereGeometry(BALL_R, 20, 14);
-    const mat = new THREE.MeshStandardMaterial({ map: basketballTex(), roughness: 0.75, emissive: 0x8a3a12, emissiveIntensity: 0.55 });
+    const mat = new THREE.MeshStandardMaterial({
+      map: basketballTex(),
+      roughness: 0.75,
+      emissive: 0x8a3a12,
+      emissiveIntensity: 0.55,
+    });
     this.ballMat = mat;
     for (let k = 0; k < 3; k++) {
       const mesh = new THREE.Mesh(geo, mat);
       mesh.castShadow = true;
       mesh.visible = false;
       this.group.add(mesh);
-      this.balls.push({ mesh, live: false, p: new THREE.Vector3(), v: new THREE.Vector3(), spin: 0, rim: false, board: false, scored: false, judged: false, points: 2, bounces: 0, age: 0, error: 0, dunk: false, who: 0, hot: false });
+      this.balls.push({
+        mesh,
+        live: false,
+        p: new THREE.Vector3(),
+        v: new THREE.Vector3(),
+        spin: 0,
+        rim: false,
+        board: false,
+        scored: false,
+        judged: false,
+        points: 2,
+        bounces: 0,
+        age: 0,
+        error: 0,
+        dunk: false,
+        who: 0,
+        hot: false,
+      });
     }
     this.hand = new THREE.Mesh(geo, mat);
     this.hand.castShadow = true;
     this.group.add(this.hand);
     this.ring = new THREE.Mesh(
       new THREE.RingGeometry(0.75, 1.05, 32),
-      new THREE.MeshBasicMaterial({ color: 0xffa23a, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 }),
+      new THREE.MeshBasicMaterial({
+        color: 0xffa23a,
+        transparent: true,
+        opacity: 0.7,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -6,
+        polygonOffsetUnits: -6,
+      }),
     );
     this.ring.rotation.x = -Math.PI / 2;
     this.ring.renderOrder = 3;
     this.group.add(this.ring);
     const tg = new THREE.BufferGeometry();
     tg.setAttribute("position", new THREE.BufferAttribute(this.trailPos, 3));
-    this.trail = new THREE.Line(tg, new THREE.LineBasicMaterial({ color: new THREE.Color(2.4, 1.3, 0.35), transparent: true, opacity: 0.85, toneMapped: false }));
+    this.trail = new THREE.Line(
+      tg,
+      new THREE.LineBasicMaterial({
+        color: new THREE.Color(2.4, 1.3, 0.35),
+        transparent: true,
+        opacity: 0.85,
+        toneMapped: false,
+      }),
+    );
     this.trail.frustumCulled = false;
     this.trail.visible = false;
     this.group.add(this.trail);
     this.group.visible = false;
     g.city.exterior.add(this.group);
+  }
+
+  /** Move the game to another court: its shape, the hoop played at (the north one), and that hoop's net. */
+  useCourt(court: CourtShape, hoops: Hoop[], nets: THREE.Mesh[]) {
+    const i = hoops[0]!.z < hoops[1]!.z ? 0 : 1;
+    this.court = court;
+    this.hoop = hoops[i]!;
+    this.net = nets[i]!;
   }
 
   start(kind: HoopsKind = this.kind) {
@@ -176,7 +242,7 @@ export class Hoops implements Activity {
       b.live = false;
       b.mesh.visible = false;
     }
-    g.pos.x = COURT.cx;
+    g.pos.x = this.court.cx;
     g.pos.z = this.hoop.z + 5.2;
     this.moveSpot();
     const r = this.rival;
@@ -203,7 +269,11 @@ export class Hoops implements Activity {
       this.round();
       this.say(`${r.name}: "${who.line}"  First to ${TO}.`, 3.2);
       g.sound.voice(`rival-${r.name.toLowerCase().replace(/[^a-z]+/g, "-")}`);
-    } else this.say(kind === "practice" ? "Practice. No clock, no pressure." : "Shoot to start the clock", 6);
+    } else
+      this.say(
+        kind === "practice" ? "Practice. No clock, no pressure." : "Shoot to start the clock",
+        6,
+      );
     this.frame(0, true);
   }
 
@@ -230,7 +300,13 @@ export class Hoops implements Activity {
     this.g.vel.x = this.g.vel.z = 0;
     this.contest.result = "";
     this.contest.at = -9;
-    if (Math.max(this.score, r.score) >= TO - 3) this.say(this.score >= TO - 3 && this.score >= r.score ? "GAME POINT" : `GAME POINT, ${r.name.toUpperCase()}`, 1.3);
+    if (Math.max(this.score, r.score) >= TO - 3)
+      this.say(
+        this.score >= TO - 3 && this.score >= r.score
+          ? "GAME POINT"
+          : `GAME POINT, ${r.name.toUpperCase()}`,
+        1.3,
+      );
     this.g.push();
   }
 
@@ -270,9 +346,19 @@ export class Hoops implements Activity {
   }
 
   /** Throw a ball from where a player stands. `e` is how far off the perfect release it was. */
-  private throwBall(who: 0 | 1, px: number, pz: number, e: number, half: number, speed: number, height: number, hot: boolean) {
+  private throwBall(
+    who: 0 | 1,
+    px: number,
+    pz: number,
+    e: number,
+    half: number,
+    speed: number,
+    height: number,
+    hot: boolean,
+  ) {
     const h = this.hoop;
-    const ball = this.balls.find((b) => !b.live) ?? this.balls.reduce((a, b) => (a.age > b.age ? a : b));
+    const ball =
+      this.balls.find((b) => !b.live) ?? this.balls.reduce((a, b) => (a.age > b.age ? a : b));
     const heading = Math.atan2(h.x - px, h.z - pz);
     const sx = px + Math.sin(heading) * 0.25;
     const sz = pz + Math.cos(heading) * 0.25;
@@ -285,12 +371,20 @@ export class Hoops implements Activity {
     const rise = h.y - (FLOOR + y0);
     const v2 = (G * d * d) / (2 * Math.cos(theta) ** 2 * Math.max(0.2, d * Math.tan(theta) - rise));
     const perfect = Math.abs(e) <= half;
-    const factor = 1 + (perfect ? e * 0.035 : outside * 0.6 + Math.sign(e) * 0.012) + (Math.random() - 0.5) * 0.006;
+    const factor =
+      1 +
+      (perfect ? e * 0.035 : outside * 0.6 + Math.sign(e) * 0.012) +
+      (Math.random() - 0.5) * 0.006;
     const v = Math.sqrt(v2) * factor;
-    const side = (Math.random() + Math.random() - 1) * (0.004 + Math.abs(outside) * 0.3 + speed * 0.0035);
+    const side =
+      (Math.random() + Math.random() - 1) * (0.004 + Math.abs(outside) * 0.3 + speed * 0.0035);
     const yaw = Math.atan2(h.x - sx, h.z - sz) + side;
     ball.p.set(sx, FLOOR + y0, sz);
-    ball.v.set(Math.sin(yaw) * Math.cos(theta) * v, Math.sin(theta) * v, Math.cos(yaw) * Math.cos(theta) * v);
+    ball.v.set(
+      Math.sin(yaw) * Math.cos(theta) * v,
+      Math.sin(theta) * v,
+      Math.cos(yaw) * Math.cos(theta) * v,
+    );
     ball.live = true;
     ball.mesh.visible = true;
     ball.rim = ball.board = ball.scored = ball.judged = false;
@@ -312,8 +406,18 @@ export class Hoops implements Activity {
     const g = this.g;
     const far = Math.hypot(this.hoop.x - g.pos.x, this.hoop.z - g.pos.z);
     const w = this.window(far);
-    const hot = this.kind === "shootout" && Math.hypot(g.pos.x - this.spot.x, g.pos.z - this.spot.z) < 1.15;
-    const pure = this.throwBall(0, g.pos.x, g.pos.z, this.charge - 0.8, w.half, Math.hypot(g.vel.x, g.vel.z), BENJI_HEIGHT + this.jump, hot);
+    const hot =
+      this.kind === "shootout" && Math.hypot(g.pos.x - this.spot.x, g.pos.z - this.spot.z) < 1.15;
+    const pure = this.throwBall(
+      0,
+      g.pos.x,
+      g.pos.z,
+      this.charge - 0.8,
+      w.half,
+      Math.hypot(g.vel.x, g.vel.z),
+      BENJI_HEIGHT + this.jump,
+      hot,
+    );
     this.shots++;
     this.started = true;
     this.cool = 0.55;
@@ -340,14 +444,30 @@ export class Hoops implements Activity {
     // that there is a hand in the shooter's face; down again, or too far off, and the look is open.
     const since = g.time - this.contest.at;
     const near = Math.hypot(g.pos.x - this.spot.x, g.pos.z - this.spot.z) < 2.6;
-    const result = !near || since < 0.06 || since > 0.46 ? "" : since >= 0.21 && since <= 0.29 ? "block" : "hand";
+    const result =
+      !near || since < 0.06 || since > 0.46
+        ? ""
+        : since >= 0.21 && since <= 0.29
+          ? "block"
+          : "hand";
     this.contest.result = result;
     // A man who went for the fake is no defence at all: the shooter has all day.
-    const good = result !== "block" && Math.random() < r.skill * (result === "hand" ? 0.6 : this.bit ? 1.15 : 1);
-    const e = good ? (Math.random() - 0.5) * half * 1.5 : (Math.random() < 0.5 ? -1 : 1) * (half + 0.035 + Math.random() * 0.11);
+    const good =
+      result !== "block" &&
+      Math.random() < r.skill * (result === "hand" ? 0.6 : this.bit ? 1.15 : 1);
+    const e = good
+      ? (Math.random() - 0.5) * half * 1.5
+      : (Math.random() < 0.5 ? -1 : 1) * (half + 0.035 + Math.random() * 0.11);
     // An open look that was going in anyway: now and then the better players take it to the rim
     // instead. It counts two wherever he set off from, so from outside the arc it costs him a point.
-    if (good && result === "" && r.tier >= 1 && far <= 8 && r.card?.has("dunk") && Math.random() < 0.25) {
+    if (
+      good &&
+      result === "" &&
+      r.tier >= 1 &&
+      far <= 8 &&
+      r.card?.has("dunk") &&
+      Math.random() < 0.25
+    ) {
       this.drive = { on: true, t: 0, done: false };
       r.tx = this.hoop.x;
       r.tz = this.hoop.z + 0.7;
@@ -366,7 +486,7 @@ export class Hoops implements Activity {
       g.stage.setPunch(0.8);
       g.input.rumble(0.7, 160);
       g.buzz([30, 40, 60]);
-      g.cheer(COURT.cx, COURT.cz, 20, 1.8);
+      g.cheer(this.court.cx, this.court.cz, 20, 1.8);
       this.say("BLOCKED!", 1.3);
     } else if (result === "hand") this.say("HAND IN HIS FACE", 1);
     r.jump = 0.001;
@@ -377,7 +497,7 @@ export class Hoops implements Activity {
     if (b.judged) return;
     b.judged = true;
     const g = this.g;
-    if (made) g.cheer(COURT.cx, COURT.cz, 18, b.points >= 3 ? 1.8 : 1.1);
+    if (made) g.cheer(this.court.cx, this.court.cz, 18, b.points >= 3 ? 1.8 : 1.1);
     if (b.who === 1) {
       const r = this.rival;
       if (made) {
@@ -385,8 +505,23 @@ export class Hoops implements Activity {
         this.netKick = 1;
         g.sound.swish();
         const talk = ["Too easy.", "Count it.", "Net.", "All day.", "You see that?"];
-        this.say(b.dunk ? `${r.name} THROWS IT DOWN  +${b.points}` : this.contest.result === "hand" ? `${r.name} hits over you  +${b.points}` : `${r.name}: "${talk[Math.floor(Math.random() * talk.length)]}"  +${b.points}`, 1.5);
-      } else this.say(this.contest.result === "block" ? "BLOCKED!  Your ball." : this.contest.result === "hand" ? `Good D. ${r.name} misses.` : `${r.name} bricks it. Your ball.`, 1.5);
+        this.say(
+          b.dunk
+            ? `${r.name} THROWS IT DOWN  +${b.points}`
+            : this.contest.result === "hand"
+              ? `${r.name} hits over you  +${b.points}`
+              : `${r.name}: "${talk[Math.floor(Math.random() * talk.length)]}"  +${b.points}`,
+          1.5,
+        );
+      } else
+        this.say(
+          this.contest.result === "block"
+            ? "BLOCKED!  Your ball."
+            : this.contest.result === "hand"
+              ? `Good D. ${r.name} misses.`
+              : `${r.name} bricks it. Your ball.`,
+          1.5,
+        );
       this.contest.result = "";
       // Benji answers from the same spot.
       this.turn = "you";
@@ -401,8 +536,14 @@ export class Hoops implements Activity {
       // Off to whichever side has more floor: toward the middle of the court.
       const px = -hz / far;
       const pz = hx / far;
-      const side = (px >= 0 ? 1 : -1) * (this.spot.x > COURT.cx + 0.5 ? -1 : this.spot.x < COURT.cx - 0.5 ? 1 : -1);
-      r.tx = clamp(this.spot.x + (hx / far) * up + side * px * 2, COURT.cx - COURT.halfW + 0.6, COURT.cx + COURT.halfW - 0.6);
+      const side =
+        (px >= 0 ? 1 : -1) *
+        (this.spot.x > this.court.cx + 0.5 ? -1 : this.spot.x < this.court.cx - 0.5 ? 1 : -1);
+      r.tx = clamp(
+        this.spot.x + (hx / far) * up + side * px * 2,
+        this.court.cx - this.court.halfW + 0.6,
+        this.court.cx + this.court.halfW - 0.6,
+      );
       r.tz = this.spot.z + (hz / far) * up + side * pz * 2;
       g.pos.x = this.spot.x;
       g.pos.z = this.spot.z;
@@ -423,10 +564,19 @@ export class Hoops implements Activity {
       if (b.rim || b.board) g.sound.rim();
       g.sound.swish();
       if (b.points >= 3 || this.streak === 3) g.sound.cheer();
-      const what = b.dunk ? "DUNK!" : !b.rim && !b.board ? "SWISH" : b.board ? "OFF THE GLASS" : "BUCKET";
+      const what = b.dunk
+        ? "DUNK!"
+        : !b.rim && !b.board
+          ? "SWISH"
+          : b.board
+            ? "OFF THE GLASS"
+            : "BUCKET";
       // The dunk is what three in a row buys, and it has to be earned again.
       if (b.dunk) this.streak = 0;
-      this.say(`${what}  +${b.points + bonus}${this.streak === 3 ? (this.kind === "versus" ? "  ON FIRE: SPACE TO DUNK" : "  ON FIRE: DUNK AT THE RIM") : this.streak > 3 ? "  ON FIRE" : ""}`, this.streak === 3 ? 2.2 : 1.4);
+      this.say(
+        `${what}  +${b.points + bonus}${this.streak === 3 ? (this.kind === "versus" ? "  ON FIRE: SPACE TO DUNK" : "  ON FIRE: DUNK AT THE RIM") : this.streak > 3 ? "  ON FIRE" : ""}`,
+        this.streak === 3 ? 2.2 : 1.4,
+      );
       if (b.hot && this.kind === "shootout") this.moveSpot();
       g.stage.setPunch(0.5);
       g.input.rumble(0.45, 120);
@@ -435,7 +585,14 @@ export class Hoops implements Activity {
       if (this.kind === "versus" && this.score >= TO && this.score > this.rival.score) g.moment(2);
     } else {
       this.streak = 0;
-      this.say(Math.abs(b.error) < 0.06 ? "Rimmed out" : b.error < 0 ? "Short. Hold it longer." : "Long. Let go sooner.", 1.4);
+      this.say(
+        Math.abs(b.error) < 0.06
+          ? "Rimmed out"
+          : b.error < 0
+            ? "Short. Hold it longer."
+            : "Long. Let go sooner.",
+        1.4,
+      );
     }
   }
 
@@ -481,7 +638,14 @@ export class Hoops implements Activity {
       }
       // Glass.
       const front = h.dir * (b.p.z - h.boardZ);
-      if (front > -BALL_R && front < 0.12 && Math.abs(b.p.x - h.x) < h.boardHalfW + 0.04 && b.p.y > h.boardMinY - 0.05 && b.p.y < h.boardMaxY + 0.05 && h.dir * b.v.z > 0) {
+      if (
+        front > -BALL_R &&
+        front < 0.12 &&
+        Math.abs(b.p.x - h.x) < h.boardHalfW + 0.04 &&
+        b.p.y > h.boardMinY - 0.05 &&
+        b.p.y < h.boardMaxY + 0.05 &&
+        h.dir * b.v.z > 0
+      ) {
         b.v.z *= -0.62;
         b.v.x *= 0.9;
         b.p.z = h.boardZ - h.dir * BALL_R;
@@ -556,8 +720,12 @@ export class Hoops implements Activity {
     } else {
       g.vel.x += ((fx * m.y - fz * m.x) * top - g.vel.x) * k;
       g.vel.z += ((fz * m.y + fx * m.x) * top - g.vel.z) * k;
-      g.pos.x = clamp(g.pos.x + g.vel.x * dt, COURT.cx - COURT.halfW + 0.5, COURT.cx + COURT.halfW - 0.5);
-      g.pos.z = clamp(g.pos.z + g.vel.z * dt, h.z + 1.25, COURT.cz + 3);
+      g.pos.x = clamp(
+        g.pos.x + g.vel.x * dt,
+        this.court.cx - this.court.halfW + 0.5,
+        this.court.cx + this.court.halfW - 0.5,
+      );
+      g.pos.z = clamp(g.pos.z + g.vel.z * dt, h.z + 1.25, this.court.cz + 3);
     }
     if (this.kind === "versus" && this.turn !== "rival" && !this.dunk.on) {
       // Shot for shot means the same shot: Benji stays inside the ring.
@@ -571,7 +739,9 @@ export class Hoops implements Activity {
     }
     // He faces the rim, except on defence, when he faces the man with the ball.
     const guarding = this.kind === "versus" && this.turn === "rival" && this.rival.card;
-    g.heading = guarding ? Math.atan2(this.rival.x - g.pos.x, this.rival.z - g.pos.z) : Math.atan2(h.x - g.pos.x, h.z - g.pos.z);
+    g.heading = guarding
+      ? Math.atan2(this.rival.x - g.pos.x, this.rival.z - g.pos.z)
+      : Math.atan2(h.x - g.pos.x, h.z - g.pos.z);
     g.benji.speed = Math.hypot(g.vel.x, g.vel.z);
 
     // The shot.
@@ -584,7 +754,13 @@ export class Hoops implements Activity {
     const mine = this.kind !== "versus" || this.turn === "you";
     if (!this.over && !this.dunk.on) {
       // Defence: one jump at his shot. Go on the fake and he shoots over a man coming down.
-      if (this.kind === "versus" && this.turn === "rival" && input.hit("action") && this.jump === 0 && this.contest.cool <= 0) {
+      if (
+        this.kind === "versus" &&
+        this.turn === "rival" &&
+        input.hit("action") &&
+        this.jump === 0 &&
+        this.contest.cool <= 0
+      ) {
         this.jump = 0.001;
         this.contest.at = g.time;
         // Up, down and set again takes long enough that a fake cannot be answered twice.
@@ -593,8 +769,23 @@ export class Hoops implements Activity {
         g.sound.whoosh();
       }
       // Three in a row: at the rim (or anywhere, in a game to eleven) Space is a dunk.
-      if (this.streak >= 3 && mine && !this.charging && this.cool <= 0 && this.armed && input.hit("action") && (this.kind === "versus" || d < 4.8)) {
-        this.dunk = { on: true, t: 0, fx: g.pos.x, fz: g.pos.z, pts: this.kind === "versus" ? (d > ARC ? 3 : 2) : 3, done: false };
+      if (
+        this.streak >= 3 &&
+        mine &&
+        !this.charging &&
+        this.cool <= 0 &&
+        this.armed &&
+        input.hit("action") &&
+        (this.kind === "versus" || d < 4.8)
+      ) {
+        this.dunk = {
+          on: true,
+          t: 0,
+          fx: g.pos.x,
+          fz: g.pos.z,
+          pts: this.kind === "versus" ? (d > ARC ? 3 : 2) : 3,
+          done: false,
+        };
         this.armed = false;
         this.started = true;
         if (this.kind === "versus") this.turn = "air";
@@ -619,26 +810,63 @@ export class Hoops implements Activity {
       this.jump += dt;
       const t = this.jump / 0.5;
       // He gets up higher to block a shot than to take one.
-      g.benji.lift = t >= 1 ? 0 : Math.sin(t * Math.PI) * (this.kind === "versus" && this.turn !== "you" && g.time - this.contest.at < 0.6 ? 0.62 : 0.34);
+      g.benji.lift =
+        t >= 1
+          ? 0
+          : Math.sin(t * Math.PI) *
+            (this.kind === "versus" && this.turn !== "you" && g.time - this.contest.at < 0.6
+              ? 0.62
+              : 0.34);
       if (t >= 1) this.jump = 0;
     } else g.benji.lift = 0;
     // Arms up through the shot and the follow-through; the stance while the other player shoots.
     // The dunk has its own drawing in some fits: three running steps, then up with one arm.
-    const dunking = this.dunk.on ? (!g.benji.has("dunk") ? "shoot" : this.dunk.t >= 0.3 ? "dunk" : null) : undefined;
+    const dunking = this.dunk.on
+      ? !g.benji.has("dunk")
+        ? "shoot"
+        : this.dunk.t >= 0.3
+          ? "dunk"
+          : null
+      : undefined;
     // The bucket that won it: fist up until the card comes.
-    const won = this.kind === "versus" && this.turn === "next" && this.score >= TO && this.score > this.rival.score;
-    g.benji.pose = dunking !== undefined ? dunking : won ? "cheer" : this.charging || this.jump > 0 ? "shoot" : this.kind === "versus" && this.turn === "rival" && g.benji.speed < 0.5 ? "ready" : g.benji.speed > 0.8 ? "drive" : null;
+    const won =
+      this.kind === "versus" &&
+      this.turn === "next" &&
+      this.score >= TO &&
+      this.score > this.rival.score;
+    g.benji.pose =
+      dunking !== undefined
+        ? dunking
+        : won
+          ? "cheer"
+          : this.charging || this.jump > 0
+            ? "shoot"
+            : this.kind === "versus" && this.turn === "rival" && g.benji.speed < 0.5
+              ? "ready"
+              : g.benji.speed > 0.8
+                ? "drive"
+                : null;
 
     // Ball in hand: dribbled low, lifted to the forehead on the way up.
     const rx = -Math.cos(g.heading);
     const rz = Math.sin(g.heading);
     this.dribble += dt * (6 + g.benji.speed * 0.8);
     const bounce = Math.abs(Math.sin(this.dribble));
-    this.hand.visible = (this.cool <= 0 && !this.over && (this.kind !== "versus" || this.turn === "you")) || (this.dunk.on && !this.dunk.done);
+    this.hand.visible =
+      (this.cool <= 0 && !this.over && (this.kind !== "versus" || this.turn === "you")) ||
+      (this.dunk.on && !this.dunk.done);
     // On fire, the ball looks it.
     const fire = this.streak >= 3;
-    this.ballMat.emissiveIntensity = lerp(this.ballMat.emissiveIntensity, fire ? 1.7 : 0.55, damp(6, dt));
-    (this.trail.material as THREE.LineBasicMaterial).color.setRGB(fire ? 3.4 : 2.4, fire ? 0.8 : 1.3, fire ? 0.12 : 0.35);
+    this.ballMat.emissiveIntensity = lerp(
+      this.ballMat.emissiveIntensity,
+      fire ? 1.7 : 0.55,
+      damp(6, dt),
+    );
+    (this.trail.material as THREE.LineBasicMaterial).color.setRGB(
+      fire ? 3.4 : 2.4,
+      fire ? 0.8 : 1.3,
+      fire ? 0.12 : 0.35,
+    );
     const r = this.rival;
     const rc = r.card;
     if (rc && rc.visible) {
@@ -666,11 +894,18 @@ export class Hoops implements Activity {
       // stance, on his toes, and stands up again a moment after. Held all through a still moment
       // the crouch read as a short, wide man.
       const close = Math.hypot(g.pos.x - r.x, g.pos.z - r.z) < 3.6;
-      const live = this.turn === "you" && close && (this.charging || this.jump > 0 || g.benji.speed > 0.8);
+      const live =
+        this.turn === "you" && close && (this.charging || this.jump > 0 || g.benji.speed > 0.8);
       this.guard = Math.max(0, Math.min(1, this.guard + (live ? dt * 7 : -dt * 1.4)));
       const set = this.turn === "you" && this.guard > 0.3;
       if (set && !running && r.jump <= 0) rc.lift = Math.abs(Math.sin(g.time * 9)) * 0.045;
-      rc.pose = running ? "drive" : r.jump > 0 || (this.turn === "rival" && r.wait < this.lead) ? "shoot" : set ? "ready" : null;
+      rc.pose = running
+        ? "drive"
+        : r.jump > 0 || (this.turn === "rival" && r.wait < this.lead)
+          ? "shoot"
+          : set
+            ? "ready"
+            : null;
       if (this.drive.on && this.drive.t > 0) {
         // Off the floor and up at the rim, one arm high.
         const u = Math.min(1, this.drive.t / DRIVE_AIR);
@@ -682,13 +917,30 @@ export class Hoops implements Activity {
     }
     if (this.dunk.on) {
       // Held high in one hand all the way to the rim.
-      this.hand.position.set(g.pos.x + fx * 0.22, FLOOR + g.benji.lift + BENJI_HEIGHT + 0.26, g.pos.z + fz * 0.22);
+      this.hand.position.set(
+        g.pos.x + fx * 0.22,
+        FLOOR + g.benji.lift + BENJI_HEIGHT + 0.26,
+        g.pos.z + fz * 0.22,
+      );
     } else if (this.charging) {
       const up = Math.min(1, this.charge * 2.2);
-      this.hand.position.set(g.pos.x + rx * 0.12 + fx * 0.2, FLOOR + lerp(0.95, BENJI_HEIGHT + 0.3, up), g.pos.z + rz * 0.12 + fz * 0.2);
+      this.hand.position.set(
+        g.pos.x + rx * 0.12 + fx * 0.2,
+        FLOOR + lerp(0.95, BENJI_HEIGHT + 0.3, up),
+        g.pos.z + rz * 0.12 + fz * 0.2,
+      );
     } else {
-      this.hand.position.set(g.pos.x + rx * 0.42 + fx * 0.18, FLOOR + BALL_R + bounce * 0.78, g.pos.z + rz * 0.42 + fz * 0.18);
-      if (bounce < 0.08 && this.hand.visible && Math.sin(this.dribble) * Math.sin(this.dribble - 0.3) < 0) g.sound.bounce(0.35);
+      this.hand.position.set(
+        g.pos.x + rx * 0.42 + fx * 0.18,
+        FLOOR + BALL_R + bounce * 0.78,
+        g.pos.z + rz * 0.42 + fz * 0.18,
+      );
+      if (
+        bounce < 0.08 &&
+        this.hand.visible &&
+        Math.sin(this.dribble) * Math.sin(this.dribble - 0.3) < 0
+      )
+        g.sound.bounce(0.35);
     }
     this.hand.rotation.x -= dt * 6;
 
@@ -842,7 +1094,7 @@ export class Hoops implements Activity {
     const got = won ? g.earn(Math.round((80 + r.tier * 45) * k), 6 + r.tier * 3) : g.earn(10, 1);
     if (won) g.sound.cheer();
     if (won) g.award("sackrow_11");
-    g.cheer(COURT.cx, COURT.cz, 20, 2.4);
+    g.cheer(this.court.cx, this.court.cz, 20, 2.4);
     g.emit("versus", won ? 1 : 0, r.tier);
     this.hand.visible = false;
     const next = RIVALS[Math.min(RIVALS.length - 1, g.save.best.versus ?? 0)]!;
@@ -850,7 +1102,11 @@ export class Hoops implements Activity {
       {
         win: won,
         title: won ? "GAME. YOU RAN IT." : `${r.name.toUpperCase()} TOOK IT`,
-        sub: won ? (r.tier >= RIVALS.length - 1 ? "Nobody left on this court. It's yours." : `${next.name} wants next.`) : "Shot for shot, he had one more. Run it back.",
+        sub: won
+          ? r.tier >= RIVALS.length - 1
+            ? "Nobody left on this court. It's yours."
+            : `${next.name} wants next.`
+          : "Shot for shot, he had one more. Run it back.",
         rows: [
           ["Final", `${this.score} - ${r.score}`],
           ["Against", r.name],
@@ -881,8 +1137,12 @@ export class Hoops implements Activity {
     const uz = tz / d;
     // Low behind the shooter's shoulder, looking up at the rim, and never outside the fence.
     this.cam.set(px + ux * 5.1 - uz * 1.25, FLOOR + 1.4 + d * 0.03, pz + uz * 5.1 + ux * 1.25);
-    this.cam.x = clamp(this.cam.x, COURT.cx - COURT.halfW - 1.1, COURT.cx + COURT.halfW + 1.1);
-    this.cam.z = Math.min(this.cam.z, COURT.cz + COURT.halfL + 1.1);
+    this.cam.x = clamp(
+      this.cam.x,
+      this.court.cx - this.court.halfW - 1.1,
+      this.court.cx + this.court.halfW + 1.1,
+    );
+    this.cam.z = Math.min(this.cam.z, this.court.cz + this.court.halfL + 1.1);
     this.look.set(lerp(px, h.x, 0.6), FLOOR + 2.05, lerp(pz, h.z, 0.6));
     if (snap) g.camera.position.copy(this.cam);
     else g.camera.position.lerp(this.cam, damp(6, dt));
@@ -899,14 +1159,19 @@ export class Hoops implements Activity {
     const best = g.save.best.hoops ?? 0;
     const record = this.score > best;
     if (record) g.save.best.hoops = this.score;
-    const got = g.earn(Math.round(this.score * 4 * (g.wearing("fresh_black") ? 1.15 : 1)), Math.floor(this.score / 3));
+    const got = g.earn(
+      Math.round(this.score * 4 * (g.wearing("fresh_black") ? 1.15 : 1)),
+      Math.floor(this.score / 3),
+    );
     g.emit("hoops", this.score, this.bestStreak);
     this.over = true;
     this.hand.visible = false;
     g.showResults(
       {
-        title: this.score >= 20 ? "HEAT CHECK" : this.score >= 10 ? "COURT APPROVED" : "FINAL BUZZER",
-        sub: this.score >= 10 ? "Court OG nods. That'll play." : "OG wants to see ten. Run it back.",
+        title:
+          this.score >= 20 ? "HEAT CHECK" : this.score >= 10 ? "COURT APPROVED" : "FINAL BUZZER",
+        sub:
+          this.score >= 10 ? "Court OG nods. That'll play." : "OG wants to see ten. Run it back.",
         rows: [
           ["Points", String(this.score)],
           ["Shooting", `${this.made} of ${this.shots}`],
@@ -953,9 +1218,21 @@ export class Hoops implements Activity {
       best: this.g.save.best.hoops ?? 0,
       call: this.call,
       fire: this.streak >= 3,
-      range: this.streak >= 3 && (this.kind === "versus" || d < 4.8) ? "DUNK IT" : `${d > ARC ? "3 PT" : "2 PT"}${onSpot && this.kind === "shootout" ? "  HOT SPOT +1" : ""}${this.streak >= 3 ? "  FIRE" : ""}`,
+      range:
+        this.streak >= 3 && (this.kind === "versus" || d < 4.8)
+          ? "DUNK IT"
+          : `${d > ARC ? "3 PT" : "2 PT"}${onSpot && this.kind === "shootout" ? "  HOT SPOT +1" : ""}${this.streak >= 3 ? "  FIRE" : ""}`,
       kind: this.kind,
-      rival: this.kind === "versus" ? { name: this.rival.name, score: this.rival.score, to: TO, yours: this.turn === "you", clock: Math.max(0, Math.ceil(this.shotClock)) } : null,
+      rival:
+        this.kind === "versus"
+          ? {
+              name: this.rival.name,
+              score: this.rival.score,
+              to: TO,
+              yours: this.turn === "you",
+              clock: Math.max(0, Math.ceil(this.shotClock)),
+            }
+          : null,
     };
   }
 }

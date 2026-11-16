@@ -2,7 +2,7 @@ import type { OutfitId } from "../assets/cast";
 
 export type Facing = "front" | "back" | "left" | "right";
 
-export type Place = "street" | "home" | "hq" | "bowl" | "fun" | "laser" | "club";
+export type Place = "street" | "home" | "hq" | "bowl" | "fun" | "laser" | "club" | "rink";
 
 export type Solid = {
   minX: number;
@@ -26,11 +26,49 @@ export type Hoop = {
 
 export type Anchor = { x: number; z: number };
 
-export type Mode = "title" | "walk" | "drive" | "race" | "hoops" | "bowl" | "fish" | "kart" | "laser" | "bounce" | "pit" | "whack";
+export type Mode =
+  | "title"
+  | "walk"
+  | "drive"
+  | "race"
+  | "hoops"
+  | "bowl"
+  | "fish"
+  | "kart"
+  | "laser"
+  | "bounce"
+  | "pit"
+  | "whack";
 
-export type Overlay = null | "pause" | "map" | "shop" | "wardrobe" | "arcade" | "prizes" | "food" | "results" | "video" | "court" | "photo" | "garage" | "table" | "album" | "online" | "loadout" | "account" | "partners";
+export type Overlay =
+  | null
+  | "pause"
+  | "map"
+  | "shop"
+  | "wardrobe"
+  | "arcade"
+  | "prizes"
+  | "food"
+  | "results"
+  | "video"
+  | "court"
+  | "photo"
+  | "garage"
+  | "table"
+  | "album"
+  | "online"
+  | "loadout"
+  | "account"
+  | "partners";
 
-export type Catch = { name: string; lb: number; pay: number; rarity: string; color: string; img?: string };
+export type Catch = {
+  name: string;
+  lb: number;
+  pay: number;
+  rarity: string;
+  color: string;
+  img?: string;
+};
 
 /** A picture held up for a few seconds: a postcard just collected, a new name just earned. */
 export type Reveal = { img: string; kicker: string; title: string; sub: string; round: boolean };
@@ -43,7 +81,17 @@ export type AlbumHud = {
 };
 
 /** A friend in the crew: who they are, how good the line to them is, and where in Memphis they have got to. */
-export type CrewFriend = { id: string; name: string; link: "connecting" | "connected" | "failed"; rtt: number | null; x: number; z: number; street: boolean; where: string; doing: string };
+export type CrewFriend = {
+  id: string;
+  name: string;
+  link: "connecting" | "connected" | "failed";
+  rtt: number | null;
+  x: number;
+  z: number;
+  street: boolean;
+  where: string;
+  doing: string;
+};
 
 /** Playing with friends: the crew he is in, if any, and everybody else in it. */
 export type CrewHud = {
@@ -118,7 +166,13 @@ export type Save = {
   count: number;
 };
 
-export type MissionCard = { chapter: string; index: number; total: number; title: string; detail: string };
+export type MissionCard = {
+  chapter: string;
+  index: number;
+  total: number;
+  title: string;
+  detail: string;
+};
 
 export type Dialogue = { who: string; text: string; portrait: string | null };
 
@@ -152,9 +206,40 @@ export type HoopsHud = {
   /** The other player in a game to eleven. */
   rival: { name: string; score: number; to: number; yours: boolean; clock: number } | null;
 };
-export type BowlHud = { phase: "position" | "aim" | "power" | "roll" | "settle" | "done"; frame: number; ball: number; marks: string[][]; totals: (number | null)[]; total: number; call: string; best: number; standing: boolean[] };
-export type FishHud = { phase: "ready" | "charge" | "flying" | "wait" | "bite" | "reel" | "landed" | "lost"; bait: number; distance: number; fish: Catch | null; call: string; cooler: number; value: number; running: boolean };
-export type RaceHud = { phase: "count" | "go" | "finish"; count: number; lap: number; laps: number; place: number; racers: number; time: number; best: number; call: string; wrongWay: boolean; kart: boolean };
+export type BowlHud = {
+  phase: "position" | "aim" | "power" | "roll" | "settle" | "done";
+  frame: number;
+  ball: number;
+  marks: string[][];
+  totals: (number | null)[];
+  total: number;
+  call: string;
+  best: number;
+  standing: boolean[];
+};
+export type FishHud = {
+  phase: "ready" | "charge" | "flying" | "wait" | "bite" | "reel" | "landed" | "lost";
+  bait: number;
+  distance: number;
+  fish: Catch | null;
+  call: string;
+  cooler: number;
+  value: number;
+  running: boolean;
+};
+export type RaceHud = {
+  phase: "count" | "go" | "finish";
+  count: number;
+  lap: number;
+  laps: number;
+  place: number;
+  racers: number;
+  time: number;
+  best: number;
+  call: string;
+  wrongWay: boolean;
+  kart: boolean;
+};
 export type LaserHud = {
   phase: "count" | "go" | "over";
   count: number;
@@ -198,12 +283,27 @@ export type LoadoutHud = {
   share: number;
   top: boolean;
   stats: [string, string][];
-  guns: { id: string; name: string; note: string; mag: number; locked: string; picked: boolean; img: string }[];
+  guns: {
+    id: string;
+    name: string;
+    note: string;
+    mag: number;
+    locked: string;
+    picked: boolean;
+    img: string;
+  }[];
   /**
    * The ways the hall can be laid out: how many floors each has, which is picked, and its floor
    * plan (cover, upstairs floors and ramps as x0, x1, z0, z1 from the middle of a hall `wide` by `deep`).
    */
-  maps: { id: string; name: string; note: string; floors: number; picked: boolean; plan: { covers: number[][]; decks: number[][]; ramps: number[][] } }[];
+  maps: {
+    id: string;
+    name: string;
+    note: string;
+    floors: number;
+    picked: boolean;
+    plan: { covers: number[][]; decks: number[][]; ramps: number[][] };
+  }[];
   hall: { wide: number; deep: number };
   auto: boolean;
 };
@@ -240,7 +340,13 @@ export type BounceHud = { left: number; best: number; combo: number; score: numb
 export type PitHud = { left: number; found: number; total: number; call: string };
 export type WhackHud = { left: number; score: number; hits: number; call: string };
 /** A machine on the arcade floor: its name, a row of numbers (label, value, colour), and what it is shouting. */
-export type MachineHud = { name: string; stats: [string, string, string?][]; call: string; meter: boolean; act: string };
+export type MachineHud = {
+  name: string;
+  stats: [string, string, string?][];
+  call: string;
+  meter: boolean;
+  act: string;
+};
 
 /** Jookin at the cypher: whether the moves are coming down the screen, and whether it is somebody else's turn on the floor. */
 export type JookHud = { on: boolean; watching: boolean };
@@ -310,7 +416,15 @@ export type HudState = {
   shopFocus: string | null;
   cabinet: string | null;
   foodAt: "catch" | "velis" | "brothers" | "pizza";
-  settings: { quality: "low" | "medium" | "high"; auto: boolean; music: boolean; sfx: boolean; clock: boolean; buzz: boolean; view: string };
+  settings: {
+    quality: "low" | "medium" | "high";
+    auto: boolean;
+    music: boolean;
+    sfx: boolean;
+    clock: boolean;
+    buzz: boolean;
+    view: string;
+  };
   /** A shot the player only watches: the opening. The rest of the screen clears for its title card. */
   cinema: { title: string; sub: string } | null;
   hasSave: boolean;

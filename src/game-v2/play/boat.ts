@@ -5,7 +5,7 @@ import { clamp, damp, wrapAngle } from "../core/util";
 import type { Activity, Game } from "../game";
 import { BRIDGE } from "../world/bridgelights";
 import { standHeight } from "../world/ground";
-import { FAR_BANK_Z, PIER, RIVER_Z } from "../world/map";
+import { FAR_BANK_Z, LANDING, PIER, RIVER_Z } from "../world/map";
 
 /** Where the river's surface lies. */
 const WATER = -0.55;
@@ -41,7 +41,13 @@ const SACKS: [number, number][] = [
   [-262, -306],
 ];
 
-type Foam = { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; age: number; life: number; grow: number };
+type Foam = {
+  mesh: THREE.Mesh;
+  mat: THREE.MeshBasicMaterial;
+  age: number;
+  life: number;
+  grow: number;
+};
 type Sack = { group: THREE.Group; x: number; z: number; got: boolean };
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -49,8 +55,17 @@ const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60))
 /** The speedboat: a white hull with a green rail, a wood foredeck, a screen, two seats and an outboard. */
 function makeBoat() {
   const g = new THREE.Group();
-  const white = new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.35, metalness: 0.1 });
-  const green = new THREE.MeshStandardMaterial({ color: 0x1fbf2a, roughness: 0.4, emissive: 0x0a3a0c, emissiveIntensity: 0.6 });
+  const white = new THREE.MeshStandardMaterial({
+    color: 0xf4f1ea,
+    roughness: 0.35,
+    metalness: 0.1,
+  });
+  const green = new THREE.MeshStandardMaterial({
+    color: 0x1fbf2a,
+    roughness: 0.4,
+    emissive: 0x0a3a0c,
+    emissiveIntensity: 0.6,
+  });
   const wood = new THREE.MeshStandardMaterial({ color: 0x8a5a2b, roughness: 0.6 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x15171b, roughness: 0.6 });
   const plan = (w: number, stern: number, shoulder: number, bow: number) => {
@@ -89,7 +104,18 @@ function makeBoat() {
   fore.quadraticCurveTo(0.76, 1.6, 0, 2.46);
   fore.quadraticCurveTo(-0.76, 1.6, -0.88, 0.55);
   g.add(slab(fore, 0.05, 0.6, wood));
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.5), new THREE.MeshStandardMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.38, roughness: 0.1, metalness: 0.4, side: THREE.DoubleSide, depthWrite: false }));
+  const screen = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.5, 0.5),
+    new THREE.MeshStandardMaterial({
+      color: 0x9fd8ff,
+      transparent: true,
+      opacity: 0.38,
+      roughness: 0.1,
+      metalness: 0.4,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+  );
   screen.position.set(0, 0.84, 0.52);
   screen.rotation.x = -0.5;
   g.add(screen);
@@ -179,7 +205,13 @@ export class BoatRide implements Activity {
     const quad = new THREE.PlaneGeometry(1.6, 1.6);
     quad.rotateX(-Math.PI / 2);
     for (let i = 0; i < 44; i++) {
-      const mat = new THREE.MeshBasicMaterial({ map: soft, color: 0xffffff, transparent: true, opacity: 0, depthWrite: false });
+      const mat = new THREE.MeshBasicMaterial({
+        map: soft,
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+      });
       const mesh = new THREE.Mesh(quad, mat);
       mesh.visible = false;
       mesh.renderOrder = 2;
@@ -188,8 +220,16 @@ export class BoatRide implements Activity {
     }
     // The sacks: burlap, tied at the neck, each in a ring that can be seen from across the water.
     const burlap = new THREE.MeshStandardMaterial({ color: 0xb08a4f, roughness: 0.95 });
-    const tie = new THREE.MeshStandardMaterial({ color: 0x1fbf2a, roughness: 0.5, emissive: 0x0f5f14, emissiveIntensity: 1 });
-    const ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 2.6, 0.4), toneMapped: false });
+    const tie = new THREE.MeshStandardMaterial({
+      color: 0x1fbf2a,
+      roughness: 0.5,
+      emissive: 0x0f5f14,
+      emissiveIntensity: 1,
+    });
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(0.5, 2.6, 0.4),
+      toneMapped: false,
+    });
     const body = new THREE.SphereGeometry(0.42, 10, 8);
     body.scale(1, 1.15, 1);
     const neck = new THREE.CylinderGeometry(0.1, 0.2, 0.24, 8);
@@ -230,7 +270,10 @@ export class BoatRide implements Activity {
         group.add(face, stripe);
       }
       for (const sx of [-1, 1]) {
-        const float = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, r.len + 0.6, 10), pontoon);
+        const float = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.45, 0.45, r.len + 0.6, 10),
+          pontoon,
+        );
         float.rotation.x = Math.PI / 2;
         float.position.set(sx * (r.wide / 2 + 0.2), 0.12, 0);
         group.add(float);
@@ -242,8 +285,31 @@ export class BoatRide implements Activity {
     // What she cannot drive through: the pier and the bridge's three piers.
     const span = (BRIDGE.z1 - BRIDGE.z0) / 2;
     this.hull = [
-      { minX: PIER.x - PIER.half - 0.2, maxX: PIER.x + PIER.half + 0.2, minZ: PIER.z1 - 0.4, maxZ: RIVER_Z + 2 },
-      ...[BRIDGE.z0, BRIDGE.z0 + span, BRIDGE.z1].map((z) => ({ minX: BRIDGE.x - 9, maxX: BRIDGE.x + 9, minZ: z - 3.5, maxZ: z + 3.5 })),
+      {
+        minX: PIER.x - PIER.half - 0.2,
+        maxX: PIER.x + PIER.half + 0.2,
+        minZ: PIER.z1 - 0.4,
+        maxZ: RIVER_Z + 2,
+      },
+      // Beale Street Landing and the riverboat tied up at it.
+      {
+        minX: LANDING.x - LANDING.w / 2 - 0.4,
+        maxX: LANDING.x + LANDING.w / 2 + 0.4,
+        minZ: LANDING.z1 - 0.6,
+        maxZ: RIVER_Z + 2,
+      },
+      {
+        minX: LANDING.boat.x - LANDING.boat.len / 2 - 1,
+        maxX: LANDING.boat.x + LANDING.boat.len / 2 + 1,
+        minZ: LANDING.boat.z - 6,
+        maxZ: LANDING.boat.z + 6,
+      },
+      ...[BRIDGE.z0, BRIDGE.z0 + span, BRIDGE.z1].map((z) => ({
+        minX: BRIDGE.x - 9,
+        maxX: BRIDGE.x + 9,
+        minZ: z - 3.5,
+        maxZ: z + 3.5,
+      })),
     ];
     this.moor();
   }
@@ -266,7 +332,9 @@ export class BoatRide implements Activity {
     const k = clamp(speed / FLAT_OUT, 0, 1);
     const bob = this.air ? 0 : Math.sin(t * 1.7 + this.x * 0.3) * 0.045 * (1 - k * 0.6);
     // Bow up as she comes on the plane; nose up off a ramp and down again coming in.
-    const wantPitch = this.air ? clamp(-this.vy * 0.045, -0.3, 0.3) : -(0.02 + k * 0.1) - this.rise * 0.04;
+    const wantPitch = this.air
+      ? clamp(-this.vy * 0.045, -0.3, 0.3)
+      : -(0.02 + k * 0.1) - this.rise * 0.04;
     const wantRoll = this.air ? 0 : this.steer * k * 0.3 + Math.sin(t * 1.3) * 0.02 * (1 - k);
     const e = dt > 0 ? damp(7, dt) : 1;
     this.pitch += (wantPitch - this.pitch) * e;
@@ -395,12 +463,14 @@ export class BoatRide implements Activity {
     if (!this.air) {
       const top = flat ? FLAT_OUT : TOP;
       if (throttle > 0) fwd += 9.5 * (flat ? 1.35 : 1) * throttle * clamp(1 - fwd / top, 0, 1) * dt;
-      else if (throttle < 0) fwd += (fwd > 0.6 ? 11 : 4.5 * clamp(1 + fwd / 4.5, 0, 1)) * throttle * dt;
+      else if (throttle < 0)
+        fwd += (fwd > 0.6 ? 11 : 4.5 * clamp(1 + fwd / 4.5, 0, 1)) * throttle * dt;
       // Water takes speed off all the time, and takes a slide off slower than tyres would.
       fwd -= fwd * damp(throttle === 0 ? 0.55 : 0.2, dt);
       lat -= lat * damp(2.3, dt);
       this.steer += ((this.leaving ? 0 : m.x) - this.steer) * damp(6, dt);
-      const bite = clamp(Math.abs(fwd) / 4.5, 0, 1) * (1.55 - 0.7 * clamp(Math.abs(fwd) / FLAT_OUT, 0, 1));
+      const bite =
+        clamp(Math.abs(fwd) / 4.5, 0, 1) * (1.55 - 0.7 * clamp(Math.abs(fwd) / FLAT_OUT, 0, 1));
       this.heading = wrapAngle(this.heading - this.steer * bite * Math.sign(fwd || 1) * dt);
     }
     const nfx = Math.sin(this.heading);
@@ -438,7 +508,12 @@ export class BoatRide implements Activity {
     if (this.nextFoam <= 0 && !this.air && speed > 1.2) {
       this.nextFoam = 0.7;
       const side = (Math.random() - 0.5) * 0.9;
-      this.spray(this.x - nfx * 2.4 + nfz * side, this.z - nfz * 2.4 - nfx * side, 1.6 + speed * 0.12, 1.5 + speed * 0.04);
+      this.spray(
+        this.x - nfx * 2.4 + nfz * side,
+        this.z - nfz * 2.4 - nfx * side,
+        1.6 + speed * 0.12,
+        1.5 + speed * 0.04,
+      );
     }
     this.fade(dt);
 
@@ -486,7 +561,12 @@ export class BoatRide implements Activity {
     g.earn(120, 4);
     g.moment(record && best !== 0 ? 3 : 2);
     g.emit("river", secs);
-    this.say(record ? `RIVER RUN  ${clock(secs)}  ·  YOUR BEST` : `RIVER RUN  ${clock(secs)}   best ${clock(best)}`, 4);
+    this.say(
+      record
+        ? `RIVER RUN  ${clock(secs)}  ·  YOUR BEST`
+        : `RIVER RUN  ${clock(secs)}   best ${clock(best)}`,
+      4,
+    );
   }
 
   /** Banks, the far reaches, the pier, the bridge and the steamer. */
@@ -523,7 +603,10 @@ export class BoatRide implements Activity {
       hit(0, -1);
     }
     const s = g.city.boat.group.position;
-    const boxes = [...this.hull, { minX: s.x - 21, maxX: s.x + 21, minZ: s.z - 5.2, maxZ: s.z + 5.2 }];
+    const boxes = [
+      ...this.hull,
+      { minX: s.x - 21, maxX: s.x + 21, minZ: s.z - 5.2, maxZ: s.z + 5.2 },
+    ];
     for (const b of boxes) {
       const px = clamp(this.x, b.minX, b.maxX);
       const pz = clamp(this.z, b.minZ, b.maxZ);
@@ -602,7 +685,8 @@ export class BoatRide implements Activity {
   hud(h: HudState) {
     const best = this.g.save.best.river ?? 0;
     const speed = Math.hypot(this.vx, this.vz);
-    const home = !this.leaving && Math.hypot(this.x - MOORING.x, this.z - MOORING.z) < 7.5 && speed < 7;
+    const home =
+      !this.leaving && Math.hypot(this.x - MOORING.x, this.z - MOORING.z) < 7.5 && speed < 7;
     h.machine = {
       name: "On the river",
       stats: [
@@ -619,7 +703,20 @@ export class BoatRide implements Activity {
 
   /** For the tests. */
   get state() {
-    return { x: this.x, z: this.z, heading: this.heading, speed: Math.hypot(this.vx, this.vz), y: this.y, air: this.air, got: this.got, time: this.time, riding: this.riding, sacks: SACKS, ramps: RAMPS, done: this.done };
+    return {
+      x: this.x,
+      z: this.z,
+      heading: this.heading,
+      speed: Math.hypot(this.vx, this.vz),
+      y: this.y,
+      air: this.air,
+      got: this.got,
+      time: this.time,
+      riding: this.riding,
+      sacks: SACKS,
+      ramps: RAMPS,
+      done: this.done,
+    };
   }
 
   /** For the tests: put her somewhere, pointing some way, at some speed. */

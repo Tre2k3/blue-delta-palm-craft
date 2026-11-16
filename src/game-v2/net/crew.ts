@@ -18,28 +18,82 @@ export interface Transport {
   broadcast(data: unknown): void;
   close(): void;
 }
-export type TransportHooks = { peers(list: PeerInfo[]): void; message(from: string, data: unknown): void };
-export type MakeTransport = (room: string, selfId: string, name: string, hooks: TransportHooks) => Transport;
+export type TransportHooks = {
+  peers(list: PeerInfo[]): void;
+  message(from: string, data: unknown): void;
+};
+export type MakeTransport = (
+  room: string,
+  selfId: string,
+  name: string,
+  hooks: TransportHooks,
+) => Transport;
 
 const direct: MakeTransport = (room, selfId, name, hooks) => {
-  const r = new P2PRoom({ room, selfId, name, onPeersChanged: hooks.peers, onMessage: (from, data) => hooks.message(from, data) });
-  return { join: () => r.join(), send: (d, to) => r.send(d, to), broadcast: (d) => r.broadcast(d), close: () => r.close() };
+  const r = new P2PRoom({
+    room,
+    selfId,
+    name,
+    onPeersChanged: hooks.peers,
+    onMessage: (from, data) => hooks.message(from, data),
+  });
+  return {
+    join: () => r.join(),
+    send: (d, to) => r.send(d, to),
+    broadcast: (d) => r.broadcast(d),
+    close: () => r.close(),
+  };
 };
 
 /**
  * Where a friend is and what they are doing, a dozen times a second. On foot it is where they
  * stand; at the wheel it is where the car is, and `y` is how high the road has it.
  */
-type State = { k: "s"; x: number; z: number; y: number; h: number; v: number; p: Place; m: string; o: OutfitId; r: string; a: string | null; l: number };
-type Wire = State | { k: "re"; e: string } | { k: "win"; l: number } | { k: "tb"; [key: string]: unknown };
+type State = {
+  k: "s";
+  x: number;
+  z: number;
+  y: number;
+  h: number;
+  v: number;
+  p: Place;
+  m: string;
+  o: OutfitId;
+  r: string;
+  a: string | null;
+  l: number;
+};
+type Wire =
+  State | { k: "re"; e: string } | { k: "win"; l: number } | { k: "tb"; [key: string]: unknown };
 
 const LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 const NAME_KEY = "sack-v2-name";
 const CODE_KEY = "sack-v2-crew";
 const RATE = 1 / 12;
-const PLACES: Record<Exclude<Place, "street">, string> = { hq: "SackReligious HQ", home: "Home", bowl: "901 Bowl", fun: "The Fun House", laser: "Laser Arena", club: "The Memphian" };
+const PLACES: Record<Exclude<Place, "street">, string> = {
+  hq: "SackReligious HQ",
+  home: "Home",
+  bowl: "901 Bowl",
+  fun: "The Fun House",
+  laser: "Laser Arena",
+  club: "The Memphian",
+  rink: "Crystal Palace",
+};
 /** What a friend is up to, in the words the crew screen uses. */
-const DOING: Record<string, string> = { walk: "Walking", drive: "Driving", race: "Street racing", hoops: "Playing ball", bowl: "Bowling", fish: "Fishing", kart: "Racing karts", laser: "Playing laser tag", bounce: "On the trampoline", pit: "In the ball pit", whack: "Playing a game", title: "At the title screen" };
+const DOING: Record<string, string> = {
+  walk: "Walking",
+  drive: "Driving",
+  race: "Street racing",
+  hoops: "Playing ball",
+  bowl: "Bowling",
+  fish: "Fishing",
+  kart: "Racing karts",
+  laser: "Playing laser tag",
+  bounce: "On the trampoline",
+  pit: "In the ball pit",
+  whack: "Playing a game",
+  title: "At the title screen",
+};
 /** Most people in one crew: every device holds a line open to every other. */
 export const CREW_MAX = 8;
 export const REACTIONS = ["👋", "🔥", "😂", "👏", "💰", "GG"] as const;
@@ -100,7 +154,11 @@ function label(text: string, color: string, size = 44) {
 
 const letter = () => LETTERS[Math.floor(Math.random() * LETTERS.length)]!;
 /** A name fit to put over somebody's head, whoever sent it. */
-const tidy = (name: string) => name.replace(/[^\w .'-]/g, "").trim().slice(0, 14);
+const tidy = (name: string) =>
+  name
+    .replace(/[^\w .'-]/g, "")
+    .trim()
+    .slice(0, 14);
 
 /**
  * A crew: up to eight people who have typed the same four letters. Everyone in it is in their own
@@ -128,9 +186,12 @@ export class Crew {
   private resumed = false;
 
   constructor(private g: Game) {
-    this.selfId = Array.from({ length: 12 }, letter).join("").toLowerCase() + Date.now().toString(36).slice(-4);
+    this.selfId =
+      Array.from({ length: 12 }, letter).join("").toLowerCase() + Date.now().toString(36).slice(-4);
     try {
-      this.name = (localStorage.getItem(NAME_KEY) || "").slice(0, 14) || `Player ${Math.floor(10 + Math.random() * 89)}`;
+      this.name =
+        (localStorage.getItem(NAME_KEY) || "").slice(0, 14) ||
+        `Player ${Math.floor(10 + Math.random() * 89)}`;
     } catch {
       // Private windows have no storage: the made-up name stands.
     }
@@ -138,7 +199,9 @@ export class Crew {
 
   /** A link that puts whoever opens it straight into this crew. */
   get invite() {
-    return this.code && typeof location !== "undefined" ? `${location.origin}/?crew=${this.code}` : "";
+    return this.code && typeof location !== "undefined"
+      ? `${location.origin}/?crew=${this.code}`
+      : "";
   }
 
   /** The crew this visit should be in and is not in yet: the one in the link, or the one a refresh interrupted. */
@@ -182,7 +245,10 @@ export class Crew {
 
   /** Join the crew with this code. False if it is not a code a crew could have. */
   join(raw: string) {
-    const code = raw.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
+    const code = raw
+      .toUpperCase()
+      .replace(/[^A-Z]/g, "")
+      .slice(0, 4);
     if (code.length !== 4) {
       this.error = "A crew code is four letters.";
       this.g.push();
@@ -246,7 +312,9 @@ export class Crew {
 
   /** The friends he has a working line to. */
   linked() {
-    return [...this.friends.values()].filter((f) => f.link === "connected").map((f) => ({ id: f.id, name: f.name }));
+    return [...this.friends.values()]
+      .filter((f) => f.link === "connected")
+      .map((f) => ({ id: f.id, name: f.name }));
   }
 
   nameOf(id: string) {
@@ -272,16 +340,51 @@ export class Crew {
     const card = new Card(OUTFITS.starter.art, BENJI_HEIGHT);
     card.visible = false;
     card.group.visible = false;
-    const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: label(name, "#39ff14"), depthWrite: false, transparent: true }));
+    const tag = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: label(name, "#39ff14"),
+        depthWrite: false,
+        transparent: true,
+      }),
+    );
     tag.scale.set(1.7, 0.425, 1);
     tag.renderOrder = 9;
     tag.visible = false;
-    const bubble = new THREE.Sprite(new THREE.SpriteMaterial({ depthWrite: false, transparent: true }));
+    const bubble = new THREE.Sprite(
+      new THREE.SpriteMaterial({ depthWrite: false, transparent: true }),
+    );
     bubble.scale.set(1.9, 0.475, 1);
     bubble.renderOrder = 10;
     bubble.visible = false;
     this.g.city.scene.add(card.group, tag, bubble);
-    return { id, name, link: "connecting", rtt: null, card, tag, bubble, car: null, ride: "", seen: false, x: 0, y: 0, z: 0, h: 0, tx: 0, ty: 0, tz: 0, th: 0, v: 0, place: "street", mode: "walk", outfit: "starter", pose: null, lift: 0, say: 0, cheered: -1e9 };
+    return {
+      id,
+      name,
+      link: "connecting",
+      rtt: null,
+      card,
+      tag,
+      bubble,
+      car: null,
+      ride: "",
+      seen: false,
+      x: 0,
+      y: 0,
+      z: 0,
+      h: 0,
+      tx: 0,
+      ty: 0,
+      tz: 0,
+      th: 0,
+      v: 0,
+      place: "street",
+      mode: "walk",
+      outfit: "starter",
+      pose: null,
+      lift: 0,
+      say: 0,
+      cheered: -1e9,
+    };
   }
 
   /** Something in a bubble over a friend's head for a few seconds. */
@@ -324,7 +427,12 @@ export class Crew {
         f.tag.material.needsUpdate = true;
       }
       const was = f.link;
-      f.link = p.connectionState === "connected" ? "connected" : p.connectionState === "failed" || p.connectionState === "closed" ? "failed" : "connecting";
+      f.link =
+        p.connectionState === "connected"
+          ? "connected"
+          : p.connectionState === "failed" || p.connectionState === "closed"
+            ? "failed"
+            : "connecting";
       f.rtt = p.rttMs ?? f.rtt;
       if (f.link === "connected" && was !== "connected") {
         g.toast(`${f.name} linked up`, 3);
@@ -347,7 +455,8 @@ export class Crew {
     if (!f || !data || typeof data !== "object") return;
     if (data.k === "s") {
       const s = data;
-      if (![s.x, s.y, s.z, s.h, s.v, s.l].every((n) => typeof n === "number" && Number.isFinite(n))) return;
+      if (![s.x, s.y, s.z, s.h, s.v, s.l].every((n) => typeof n === "number" && Number.isFinite(n)))
+        return;
       f.tx = s.x;
       f.ty = s.y;
       f.tz = s.z;
@@ -374,7 +483,8 @@ export class Crew {
       if (!(REACTIONS as readonly string[]).includes(e)) return;
       this.pop(f, e);
       this.g.sound.ui();
-      if (f.place !== this.g.place || Math.hypot(f.x - this.g.pos.x, f.z - this.g.pos.z) > 40) this.g.toast(`${f.name}: ${e}`, 2.2);
+      if (f.place !== this.g.place || Math.hypot(f.x - this.g.pos.x, f.z - this.g.pos.z) > 40)
+        this.g.toast(`${f.name}: ${e}`, 2.2);
     } else if (data.k === "win") {
       const now = performance.now();
       if (now - f.cheered < 4000) return;
@@ -496,6 +606,18 @@ export class Crew {
 
   /** For the tests: where each friend is drawn. */
   get shown() {
-    return [...this.friends.values()].map((f) => ({ id: f.id, name: f.name, link: f.link, x: f.x, z: f.z, visible: f.card.group.visible, car: !!f.car?.group.visible, outfit: f.outfit, pose: f.card.pose, tag: f.tag.visible, say: f.bubble.visible }));
+    return [...this.friends.values()].map((f) => ({
+      id: f.id,
+      name: f.name,
+      link: f.link,
+      x: f.x,
+      z: f.z,
+      visible: f.card.group.visible,
+      car: !!f.car?.group.visible,
+      outfit: f.outfit,
+      pose: f.card.pose,
+      tag: f.tag.visible,
+      say: f.bubble.visible,
+    }));
   }
 }
