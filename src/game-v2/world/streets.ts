@@ -174,10 +174,12 @@ export function buildStreets(ctx: BuildCtx): SignalMats {
       ] as const) {
         for (const t of [0.2, 0.8]) streetLamp(ctx, along(t, s.minX, s.maxX), z, yaw, y0);
         for (const t of [0.36, 0.64]) {
-          const tx = along(t, s.minX, s.maxX);
+          let tx = along(t, s.minX, s.maxX);
           const tz = z + (yaw === YAW.north ? 0.5 : -0.5);
-          // Nothing grows up through the Memphian's marquee or stands in its doors.
-          if (Math.abs(tx - MEMPHIAN.x) < 9 && Math.abs(tz - MEMPHIAN.z) < 5) continue;
+          // Nothing grows up through the Memphian's marquee or stands in its doors: a tree there
+          // goes just past the end of it instead (still planted, so the rest of the street is unchanged).
+          if (Math.abs(tx - MEMPHIAN.x) < 9 && Math.abs(tz - MEMPHIAN.z) < 5)
+            tx = MEMPHIAN.x + (tx < MEMPHIAN.x ? -9.5 : 9.5);
           tree(ctx, tx, tz, 0.9, y0, row === 7 && col === 3);
         }
         if (ctx.rand() > 0.4) trashCan(ctx, along(0.5, s.minX, s.maxX), z, y0);
