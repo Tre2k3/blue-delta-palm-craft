@@ -49,6 +49,15 @@ export function buildRiverside(ctx: BuildCtx): Riverside {
   const grass = MAT.grass();
   const mid = (PARK_Z0 + PARK_Z1) / 2;
   const depth = PARK_Z1 - PARK_Z0;
+  // The riverfront lawn under the park is pulled toward the camera so it wins over the ground;
+  // what is laid on top of it here is pulled harder, or from low down the lawn shows through.
+  const over = <T extends THREE.Material>(m: T): T => {
+    const c = m.clone() as T;
+    c.polygonOffset = true;
+    c.polygonOffsetFactor = -2;
+    c.polygonOffsetUnits = -4;
+    return c;
+  };
 
   // ---- The great lawn at the south end.
   ctx.ground.flat(46, depth, -392, Y0 + 0.008, mid, grass, 0, 6);
@@ -75,7 +84,7 @@ export function buildRiverside(ctx: BuildCtx): Riverside {
       ctx.solid.cyl(0.14, 0.14, 5, cx + x, Y0 + 2.5, mid + z, MAT.steel(), 8);
       addSolid(ctx, cx + x - 0.2, cx + x + 0.2, mid + z - 0.2, mid + z + 0.2);
     }
-  ctx.ground.flat(28, 14, cx, Y0 + 0.01, mid, MAT.concrete(), 0, 4);
+  ctx.ground.flat(28, 14, cx, Y0 + 0.01, mid, over(MAT.concrete()), 0, 4);
   for (let x = -9; x <= 9; x += 6) {
     ctx.solid.box(2.4, 0.08, 1, cx + x, Y0 + 0.78, mid, MAT.wood());
     ctx.solid.box(2.4, 0.06, 0.32, cx + x, Y0 + 0.45, mid - 0.85, MAT.wood());
@@ -98,7 +107,7 @@ export function buildRiverside(ctx: BuildCtx): Riverside {
 
   // ---- The playground: towers joined by bridges, a rope pyramid, slides off the sides.
   const px = -312;
-  ctx.ground.flat(30, depth - 4, px, Y0 + 0.01, mid, std(0x3a5a8a, 0.95), 0, 4);
+  ctx.ground.flat(30, depth - 4, px, Y0 + 0.01, mid, over(std(0x3a5a8a, 0.95)), 0, 4);
   const towers = [
     [-9, -6, 0xff7a2a, 5],
     [-1, 5, 0x39c86a, 4],
@@ -157,15 +166,16 @@ export function buildRiverside(ctx: BuildCtx): Riverside {
 
   // ---- Sports courts: a half court with its hoop, and the sand court with a net.
   const sx = -244;
-  ctx.ground.flat(14, 15, sx - 8, Y0 + 0.012, mid, std(0x2a6ad0, 0.8));
-  ctx.ground.flat(
-    13.2,
-    0.12,
-    sx - 8,
-    Y0 + 0.016,
-    mid + 7,
-    new THREE.MeshBasicMaterial({ color: 0xf4f1ea }),
-  );
+  ctx.ground.flat(14, 15, sx - 8, Y0 + 0.012, mid, over(std(0x2a6ad0, 0.8)));
+  // The lines: the half-court line, the baseline, the sidelines and the key under the basket.
+  const line = over(new THREE.MeshBasicMaterial({ color: 0xf4f1ea }));
+  ctx.ground.flat(13.2, 0.12, sx - 8, Y0 + 0.016, mid + 7, line);
+  ctx.ground.flat(13.2, 0.12, sx - 8, Y0 + 0.016, mid - 7.1, line);
+  for (const e of [-1, 1]) ctx.ground.flat(0.12, 14.2, sx - 8 + e * 6.6, Y0 + 0.016, mid, line);
+  ctx.ground.flat(4.9, 5.8, sx - 8, Y0 + 0.014, mid - 7.1 + 2.9, over(std(0x1d4ea8, 0.8)));
+  for (const e of [-1, 1])
+    ctx.ground.flat(0.1, 5.8, sx - 8 + e * 2.45, Y0 + 0.017, mid - 4.2, line);
+  ctx.ground.flat(4.9, 0.1, sx - 8, Y0 + 0.017, mid - 1.3, line);
   // A real hoop at the north end, rim and net and all: it is played on like any other court.
   const courtShape = { cx: sx - 8, cz: mid, halfW: 6.6, halfL: 7.5, rimY: 3.05, rimIn: 1.6 };
   const half = buildHoops(ctx, courtShape, "TOM LEE", "ON THE RIVER", [-1]);
@@ -174,7 +184,7 @@ export function buildRiverside(ctx: BuildCtx): Riverside {
     ...half,
     gate: { x: courtShape.cx + courtShape.halfW + 1.4, z: mid + 4 },
   };
-  ctx.ground.flat(10, 16, sx + 6, Y0 + 0.012, mid, std(0xe8d4a0, 0.95));
+  ctx.ground.flat(10, 16, sx + 6, Y0 + 0.012, mid, over(std(0xe8d4a0, 0.95)));
   for (const s of [-1, 1])
     ctx.solid.cyl(0.06, 0.06, 2.5, sx + 6 + s * 5.2, Y0 + 1.25, mid, MAT.steel(), 6);
   ctx.solid.box(
