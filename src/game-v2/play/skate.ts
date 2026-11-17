@@ -212,7 +212,7 @@ export class Skate implements Activity {
   private pushLeft = 0;
 
   /** Benji's own pair, laced on at the rental counter. */
-  private skates = skatePair(0x1a1a1a, 0x39ff14);
+  private skates = skatePair(0xf4f1ea, 0x39ff14);
 
   constructor(
     private g: Game,
