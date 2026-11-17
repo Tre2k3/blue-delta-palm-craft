@@ -72,10 +72,14 @@ export function skatePair(boot = 0xf4f1ea, wheel = 0xff4fd8) {
   const wheelGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.035, 10);
   wheelGeo.rotateZ(Math.PI / 2);
   for (const side of [-0.11, 0.11]) {
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 0.28), bootMat);
+    // A high-top boot the leg goes down into: the foot, and the cuff up past the ankle.
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.29), bootMat);
     foot.position.set(side, 0.15, 0.01);
-    const cuff = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.14), bootMat);
-    cuff.position.set(side, 0.27, -0.06);
+    const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.075, 0.17, 12), bootMat);
+    cuff.position.set(side, 0.255, -0.04);
+    const lace = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.16), stop);
+    lace.position.set(side, 0.226, 0.07);
+    g.add(lace);
     const p = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.025, 0.27), plate);
     p.position.set(side, 0.07, 0.01);
     const toe = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.035, 0.06, 8), stop);
@@ -89,6 +93,14 @@ export function skatePair(boot = 0xf4f1ea, wheel = 0xff4fd8) {
       }
   }
   return g;
+}
+
+/** On wheels: the soles on the plate, and the drawing gone below the ankle so the legs go down into the boots. */
+const SOLE = 0.1;
+const ANKLE = 0.105;
+export function onSkates(card: Card) {
+  card.lift = SOLE;
+  card.sink = card.height * ANKLE;
 }
 
 type Skater = {
@@ -155,7 +167,7 @@ export class RinkCrowd {
       s.card.speed = s.speed * 0.42;
       s.card.tilt = Math.sin(this.time * 2.2 + s.wobble) * 0.05;
       s.card.place(p.x, p.z);
-      s.card.lift = 0.3;
+      onSkates(s.card);
       s.card.update(dt, camera, tint, 0);
       s.skates.position.set(p.x, 0, p.z);
       s.skates.rotation.y = heading;
@@ -355,7 +367,7 @@ export class Skate implements Activity {
     g.benji.speed = this.pushLeft > 0 ? this.speed * 0.7 : this.speed * 0.32;
     g.benji.tilt = clamp(-m.x * this.speed * 0.025, -0.18, 0.18);
     g.benji.pose = this.spin > 0.2 && g.benji.has("cheer") ? "cheer" : null;
-    g.benji.lift = 0.3;
+    onSkates(g.benji);
     this.skates.position.set(g.pos.x, 0, g.pos.z);
     this.skates.rotation.y = this.heading;
     g.live.meter = clamp(this.speed / TOP, 0, 1);
@@ -392,6 +404,7 @@ export class Skate implements Activity {
     this.on = false;
     this.skates.visible = false;
     g.benji.lift = 0;
+    g.benji.sink = 0;
     const score = Math.max(0, this.score);
     const best = g.save.best.skate ?? 0;
     const record = score > best;
@@ -433,6 +446,7 @@ export class Skate implements Activity {
     this.on = false;
     this.skates.visible = false;
     g.benji.lift = 0;
+    g.benji.sink = 0;
     g.benji.pose = null;
     g.benji.tilt = 0;
     g.live.meter = 0;

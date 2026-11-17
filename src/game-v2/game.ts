@@ -1339,9 +1339,13 @@ export class Game {
         return d > R.halfX - R.width && d < R.halfX;
       };
     }
+    // Whoever is in a tube or on a raft is one of the people with a seated drawing, so they sit in it.
     this.floaters = new Floaters(
       wpk,
-      Array.from({ length: few ? 12 : 23 }, () => pick()),
+      Array.from(
+        { length: few ? 12 : 23 },
+        (_, i) => (pick(), SITTERS[(i * 5 + 3) % SITTERS.length]!),
+      ),
     );
     for (let i = 0; i < (few ? 6 : 12); i++) {
       const w = pick();
@@ -2281,6 +2285,7 @@ export class Game {
     this.benji.lift = 0;
     this.benji.tilt = 0;
     this.benji.sink = 0;
+    this.benji.side = false;
     this.benji.visible = mode !== "drive";
     this.stage.setPunch(0);
     this.sound.duck(false);

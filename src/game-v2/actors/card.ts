@@ -144,6 +144,12 @@ export class Card {
    * a tube, down in a car. 0 shows all of them. Nothing below the line is drawn.
    */
   sink = 0;
+  /**
+   * Shown side-on whichever way the lens looks: for a seated drawing made only from the side, so
+   * someone sat in a tube still reads as sat down from behind.
+   */
+  side = false;
+  private flank: View = "left";
   private clip = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private phase = 0;
   private art: CardArt;
@@ -198,6 +204,14 @@ export class Card {
     return this.art.front;
   }
 
+  /** How tall a pose's drawing stands, in metres. */
+  heightOf(pose: string) {
+    const p = this.art.poses?.[pose];
+    const src =
+      typeof p === "string" ? p : p ? (p.front ?? p.left ?? p.back ?? p.right) : undefined;
+    return this.height * (src ? (this.art.scale?.[src] ?? 1) : 1);
+  }
+
   /** Is there a drawing for this pose? */
   has(pose: string) {
     return !!this.art.poses?.[pose];
@@ -220,7 +234,7 @@ export class Card {
     const rel = wrapAngle(toCam - this.heading);
     const abs = Math.abs(rel);
     // The side the camera is on. A pose can have a drawing for a side the standing art has none for.
-    const seen: View = !this.art.back
+    let seen: View = !this.art.back
       ? "front"
       : abs < 0.8
         ? "front"
@@ -229,6 +243,11 @@ export class Card {
           : rel > 0
             ? "left"
             : "right";
+    if (this.side) {
+      // Square behind or in front there is no telling which side: keep the one already showing.
+      if (abs > 0.3 && abs < Math.PI - 0.3) this.flank = rel > 0 ? "left" : "right";
+      seen = this.flank;
+    }
     let view = seen;
     // No side drawing: whichever of front and back is nearer the truth.
     if ((view === "left" || view === "right") && !this.art[view])
@@ -295,7 +314,8 @@ export class Card {
       this.mat.clippingPlanes = sunk ? [this.clip] : [];
       this.mat.needsUpdate = true;
     }
-    this.shadow.visible = !sunk;
+    // Only the ankles gone, on skates: still stood on the floor, so still a shadow.
+    this.shadow.visible = !sunk || (this.sink < 0.25 && !this.side && !this.pose);
     const s = 1 - Math.min(0.6, Math.max(0, this.lift) * 0.25);
     this.shadow.scale.set(this.height * 0.5 * s, 1, this.height * 0.32 * s);
     this.shadow.position.y = 0.02;

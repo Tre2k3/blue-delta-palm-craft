@@ -109,7 +109,7 @@ export class Geronimo implements Activity {
     g.pos.z = _p.z;
     g.heading = Math.atan2(_t.x, _t.z);
     // Sat down in the chute, the water up round him: the sides hide him from the waist.
-    seatIn(g.benji, _p.y - 0.75 + 0.5, standHeight(_p.x, _p.z), 0.55);
+    seatIn(g.benji, _p.y - 0.75 + 0.5, standHeight(_p.x, _p.z), 0.55, "lean");
     g.benji.tilt = 0;
   }
 
@@ -142,7 +142,7 @@ export class Geronimo implements Activity {
       (this.ring.material as THREE.MeshBasicMaterial).opacity = 0.8 * (1 - k);
       // In the pool to his chest.
       this.park.geronimo.getPointAt(1, _p);
-      seatIn(g.benji, Y0 + WATERPARK.waterY, standHeight(_p.x, _p.z), 0.45);
+      seatIn(g.benji, Y0 + WATERPARK.waterY, standHeight(_p.x, _p.z), 0.45, "stand");
       if (this.t > 1.6) this.done();
     }
     this.spray.update(dt);
@@ -569,14 +569,52 @@ export class HighDive implements Activity {
 }
 
 /**
- * Sit a drawing down inside something whose rim is at `rimY`: a tube, a raft, a car, a log. The
- * waist up shows above the rim; the rest is inside it, out of sight.
+ * Seated drawings, and for each where the seat meets it and how much of it goes out of sight, as
+ * shares of its height up from the soles. Sat on the swing: knees bent, the shins hang down out of
+ * sight. Leant back on the slide: legs out over the front, hands up. Sat on a stool: the stool is
+ * in the drawing, so it goes with the shins.
  */
-export function seatIn(card: Card, rimY: number, groundY: number, show = 0.56) {
-  card.pose = null;
+const SEATED = { swing: [0.27, 0.24], slide: [0.2, 0.02], sit: [0.35, 0.37] } as const;
+
+/**
+ * Sit a drawing down inside something whose rim is at `rimY`: a tube, a raft, a car, a log. With a
+ * seated drawing he sits in it, down in the seat, and the knees or the legs come over the front;
+ * `lean` has him lie back with his hands up, for the slides. Without one (or with `stand`, chest
+ * deep in a pool) the waist up shows above the rim and the rest is inside it, out of sight.
+ */
+export function seatIn(
+  card: Card,
+  rimY: number,
+  groundY: number,
+  show = 0.56,
+  how: "sit" | "lean" | "stand" = "sit",
+) {
   card.speed = 0;
-  card.sink = card.height * (1 - show);
-  card.lift = rimY - groundY - card.sink;
+  const pose =
+    how === "stand"
+      ? null
+      : how === "lean" && card.has("slide")
+        ? "slide"
+        : card.has("swing")
+          ? "swing"
+          : card.has("sit")
+            ? "sit"
+            : null;
+  if (!pose) {
+    card.pose = null;
+    card.side = false;
+    card.sink = card.height * (1 - show);
+    card.lift = rimY - groundY - card.sink;
+    return;
+  }
+  const [seat, hide] = SEATED[pose];
+  const h = card.heightOf(pose);
+  card.pose = pose;
+  // The swing and the slide are drawn from the side only.
+  card.side = pose !== "sit";
+  card.sink = Math.max(0.01, hide * h);
+  // Down in the seat, a hand below the rim.
+  card.lift = rimY - 0.14 - groundY - seat * h;
 }
 
 /** A soft round drop, so spray reads as water and not as squares. */
@@ -819,7 +857,7 @@ export class Twister implements Activity {
     g.pos.x = this.c.x;
     g.pos.z = this.c.z;
     g.heading = Math.atan2(_t.x, _t.z) + this.spin;
-    seatIn(g.benji, this.c.y + 0.2, standHeight(this.c.x, this.c.z));
+    seatIn(g.benji, this.c.y + 0.2, standHeight(this.c.x, this.c.z), 0.56, "lean");
     g.benji.tilt = -this.bank * 0.5;
   }
 

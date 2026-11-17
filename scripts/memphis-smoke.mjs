@@ -5608,8 +5608,9 @@ try {
     out.lazy = {
       mode: g.mode,
       went: +g.lazy.state.went.toFixed(3),
-      // Sat down in the tube: only the waist up shows.
+      // Sat down in the tube: the seated drawing, the shins out of sight.
       sink: +g.benji.sink.toFixed(2),
+      pose: g.benji.pose,
     };
     g.lazy.quit();
     run(1);
@@ -5646,6 +5647,7 @@ try {
       held: g.raft.state.held,
       ridden: g.raft.state.ridden,
       sink: +g.benji.sink.toFixed(2),
+      pose: g.benji.pose,
     };
     g.raft.quit();
     run(1);
@@ -5655,9 +5657,9 @@ try {
     return out;
   });
   check(
-    added.lazy.sink > 0.5 && added.sinkOff === 0,
+    added.lazy.pose === "swing" && added.lazy.sink > 0.2 && added.sinkOff === 0,
     "Adventure River: sat down inside the tube on the lazy river, and stood up again after",
-    { sink: added.lazy.sink, after: added.sinkOff },
+    { sink: added.lazy.sink, pose: added.lazy.pose, after: added.sinkOff },
   );
   check(
     added.twister.overlay === "results" &&
@@ -5671,7 +5673,8 @@ try {
     added.raft.mode === "whack" &&
       added.raft.held &&
       added.raft.ridden > 0 &&
-      added.raft.sink > 0.5 &&
+      added.raft.pose === "swing" &&
+      added.raft.sink > 0.2 &&
       added.raftOff.mode === "walk" &&
       added.raftOff.free,
     "Adventure River: a raft on the wave pool rides the big waves when the horn goes",
