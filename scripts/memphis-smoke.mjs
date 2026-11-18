@@ -119,6 +119,17 @@ try {
     "a new day opens on the flight in over the river",
     { ...opening, flown },
   );
+  // Every line said from here is written down as it is said: on a slow machine the flight can land
+  // by itself and K Blanco's line run its course while the button is still being pressed.
+  await page.evaluate(() => {
+    const g = window.__GAME__;
+    window.__said = g.dialogue.map((d) => d.who);
+    const say = g.say.bind(g);
+    g.say = (who, ...rest) => {
+      window.__said.push(who);
+      return say(who, ...rest);
+    };
+  });
   await press(0);
   const landed = await page.evaluate(() => {
     const g = window.__GAME__;
@@ -126,7 +137,7 @@ try {
       on: !!g.intro,
       card: !!g.cinema,
       locked: g.input.locked,
-      said: g.dialogue.length,
+      said: window.__said.filter((w) => w === "K Blanco").length,
       behind: Math.hypot(g.camera.position.x - g.pos.x, g.camera.position.z - g.pos.z),
     };
   });
