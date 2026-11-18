@@ -5127,7 +5127,7 @@ try {
       spots.inPause &&
       spots.form &&
       /^mailto:\S+@\S+\?subject=/.test(spots.mail) &&
-      spots.kinds.join() === "billboard*,truck,store,music,other",
+      spots.kinds.join() === "billboard*,truck,store,music,player,other",
     "open spots: a pitch on the truck row, a billboard on the plaza and a board by the Beale stage each open the asking screen set to what they are for, the pause menu opens it too, and it gives an address to write to",
     spots,
   );

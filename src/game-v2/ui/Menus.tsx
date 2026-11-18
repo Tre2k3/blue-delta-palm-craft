@@ -148,7 +148,7 @@ export function Title({ game, hud }: { game: Game; hud: HudState }) {
                 Get in the game
               </span>
               <span className="block text-[11px] font-semibold text-white/60">
-                Put your business, food truck or music in Memphis
+                Be a player, or put your business, truck or music in Memphis
               </span>
             </span>
           </button>
@@ -370,7 +370,7 @@ export function Pause({ game, hud }: { game: Game; hud: HudState }) {
         className="sr-btn sr-btn-ghost mb-3 w-full py-2.5"
         onClick={() => game.openPartners("billboard")}
       >
-        Get in the game: your business, food truck or music
+        Get in the game: be a player, or bring your business, truck or music
       </button>
       <Row label="Today's drop">
         <div className="text-right">

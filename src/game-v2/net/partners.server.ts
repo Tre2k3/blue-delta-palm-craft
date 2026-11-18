@@ -14,7 +14,7 @@
  */
 import type { Sql } from "@/lib/db";
 
-export const KINDS = ["billboard", "truck", "store", "music", "other"] as const;
+export const KINDS = ["billboard", "truck", "store", "music", "player", "other"] as const;
 export type Kind = (typeof KINDS)[number];
 export type Ask = { kind: Kind; name: string; business: string; reach: string; note: string };
 export type Kept = Ask & { id: number; at: string; done: boolean };

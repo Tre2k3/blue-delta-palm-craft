@@ -1,12 +1,13 @@
 import { createMiddleware, createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 
-/** What a business, a food truck or an artist can ask to have put in the game. */
+/** What a business, a food truck, an artist or anyone who wants to be in it can ask to have put in the game. */
 export const SPOT_KINDS = [
   { id: "billboard", name: "A billboard", line: "Your name and your art up over the plaza, the streets and Beale." },
   { id: "truck", name: "A food truck", line: "Your truck on the riverfront row: your logo, your menu, your crew in the window." },
   { id: "store", name: "A storefront", line: "Your shop on a Memphis block, with your sign over the door." },
   { id: "music", name: "Your music", line: "Your song on the car radio, on the stage screen or in the club." },
+  { id: "player", name: "Be a player", line: "You in the game: your look and your name, out on the streets of Memphis." },
   { id: "other", name: "Something else", line: "A character, an event, a drop. Tell us what you have in mind." },
 ] as const;
 export type SpotKind = (typeof SPOT_KINDS)[number]["id"];

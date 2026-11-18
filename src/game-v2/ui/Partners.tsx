@@ -136,7 +136,7 @@ export function PartnersScreen({ game, hud }: { game: Game; hud: HudState }) {
   const mailto = mailtoFor(kept ?? { kind, name, business, reach, note });
 
   return (
-    <Sheet title="Get in the game" sub="Put your business, your food truck or your music in SackReligious · Memphis 901. Spots are open now." onClose={close} wide>
+    <Sheet title="Get in the game" sub="Put yourself, your business, your food truck or your music in SackReligious · Memphis 901. Spots are open now." onClose={close} wide>
       {owner && (
         <div className="mb-4 grid grid-cols-2 gap-2">
           <button data-partners-tab="ask" className={`sr-btn py-2 text-sm ${tab === "ask" ? "sr-btn-gold" : "sr-btn-ghost"}`} onClick={() => setTab("ask")}>
