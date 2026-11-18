@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { BENJI_HEIGHT_UNITS } from "./worldScale";
 import type { LocomotionState } from "./characterController";
 import { cleanSprite } from "./chroma";
 import { CUTOUT_ALPHA, hardenCutoutTexture } from "./cutout";
@@ -27,7 +28,7 @@ type CycleKind =
 
 const TAU = Math.PI * 2;
 const VIEWS: View[] = ["back", "right", "front", "left"];
-const CARD_H = 1.78;
+const CARD_H = BENJI_HEIGHT_UNITS;
 
 function wrap(a: number) {
   return Math.atan2(Math.sin(a), Math.cos(a));
@@ -93,7 +94,7 @@ function benjiCardMaterial(src?: HTMLImageElement | HTMLCanvasElement, path = ""
     transparent: true,
     opacity: 1,
     alphaTest: CUTOUT_ALPHA,
-    alphaToCoverage: true,
+    alphaToCoverage: false,
     depthWrite: true,
     depthTest: true,
     polygonOffset: true,
@@ -549,7 +550,7 @@ export class PlayerCharacter {
       matA.opacity = 1;
       matA.transparent = true;
       matA.alphaTest = CUTOUT_ALPHA;
-      matA.alphaToCoverage = true;
+      matA.alphaToCoverage = false;
       matA.depthWrite = true;
       this.cardA.visible = true;
       this.cardB.visible = false;

@@ -18,10 +18,17 @@ export const Route = createRootRoute({
           "Play as Benji. Run missions across Memphis, ball up, earn $ackdollars, and rep the brand.",
       },
       { name: "theme-color", content: "#0a0c0b" },
+      // Added to a phone's home screen, it opens full screen like an app.
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "apple-mobile-web-app-title", content: "Memphis 901" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/game/sack-icon.png" },
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "apple-touch-icon", href: "/game/app-icon-192.png" },
     ],
   }),
   component: RootComponent,

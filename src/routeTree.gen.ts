@@ -10,33 +10,115 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiAccountRouteImport } from './routes/api/account'
+import { Route as ApiItchRouteImport } from './routes/api/itch'
+import { Route as ApiPartnersRouteImport } from './routes/api/partners'
+import { Route as ApiPaypalRouteImport } from './routes/api/paypal'
+import { Route as ApiRtcRouteImport } from './routes/api/rtc'
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAccountRoute = ApiAccountRouteImport.update({
+  id: '/api/account',
+  path: '/api/account',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiItchRoute = ApiItchRouteImport.update({
+  id: '/api/itch',
+  path: '/api/itch',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPartnersRoute = ApiPartnersRouteImport.update({
+  id: '/api/partners',
+  path: '/api/partners',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPaypalRoute = ApiPaypalRouteImport.update({
+  id: '/api/paypal',
+  path: '/api/paypal',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiRtcRoute = ApiRtcRouteImport.update({
+  id: '/api/rtc',
+  path: '/api/rtc',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
+  id: '/api/auth/$',
+  path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/account': typeof ApiAccountRoute
+  '/api/itch': typeof ApiItchRoute
+  '/api/partners': typeof ApiPartnersRoute
+  '/api/paypal': typeof ApiPaypalRoute
+  '/api/rtc': typeof ApiRtcRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/account': typeof ApiAccountRoute
+  '/api/itch': typeof ApiItchRoute
+  '/api/partners': typeof ApiPartnersRoute
+  '/api/paypal': typeof ApiPaypalRoute
+  '/api/rtc': typeof ApiRtcRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/account': typeof ApiAccountRoute
+  '/api/itch': typeof ApiItchRoute
+  '/api/partners': typeof ApiPartnersRoute
+  '/api/paypal': typeof ApiPaypalRoute
+  '/api/rtc': typeof ApiRtcRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/api/account'
+    | '/api/itch'
+    | '/api/partners'
+    | '/api/paypal'
+    | '/api/rtc'
+    | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/api/account'
+    | '/api/itch'
+    | '/api/partners'
+    | '/api/paypal'
+    | '/api/rtc'
+    | '/api/auth/$'
+  id:
+    | '__root__'
+    | '/'
+    | '/api/account'
+    | '/api/itch'
+    | '/api/partners'
+    | '/api/paypal'
+    | '/api/rtc'
+    | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiAccountRoute: typeof ApiAccountRoute
+  ApiItchRoute: typeof ApiItchRoute
+  ApiPartnersRoute: typeof ApiPartnersRoute
+  ApiPaypalRoute: typeof ApiPaypalRoute
+  ApiRtcRoute: typeof ApiRtcRoute
+  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +130,59 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/account': {
+      id: '/api/account'
+      path: '/api/account'
+      fullPath: '/api/account'
+      preLoaderRoute: typeof ApiAccountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/itch': {
+      id: '/api/itch'
+      path: '/api/itch'
+      fullPath: '/api/itch'
+      preLoaderRoute: typeof ApiItchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/partners': {
+      id: '/api/partners'
+      path: '/api/partners'
+      fullPath: '/api/partners'
+      preLoaderRoute: typeof ApiPartnersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/paypal': {
+      id: '/api/paypal'
+      path: '/api/paypal'
+      fullPath: '/api/paypal'
+      preLoaderRoute: typeof ApiPaypalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/rtc': {
+      id: '/api/rtc'
+      path: '/api/rtc'
+      fullPath: '/api/rtc'
+      preLoaderRoute: typeof ApiRtcRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiAccountRoute: ApiAccountRoute,
+  ApiItchRoute: ApiItchRoute,
+  ApiPartnersRoute: ApiPartnersRoute,
+  ApiPaypalRoute: ApiPaypalRoute,
+  ApiRtcRoute: ApiRtcRoute,
+  ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

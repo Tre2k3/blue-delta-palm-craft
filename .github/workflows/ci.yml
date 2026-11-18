@@ -68,35 +68,22 @@ jobs:
           cat artifacts/preview.log || true
           exit 1
 
-      - name: Game smoke
-        run: xvfb-run -a node scripts/game-smoke.mjs
+      - name: Memphis smoke
+        run: xvfb-run -a node scripts/memphis-smoke.mjs
 
-      - name: Traffic and street-life smoke
-        run: xvfb-run -a node scripts/traffic-smoke.mjs
-
-      - name: Mission smoke
-        run: xvfb-run -a node scripts/mission-smoke.mjs
-
-      - name: DOM visual smoke
-        run: xvfb-run -a node scripts/dom-smoke.mjs
-
-      - name: Confirm mission screenshots
+      - name: Confirm smoke screenshots
         run: |
           set -euo pipefail
           missing=0
           for f in \
-            01-apartment-start.png \
-            02-apartment-exit.png \
-            03-k-blanco-hq.png \
-            04-drop-van.png \
-            05-neighborhood-delivery.png \
-            06-downtown-delivery.png \
-            07-culture-delivery.png \
-            08-sackrow-basketball.png \
-            09-return-to-hq.png \
-            10-drop-day-complete.png \
-            11-wardrobe-equipped.png \
-            12-after-reload.png
+            01-title.png \
+            02-plaza.png \
+            03-hq.png \
+            04-court.png \
+            05-pier.png \
+            06-bowl.png \
+            07-race.png \
+            08-funhouse.png
           do
             if [ ! -s "artifacts/$f" ]; then
               echo "MISSING: artifacts/$f"
@@ -105,7 +92,6 @@ jobs:
               echo "OK: artifacts/$f ($(wc -c < "artifacts/$f") bytes)"
             fi
           done
-          echo "Screenshot count: $(find artifacts -maxdepth 1 -name '*.png' | wc -l)"
           exit "$missing"
 
       - name: Black-frame and pixel variance
@@ -115,10 +101,20 @@ jobs:
         if: failure()
         run: cat artifacts/preview.log || true
 
+      - name: Stage QA screenshots
+        if: always()
+        run: |
+          set -eu
+          mkdir -p qa-screenshots
+          if [ -d artifacts ]; then
+            cp -a artifacts/. qa-screenshots/
+          fi
+          find qa-screenshots -type f -print
+
       - name: Upload QA screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: sackreligious-qa
-          path: artifacts/
-          if-no-files-found: error
+          path: qa-screenshots/
+          if-no-files-found: warn

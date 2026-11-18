@@ -1,6 +1,7 @@
 import type { FishId } from "./fishing";
 import type { LocationId } from "./types";
 import { ART_REV } from "./data";
+import { halloweenOn } from "./season";
 
 export type FoodTruckId = Extract<LocationId, "foodtruck" | "velis" | "brothers">;
 
@@ -83,6 +84,34 @@ export const FOOD_TRUCKS: FoodTruckDef[] = [
 ];
 
 export const FOOD_TRUCK_IDS = FOOD_TRUCKS.map((t) => t.id);
+
+const AFTER_DARK: Record<FoodTruckId, FoodItem[]> = {
+  foodtruck: [
+    { id: "hw-fries", name: "Memphis Midnight Fries", blurb: "Hot, salted, orange salt. Small stamina bump.", price: 9, respect: 1 },
+    { id: "hw-shake", name: "Pumpkin Shake", blurb: "Thick, cold, candle-spice.", price: 8, respect: 1 },
+    { id: "hw-slime", name: "Slime Lemonade", blurb: "Sour green. Wakes the legs up.", price: 7, respect: 1 },
+  ],
+  velis: [
+    { id: "hw-wings", name: "After Dark Wings", blurb: "Black pepper, orange glaze, extra napkins.", price: 16, respect: 2 },
+  ],
+  brothers: [
+    { id: "hw-burger", name: "Sack-O-Lantern Burger", blurb: "Smash patty, pepper jack, pumpkin aioli.", price: 13, respect: 2 },
+  ],
+};
+
+export function menuFor(truck: FoodTruckDef): FoodTruckDef {
+  if (!halloweenOn()) return truck;
+  const extra = AFTER_DARK[truck.id] ?? [];
+  return {
+    ...truck,
+    blurb: `${truck.blurb} After Dark menu is up.`,
+    items: [...truck.items, ...extra],
+  };
+}
+
+export function isSeasonFood(id: string) {
+  return id.startsWith("hw-");
+}
 
 export function foodTruckById(id: string | null | undefined) {
   return FOOD_TRUCKS.find((t) => t.id === id) ?? null;

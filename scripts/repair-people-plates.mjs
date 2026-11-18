@@ -5,9 +5,15 @@
  *   node scripts/repair-people-plates.mjs            # repair + write .webp and .png
  *   node scripts/repair-people-plates.mjs --dry      # report only
  *
- * close: an old dark-flood key cut jagged notches into black trousers. Morphologically close the
- * alpha mask over the legs (radius 16px, so the real gap between the legs survives) and fill the
- * closed pixels with the neighbouring trouser colour. Nothing else on the plate is touched.
+ * close:   an old dark-flood key cut jagged notches into black trousers. Morphologically close the
+ *          alpha mask over the legs (radius 16px, so the real gap between the legs survives) and fill
+ *          the closed pixels with the neighbouring trouser colour.
+ * islands: keep only the figure — drop detached crop marks, labels and dots.
+ * backdrop: clear large near-white, unsaturated patches below the face (studio backdrop left in
+ *          enclosed gaps such as arm-on-hip). Small highlights and gold jewellery are untouched.
+ * top=f:   clear rows above fraction f of the height (crop bars touching the hair).
+ *
+ * An entry may read from another plate (`from`) and write a new one, leaving the source untouched.
  *
  * Runs in headless Chromium so it needs no native image libs.
  */
@@ -17,9 +23,12 @@ import { chromium } from "playwright";
 
 const DIR = "public/game/people";
 const PLATES = {
-  dj: ["close"],
-  "court-og": ["close"],
+  dj: { ops: ["close"] },
+  "court-og": { ops: ["close"] },
+  // The k-blanco-front plate lost her whole top to a dark flood. walker-05 is a clean full-body K.
+  "k-blanco-desk": { from: "walker-05", ops: ["islands", "backdrop", "top=0.038"] },
 };
+const only = process.argv.find((a) => a.startsWith("--only="))?.slice(7).split(",");
 const dry = process.argv.includes("--dry");
 
 const browser = await chromium.launch({
@@ -29,8 +38,9 @@ const browser = await chromium.launch({
 const page = await browser.newPage();
 await page.setContent("<html><body></body></html>");
 
-for (const [name, ops] of Object.entries(PLATES)) {
-  const src = await readFile(join(DIR, `${name}.webp`));
+for (const [name, { from, ops }] of Object.entries(PLATES)) {
+  if (only && !only.includes(name)) continue;
+  const src = await readFile(join(DIR, `${from ?? name}.webp`));
   const result = await page.evaluate(
     async ({ b64, ops }) => {
       const img = new Image();
@@ -48,6 +58,84 @@ for (const [name, ops] of Object.entries(PLATES)) {
       for (const op of ops) {
         const data = g.getImageData(0, 0, w, h);
         const d = data.data;
+
+        if (op === "islands") {
+          const label = new Int32Array(w * h).fill(-1);
+          const sizes = [];
+          const stack = [];
+          for (let s0 = 0; s0 < w * h; s0++) {
+            if (label[s0] !== -1 || d[s0 * 4 + 3] < 40) continue;
+            const id = sizes.length;
+            let n = 0;
+            label[s0] = id;
+            stack.push(s0);
+            while (stack.length) {
+              const i = stack.pop();
+              n++;
+              const x = i % w;
+              const y = (i - x) / w;
+              for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                  const nx = x + dx;
+                  const ny = y + dy;
+                  if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+                  const j = ny * w + nx;
+                  if (label[j] !== -1 || d[j * 4 + 3] < 40) continue;
+                  label[j] = id;
+                  stack.push(j);
+                }
+              }
+            }
+            sizes.push(n);
+          }
+          const biggest = Math.max(...sizes);
+          let cleared = 0;
+          for (let i = 0; i < w * h; i++) {
+            if (d[i * 4 + 3] === 0) continue;
+            if (label[i] >= 0 && sizes[label[i]] >= biggest * 0.02) continue;
+            d[i * 4 + 3] = 0;
+            cleared++;
+          }
+          g.putImageData(data, 0, 0);
+          report.push(`islands: kept ${sizes.filter((n) => n >= biggest * 0.02).length}/${sizes.length}, cleared ${cleared}px`);
+        }
+
+        if (op.startsWith("top=")) {
+          const rows = Math.floor(h * Number(op.slice(4)));
+          for (let i = 0; i < rows * w; i++) d[i * 4 + 3] = 0;
+          g.putImageData(data, 0, 0);
+          report.push(`top: cleared ${rows} rows`);
+        }
+
+        if (op === "backdrop") {
+          const y0 = Math.floor(h * 0.28);
+          const white = (i) => {
+            const o = i * 4;
+            const mn = Math.min(d[o], d[o + 1], d[o + 2]);
+            return d[o + 3] >= 40 && mn >= 205 && Math.max(d[o], d[o + 1], d[o + 2]) - mn <= 28;
+          };
+          const seen = new Uint8Array(w * h);
+          let cleared = 0;
+          for (let s0 = y0 * w; s0 < w * h; s0++) {
+            if (seen[s0] || !white(s0)) continue;
+            const region = [s0];
+            seen[s0] = 1;
+            for (let k = 0; k < region.length; k++) {
+              const i = region[k];
+              const x = i % w;
+              for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w]) {
+                if (j < y0 * w || j >= w * h || seen[j] || !white(j)) continue;
+                seen[j] = 1;
+                region.push(j);
+              }
+            }
+            if (region.length < 150) continue;
+            for (const i of region) d[i * 4 + 3] = 0;
+            cleared += region.length;
+          }
+          g.putImageData(data, 0, 0);
+          report.push(`backdrop: cleared ${cleared}px`);
+        }
 
         if (op === "close") {
           // Morphological close of the alpha mask over the legs, filled with nearby trouser colour.

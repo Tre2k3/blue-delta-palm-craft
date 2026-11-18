@@ -58,4 +58,5 @@ Catalog for development: `public/config/store-products.json`
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - [docs/ASSET_GUIDE.md](docs/ASSET_GUIDE.md)
-- [docs/QA_CHECKLIST.md](docs/QA_CHECKLIST.md)
+- [docs/ASTRA_HANDOFF.md](docs/ASTRA_HANDOFF.md)
+- [docs/CLAUDE_HANDOFF.md](docs/CLAUDE_HANDOFF.md)

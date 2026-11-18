@@ -1,0 +1,61 @@
+
+> lint
+> eslint .
+
+
+/workspace/scripts/audit-capture.mjs
+  104:10  error  Spaces are hard to count. Use {2}  no-regex-spaces
+
+/workspace/scripts/feet-shots.mjs
+  17:7  warning  'aim' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/workspace/src/game-v2/GameV2.tsx
+  48:7  warning  The 5 literal is not a valid dependency because it never changes. You can safely remove it  react-hooks/exhaustive-deps
+
+/workspace/src/game-v2/runtime.ts
+  563:13  error  React Hook "useSpot" is called in function "tryEnter" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word "use"  react-hooks/rules-of-hooks
+  572:20  error  React Hook "useSpot" is called in function "tryEnter" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word "use"  react-hooks/rules-of-hooks
+  581:13  error  React Hook "useSpot" is called in function "tryEnter" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word "use"  react-hooks/rules-of-hooks
+  585:13  error  React Hook "useSpot" is called in function "tryEnter" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word "use"  react-hooks/rules-of-hooks
+  589:20  error  React Hook "useSpot" is called in function "tryEnter" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word "use"  react-hooks/rules-of-hooks
+  595:13  error  React Hook "useSpot" is called in function "tryEnter" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word "use"  react-hooks/rules-of-hooks
+  619:42  error  React Hook "useSpot" is called in function "tryEnter" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word "use"  react-hooks/rules-of-hooks
+
+/workspace/src/game-v2/world/haunt.ts
+  354:9  warning  'frame' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/workspace/src/game-v2/world/slice.ts
+    9:30  warning  'trashBin' is defined but never used. Allowed unused vars must match /^_/u           @typescript-eslint/no-unused-vars
+   74:7   warning  'trunkMat' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  142:10  warning  'grassMat' is defined but never used. Allowed unused vars must match /^_/u           @typescript-eslint/no-unused-vars
+  316:10  warning  'gable' is defined but never used. Allowed unused vars must match /^_/u              @typescript-eslint/no-unused-vars
+  328:10  warning  'shingleMat' is defined but never used. Allowed unused vars must match /^_/u         @typescript-eslint/no-unused-vars
+  344:10  warning  'sidingMat' is defined but never used. Allowed unused vars must match /^_/u          @typescript-eslint/no-unused-vars
+  360:10  warning  'windowUnit' is defined but never used. Allowed unused vars must match /^_/u         @typescript-eslint/no-unused-vars
+  495:9   warning  'walk' is assigned a value but never used. Allowed unused vars must match /^_/u      @typescript-eslint/no-unused-vars
+
+/workspace/src/game/GameApp.tsx
+  344:6  warning  React Hook useEffect has a missing dependency: 'yielded'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/workspace/src/game/chroma.ts
+  322:9  warning  'n' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/workspace/src/game/commerce.ts
+  3:70  warning  'STORE_BASE_URL' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/workspace/src/game/riverDetailPass.ts
+  6:39  warning  'depth' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+/workspace/src/game/trafficMotion.ts
+  76:7  error  't' is never reassigned. Use 'const' instead  prefer-const
+
+/workspace/src/lib/app-data/client.server.ts
+  281:13  error  Empty block statement  no-empty
+
+/workspace/src/lib/auth/use-current-user.ts
+  59:3  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/rules-of-hooks')
+
+✖ 26 problems (10 errors, 16 warnings)
+  2 errors and 1 warning potentially fixable with the `--fix` option.
+
+LINT:1

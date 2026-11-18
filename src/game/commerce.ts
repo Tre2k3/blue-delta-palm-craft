@@ -1,6 +1,6 @@
 import type { ApparelId } from "./types";
 import { APPAREL } from "./data";
-import { GAME_BUILD_VERSION, PRODUCT_CATALOG_URL, storeProductUrl } from "./config";
+import { GAME_BUILD_VERSION, PRODUCT_CATALOG_URL, PUBLIC_STORE_PAGE, STORE_BASE_URL, isEmbedded, storeProductUrl } from "./config";
 import { analytics } from "./analytics";
 import { parseVerifiedReward, type VerifiedReward } from "./progression";
 import {
@@ -16,6 +16,7 @@ export interface StoreProduct {
   slug: string;
   name: string;
   imageUrl?: string;
+  backImage?: string;
   price?: number;
   currency?: string;
   sizes?: string[];
@@ -38,8 +39,12 @@ export type CommerceSnapshot = {
   catalogLive: boolean;
   lastAck: { forType: string; ok: boolean; error?: string; granted?: number } | null;
   signInHint: string | null;
+  storeDisclaimer: boolean;
+  storeOpenUrl: string | null;
+  frameBlocked: boolean;
 };
 
+const STORE_RETURN_KEY = "sack-return-hq";
 const APPAREL_IDS = new Set(APPAREL.map((a) => a.id));
 
 function asOutfit(id?: string | null): ApparelId | undefined {
@@ -79,7 +84,8 @@ function liveToStore(p: LiveProduct): StoreProduct {
     id: p.id,
     slug,
     name: p.name,
-    imageUrl: p.image,
+    imageUrl: p.imageUrl || p.image,
+    backImage: p.backImage,
     price: p.price,
     currency: "USD",
     sizes: p.sizes,
@@ -164,6 +170,9 @@ type PauseHooks = {
   resume: (source: "parent" | "hidden") => void;
   toast: (text: string) => void;
   grant?: (reward: VerifiedReward) => void;
+  catalog?: (products: StoreProduct[]) => void;
+  returnedFromStore?: () => void;
+  beforeStoreLeave?: () => void;
 };
 
 class CommerceService {
@@ -175,6 +184,13 @@ class CommerceService {
   lastIntent: { kind: "view" | "buy"; productId: string; size?: string; at: number } | null = null;
   lastRunId: string | null = null;
   private sentRuns = new Set<string>();
+  private readySent = false;
+  private bucksKnown = false;
+  private postedEnter = false;
+  disclaimerOpen = false;
+  storeOpenUrl: string | null = null;
+  private declinedEntry = false;
+  frameBlocked = false;
   private listeners = new Set<(snap: CommerceSnapshot) => void>();
   private hooks: PauseHooks | null = null;
   theme: ParentTheme | null = null;
@@ -197,12 +213,15 @@ class CommerceService {
       signedIn,
       displayName: this.player.displayName,
       userId: this.player.userId,
-      sackBucks: connected ? this.player.sackBucks : null,
+      sackBucks: this.bucksKnown ? this.player.sackBucks : null,
       currency: this.currency,
       rewardsEnabled: connected && signedIn,
       catalogLive: this.catalog.live,
       lastAck: this.lastAck,
       signInHint: connected && !signedIn ? "Sign in to earn Sack Bucks" : null,
+      storeDisclaimer: this.disclaimerOpen,
+      storeOpenUrl: this.storeOpenUrl,
+      frameBlocked: this.frameBlocked,
     };
   }
 
@@ -227,23 +246,32 @@ class CommerceService {
       },
       onPlayer: (player) => {
         this.player = player;
+        this.bucksKnown = true;
         this.emit();
       },
       onCatalog: (products) => {
         this.catalog.applyLive(products);
+        this.hooks?.catalog?.(this.catalog.products);
         this.emit();
       },
       onAck: (ack) => {
         this.lastAck = ack;
-        if (typeof ack.sackBucks === "number") this.player = { ...this.player, sackBucks: ack.sackBucks };
-        if (ack.forType === "GG_RUN_COMPLETE" && ack.ok && (ack.granted ?? 0) > 0) {
+        if (typeof ack.sackBucks === "number") {
+          this.player = { ...this.player, sackBucks: ack.sackBucks };
+          this.bucksKnown = true;
+        }
+        if (ack.ok && ack.forType === "GG_ADD_TO_CART") this.hooks?.toast("Added to Kart");
+        else if (ack.forType === "GG_RUN_COMPLETE" && ack.ok && (ack.granted ?? 0) > 0) {
           this.hooks?.toast(`+${ack.granted} ${this.currency}`);
         }
         if (ack.ok === false && ack.error) this.hooks?.toast(ack.error);
         this.emit();
       },
       onPause: () => this.hooks?.pause("parent"),
-      onResume: () => this.hooks?.resume("parent"),
+      onResume: () => {
+        this.hooks?.resume("parent");
+        this.returnToSameGame();
+      },
       onReward: (payload) => {
         const reward = parseVerifiedReward(payload);
         if (!reward) return;
@@ -251,7 +279,119 @@ class CommerceService {
       },
     });
     await this.catalog.loadFallback();
+    this.hooks?.catalog?.(this.catalog.products);
+    if (isEmbedded()) {
+      this.bridge.post("GG_READY", {
+        gameId: GAME_ID,
+        capabilities: ["rewards", "cart", "identity"],
+      });
+      this.readySent = true;
+    }
     this.emit();
+  }
+
+  returnToSameGame() {
+    if (!this.postedEnter) return;
+    this.postedEnter = false;
+    this.hooks?.returnedFromStore?.();
+  }
+
+  private inFrame() {
+    try {
+      return window.parent !== window;
+    } catch {
+      return true;
+    }
+  }
+
+  /** Always the public store. Never a Lovable preview address. */
+  private storePage() {
+    return PUBLIC_STORE_PAGE;
+  }
+
+  /** Same phone or computer tab. Not a new window. */
+  private markStoreReturn() {
+    try {
+      sessionStorage.setItem(STORE_RETURN_KEY, "1");
+    } catch { /* private mode */ }
+  }
+
+  consumeStoreReturn() {
+    try {
+      if (sessionStorage.getItem(STORE_RETURN_KEY) !== "1") return false;
+      sessionStorage.removeItem(STORE_RETURN_KEY);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private leaveToStore() {
+    if (typeof window === "undefined") return;
+    this.hooks?.beforeStoreLeave?.();
+    this.markStoreReturn();
+    const url = this.storePage();
+    if (!this.inFrame()) {
+      window.location.assign(url);
+      return;
+    }
+    // Full window only. Assigning this frame puts the store inside the game inside the Arkade.
+    try {
+      const top = window.top;
+      if (top && top !== window) {
+        top.location.assign(url);
+        return;
+      }
+    } catch {
+      /* This frame is not allowed to change the outer window. */
+    }
+    this.postedEnter = false;
+    this.frameBlocked = true;
+    this.disclaimerOpen = true;
+    this.emit();
+  }
+
+  offerStoreEntry() {
+    if (this.disclaimerOpen || this.postedEnter || this.declinedEntry) return;
+    this.frameBlocked = false;
+    this.disclaimerOpen = true;
+    this.emit();
+  }
+
+  cancelStoreOffer() {
+    this.declinedEntry = false;
+    if (!this.disclaimerOpen) return;
+    this.disclaimerOpen = false;
+    this.emit();
+  }
+
+  enterHeadquarters() {
+    this.offerStoreEntry();
+  }
+
+  dismissStoreDisclaimer() {
+    if (!this.disclaimerOpen && this.declinedEntry) return;
+    this.disclaimerOpen = false;
+    this.declinedEntry = true;
+    this.emit();
+  }
+
+  confirmEnterStore() {
+    if (this.postedEnter) return;
+    this.disclaimerOpen = false;
+    this.declinedEntry = false;
+    this.postedEnter = true;
+    this.emit();
+    const url = this.storePage();
+    this.leaveToStore();
+    this.bridge.post("GG_ENTER_HQ", { zone: "headquarters", path: "/store", url, display: "top", keepGame: false });
+  }
+
+  exitHeadquarters() {
+    this.dismissStoreDisclaimer();
+    if (!this.postedEnter) return;
+    this.postedEnter = false;
+    this.bridge.post("GG_EXIT_HQ", { zone: "headquarters" });
   }
 
   productForOutfit(id: ApparelId) {
@@ -268,9 +408,15 @@ class CommerceService {
     if (!allowed) return;
     this.lastIntent = { kind: "buy", productId: product.id, size: allowed, at: Date.now() };
     analytics.track("product_buy_clicked", { productId: product.id, slug: product.slug, size: allowed });
-    if (this.bridge.connected) {
-      this.bridge.post("GG_ADD_TO_CART", { productId: product.id, size: allowed, qty });
-      this.hooks?.toast(`Cart · ${product.name} · ${allowed}`);
+    if (this.bridge.parentOrigin || typeof window !== "undefined" && window.parent !== window) {
+      this.bridge.post("GG_ADD_TO_CART", {
+        productId: product.id,
+        name: product.name,
+        price: product.price ?? 0,
+        size: allowed,
+        image: product.imageUrl ?? "",
+        qty,
+      });
       return;
     }
     if (typeof window !== "undefined") {
@@ -314,7 +460,6 @@ class CommerceService {
       runId,
       score: Math.max(0, Math.round(opts.score)),
       durationMs: Math.max(0, Math.round(opts.durationMs)),
-      level: opts.level,
     });
   }
 

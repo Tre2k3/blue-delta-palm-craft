@@ -4,7 +4,7 @@ import { keyedTexture, preparePeoplePlate } from "./chroma";
 import { hardenCutoutTexture } from "./cutout";
 
 export const PEOPLE_URLS = {
-  "k-blanco": "/game/people/k-blanco-front.webp",
+  "k-blanco": "/game/people/k-blanco-hq-cutout.png",
   supporter: "/game/people/supporter.webp",
   fan: "/game/people/fan.webp",
   host: "/game/people/host.webp",

@@ -145,7 +145,8 @@ export const OUTFIT_LOOKS: Record<ApparelId, OutfitLook> = {
     stampFront: "tour-black-front",
     stampBack: "tour-black-back",
     overlay: "tour-black",
-    thumb: { src: "/game/benji/outfits/tour_black/front.png", crop: [0.18, 0.08, 0.64, 0.7] },
+    // Folder names are swapped: outfits/tour_white holds the black tee (see outfitSprites.ts).
+    thumb: { src: "/game/benji/outfits/tour_white/front.png", crop: [0.18, 0.08, 0.64, 0.7] },
   },
   tour_white: {
     id: "tour_white",
@@ -159,7 +160,7 @@ export const OUTFIT_LOOKS: Record<ApparelId, OutfitLook> = {
     stampFront: "tour-white-front",
     stampBack: "tour-white-back",
     overlay: "tour-white",
-    thumb: { src: "/game/benji/outfits/tour_white/front.png", crop: [0.18, 0.08, 0.64, 0.7] },
+    thumb: { src: "/game/benji/outfits/tour_black/front.png", crop: [0.18, 0.08, 0.64, 0.7] },
   },
   tour_red: {
     id: "tour_red",
@@ -203,7 +204,7 @@ export const OUTFIT_LOOKS: Record<ApparelId, OutfitLook> = {
     chain: true,
     graphic: "jersey",
     hoodie: false,
-    thumb: { src: "/game/benji/outfits/jersey_black_fresh/front.png", crop: [0.18, 0.08, 0.64, 0.7] },
+    thumb: { src: "/game/benji/outfits/black_sackrow_11/front.png", crop: [0.22, 0.08, 0.56, 0.72] },
   },
   black_sackrow_11: {
     id: "black_sackrow_11",
@@ -224,6 +225,36 @@ export const OUTFIT_LOOKS: Record<ApparelId, OutfitLook> = {
     graphic: "jersey",
     hoodie: false,
     thumb: { src: "/game/benji/outfits/blue_901_day/front.png", crop: [0.22, 0.08, 0.56, 0.72] },
+  },
+  hw_doll: {
+    id: "hw_doll",
+    shirt: null,
+    shorts: null,
+    cap: null,
+    chain: true,
+    graphic: "none",
+    hoodie: false,
+    thumb: { src: "/game/benji/outfits/hw_doll/front.png", crop: [0.22, 0.08, 0.56, 0.72] },
+  },
+  hw_sackrow: {
+    id: "hw_sackrow",
+    shirt: null,
+    shorts: null,
+    cap: null,
+    chain: true,
+    graphic: "none",
+    hoodie: false,
+    thumb: { src: "/game/benji/outfits/hw_sackrow/front.png", crop: [0.22, 0.08, 0.56, 0.72] },
+  },
+  hw_claw: {
+    id: "hw_claw",
+    shirt: null,
+    shorts: null,
+    cap: null,
+    chain: true,
+    graphic: "none",
+    hoodie: false,
+    thumb: { src: "/game/benji/outfits/hw_claw/front.png", crop: [0.22, 0.08, 0.56, 0.72] },
   },
 };
 
