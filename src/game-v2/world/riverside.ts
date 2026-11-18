@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { Hoop } from "../core/types";
+import { tex } from "../gfx/tex";
 import { buildHoops } from "./riverfront";
 import { MAT, YAW, addSolid, bench, neon, sign, std, tree, type BuildCtx } from "./kit";
 import { CROSSING, CURB, FAR_BANK_Z, LANDING, RIVER_Z, STREETS_Z, ROAD_HALF, WALK } from "./map";
@@ -166,7 +167,50 @@ export function buildRiverside(ctx: BuildCtx): Riverside {
 
   // ---- Sports courts: a half court with its hoop, and the sand court with a net.
   const sx = -244;
-  ctx.ground.flat(14, 15, sx - 8, Y0 + 0.012, mid, over(std(0x2a6ad0, 0.8)));
+  // The floor is a painting: bold bands of colour laid on the diagonal, as the artist's court under
+  // the Sunset Canopy has them, with the lines painted over the top.
+  const paint = tex(256, 256, (g, w, h) => {
+    const bands = ["#e4472f", "#f2b43a", "#2a6ad0", "#3aa37a", "#f4f1ea", "#d0457a", "#1d3f7a", "#f28a2e"];
+    g.save();
+    g.translate(w / 2, h / 2);
+    g.rotate(-Math.PI / 5);
+    const bw = 34;
+    for (let i = -8; i < 8; i++) {
+      g.fillStyle = bands[(i + 16) % bands.length]!;
+      g.fillRect(i * bw, -h, bw, h * 2);
+    }
+    g.restore();
+  });
+  ctx.ground.flat(14, 15, sx - 8, Y0 + 0.012, mid, over(new THREE.MeshStandardMaterial({ map: paint, roughness: 0.8 })));
+  // The Sunset Canopy: a great timber roof on four glulam legs, high over the court.
+  {
+    const wood = std(0xb07a45, 0.75);
+    const dark = std(0x7a5230, 0.8);
+    const ccx = sx - 8;
+    const hx = 8.4;
+    const hz = 9.2;
+    const top = Y0 + 8.6;
+    for (const ex of [-1, 1])
+      for (const ez of [-1, 1]) {
+        // Each leg is two timbers side by side.
+        for (const o of [-0.25, 0.25])
+          ctx.solid.box(0.32, top - Y0, 0.5, ccx + ex * hx + o, Y0 + (top - Y0) / 2, mid + ez * hz, wood);
+        addSolid(ctx, ccx + ex * hx - 0.5, ccx + ex * hx + 0.5, mid + ez * hz - 0.35, mid + ez * hz + 0.35);
+      }
+    // Two deep beams along the length, joists across them, then the roof deck.
+    for (const ex of [-1, 1]) ctx.solid.box(0.5, 1.1, hz * 2 + 2, ccx + ex * hx, top + 0.3, mid, dark);
+    for (let z = -hz - 0.8; z <= hz + 0.81; z += 1.2) ctx.solid.box(hx * 2 + 2.4, 0.28, 0.22, ccx, top + 0.95, mid + z, wood);
+    ctx.solid.box(hx * 2 + 3, 0.22, hz * 2 + 3, ccx, top + 1.2, mid, dark);
+    ctx.flat.wall(
+      7,
+      1,
+      ccx,
+      top + 0.3,
+      mid + hz + 1.02,
+      sign("SUNSET CANOPY", "#f3e9c8", "#5a3a20", { w: 512, h: 72 }),
+      YAW.south,
+    );
+  }
   // The lines: the half-court line, the baseline, the sidelines and the key under the basket.
   const line = over(new THREE.MeshBasicMaterial({ color: 0xf4f1ea }));
   ctx.ground.flat(13.2, 0.12, sx - 8, Y0 + 0.016, mid + 7, line);

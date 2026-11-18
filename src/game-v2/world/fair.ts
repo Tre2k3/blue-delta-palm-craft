@@ -6,6 +6,7 @@ import {
   addSolid,
   bench,
   emissiveMat,
+  globeLamp,
   neon,
   sign,
   std,
@@ -539,6 +540,84 @@ export function buildFair(ctx: BuildCtx): Fair {
   ctx.solid.box(5.4, 1.4, 0.3, B.x, Y0 + 6, B.z, std(0x2a4ad0, 0.6));
   addSolid(ctx, B.x - 2, B.x + 2, B.z - 2, B.z + 2);
   spots.bell = { x: B.x, z: B.z - 3 };
+
+  // ---- Liberty Square: Libertyland was built as a colonial town, so past the bell is a row of
+  // red-brick shops with white trim and shutters, a clock cupola on the middle one, a brick-paved
+  // square in front of them and a walk from the square to the bell.
+  {
+    const sqZ0 = 671;
+    const sqZ1 = 696;
+    const sqX0 = -118;
+    const sqX1 = -40;
+    const pave = std(0xa8584a, 0.9);
+    ctx.ground.flat(sqX1 - sqX0, sqZ1 - sqZ0, (sqX0 + sqX1) / 2, Y0 + 0.009, (sqZ0 + sqZ1) / 2, pave, 0, 4);
+    ctx.ground.flat(B.x - 2.2 - sqX1, 7, (sqX1 + B.x - 2.2) / 2, Y0 + 0.009, 675, pave, 0, 4);
+    const brick = MAT.brick("#8a3a2a", 3);
+    const trim = std(0xf4f1ea, 0.6);
+    const shutter = std(0x1f4a3a, 0.7);
+    const names = ["GENERAL STORE", "SWEET SHOPPE", "LIBERTY GIFTS", "PENNY ARCADE", "PRINT SHOP"];
+    const sw = 13;
+    const front = 671;
+    for (let i = 0; i < names.length; i++) {
+      const x = sqX0 + 4 + sw / 2 + i * sw;
+      const h = i === 2 ? 8 : 6 + (i % 2) * 0.8;
+      ctx.solid.box(sw - 0.6, h, 7, x, Y0 + h / 2, front - 3.5, brick);
+      ctx.solid.box(sw - 0.2, 0.4, 7.4, x, Y0 + h + 0.2, front - 3.5, trim);
+      // A pitched roof of dark slate above the cornice.
+      const gable = new THREE.Shape([new THREE.Vector2(-3.8, 0), new THREE.Vector2(3.8, 0), new THREE.Vector2(0, 2.4)]);
+      const roof = new THREE.ExtrudeGeometry(gable, { depth: sw - 0.4, bevelEnabled: false });
+      roof.translate(0, 0, -(sw - 0.4) / 2);
+      roof.rotateY(Math.PI / 2);
+      ctx.solid.add(roof, std(0x3a3d42, 0.8), x, Y0 + h + 0.4, front - 3.5);
+      // The door in the middle, a window and shutters each side.
+      ctx.solid.box(1.4, 2.6, 0.12, x, Y0 + 1.3, front + 0.02, std(0x2a4a8a, 0.6));
+      ctx.solid.box(1.9, 0.3, 0.3, x, Y0 + 2.75, front + 0.1, trim);
+      for (const e of [-1, 1]) {
+        const wx = x + e * 3.6;
+        ctx.solid.box(2, 1.9, 0.1, wx, Y0 + 1.9, front + 0.02, std(0x2b3a4a, 0.2, 0.5));
+        ctx.solid.box(2.3, 0.18, 0.25, wx, Y0 + 0.9, front + 0.08, trim);
+        for (const f of [-1, 1]) ctx.solid.box(0.55, 1.9, 0.08, wx + f * 1.35, Y0 + 1.9, front + 0.06, shutter);
+        // Upstairs windows.
+        ctx.solid.box(1.4, 1.5, 0.1, wx, Y0 + 4.4, front + 0.02, std(0x2b3a4a, 0.2, 0.5));
+        ctx.solid.box(1.7, 0.16, 0.22, wx, Y0 + 3.6, front + 0.07, trim);
+      }
+      ctx.flat.wall(
+        6,
+        0.8,
+        x,
+        Y0 + 3.3,
+        front + 0.14,
+        sign(names[i]!, "#f3e9c8", "#1f3a2a", { w: 512, h: 72 }),
+        YAW.south,
+      );
+      addSolid(ctx, x - sw / 2 + 0.3, x + sw / 2 - 0.3, front - 7, front);
+      stops.push({ x: x + (i % 2 ? 2 : -2), z: front + 2.2, fx: x, fz: front, act: "watch" });
+    }
+    // The clock cupola on the middle shop, white with a gold weathervane.
+    const mx = sqX0 + 4 + sw / 2 + 2 * sw;
+    ctx.solid.box(3, 2.6, 3, mx, Y0 + 10.6, front - 3.5, trim);
+    ctx.solid.add(new THREE.CylinderGeometry(1.2, 1.4, 1.6, 8), trim, mx, Y0 + 12.7, front - 3.5);
+    ctx.solid.add(new THREE.ConeGeometry(1.3, 2.4, 8), std(0x2f6a5a, 0.6, 0.3), mx, Y0 + 14.7, front - 3.5);
+    ctx.solid.cyl(0.04, 0.04, 1.2, mx, Y0 + 16.4, front - 3.5, MAT.gold(), 4);
+    ctx.solid.add(new THREE.CircleGeometry(1.05, 24), std(0xfaf6ea, 0.5), mx, Y0 + 10.7, front - 1.98);
+    ctx.solid.box(0.08, 0.7, 0.04, mx, Y0 + 10.95, front - 1.94, MAT.black());
+    ctx.solid.box(0.5, 0.08, 0.04, mx + 0.2, Y0 + 10.7, front - 1.94, MAT.black());
+    // Lamps, benches and shade trees round the square.
+    for (let x = sqX0 + 6; x < sqX1; x += 13) {
+      globeLamp(ctx, x, sqZ1 - 1.5, Y0);
+      bench(ctx, x + 6, sqZ1 - 2.2, Math.PI, Y0);
+    }
+    for (let x = sqX0 + 3; x < sqX1 + 2; x += 15) tree(ctx, x, sqZ1 + 1.2, 1 + ctx.rand() * 0.2, Y0);
+    for (let x = sqX1 + 8; x < B.x - 6; x += 12) {
+      tree(ctx, x, 668.5, 0.9 + ctx.rand() * 0.2, Y0);
+      globeLamp(ctx, x + 6, 679.2, Y0);
+    }
+    stops.push(
+      { x: -80, z: 684, fx: mx, fz: front, act: "watch" },
+      { x: -64, z: 688, fx: -64, fz: 694, act: "eat" },
+      { x: -100, z: 680, fx: -95, fz: 694, act: "eat" },
+    );
+  }
 
   // ---- The Grand Carousel: a round house, the platform turning under it, horses rising and falling.
   const C = F.carousel;

@@ -139,7 +139,35 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
   const L = P.lot;
   const group = new THREE.Group();
   lotSurface(ctx, L, "plaza");
-  const deck = std(0xe8dcc4, 0.85);
+  // The lot under the park is pulled toward the lens so it wins over the ground; every layer laid
+  // on it here is pulled harder in turn, or the dark lot shows through the deck and the pools.
+  const over = <T extends THREE.Material>(src: T, k: number): T => {
+    const m = src.clone() as T;
+    m.polygonOffset = true;
+    m.polygonOffsetFactor = -1 - k;
+    m.polygonOffsetUnits = -2 - 2 * k;
+    return m;
+  };
+  // Pale broom-finished concrete, scored into slabs, as pool decks are.
+  const deck = over(
+    new THREE.MeshStandardMaterial({
+      roughness: 0.9,
+      map: tex(
+        128,
+        128,
+        (g, w, h) => {
+          g.fillStyle = "#e8dcc4";
+          g.fillRect(0, 0, w, h);
+          g.strokeStyle = "rgba(150,130,100,0.35)";
+          g.lineWidth = 2;
+          g.strokeRect(0, 0, w, h);
+        },
+        { repeat: true },
+      ),
+    }),
+    1,
+  );
+  deck.map!.repeat.set((L.maxX - L.minX) / 4, (L.maxZ - L.minZ) / 4);
   ctx.ground.flat(
     L.maxX - L.minX,
     L.maxZ - L.minZ,
@@ -149,7 +177,7 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
     deck,
   );
   const wy = Y0 + P.waterY;
-  const tile = std(0x5ac0e8, 0.4);
+  const tile = over(std(0x5ac0e8, 0.4), 2);
   const blue = waterMat(0x6ad0ff);
 
   // ---- The wave pool: tiled bottom, a beach going in at the north end, the wave machine house at the south.
@@ -159,7 +187,7 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
   const wcx = (W.minX + W.maxX) / 2;
   const wcz = (W.minZ + W.maxZ) / 2;
   ctx.ground.flat(ww, wd, wcx, Y0 + 0.01, wcz, tile);
-  ctx.ground.flat(ww, 6, wcx, Y0 + 0.02, W.minZ + 3, std(0xf0dca8, 0.9));
+  ctx.ground.flat(ww, 6, wcx, Y0 + 0.02, W.minZ + 3, over(std(0xf0dca8, 0.9), 3));
   for (const [x0, z0, x1, z1] of [
     [W.minX - 0.4, W.minZ, W.minX, W.maxZ],
     [W.maxX, W.minZ, W.maxX + 0.4, W.maxZ],
@@ -202,15 +230,15 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
   const hs = R.halfZ - R.halfX;
   const r1 = R.halfX;
   const r0 = R.halfX - R.width;
-  ctx.ground.add(ring(R.cx, R.cz, hs, r0 - 0.3, r1 + 0.3), std(0xf4f1ea, 0.6), 0, Y0 + 0.012, 0);
-  ctx.ground.add(ring(R.cx, R.cz, hs, r0, r1), tile, 0, Y0 + 0.016, 0);
+  ctx.ground.add(ring(R.cx, R.cz, hs, r0 - 0.3, r1 + 0.3), over(std(0xf4f1ea, 0.6), 2), 0, Y0 + 0.012, 0);
+  ctx.ground.add(ring(R.cx, R.cz, hs, r0, r1), over(tile, 1), 0, Y0 + 0.016, 0);
   const riverMat = waterMat(0x5ac8f0);
   const riverMesh = new THREE.Mesh(ring(R.cx, R.cz, hs, r0, r1), riverMat);
   riverMesh.position.y = wy;
   riverMesh.renderOrder = 3;
   group.add(riverMesh);
   // The island: sand, palms, umbrellas and loungers.
-  const sand = std(0xf0dca8, 0.95);
+  const sand = over(std(0xf0dca8, 0.95), 3);
   const islandShape = new THREE.Shape(
     loop(0, 0, hs, r0 - 0.3, 24).map((p) => new THREE.Vector2(p.x, -p.z)),
   );
@@ -700,6 +728,27 @@ export function buildWaterpark(ctx: BuildCtx): Waterpark {
     YAW.north,
   );
   addSolid(ctx, L.maxX - 8, L.maxX - 2, L.minZ + 2.5, L.minZ + 6.5);
+  // Palms round the edge of the deck, leaning a little, as a water park has them.
+  const trunk = std(0x8a6a48, 0.9);
+  const frond = std(0x3f8a3a, 0.8);
+  const palm = (x: number, z: number, h: number) => {
+    const lean = (ctx.rand() - 0.5) * 0.2;
+    ctx.solid.add(new THREE.CylinderGeometry(0.16, 0.26, h, 7), trunk, x, Y0 + h / 2, z, 0, lean);
+    const tx = x;
+    const ty = Y0 + h;
+    const tz = z + Math.sin(lean) * h;
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2 + ctx.rand() * 0.4;
+      const g = new THREE.BoxGeometry(0.7, 0.06, 2.6);
+      g.translate(0, 0, 1.3);
+      ctx.solid.add(g, frond, tx, ty, tz, a, 0.45);
+    }
+    ctx.solid.add(new THREE.SphereGeometry(0.32, 7, 5), trunk, tx, ty, tz);
+    addSolid(ctx, x - 0.3, x + 0.3, z - 0.3, z + 0.3);
+  };
+  for (let z = L.minZ + 14; z < L.maxZ - 3; z += 11) palm(L.maxX - 2, z, 6 + ctx.rand() * 2);
+  for (let z = W.minZ + 4; z < W.maxZ; z += 12) palm(L.minX + 2.2, z, 6 + ctx.rand() * 2);
+  for (let x = R.cx - r1 + 2; x < L.maxX - 6; x += 10) palm(x, L.maxZ - 2, 6 + ctx.rand() * 2);
   // The tube rack by the river.
   const rackX = R.cx - r1 - 2.2;
   const rackZ = R.cz - hs - 6;

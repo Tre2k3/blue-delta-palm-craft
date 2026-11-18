@@ -110,16 +110,25 @@ export function buildHalle(ctx: BuildCtx): Halle {
   lotSurface(ctx, L, "grass");
   const { cx, cz, halfStraight: hs, radius: R, lanes, laneW } = HALLE.track;
   const r0 = R - lanes * laneW;
+  // The lot's grass is pulled toward the lens so it wins over the ground under it; everything laid
+  // on it here is pulled harder, layer by layer, or from any distance the grass shows through.
+  const over = <T extends THREE.Material>(src: T, k: number): T => {
+    const m = src.clone() as T;
+    m.polygonOffset = true;
+    m.polygonOffsetFactor = -1 - k;
+    m.polygonOffsetUnits = -2 - 2 * k;
+    return m;
+  };
 
   // The track: red rubber, white lane lines, and a kerb round the inside.
-  const rubber = std(0xa4372a, 0.95);
+  const rubber = over(std(0xa4372a, 0.95), 2);
   ctx.ground.add(ringGeo(cx, cz, hs, r0, R), rubber, 0, Y0 + 0.012, 0);
-  const white = new THREE.MeshBasicMaterial({ color: 0xf4f1ea });
+  const white = over(new THREE.MeshBasicMaterial({ color: 0xf4f1ea }), 3);
   for (let i = 0; i <= lanes; i++) {
     const r = r0 + i * laneW;
     ctx.ground.add(ringGeo(cx, cz, hs, r - 0.04, r + 0.04), white, 0, Y0 + 0.02, 0);
   }
-  ctx.ground.add(ringGeo(cx, cz, hs, r0 - 0.35, r0), std(0xe8e4dc, 0.7), 0, Y0 + 0.03, 0);
+  ctx.ground.add(ringGeo(cx, cz, hs, r0 - 0.35, r0), over(std(0xe8e4dc, 0.7), 2), 0, Y0 + 0.03, 0);
   // The start and finish line across the home straight, and the lane numbers' blocks.
   ctx.ground.flat(
     lanes * laneW,
@@ -133,7 +142,14 @@ export function buildHalle(ctx: BuildCtx): Halle {
   // The field: football lines, the end zones, the goalposts.
   const fieldW = r0 * 1.62;
   const fieldL = hs * 2 + r0 * 0.9;
-  ctx.ground.flat(fieldW, fieldL, cx, Y0 + 0.006, cz, std(0x2f7a3a, 0.95));
+  // Mown in stripes, darker and lighter every five yards, as a kept field is.
+  const turf = tex(64, 512, (g, w, h) => {
+    for (let i = 0; i < 20; i++) {
+      g.fillStyle = i % 2 ? "#2f7a3a" : "#37883f";
+      g.fillRect(0, (h * i) / 20, w, h / 20 + 1);
+    }
+  });
+  ctx.ground.flat(fieldW, fieldL, cx, Y0 + 0.006, cz, over(new THREE.MeshStandardMaterial({ map: turf, roughness: 0.95 }), 1));
   for (let i = 0; i <= 10; i++) {
     const z = cz - fieldL / 2 + fieldL * 0.1 + (fieldL * 0.8 * i) / 10;
     ctx.ground.flat(fieldW, 0.18, cx, Y0 + 0.012, z, white);
@@ -145,7 +161,7 @@ export function buildHalle(ctx: BuildCtx): Halle {
       cx,
       Y0 + 0.01,
       cz + end * fieldL * 0.45,
-      std(0x1d3f7a, 0.9),
+      over(std(0x1d3f7a, 0.9), 2),
     );
     const gz = cz + end * (fieldL / 2 + 1);
     const gold = std(0xf2c230, 0.4, 0.3);
@@ -280,6 +296,66 @@ export function buildHalle(ctx: BuildCtx): Halle {
   addSolid(ctx, cx - 6.3, cx - 5.7, gz - 0.3, gz + 0.3);
   addSolid(ctx, cx + 5.7, cx + 6.3, gz - 0.3, gz + 0.3);
 
+  // The visitors' side across the field: aluminium bleachers on a steel frame, the way a city
+  // high-school stadium has them, with a rail along the back.
+  {
+    const vx0 = cx + R + 1.2;
+    const vz0 = cz - 13;
+    const vz1 = cz + 13;
+    const alu = std(0xc9ced4, 0.35, 0.7);
+    const frame = MAT.steel();
+    const vRows = 5;
+    const tread = 0.7;
+    for (let i = 0; i < vRows; i++) {
+      const x = vx0 + 0.35 + i * tread;
+      const y = Y0 + 0.4 + i * 0.42;
+      ctx.solid.box(0.42, 0.06, vz1 - vz0, x, y, (vz0 + vz1) / 2, alu);
+      // The footboard below each seat and the kick plate under it, so the rows read as a stand.
+      ctx.solid.box(0.3, 0.05, vz1 - vz0, x - 0.32, y - 0.22, (vz0 + vz1) / 2, alu);
+      ctx.solid.box(0.04, 0.42, vz1 - vz0, x - 0.47, y - 0.43, (vz0 + vz1) / 2, std(0x9aa1a8, 0.4, 0.6));
+    }
+    const back = vx0 + vRows * tread + 0.1;
+    for (let z = vz0; z <= vz1 + 0.01; z += (vz1 - vz0) / 6) {
+      ctx.solid.box(vRows * tread, 0.08, 0.08, vx0 + (vRows * tread) / 2, Y0 + 0.2, z, frame);
+      ctx.solid.cyl(0.05, 0.05, Y0 + 0.4 + vRows * 0.42 + 1, back, (Y0 + 0.4 + vRows * 0.42 + 1) / 2, z, frame, 6);
+    }
+    ctx.solid.box(0.06, 0.06, vz1 - vz0, back, Y0 + 0.4 + vRows * 0.42 + 1, (vz0 + vz1) / 2, frame);
+    addSolid(ctx, vx0, back + 0.1, vz0, vz1);
+    for (const i of [1, 3])
+      for (const dz of [-9, -2, 6])
+        seats.push({ x: vx0 + 0.35 + i * tread, z: cz + dz + i, y: 0.4 + i * 0.42 });
+    ctx.flat.wall(
+      8,
+      1,
+      back + 0.06,
+      Y0 + 0.4 + vRows * 0.42 + 1.7,
+      cz,
+      sign("VISITORS", "#f3e9c8", "#1d3f7a", { w: 512, h: 64 }),
+      YAW.west,
+    );
+    ctx.solid.box(0.08, 1.1, 8.2, back + 0.1, Y0 + 0.4 + vRows * 0.42 + 1.7, cz, MAT.black());
+    ctx.solid.cyl(0.05, 0.05, 1.2, back + 0.1, Y0 + 0.4 + vRows * 0.42 + 1.1, cz - 3.8, frame, 6);
+    ctx.solid.cyl(0.05, 0.05, 1.2, back + 0.1, Y0 + 0.4 + vRows * 0.42 + 1.1, cz + 3.8, frame, 6);
+  }
+
+  // A chain-link fence round the track, open at the gate end and in front of each stand.
+  {
+    const chain = chainMat();
+    const run = (ax: number, az: number, bx: number, bz: number) => {
+      const len = Math.hypot(bx - ax, bz - az);
+      const yaw = Math.abs(bx - ax) > 0.1 ? 0 : Math.PI / 2;
+      ctx.solid.wall(len, 1.2, (ax + bx) / 2, Y0 + 0.6, (az + bz) / 2, chain, yaw, len / 0.5, 1.2 / 0.5);
+      ctx.solid.box(Math.abs(bx - ax) + 0.05, 0.05, Math.abs(bz - az) + 0.05, (ax + bx) / 2, Y0 + 1.2, (az + bz) / 2, MAT.steel());
+      addSolid(ctx, Math.min(ax, bx), Math.max(ax, bx), Math.min(az, bz) - 0.06, Math.max(az, bz) + 0.06);
+    };
+    // Along the ends, behind the end zones, low enough to see over.
+    const zN = cz - hs - R - 0.6;
+    const zS = cz + hs + R + 0.6;
+    run(cx - R, zS, cx + R, zS);
+    run(cx - R, zN, cx - 4, zN);
+    run(cx + 4, zN, cx + R, zN);
+  }
+
   // Floodlights on four tall poles.
   const poleMat = MAT.steel();
   const lamp = emissiveMat(ctx, 0xfff4dc, 0.2, 3.2);
@@ -398,7 +474,7 @@ export function buildHalle(ctx: BuildCtx): Halle {
   const trackside: Halle["trackside"] = [];
   for (const dz of [-14, -4, 6, 16])
     trackside.push({ x: cx - R - 1.4, z: cz + dz, lookX: cx, lookZ: cz + dz });
-  for (const dz of [-10, 10])
+  for (const dz of [-18, 18])
     trackside.push({ x: cx + R + 1.6, z: cz + dz, lookX: cx, lookZ: cz + dz });
 
   const north = HALLE.courts[0];
